@@ -5,6 +5,7 @@
     enable = true;
     enableCompletion = true;
     autocd = true;
+    dotDir = "${config.xdg.configHome}/zsh";
 
     # Built-in plugin support
     autosuggestion.enable = true;
@@ -89,7 +90,7 @@
     };
 
     # Additional init content
-    initExtra = ''
+    initContent = ''
       # FZF configuration
       if command -v fzf &> /dev/null; then
         source <(fzf --zsh)

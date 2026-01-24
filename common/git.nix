@@ -5,17 +5,17 @@
     enable = true;
     package = pkgs.gitFull;
 
-    userName = "Thierry Santos";
-    userEmail = "thierrysantoos123@gmail.com";
+    settings = {
+      user.name = "Thierry Santos";
+      user.email = "thierrysantoos123@gmail.com";
 
-    aliases = {
-      co = "checkout";
-      br = "branch";
-      ci = "commit";
-      st = "status";
-    };
+      alias = {
+        co = "checkout";
+        br = "branch";
+        ci = "commit";
+        st = "status";
+      };
 
-    extraConfig = {
       init.defaultBranch = "main";
       pull.rebase = true;
       push.autoSetupRemote = true;
