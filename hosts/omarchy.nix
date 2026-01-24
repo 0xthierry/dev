@@ -1,13 +1,27 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, repoPath, ... }:
 
+let
+  configsPath = "${repoPath}/configs";
+in
 {
-  # Omarchy host configuration
-  # Minimal - omarchy provides most tools via pacman
-  # Only shell config (git, zsh, mise) from home-manager
+  xdg.configFile."nvim".source = config.lib.file.mkOutOfStoreSymlink
+    "${configsPath}/nvim";
 
-  # SSH configuration
-  programs.ssh = {
+  home.file.".claude".source = config.lib.file.mkOutOfStoreSymlink
+    "${configsPath}/claude";
+
+  xdg.configFile."zellij".source = config.lib.file.mkOutOfStoreSymlink
+    "${configsPath}/zellij";
+
+  xdg.configFile."hypr".source = config.lib.file.mkOutOfStoreSymlink
+    "${configsPath}/hypr";
+
+  programs.neovim = {
     enable = true;
-    addKeysToAgent = "yes";
+    defaultEditor = true;
+  };
+
+  programs.zellij = {
+    enable = true;
   };
 }

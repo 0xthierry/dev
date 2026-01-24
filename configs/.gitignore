@@ -1,0 +1,14 @@
+# Claude
+claude/.credentials.json
+claude/.claude.json*
+claude/cache/
+claude/debug/
+claude/.claude/
+claude/hooks/node_modules/
+claude/hooks/.logs/
+
+# Nvim
+nvim/lazy-lock.json
+
+# Zellij sessions
+zellij/sessions/
