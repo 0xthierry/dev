@@ -1,11 +1,28 @@
-# Claude
+# Claude - sensitive/generated files
 claude/.credentials.json
 claude/.claude.json*
 claude/cache/
 claude/debug/
 claude/.claude/
-claude/hooks/node_modules/
+claude/**/node_modules/
 claude/hooks/.logs/
+claude/**/.env
+claude/history.jsonl
+claude/file-history/
+claude/paste-cache/
+claude/plans/
+claude/projects/
+claude/plugins/
+claude/ai_docs/
+claude/chrome/
+claude/.repositories/
+claude/todos/
+claude/shell-snapshots/
+claude/transcript/
+claude/statsig/
+claude/telemetry/
+claude/session-env/
+claude/**/.codesearch/
 
 # Nvim
 nvim/lazy-lock.json
