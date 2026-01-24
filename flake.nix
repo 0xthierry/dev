@@ -20,7 +20,7 @@
       mkHome = { system, username, hostname, extraModules ? [] }:
         let
           homePath = homeDir system username;
-          repoPath = "${homePath}/dev";  # Configurable repo location
+          repoPath = "${homePath}/dev";
         in
         home-manager.lib.homeManagerConfiguration {
           pkgs = import nixpkgs {
