@@ -3,30 +3,59 @@
 {
   # Packages without dedicated programs.* modules
   home.packages = with pkgs; [
+    # Disk & files
     dust          # Disk usage analyzer
+    duf           # Modern df replacement
     tree          # Directory tree
-    wl-clipboard  # Wayland clipboard (wl-copy, wl-paste)
-    dnsutils      # DNS tools (dig, nslookup, host)
+    ncdu          # Interactive disk usage
+    hexyl         # Hex viewer
+
+    # Text processing
     jq            # JSON processor
     yq            # YAML processor
-    gum           # CLI prompts/spinners
-    lazydocker    # Docker TUI
-    socat         # Socket utility
-    htop          # Process viewer
-    shellcheck    # Shell script linter
-    fastfetch     # System info
-    unzip         # Archive extraction
-    gh            # GitHub CLI
+    sd            # Modern sed replacement
+    choose        # Modern cut replacement
+
+    # Network & HTTP
     curl          # HTTP client
     wget          # HTTP downloads
+    xh            # Modern HTTPie alternative
+    dnsutils      # DNS tools (dig, nslookup, host)
+    nmap          # Network scanner
+    whois         # Domain lookup
+    mitmproxy     # HTTP debugging proxy
+    iperf3        # Network performance testing
+
+    # System monitoring
+    htop          # Process viewer
+    procs         # Modern ps replacement
+    fastfetch     # System info
+    inxi          # Detailed system info
+
+    # Development
+    gh            # GitHub CLI
     gnumake       # Build tool
-    entr          # Run commands on file change
+    shellcheck    # Shell script linter
     gitleaks      # Git secrets scanner
     graphviz      # Diagrams (dot)
-    rsync         # File synchronization
     tree-sitter   # Parser generator for neovim
-    ncdu          # Interactive disk usage
+    tokei         # Code statistics
     hyperfine     # Command benchmarking
+
+    # File watching & sync
+    entr          # Run commands on file change
+    watchexec     # File watcher (better entr)
+    rsync         # File synchronization
+
+    # Containers
+    lazydocker    # Docker TUI
+    dive          # Docker image layer analyzer
+
+    # Utilities
+    wl-clipboard  # Wayland clipboard (wl-copy, wl-paste)
+    gum           # CLI prompts/spinners
+    socat         # Socket utility
+    unzip         # Archive extraction
   ];
 
   # eza - modern ls replacement
