@@ -37,3 +37,22 @@ get_aur_helper() {
     echo ""
   fi
 }
+
+set_default_shell() {
+  local target_shell="$1"
+  local shell_path
+  shell_path=$(which "$target_shell" 2>/dev/null)
+
+  if [ -z "$shell_path" ]; then
+    log_item "Shell $target_shell not found, skipping"
+    return 1
+  fi
+
+  if [ "$SHELL" = "$shell_path" ]; then
+    log_item "Default shell: already $target_shell"
+    return 0
+  fi
+
+  log_item "Setting default shell to $target_shell..."
+  chsh -s "$shell_path"
+}

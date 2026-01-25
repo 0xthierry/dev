@@ -7,6 +7,23 @@
     tree          # Directory tree
     tldr          # Simplified man pages
     wl-clipboard  # Wayland clipboard (wl-copy, wl-paste)
+    dnsutils      # DNS tools (dig, nslookup, host)
+    jq            # JSON processor
+    yq            # YAML processor
+    gum           # CLI prompts/spinners
+    lazydocker    # Docker TUI
+    socat         # Socket utility
+    htop          # Process viewer
+    shellcheck    # Shell script linter
+    fastfetch     # System info
+    unzip         # Archive extraction
+    gh            # GitHub CLI
+    curl          # HTTP client
+    wget          # HTTP downloads
+    gnumake       # Build tool
+    entr          # Run commands on file change
+    gitleaks      # Git secrets scanner
+    graphviz      # Diagrams (dot)
   ];
 
   # eza - modern ls replacement
@@ -91,5 +108,12 @@
   programs.zoxide = {
     enable = true;
     enableZshIntegration = true;
+  };
+
+  # direnv - auto-load .envrc
+  programs.direnv = {
+    enable = true;
+    enableZshIntegration = true;
+    nix-direnv.enable = true;
   };
 }

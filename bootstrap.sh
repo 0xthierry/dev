@@ -39,18 +39,18 @@ install_nix
 # 3. Apply Home Manager configuration
 apply_home_manager "$HOST" "$SCRIPT_DIR"
 
-# 4. Install mise runtimes
+# 4. Set zsh as default shell
+log_section "Shell Configuration"
+set_default_shell zsh
+
+# 5. Install mise runtimes
 install_runtimes
 
-# 5. AI coding CLIs (omarchy only)
-if [ "$HOST" = "omarchy" ]; then
-  install_ai_clis
-fi
+# 6. AI coding CLIs
+install_ai_clis
 
-# 6. Claude hooks dependencies (omarchy only)
-if [ "$HOST" = "omarchy" ]; then
-  install_hooks "$SCRIPT_DIR"
-fi
+# 7. Claude hooks dependencies
+install_hooks "$SCRIPT_DIR"
 
 echo ""
 echo "=== Bootstrap complete! ==="
