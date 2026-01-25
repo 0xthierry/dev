@@ -3,9 +3,10 @@
 {
   # Packages without dedicated programs.* modules
   home.packages = with pkgs; [
-    dust        # Disk usage analyzer
-    tree        # Directory tree
-    tldr        # Simplified man pages
+    dust          # Disk usage analyzer
+    tree          # Directory tree
+    tldr          # Simplified man pages
+    wl-clipboard  # Wayland clipboard (wl-copy, wl-paste)
   ];
 
   # eza - modern ls replacement
