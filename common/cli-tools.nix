@@ -23,6 +23,10 @@
     entr          # Run commands on file change
     gitleaks      # Git secrets scanner
     graphviz      # Diagrams (dot)
+    rsync         # File synchronization
+    tree-sitter   # Parser generator for neovim
+    ncdu          # Interactive disk usage
+    hyperfine     # Command benchmarking
   ];
 
   # eza - modern ls replacement
