@@ -30,6 +30,7 @@ in
   # SSH configuration for remote development
   programs.ssh = {
     enable = true;
+    enableDefaultConfig = false;
     matchBlocks."*" = {
       addKeysToAgent = "yes";
     };
