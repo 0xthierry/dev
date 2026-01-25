@@ -69,7 +69,44 @@ if command -v mise &> /dev/null; then
   mise install
 fi
 
-# 6. Install claude hook dependencies (omarchy only)
+# 6. Install AI coding CLIs (omarchy only)
+if [ "$HOST" = "omarchy" ]; then
+  echo "Installing AI coding CLIs..."
+
+  # Claude (Anthropic)
+  if ! command -v claude &> /dev/null; then
+    echo "  Installing Claude CLI..."
+    curl -fsSL https://claude.ai/install.sh | bash
+  else
+    echo "  Claude CLI: installed"
+  fi
+
+  # Codex (OpenAI)
+  if ! command -v codex &> /dev/null; then
+    echo "  Installing Codex CLI..."
+    npm install -g @openai/codex
+  else
+    echo "  Codex CLI: installed"
+  fi
+
+  # Gemini CLI (Google)
+  if ! command -v gemini &> /dev/null; then
+    echo "  Installing Gemini CLI..."
+    npm install -g @google/gemini-cli
+  else
+    echo "  Gemini CLI: installed"
+  fi
+
+  # OpenCode
+  if ! command -v opencode &> /dev/null; then
+    echo "  Installing OpenCode..."
+    curl -fsSL https://raw.githubusercontent.com/opencode-ai/opencode/refs/heads/main/install | bash
+  else
+    echo "  OpenCode: installed"
+  fi
+fi
+
+# 7. Install claude hook dependencies (omarchy only)
 if [ "$HOST" = "omarchy" ] && [ -d "$SCRIPT_DIR/configs/claude/hooks" ]; then
   echo "Installing claude hook dependencies..."
   cd "$SCRIPT_DIR/configs/claude/hooks" && bun install

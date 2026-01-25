@@ -5,6 +5,7 @@
     ./common/git.nix
     ./common/zsh.nix
     ./common/mise.nix
+    ./common/neovim.nix
   ];
 
   home.username = "thierry";
