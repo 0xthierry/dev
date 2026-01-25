@@ -21,6 +21,8 @@ in
   # SSH configuration for remote development
   programs.ssh = {
     enable = true;
-    addKeysToAgent = "yes";
+    matchBlocks."*" = {
+      addKeysToAgent = "yes";
+    };
   };
 }

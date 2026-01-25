@@ -5,7 +5,6 @@
   home.packages = with pkgs; [
     dust          # Disk usage analyzer
     tree          # Directory tree
-    tldr          # Simplified man pages
     wl-clipboard  # Wayland clipboard (wl-copy, wl-paste)
     dnsutils      # DNS tools (dig, nslookup, host)
     jq            # JSON processor
