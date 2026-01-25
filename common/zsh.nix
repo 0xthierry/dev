@@ -56,9 +56,11 @@
       wrkp = "cd ~/Work/Pagarme";
       wrka = "cd ~/Work/Arado";
 
-      # Claude
-      uc = "claude --unsafe-mode";
-      sc = "source ~/.claude/hooks/tools/scripts/cc.sh";
+      # Claude (using cclaude wrapper)
+      uc = "cclaude --rw";
+      ucr = "cclaude --rw -- --resume";
+      sc = "cclaude --ro";
+      scr = "cclaude --ro -- --resume";
 
       # Zellij
       zj = "zellij";
@@ -67,8 +69,17 @@
       zk = "zellij kill-session";
       zka = "zellij kill-all-sessions";
 
+      # Docker
+      dstop = "docker ps -q | xargs -r docker stop";
+
       # Home Manager (uses repoPath from flake)
       hms = "home-manager switch --flake ${repoPath}";
+    };
+
+    # Session variables
+    sessionVariables = {
+      OLLAMA_HOST = "http://localhost:11434";
+      OPENCODE_ENABLE_EXA = "true";
     };
 
     # History configuration
@@ -91,6 +102,29 @@
 
     # Additional init content
     initContent = ''
+      # Additional PATH entries
+      export PATH="$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH"
+      export PATH="$HOME/.opencode/bin:$PATH"
+      export PATH="/opt/rocm/bin:$PATH"
+      export PATH="$HOME/.cache/.bun/bin:$PATH"
+
+      # Source Nix daemon (required for Nix on Arch)
+      if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
+        . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
+      fi
+
+      # Load omarchy-zsh configuration (Arch-specific)
+      if [[ -d /usr/share/omarchy-zsh/conf.d ]]; then
+        for config in /usr/share/omarchy-zsh/conf.d/*.zsh; do
+          [[ -f "$config" ]] && source "$config"
+        done
+      fi
+      if [[ -d /usr/share/omarchy-zsh/functions ]]; then
+        for func in /usr/share/omarchy-zsh/functions/*.zsh; do
+          [[ -f "$func" ]] && source "$func"
+        done
+      fi
+
       # FZF configuration
       if command -v fzf &> /dev/null; then
         source <(fzf --zsh)
@@ -110,6 +144,10 @@
       if [ -f "$HOME/.local/share/omarchy/default/bash/aliases" ]; then
         source "$HOME/.local/share/omarchy/default/bash/aliases"
       fi
+
+      # Custom terminal title (folder-aware)
+      ZSH_THEME_TERM_TAB_TITLE_IDLE="%1~ - %15<..<%~%<<"
+      ZSH_THEME_TERM_TITLE_IDLE="%1~ - %n@%m:%~"
     '';
   };
 }

@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Shared functions for install scripts
+
+log_section() {
+  echo ""
+  echo "=== $1 ==="
+}
+
+log_item() {
+  echo "  $1"
+}
+
+check_installed() {
+  command -v "$1" &> /dev/null
+}
+
+install_if_missing() {
+  local name="$1"
+  local cmd="$2"
+  local install_cmd="$3"
+
+  if check_installed "$cmd"; then
+    log_item "$name: installed"
+    return 0
+  else
+    log_item "Installing $name..."
+    eval "$install_cmd"
+  fi
+}
+
+get_aur_helper() {
+  if command -v paru &> /dev/null; then
+    echo "paru"
+  elif command -v yay &> /dev/null; then
+    echo "yay"
+  else
+    echo ""
+  fi
+}

@@ -5,10 +5,13 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-HOST=${1:-$(hostname)}
+# Source shared library
+source "$SCRIPT_DIR/install/lib.sh"
 
-# Validate HOST against known configurations
+# Determine host
+HOST=${1:-$(hostname)}
 VALID_HOSTS="omarchy dev macbook"
+
 if ! echo "$VALID_HOSTS" | grep -qw "$HOST"; then
   echo "Error: Unknown host '$HOST'"
   echo "Valid hosts: $VALID_HOSTS"
@@ -17,100 +20,36 @@ fi
 
 echo "=== Bootstrapping Home Manager for $HOST ==="
 
-# 1. Arch-specific packages via pacman (omarchy only)
+# Source install scripts
+source "$SCRIPT_DIR/install/nix.sh"
+source "$SCRIPT_DIR/install/pacman.sh"
+source "$SCRIPT_DIR/install/ai-cli.sh"
+source "$SCRIPT_DIR/install/mise.sh"
+source "$SCRIPT_DIR/install/hooks.sh"
+
+# 1. Arch-specific packages (omarchy only)
 if command -v pacman &> /dev/null && [ "$HOST" = "omarchy" ]; then
-  echo "Installing GPU packages via pacman..."
-  sudo pacman -S --needed --noconfirm \
-    rocm-hip-sdk \
-    rocm-opencl-sdk \
-    vulkan-radeon
-
-  # Desktop apps via AUR (NixGL issues with Nix GUI apps on Arch)
-  echo "Installing desktop apps via AUR..."
-  if command -v paru &> /dev/null; then
-    paru -S --needed --noconfirm ollama-rocm slack-desktop spotify obsidian signal-desktop obs-studio
-  elif command -v yay &> /dev/null; then
-    yay -S --needed --noconfirm ollama-rocm slack-desktop spotify obsidian signal-desktop obs-studio
-  else
-    echo "Note: Install desktop apps manually from AUR (slack, spotify, obsidian, signal, obs-studio)"
-  fi
+  install_gpu_packages
+  install_aur_packages
 fi
 
-# 2. Install Nix (if not present)
-if ! command -v nix &> /dev/null; then
-  echo "Installing Nix..."
-  curl -L https://nixos.org/nix/install | sh -s -- --daemon
+# 2. Install and configure Nix
+install_nix
 
-  # Source nix for current session
-  if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
-    . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
-  fi
-fi
+# 3. Apply Home Manager configuration
+apply_home_manager "$HOST" "$SCRIPT_DIR"
 
-# 3. Enable flakes
-echo "Enabling Nix flakes..."
-mkdir -p ~/.config/nix
-if ! grep -q "experimental-features" ~/.config/nix/nix.conf 2>/dev/null; then
-  echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
-fi
+# 4. Install mise runtimes
+install_runtimes
 
-# Restart nix-daemon to pick up config (systemd)
-if command -v systemctl &> /dev/null; then
-  sudo systemctl restart nix-daemon.service 2>/dev/null || true
-fi
-
-# 4. Apply Home Manager config (using pinned flake inputs)
-echo "Applying Home Manager configuration for $HOST..."
-nix run .#home-manager -- switch --flake ".#$HOST"
-
-# 5. Install mise runtimes
-if command -v mise &> /dev/null; then
-  echo "Installing language runtimes via mise..."
-  mise install
-fi
-
-# 6. Install AI coding CLIs (omarchy only)
+# 5. AI coding CLIs (omarchy only)
 if [ "$HOST" = "omarchy" ]; then
-  echo "Installing AI coding CLIs..."
-
-  # Claude (Anthropic)
-  if ! command -v claude &> /dev/null; then
-    echo "  Installing Claude CLI..."
-    curl -fsSL https://claude.ai/install.sh | bash
-  else
-    echo "  Claude CLI: installed"
-  fi
-
-  # Codex (OpenAI)
-  if ! command -v codex &> /dev/null; then
-    echo "  Installing Codex CLI..."
-    npm install -g @openai/codex
-  else
-    echo "  Codex CLI: installed"
-  fi
-
-  # Gemini CLI (Google)
-  if ! command -v gemini &> /dev/null; then
-    echo "  Installing Gemini CLI..."
-    npm install -g @google/gemini-cli
-  else
-    echo "  Gemini CLI: installed"
-  fi
-
-  # OpenCode
-  if ! command -v opencode &> /dev/null; then
-    echo "  Installing OpenCode..."
-    curl -fsSL https://raw.githubusercontent.com/opencode-ai/opencode/refs/heads/main/install | bash
-  else
-    echo "  OpenCode: installed"
-  fi
+  install_ai_clis
 fi
 
-# 7. Install claude hook dependencies (omarchy only)
-if [ "$HOST" = "omarchy" ] && [ -d "$SCRIPT_DIR/configs/claude/hooks" ]; then
-  echo "Installing claude hook dependencies..."
-  cd "$SCRIPT_DIR/configs/claude/hooks" && bun install
-  cd "$SCRIPT_DIR"
+# 6. Claude hooks dependencies (omarchy only)
+if [ "$HOST" = "omarchy" ]; then
+  install_hooks "$SCRIPT_DIR"
 fi
 
 echo ""
