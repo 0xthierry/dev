@@ -23,6 +23,7 @@ echo "=== Bootstrapping Home Manager for $HOST ==="
 # Source install scripts
 source "$SCRIPT_DIR/install/nix.sh"
 source "$SCRIPT_DIR/install/pacman.sh"
+source "$SCRIPT_DIR/install/docker.sh"
 source "$SCRIPT_DIR/install/ai-cli.sh"
 source "$SCRIPT_DIR/install/mise.sh"
 source "$SCRIPT_DIR/install/hooks.sh"
@@ -33,23 +34,28 @@ if command -v pacman &> /dev/null && [ "$HOST" = "omarchy" ]; then
   install_aur_packages
 fi
 
-# 2. Install and configure Nix
+# 2. Docker (dev and omarchy only)
+if command -v pacman &> /dev/null && [[ "$HOST" =~ ^(dev|omarchy)$ ]]; then
+  install_docker
+fi
+
+# 3. Install and configure Nix
 install_nix
 
-# 3. Apply Home Manager configuration
+# 4. Apply Home Manager configuration
 apply_home_manager "$HOST" "$SCRIPT_DIR"
 
-# 4. Set zsh as default shell
+# 5. Set zsh as default shell
 log_section "Shell Configuration"
 set_default_shell zsh
 
-# 5. Install mise runtimes
+# 6. Install mise runtimes
 install_runtimes
 
-# 6. AI coding CLIs
+# 7. AI coding CLIs
 install_ai_clis
 
-# 7. Claude hooks dependencies
+# 8. Claude hooks dependencies
 install_hooks "$SCRIPT_DIR"
 
 echo ""
