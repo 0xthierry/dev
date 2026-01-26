@@ -53,6 +53,12 @@ set_default_shell() {
     return 0
   fi
 
+  # Add to /etc/shells if not already listed (required for chsh)
+  if ! grep -qx "$shell_path" /etc/shells 2>/dev/null; then
+    log_item "Adding $shell_path to /etc/shells..."
+    echo "$shell_path" | sudo tee -a /etc/shells > /dev/null
+  fi
+
   log_item "Setting default shell to $target_shell..."
   chsh -s "$shell_path"
 }
