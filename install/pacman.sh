@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install Arch/pacman packages (GPU, AUR apps)
 set -e
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # GPU packages (official repos)
 GPU_PACKAGES=(

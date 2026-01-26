@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install Claude hooks dependencies
 set -e
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 install_hooks() {
   local repo_path="$1"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install AI coding CLIs (Claude, Codex, Gemini, OpenCode)
 set -e
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 install_ai_clis() {
   log_section "AI Coding CLIs"

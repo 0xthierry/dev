@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install mise language runtimes
 set -e
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 install_runtimes() {
   log_section "Mise Runtimes"
