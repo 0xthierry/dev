@@ -21,6 +21,7 @@
     wget          # HTTP downloads
     xh            # Modern HTTPie alternative
     dnsutils      # DNS tools (dig, nslookup, host)
+    inetutils     # hostname, ftp, telnet, etc.
     nmap          # Network scanner
     whois         # Domain lookup
     mitmproxy     # HTTP debugging proxy
