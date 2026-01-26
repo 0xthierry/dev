@@ -13,6 +13,10 @@ install_runtimes() {
 
   log_item "Installing language runtimes..."
   mise install
+
+  # Activate mise shims in current shell for subsequent steps
+  log_item "Activating mise shims..."
+  eval "$(mise activate bash)"
 }
 
 # Run if executed directly
