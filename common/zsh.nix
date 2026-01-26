@@ -76,8 +76,6 @@
       # Docker
       dstop = "docker ps -q | xargs -r docker stop";
 
-      # Home Manager (uses repoPath from flake)
-      hms = "home-manager switch --flake ${repoPath}";
     };
 
     # Session variables
@@ -103,6 +101,14 @@
     historySubstringSearch = {
       enable = true;
     };
+
+    # Early environment setup (runs before profile scripts)
+    envExtra = ''
+      # Fallback TERM for unknown terminals (e.g., ghostty on remote without terminfo)
+      if ! infocmp "$TERM" &>/dev/null 2>&1; then
+        export TERM=xterm-256color
+      fi
+    '';
 
     # Additional init content
     initContent = ''
