@@ -163,12 +163,49 @@
       ZSH_THEME_TERM_TAB_TITLE_IDLE="%1~ - %15<..<%~%<<"
       ZSH_THEME_TERM_TITLE_IDLE="%1~ - %n@%m:%~"
 
-      # Spaceship configuration
+      # Custom IP section for Spaceship
+      spaceship_ip() {
+        local ip
+        # Get primary IP (works on Linux and macOS)
+        if command -v ip &> /dev/null; then
+          ip=$(ip route get 1 2>/dev/null | awk '{print $7; exit}')
+        elif command -v ifconfig &> /dev/null; then
+          ip=$(ifconfig | grep 'inet ' | grep -v '127.0.0.1' | awk '{print $2}' | head -1)
+        fi
+        [[ -z "$ip" ]] && return
+        spaceship::section --color "blue" --prefix "(" --suffix ") " "$ip"
+      }
+
+      # Spaceship prompt order
+      SPACESHIP_PROMPT_ORDER=(
+        user          # Username
+        dir           # Current directory
+        host          # Hostname
+        ip            # IP address (custom)
+        git           # Git branch & status
+        node          # Node.js
+        python        # Python
+        golang        # Go
+        rust          # Rust
+        docker        # Docker
+        exec_time     # Execution time
+        line_sep      # Line break
+        char          # Prompt character
+      )
+
+      # User/Host settings
       SPACESHIP_USER_SHOW=always
       SPACESHIP_HOST_SHOW=always
+      SPACESHIP_HOST_PREFIX="at "
+
+      # Git settings
       SPACESHIP_GIT_SHOW=true
       SPACESHIP_GIT_ASYNC=false
       SPACESHIP_GIT_STATUS_SHOW=true
+
+      # Directory settings
+      SPACESHIP_DIR_TRUNC=3
+      SPACESHIP_DIR_TRUNC_REPO=false
 
       # Spaceship prompt
       source "${pkgs.spaceship-prompt}/share/zsh/themes/spaceship.zsh-theme"
