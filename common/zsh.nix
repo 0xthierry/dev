@@ -102,6 +102,11 @@
 
     # Additional init content
     initContent = ''
+      # Fallback TERM for unknown terminals (e.g., ghostty on remote without terminfo)
+      if ! infocmp "$TERM" &>/dev/null 2>&1; then
+        export TERM=xterm-256color
+      fi
+
       # Additional PATH entries
       export PATH="$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH"
       export PATH="$HOME/.opencode/bin:$PATH"
