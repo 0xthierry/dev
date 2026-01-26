@@ -72,8 +72,8 @@
       # Docker
       dstop = "docker ps -q | xargs -r docker stop";
 
-      # Home Manager - use hms function defined in initContent
-      # hms = defined as function below
+      # Home Manager (uses repoPath from flake)
+      hms = "home-manager switch --flake ${repoPath}";
     };
 
     # Session variables
@@ -143,11 +143,6 @@
       # Custom function for mkdir + cd
       mkcd() {
         mkdir -p "$1" && cd "$1"
-      }
-
-      # Home Manager switch (uses hostname to pick config)
-      hms() {
-        home-manager switch --flake ${repoPath}#"$(hostname)"
       }
 
       # Source omarchy bash aliases if available (for compatibility)
