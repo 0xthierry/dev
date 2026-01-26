@@ -46,7 +46,7 @@
         };
         "dev" = mkHome {
           system = "x86_64-linux";
-          username = "thierry";
+          username = "0xthierry";
           hostname = "dev";
           extraModules = [ ./linux/default.nix ];
         };
