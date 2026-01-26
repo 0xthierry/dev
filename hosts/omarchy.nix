@@ -11,6 +11,10 @@ in
   home.packages = with pkgs; [
     imagemagick   # Image processing
   ];
+
+  home.sessionVariables = {
+    OLLAMA_HOST = "http://localhost:11434";
+  };
   xdg.configFile."nvim".source = config.lib.file.mkOutOfStoreSymlink
     "${configsPath}/nvim";
 

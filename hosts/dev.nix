@@ -15,6 +15,8 @@ in
   home.sessionVariables = {
     OLLAMA_HOST = "http://172.22.0.1:11434";
     TZ = "America/Sao_Paulo";
+    LANG = "en_US.UTF-8";
+    LC_ALL = "en_US.UTF-8";
   };
 
   # Config symlinks

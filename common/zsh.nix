@@ -80,7 +80,6 @@
 
     # Session variables
     sessionVariables = {
-      OLLAMA_HOST = "http://localhost:11434";
       OPENCODE_ENABLE_EXA = "true";
     };
 
@@ -163,6 +162,13 @@
       # Custom terminal title (folder-aware)
       ZSH_THEME_TERM_TAB_TITLE_IDLE="%1~ - %15<..<%~%<<"
       ZSH_THEME_TERM_TITLE_IDLE="%1~ - %n@%m:%~"
+
+      # Spaceship configuration
+      SPACESHIP_USER_SHOW=always
+      SPACESHIP_HOST_SHOW=always
+      SPACESHIP_GIT_SHOW=true
+      SPACESHIP_GIT_ASYNC=false
+      SPACESHIP_GIT_STATUS_SHOW=true
 
       # Spaceship prompt
       source "${pkgs.spaceship-prompt}/share/zsh/themes/spaceship.zsh-theme"
