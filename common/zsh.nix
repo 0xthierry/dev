@@ -1,6 +1,10 @@
 { config, pkgs, repoPath, ... }:
 
 {
+  home.packages = [
+    pkgs.spaceship-prompt
+  ];
+
   programs.zsh = {
     enable = true;
     enableCompletion = true;
@@ -11,10 +15,10 @@
     autosuggestion.enable = true;
     syntaxHighlighting.enable = true;
 
-    # Oh My Zsh configuration
+    # Oh My Zsh configuration (theme disabled - using Spaceship)
     oh-my-zsh = {
       enable = true;
-      theme = "robbyrussell";
+      theme = "";
       plugins = [
         "git"
         "python"
@@ -153,6 +157,9 @@
       # Custom terminal title (folder-aware)
       ZSH_THEME_TERM_TAB_TITLE_IDLE="%1~ - %15<..<%~%<<"
       ZSH_THEME_TERM_TITLE_IDLE="%1~ - %n@%m:%~"
+
+      # Spaceship prompt
+      source "${pkgs.spaceship-prompt}/share/zsh/themes/spaceship.zsh-theme"
     '';
   };
 }
