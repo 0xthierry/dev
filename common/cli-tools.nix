@@ -56,6 +56,7 @@
     gum           # CLI prompts/spinners
     socat         # Socket utility
     unzip         # Archive extraction
+    less          # Pager (used by git, man, etc.)
   ];
 
   # eza - modern ls replacement
