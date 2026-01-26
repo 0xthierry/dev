@@ -31,7 +31,7 @@ in
 
   # Create work directories
   home.activation.createWorkDirs = lib.hm.dag.entryAfter ["writeBoundary"] ''
-    mkdir -p ~/Work/Sideproject
+    mkdir -p ~/Work/Sideprojects
     mkdir -p ~/Work/Meistrari
   '';
 
