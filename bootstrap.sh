@@ -34,8 +34,8 @@ if command -v pacman &> /dev/null && [ "$HOST" = "omarchy" ]; then
   install_aur_packages
 fi
 
-# 2. Docker (dev and omarchy only)
-if command -v pacman &> /dev/null && [[ "$HOST" =~ ^(dev|omarchy)$ ]]; then
+# 2. Docker (Arch only)
+if command -v pacman &> /dev/null; then
   install_docker
 fi
 
