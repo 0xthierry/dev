@@ -29,6 +29,12 @@ in
   xdg.configFile."zellij".source = config.lib.file.mkOutOfStoreSymlink
     "${configsPath}/zellij";
 
+  # Create work directories
+  home.activation.createWorkDirs = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    mkdir -p ~/Work/Sideproject
+    mkdir -p ~/Work/Meistrari
+  '';
+
   # SSH configuration for remote development
   programs.ssh = {
     enable = true;
