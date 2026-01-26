@@ -13,7 +13,7 @@ in
   ];
 
   home.sessionVariables = {
-    OLLAMA_HOST = "http://localhost:11434";
+    OLLAMA_HOST = "0.0.0.0:11434";
   };
   xdg.configFile."nvim".source = config.lib.file.mkOutOfStoreSymlink
     "${configsPath}/nvim";
