@@ -35,6 +35,7 @@
 
     # Development
     gh            # GitHub CLI
+    infisical     # Secrets management CLI
     gnumake       # Build tool
     shellcheck    # Shell script linter
     gitleaks      # Git secrets scanner
