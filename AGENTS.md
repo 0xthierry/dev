@@ -46,6 +46,18 @@ ls -la ~/.config/nvim
 | Machine-specific app | Edit `hosts/{machine}.nix` |
 | New editable config | Use `config.lib.file.mkOutOfStoreSymlink` pattern |
 
+## Decision: common/ vs hosts/
+
+**Default to `common/`** unless user explicitly names a single host.
+
+| User says | Location | Why |
+|-----------|----------|-----|
+| "add X" / "install X" / "for all hosts" | `common/` | Default: shared across machines |
+| "on omarchy" / "just on dev" / "only macbook" | `hosts/{machine}.nix` | Explicit single-host request |
+| Ambiguous (e.g., "this hosts") | **Ask** | Clarify scope before editing |
+
+When in doubt, ask: "All hosts or just [machine]?"
+
 ## Claude Code Integration
 
 Hooks and skills in `configs/claude/` use **Bun + TypeScript**:
