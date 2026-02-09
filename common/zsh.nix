@@ -118,6 +118,7 @@
 
       # Additional PATH entries
       export PATH="$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH"
+      export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
       export PATH="$HOME/.opencode/bin:$PATH"
       export PATH="/opt/rocm/bin:$PATH"
       export PATH="$HOME/.cache/.bun/bin:$PATH"

@@ -1,10 +1,12 @@
 { config, pkgs, ... }:
 
 {
-  # macOS-specific settings (stub)
-  # TODO: Implement when macbook setup is needed
+  # XDG integration
+  xdg.enable = true;
 
+  # macOS session variables
   home.sessionVariables = {
-    # macOS uses different locale path
+    LANG = "en_US.UTF-8";
+    LC_ALL = "en_US.UTF-8";
   };
 }

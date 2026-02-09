@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 
 {
   # Packages without dedicated programs.* modules
@@ -54,11 +54,12 @@
     dive          # Docker image layer analyzer
 
     # Utilities
-    wl-clipboard  # Wayland clipboard (wl-copy, wl-paste)
     gum           # CLI prompts/spinners
     socat         # Socket utility
     unzip         # Archive extraction
     less          # Pager (used by git, man, etc.)
+  ] ++ lib.optionals pkgs.stdenv.isLinux [
+    wl-clipboard  # Wayland clipboard (wl-copy, wl-paste)
   ];
 
   # eza - modern ls replacement

@@ -23,6 +23,7 @@ echo "=== Bootstrapping Home Manager for $HOST ==="
 # Source install scripts
 source "$SCRIPT_DIR/install/nix.sh"
 source "$SCRIPT_DIR/install/pacman.sh"
+source "$SCRIPT_DIR/install/brew.sh"
 source "$SCRIPT_DIR/install/docker.sh"
 source "$SCRIPT_DIR/install/ai-cli.sh"
 source "$SCRIPT_DIR/install/mise.sh"
@@ -34,28 +35,34 @@ if command -v pacman &> /dev/null && [ "$HOST" = "omarchy" ]; then
   install_aur_packages
 fi
 
-# 2. Docker (Arch only)
+# 2. macOS-specific packages (macbook only)
+if [[ "$(uname)" == "Darwin" ]] && [ "$HOST" = "macbook" ]; then
+  install_homebrew
+  install_brew_casks
+fi
+
+# 3. Docker (Arch only)
 if command -v pacman &> /dev/null; then
   install_docker
 fi
 
-# 3. Install and configure Nix
+# 4. Install and configure Nix
 install_nix
 
-# 4. Apply Home Manager configuration
+# 5. Apply Home Manager configuration
 apply_home_manager "$HOST" "$SCRIPT_DIR"
 
-# 5. Set zsh as default shell
+# 6. Set zsh as default shell
 log_section "Shell Configuration"
 set_default_shell zsh
 
-# 6. Install mise runtimes
+# 7. Install mise runtimes
 install_runtimes
 
-# 7. AI coding CLIs
+# 8. AI coding CLIs
 install_ai_clis
 
-# 8. Claude hooks dependencies
+# 9. Claude hooks dependencies
 install_hooks "$SCRIPT_DIR"
 
 echo ""
