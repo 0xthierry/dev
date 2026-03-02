@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
-# Install AI coding CLIs (Claude, Codex, Gemini, OpenCode)
+# Install AI coding CLIs not provided by pacman/Omarchy
+# Claude Code and OpenCode are Omarchy defaults (pacman)
 set -e
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 install_ai_clis() {
   log_section "AI Coding CLIs"
-
-  # Claude (Anthropic)
-  install_if_missing "Claude CLI" "claude" \
-    "curl -fsSL https://claude.ai/install.sh | bash"
 
   # Codex (OpenAI)
   install_if_missing "Codex CLI" "codex" \
@@ -17,10 +14,6 @@ install_ai_clis() {
   # Gemini CLI (Google)
   install_if_missing "Gemini CLI" "gemini" \
     "npm install -g @google/gemini-cli"
-
-  # OpenCode
-  install_if_missing "OpenCode" "opencode" \
-    "curl -fsSL https://raw.githubusercontent.com/opencode-ai/opencode/refs/heads/main/install | bash"
 }
 
 # Run if executed directly

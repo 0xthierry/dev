@@ -32,6 +32,9 @@ source "$SCRIPT_DIR/install/hooks.sh"
 # 1. Arch-specific packages (omarchy only)
 if command -v pacman &> /dev/null && [ "$HOST" = "omarchy" ]; then
   install_gpu_packages
+  install_desktop_packages
+  install_gaming_packages
+  install_system_packages
   install_aur_packages
 fi
 

@@ -4,10 +4,6 @@ let
   configsPath = "${repoPath}/configs";
 in
 {
-  imports = [
-    ../common/cli-tools.nix
-  ];
-
   home.packages = with pkgs; [
     ollama
   ];

@@ -2,6 +2,7 @@
 
 {
   imports = [
+    ./common/cli-tools.nix
     ./common/git.nix
     ./common/zsh.nix
     ./common/mise.nix

@@ -14,7 +14,7 @@
         bun = "latest";
         rust = "latest";
         zig = "latest";
-        "aws-cli" = "latest";
+        aws = "latest";
       };
       settings = {
         experimental = false;

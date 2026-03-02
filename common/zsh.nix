@@ -118,10 +118,19 @@
 
       # Additional PATH entries
       export PATH="$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH"
-      export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
       export PATH="$HOME/.opencode/bin:$PATH"
       export PATH="/opt/rocm/bin:$PATH"
       export PATH="$HOME/.cache/.bun/bin:$PATH"
+
+      # Source secrets
+      [[ -f ~/.secrets ]] && source ~/.secrets
+
+      # SSH-aware EDITOR
+      if [[ -n $SSH_CONNECTION ]]; then
+        export EDITOR='vim'
+      else
+        export EDITOR='nvim'
+      fi
 
       # Source Nix daemon (required for Nix on Arch)
       if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
@@ -163,6 +172,35 @@
       # Custom terminal title (folder-aware)
       ZSH_THEME_TERM_TAB_TITLE_IDLE="%1~ - %15<..<%~%<<"
       ZSH_THEME_TERM_TITLE_IDLE="%1~ - %n@%m:%~"
+
+      # Override preexec to include folder name during command execution
+      function omz_termsupport_preexec {
+        [[ "''${DISABLE_AUTO_TITLE:-}" != true ]] || return 0
+        emulate -L zsh
+        setopt extended_glob
+
+        local -a cmdargs
+        cmdargs=("''${(z)2}")
+        if [[ "''${cmdargs[1]}" = fg ]]; then
+          local job_id jobspec="''${cmdargs[2]#%}"
+          case "$jobspec" in
+            <->) job_id=''${jobspec} ;;
+            ""|%|+) job_id=''${(k)jobstates[(r)*:+:*]} ;;
+            -) job_id=''${(k)jobstates[(r)*:-:*]} ;;
+            [?]*) job_id=''${(k)jobtexts[(r)*''${(Q)jobspec}*]} ;;
+            *) job_id=''${(k)jobtexts[(r)''${(Q)jobspec}*]} ;;
+          esac
+          if [[ -n "''${jobtexts[$job_id]}" ]]; then
+            1="''${jobtexts[$job_id]}"
+            2="''${jobtexts[$job_id]}"
+          fi
+        fi
+
+        local CMD="''${1[(wr)^(*=*|sudo|ssh|mosh|rake|-*)]:gs/%/%%}"
+        local LINE="''${2:gs/%/%%}"
+        local FOLDER="''${PWD##*/}"
+        title "''${FOLDER} - ''${CMD}" "''${FOLDER} - %100>...>''${LINE}%<<"
+      }
 
       # Custom IP section for Spaceship
       spaceship_ip() {
