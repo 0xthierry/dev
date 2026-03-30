@@ -36,7 +36,7 @@ apply_home_manager() {
 
   log_section "Home Manager"
   log_item "Applying configuration for $host..."
-  nix run "$repo_path#home-manager" -- switch --flake "$repo_path#$host"
+  nix run "$repo_path#home-manager" -- switch -b backup --flake "$repo_path#$host"
 
   # Update PATH to include newly installed binaries
   export PATH="$HOME/.nix-profile/bin:$PATH"
