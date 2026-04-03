@@ -1,6 +1,4 @@
-# Nix
-result
-result-*
+ai_docs/
 .direnv/
 
 # Editor
