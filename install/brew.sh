@@ -92,6 +92,9 @@ install_common_brew_formulae() {
 
 install_brew_casks() {
   local -a packages=("$@")
+  local -a pending_packages=()
+  local brew_bin=""
+  local package=""
 
   if [[ ${#packages[@]} -eq 0 ]]; then
     packages=("${BREW_CASKS[@]}")
@@ -108,8 +111,30 @@ install_brew_casks() {
     return 1
   fi
 
-  log_item "Installing: ${packages[*]}"
-  run_brew install --cask "${packages[@]}"
+  if (( ${DRY_RUN:-0} )); then
+    log_item "Installing: ${packages[*]}"
+    run_brew install --cask "${packages[@]}"
+    return 0
+  fi
+
+  brew_bin="$(resolve_brew_bin)"
+
+  for package in "${packages[@]}"; do
+    if "$brew_bin" list --cask --versions "$package" >/dev/null 2>&1; then
+      log_item "Already installed: $package"
+      continue
+    fi
+
+    pending_packages+=("$package")
+  done
+
+  if [[ ${#pending_packages[@]} -eq 0 ]]; then
+    log_item "Homebrew casks: already installed"
+    return 0
+  fi
+
+  log_item "Installing: ${pending_packages[*]}"
+  run_brew install --cask "${pending_packages[@]}"
 }
 
 # Run if executed directly

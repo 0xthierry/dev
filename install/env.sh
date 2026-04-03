@@ -15,6 +15,8 @@ write_env_file() {
   local target="$HOME/.config/dev-setup/env.sh"
   local tmp=""
   local entry=""
+  local key=""
+  local value=""
 
   log_section "Environment"
   ensure_dir "$(dirname "$target")"
@@ -22,11 +24,15 @@ write_env_file() {
   tmp="$(mktemp)"
   {
     for entry in "${SHARED_ENV_VARS[@]}"; do
-      printf 'export %s\n' "$entry"
+      key="${entry%%=*}"
+      value="${entry#*=}"
+      printf 'export %s=%q\n' "$key" "$value"
     done
 
     for entry in "${HOST_ENV_VARS[@]}"; do
-      printf 'export %s\n' "$entry"
+      key="${entry%%=*}"
+      value="${entry#*=}"
+      printf 'export %s=%q\n' "$key" "$value"
     done
   } > "$tmp"
 
