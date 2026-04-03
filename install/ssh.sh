@@ -3,6 +3,7 @@ set -euo pipefail
 
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck disable=SC2153
 
 write_ssh_config() {
   local ssh_dir="$HOME/.ssh"
@@ -18,9 +19,9 @@ write_ssh_config() {
   ensure_dir "$ssh_dir"
   ensure_dir "$config_dir"
 
-  while IFS= read -r line; do
-    [[ -n "$line" ]] && host_ssh_config_lines+=("$line")
-  done < <(eval "printf '%s\n' \"\${HOST_SSH_CONFIG_LINES[@]-}\"")
+  if declare -p HOST_SSH_CONFIG_LINES >/dev/null 2>&1; then
+    host_ssh_config_lines=("${HOST_SSH_CONFIG_LINES[@]}")
+  fi
 
   tmp_fragment="$(mktemp)"
   {
