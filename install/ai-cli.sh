@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# Install AI coding CLIs not provided by pacman/Omarchy
-# Claude Code and OpenCode are Omarchy defaults (pacman)
-set -e
+# Install AI coding CLIs not provided by the base host packages
+set -euo pipefail
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 install_ai_clis() {
   log_section "AI Coding CLIs"
+
+  # Claude Code (Anthropic)
+  install_if_missing "Claude Code CLI" "claude" \
+    "npm install -g @anthropic-ai/claude-code"
 
   # Codex (OpenAI)
   install_if_missing "Codex CLI" "codex" \

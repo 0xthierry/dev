@@ -79,19 +79,29 @@ install_system_packages() {
 }
 
 install_aur_packages() {
+  local -a packages=("$@")
   log_section "AUR Packages"
 
-  local aur_helper
+  local aur_helper=""
+
+  if [[ ${#packages[@]} -eq 0 ]]; then
+    packages=("${AUR_PACKAGES[@]}")
+  fi
+
+  if [[ ${#packages[@]} -eq 0 ]]; then
+    return 0
+  fi
+
   aur_helper=$(get_aur_helper)
 
   if [ -z "$aur_helper" ]; then
     log_item "WARNING: No AUR helper found (paru/yay)"
-    log_item "Install manually: ${AUR_PACKAGES[*]}"
+    log_item "Install manually: ${packages[*]}"
     return 0
   fi
 
-  log_item "Using $aur_helper for: ${AUR_PACKAGES[*]}"
-  run_cmd "$aur_helper" -S --needed --noconfirm "${AUR_PACKAGES[@]}"
+  log_item "Using $aur_helper for: ${packages[*]}"
+  run_cmd "$aur_helper" -S --needed --noconfirm "${packages[@]}"
 }
 
 install_pacman_packages() {
@@ -121,5 +131,5 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   install_desktop_packages
   install_gaming_packages
   install_system_packages
-  install_aur_packages
+  install_aur_packages "${AUR_PACKAGES[@]}"
 fi

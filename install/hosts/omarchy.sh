@@ -15,8 +15,23 @@ HOST_CONFIG_TARGETS=(
 
 # shellcheck disable=SC2034
 HOST_PACMAN_PACKAGES=(
-  brave-bin
+  bitwarden
+  dbeaver
+  discord
   ghostty
+  obsidian
+  steam
+  telegram-desktop
+)
+
+# shellcheck disable=SC2034
+HOST_AUR_PACKAGES=(
+  bambustudio-bin
+  brave-bin
+  figma-linux
+  linear-desktop-bin
+  slack-desktop
+  spotify
 )
 
 setup_host_prereqs() {
@@ -28,6 +43,8 @@ setup_host_packages() {
   log_section "Host Packages"
   log_item "Installing shared CLI package set for omarchy"
   setup_shared_cli_packages
+  install_zed_linux
+  log_item "Skipping unsupported Omarchy apps: ChatGPT, Claude desktop, Codex.app, Rectangle"
 }
 
 setup_shared_machine_state() {

@@ -2,12 +2,15 @@
 
 source "$REPO_ROOT/install/pacman.sh"
 source "$REPO_ROOT/install/brew.sh"
+source "$REPO_ROOT/install/codex-app.sh"
+source "$REPO_ROOT/install/zed.sh"
 source "$REPO_ROOT/install/configs.sh"
 source "$REPO_ROOT/install/env.sh"
 source "$REPO_ROOT/install/shell.sh"
 source "$REPO_ROOT/install/git.sh"
 source "$REPO_ROOT/install/ssh.sh"
 source "$REPO_ROOT/install/mise.sh"
+source "$REPO_ROOT/install/ai-cli.sh"
 source "$REPO_ROOT/install/tools.sh"
 source "$REPO_ROOT/install/hooks.sh"
 
@@ -19,6 +22,8 @@ HOST_CONFIG_TARGETS=()
 # shellcheck disable=SC2034
 HOST_PACMAN_PACKAGES=()
 # shellcheck disable=SC2034
+HOST_AUR_PACKAGES=()
+# shellcheck disable=SC2034
 HOST_BREW_CASKS=()
 
 array_values() {
@@ -29,6 +34,7 @@ array_values() {
 setup_shared_cli_packages() {
   local -a host_brew_casks=()
   local -a host_pacman_packages=()
+  local -a host_aur_packages=()
 
   while IFS= read -r value; do
     [[ -n "$value" ]] && host_brew_casks+=("$value")
@@ -37,6 +43,10 @@ setup_shared_cli_packages() {
   while IFS= read -r value; do
     [[ -n "$value" ]] && host_pacman_packages+=("$value")
   done < <(array_values HOST_PACMAN_PACKAGES)
+
+  while IFS= read -r value; do
+    [[ -n "$value" ]] && host_aur_packages+=("$value")
+  done < <(array_values HOST_AUR_PACKAGES)
 
   if [[ "$SETUP_HOST" == "macbook" ]]; then
     install_homebrew
@@ -47,6 +57,7 @@ setup_shared_cli_packages() {
 
   install_common_pacman_packages
   install_pacman_packages "${host_pacman_packages[@]}"
+  install_aur_packages "${host_aur_packages[@]}"
 }
 
 apply_shared_machine_state() {
@@ -56,6 +67,7 @@ apply_shared_machine_state() {
   write_git_files
   write_ssh_config
   install_runtimes
+  install_ai_clis
 }
 
 create_host_work_dirs() {

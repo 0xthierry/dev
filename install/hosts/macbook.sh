@@ -22,8 +22,26 @@ HOST_CONFIG_TARGETS=(
 
 # shellcheck disable=SC2034
 HOST_BREW_CASKS=(
+  bambu-studio
+  bitwarden
   brave-browser
+  chatgpt
+  claude
+  dbeaver-community
+  discord
+  figma
   ghostty
+  linear-linear
+  obs
+  obsidian
+  orbstack
+  rectangle
+  slack
+  signal
+  spotify
+  steam
+  telegram
+  zed
 )
 
 setup_host_prereqs() {
@@ -35,6 +53,7 @@ setup_host_packages() {
   log_section "Host Packages"
   log_item "Installing shared CLI package set for macbook"
   setup_shared_cli_packages
+  install_codex_app_macos
 }
 
 setup_shared_machine_state() {
