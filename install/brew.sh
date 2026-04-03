@@ -120,6 +120,11 @@ install_brew_casks() {
   brew_bin="$(resolve_brew_bin)"
 
   for package in "${packages[@]}"; do
+    if [[ "$package" == "brave-browser" ]] && [[ -d /Applications/Brave\ Browser.app ]]; then
+      log_item "Already installed: $package (/Applications/Brave Browser.app)"
+      continue
+    fi
+
     if "$brew_bin" list --cask --versions "$package" >/dev/null 2>&1; then
       log_item "Already installed: $package"
       continue
