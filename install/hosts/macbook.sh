@@ -20,6 +20,11 @@ HOST_CONFIG_TARGETS=(
   agents
 )
 
+# shellcheck disable=SC2034
+HOST_BREW_CASKS=(
+  ghostty
+)
+
 setup_host_prereqs() {
   log_section "Host Prerequisites"
   log_item "Preparing macbook host prerequisites"

@@ -91,6 +91,16 @@ install_common_brew_formulae() {
 }
 
 install_brew_casks() {
+  local -a packages=("$@")
+
+  if [[ ${#packages[@]} -eq 0 ]]; then
+    packages=("${BREW_CASKS[@]}")
+  fi
+
+  if [[ ${#packages[@]} -eq 0 ]]; then
+    return 0
+  fi
+
   log_section "Homebrew Casks"
 
   if ! (( ${DRY_RUN:-0} )) && ! resolve_brew_bin >/dev/null 2>&1; then
@@ -98,13 +108,13 @@ install_brew_casks() {
     return 1
   fi
 
-  log_item "Installing: ${BREW_CASKS[*]}"
-  run_brew install --cask "${BREW_CASKS[@]}"
+  log_item "Installing: ${packages[*]}"
+  run_brew install --cask "${packages[@]}"
 }
 
 # Run if executed directly
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   install_homebrew
   install_common_brew_formulae
-  install_brew_casks
+  install_brew_casks "${BREW_CASKS[@]}"
 fi

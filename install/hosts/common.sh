@@ -15,15 +15,19 @@ HOST_ENV_VARS=()
 HOST_SSH_CONFIG_LINES=()
 HOST_WORK_DIRS=()
 HOST_CONFIG_TARGETS=()
+HOST_PACMAN_PACKAGES=()
+HOST_BREW_CASKS=()
 
 setup_shared_cli_packages() {
   if [[ "$SETUP_HOST" == "macbook" ]]; then
     install_homebrew
     install_common_brew_formulae
+    install_brew_casks "${HOST_BREW_CASKS[@]}"
     return 0
   fi
 
   install_common_pacman_packages
+  install_pacman_packages "${HOST_PACMAN_PACKAGES[@]}"
 }
 
 apply_shared_machine_state() {
@@ -73,6 +77,7 @@ apply_host_configs() {
 }
 
 run_post_setup_tasks() {
+  "$REPO_ROOT/scripts/clone-repos.sh"
   install_hooks "$REPO_ROOT"
 }
 

@@ -13,6 +13,11 @@ HOST_CONFIG_TARGETS=(
   agents
 )
 
+# shellcheck disable=SC2034
+HOST_PACMAN_PACKAGES=(
+  ghostty
+)
+
 setup_host_prereqs() {
   log_section "Host Prerequisites"
   log_item "Preparing omarchy host prerequisites"
