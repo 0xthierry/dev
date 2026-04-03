@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Install Docker via pacman
 set -e
+# shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 install_docker() {

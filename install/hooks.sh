@@ -1,26 +1,31 @@
 #!/usr/bin/env bash
-# Install Claude hooks dependencies
-set -e
+# Install agents hooks dependencies
+set -euo pipefail
+# shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 install_hooks() {
   local repo_path="$1"
-  local hooks_dir="$repo_path/configs/claude/hooks"
+  local hooks_dir="$repo_path/configs/agents/hooks"
 
-  log_section "Claude Hooks"
+  log_section "Agent Hooks"
 
   if [ ! -d "$hooks_dir" ]; then
     log_item "Hooks directory not found: $hooks_dir"
     return 0
   fi
 
-  if ! command -v bun &> /dev/null; then
+  if ! (( ${DRY_RUN:-0} )) && ! command -v bun &> /dev/null; then
     log_item "Bun not installed, skipping hooks"
-    return 1
+    return 0
   fi
 
   log_item "Installing dependencies..."
-  (cd "$hooks_dir" && bun install)
+  if (( ${DRY_RUN:-0} )); then
+    dry_run_cmd /bin/bash -lc "cd $(printf '%q' "$hooks_dir") && bun install"
+  else
+    (cd "$hooks_dir" && bun install)
+  fi
 }
 
 # Run if executed directly

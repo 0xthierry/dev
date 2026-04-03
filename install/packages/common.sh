@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+
+COMMON_PACMAN_PACKAGES=(
+  dust
+  duf
+  tree
+  ncdu
+  hexyl
+  jq
+  yq
+  sd
+  choose
+  curl
+  wget
+  xh
+  dnsutils
+  inetutils
+  nmap
+  whois
+  mitmproxy
+  iperf3
+  htop
+  procs
+  fastfetch
+  inxi
+  gh
+  infisical
+  gnumake
+  shellcheck
+  gitleaks
+  graphviz
+  tree-sitter
+  tokei
+  hyperfine
+  entr
+  watchexec
+  rsync
+  lazydocker
+  dive
+  gum
+  socat
+  unzip
+  less
+  ripgrep
+  fd
+  bat
+  fzf
+  eza
+  zoxide
+  direnv
+  btop
+  tealdeer
+  lazygit
+  git-delta
+)
+
+COMMON_PACMAN_LINUX_PACKAGES=(
+  wl-clipboard
+)
+
+COMMON_BREW_FORMULAE=(
+  dust
+  duf
+  tree
+  ncdu
+  hexyl
+  jq
+  yq
+  sd
+  choose
+  curl
+  wget
+  xh
+  nmap
+  whois
+  mitmproxy
+  iperf3
+  htop
+  procs
+  fastfetch
+  gh
+  make
+  shellcheck
+  graphviz
+  tokei
+  hyperfine
+  entr
+  watchexec
+  rsync
+  gum
+  socat
+  unzip
+  ripgrep
+  fd
+  bat
+  fzf
+  eza
+  zoxide
+  direnv
+  btop
+  tealdeer
+  lazygit
+  git-delta
+)

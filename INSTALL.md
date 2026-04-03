@@ -1,77 +1,93 @@
-# Fresh Install Guide
+# Machine Setup Guide
+
+## Supported Setup Path
+
+The supported machine setup entrypoint is:
+
+```bash
+./setup.sh <dev|omarchy|macbook>
+```
+
+Use `--dry-run` first when changing the setup flow or validating a host:
+
+```bash
+./setup.sh dev --dry-run
+./setup.sh omarchy --dry-run
+./setup.sh macbook --dry-run
+```
+
+`bootstrap.sh` is now only a compatibility shim that forwards to `setup.sh`.
 
 ## Prerequisites
 
-This guide assumes a fresh Omarchy install, which provides:
-- `yay` (AUR helper), `git`, `zsh`, `neovim`, `docker`
-- 1Password (GUI + CLI), Ghostty, Chromium, and other desktop apps
-- Base development tools (`base-devel`, `mise`, `starship`, etc.)
+- A cloned checkout of this repo, typically at `~/dev`
+- `git`
+- `zsh`
+- `sudo` access on Linux hosts
+- 1Password SSH agent configured separately from this repo
 
-## Step 1: Set up 1Password + SSH
+## Host Notes
 
-1. Open 1Password from the app launcher and sign in
-2. Enable the SSH agent: **Settings → Developer → SSH Agent → Enable**
-3. Add to `~/.ssh/config` (create if needed):
-   ```
-   Host *
-     IdentityAgent ~/.1password/agent.sock
-   ```
-4. Verify: `ssh -T git@github.com` should authenticate
+### `dev`
 
-## Step 2: Clone this repo
+- Linux VM-oriented setup
+- Creates `~/Work/Sideprojects` and `~/Work/Meistrari`
+- Writes the `github.com` SSH override used by the VM
+
+### `omarchy`
+
+- Linux desktop setup
+- Installs the shared CLI layer through `pacman`
+- Applies `nvim`, `zellij`, `hypr`, and `agents`
+
+### `macbook`
+
+- macOS setup
+- Installs the shared CLI layer through Homebrew
+- Applies `nvim`, `zellij`, and `agents`
+
+## What Setup Applies
+
+`./setup.sh <host>` applies the Bash-managed machine state in this order:
+
+1. Shared CLI packages for the selected host
+2. Shared CLI tool config under `configs/cli/`
+3. Shared env, shell, git, SSH, and mise setup
+4. Repo-owned config directories for the selected host
+5. Agent hook dependencies from `configs/agents/hooks`
+
+The setup is intended to be idempotent and non-destructive. Existing unrelated paths are warned about and left in place instead of being overwritten.
+
+## Verification
+
+Run the Bash checks after changing the setup code:
 
 ```bash
-git clone git@github.com:0xthierry/dev.git ~/dev
+bash -n setup.sh install/*.sh install/hosts/*.sh
+shellcheck setup.sh install/*.sh install/hosts/*.sh
+./setup.sh dev --dry-run
+./setup.sh omarchy --dry-run
+./setup.sh macbook --dry-run
 ```
 
-The repo **must** be at `~/dev` — the flake hardcodes this path.
-
-## Step 3: Run bootstrap
+For repo-owned config deployment, verify the symlink targets after a real setup:
 
 ```bash
-cd ~/dev
-./bootstrap.sh omarchy
+ls -la ~/.config/nvim
+ls -la ~/.config/zellij
+ls -la ~/.config/hypr
+ls -la ~/.config/zsh
 ```
 
-This will:
-1. Install GPU packages (ROCm), desktop apps, gaming stack, system tools via pacman
-2. Install AUR packages (ollama-rocm, slack, chrome, cursor, etc.)
-3. Install and configure Docker
-4. Install Nix with flakes enabled
-5. Apply Home Manager configuration (CLI tools, shell, git, symlinks)
-6. Set zsh as default shell
-7. Install language runtimes via mise (node, python, go, bun, rust, zig, aws)
-8. Install AI coding CLIs (codex, gemini)
-9. Install Claude hooks dependencies (bun install)
-
-## Step 4: Restart shell
+For the agent setup, verify:
 
 ```bash
-exec zsh
-```
-
-## Step 5: Verify
-
-```bash
-home-manager --version    # Home Manager installed
-mise current              # Runtimes installed
-nvim --version            # Neovim working
-ls -la ~/.config/nvim     # Symlink to ~/dev/configs/nvim
-ls -la ~/.claude          # Symlink to ~/dev/configs/claude
-ls -la ~/.config/zellij   # Symlink to ~/dev/configs/zellij
-ls -la ~/.config/hypr     # Symlink to ~/dev/configs/hypr
+ls -la ~/.codex
+ls -la ~/.claude
 ```
 
 ## Troubleshooting
 
-**AUR helper not found:** Omarchy ships `yay`. If missing, install manually:
-```bash
-sudo pacman -S --needed git base-devel
-git clone https://aur.archlinux.org/yay.git /tmp/yay && cd /tmp/yay && makepkg -si
-```
+If a dry-run shows warnings about an existing path, setup is intentionally refusing to replace that path automatically. Inspect it and decide whether to move it aside manually.
 
-**Nix daemon not running:** `sudo systemctl restart nix-daemon.service`
-
-**Home Manager switch fails:** Check `nix flake check` in the repo for syntax errors.
-
-**Locale warnings:** Ensure `en_US.UTF-8` is generated: `sudo locale-gen`
+If Homebrew or `pacman` is missing, the host package step cannot complete. Install the platform package manager first, then rerun `./setup.sh <host>`.

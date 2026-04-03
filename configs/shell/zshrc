@@ -1,0 +1,115 @@
+autoload -U compinit
+compinit
+
+setopt AUTO_CD
+setopt EXTENDED_HISTORY
+setopt HIST_EXPIRE_DUPS_FIRST
+setopt HIST_IGNORE_ALL_DUPS
+setopt HIST_IGNORE_DUPS
+setopt HIST_IGNORE_SPACE
+setopt SHARE_HISTORY
+
+HISTFILE="${XDG_DATA_HOME:-$HOME/.local/share}/zsh/history"
+HISTSIZE=32768
+SAVEHIST=32768
+
+if ! infocmp "$TERM" >/dev/null 2>&1; then
+  export TERM=xterm-256color
+fi
+
+export PATH="$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH"
+export PATH="$HOME/.opencode/bin:$PATH"
+export PATH="/opt/rocm/bin:$PATH"
+export PATH="$HOME/.cache/.bun/bin:$PATH"
+
+[[ -f "$HOME/.secrets" ]] && source "$HOME/.secrets"
+
+if [[ -n "$SSH_CONNECTION" ]]; then
+  export EDITOR='vim'
+else
+  export EDITOR='nvim'
+fi
+
+if [[ -d /usr/share/omarchy-zsh/conf.d ]]; then
+  for config in /usr/share/omarchy-zsh/conf.d/*.zsh; do
+    [[ -f "$config" ]] && source "$config"
+  done
+fi
+
+if [[ -d /usr/share/omarchy-zsh/functions ]]; then
+  for func in /usr/share/omarchy-zsh/functions/*.zsh; do
+    [[ -f "$func" ]] && source "$func"
+  done
+fi
+
+export ZSH="${HOME}/.oh-my-zsh"
+plugins=(
+  git
+  python
+  node
+  golang
+  aws
+  terraform
+  rust
+  docker
+  colorize
+  colored-man-pages
+)
+
+if [[ -f "${ZSH}/oh-my-zsh.sh" ]]; then
+  source "${ZSH}/oh-my-zsh.sh"
+fi
+
+if [[ -f "${ZSH}/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ]]; then
+  source "${ZSH}/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
+fi
+
+if [[ -f "${ZSH}/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]]; then
+  source "${ZSH}/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+fi
+
+if [[ -f "${ZSH}/custom/plugins/zsh-history-substring-search/zsh-history-substring-search.zsh" ]]; then
+  source "${ZSH}/custom/plugins/zsh-history-substring-search/zsh-history-substring-search.zsh"
+fi
+
+[[ -f "${ZDOTDIR}/fzf.sh" ]] && source "${ZDOTDIR}/fzf.sh"
+
+if command -v zoxide >/dev/null 2>&1; then
+  eval "$(zoxide init zsh)"
+fi
+
+if [[ -f "$HOME/.local/share/omarchy/default/bash/aliases" ]]; then
+  source "$HOME/.local/share/omarchy/default/bash/aliases"
+fi
+
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+alias ls='eza -lh --group-directories-first --icons=auto'
+alias ll='eza -la --icons --group-directories-first'
+alias la='eza -la --icons'
+alias lt='eza --tree --icons --level=2'
+alias vim='nvim'
+alias vi='nvim'
+alias lg='lazygit'
+alias g='git'
+alias wrks='cd ~/Work/Sideprojects'
+alias wrkm='cd ~/Work/Meistrari'
+alias wrkp='cd ~/Work/Pagarme'
+alias wrka='cd ~/Work/Arado'
+alias uc='cclaude --rw'
+alias ucr='cclaude --rw -- --resume'
+alias sc='cclaude --ro'
+alias scr='cclaude --ro -- --resume'
+alias zj='zellij'
+alias zl='zellij list-sessions'
+alias za='zellij attach'
+alias zk='zellij kill-session'
+alias zka='zellij kill-all-sessions'
+alias dstop='docker ps -q | xargs -r docker stop'
+
+mkcd() {
+  mkdir -p "$1" && cd "$1"
+}
+
+[[ -f "${ZDOTDIR}/prompt.sh" ]] && source "${ZDOTDIR}/prompt.sh"

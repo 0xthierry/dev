@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Install Arch/pacman packages (GPU, desktop apps, gaming, system tools)
-set -e
+set -euo pipefail
+# shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/packages/common.sh"
 
 # GPU packages (official repos)
 GPU_PACKAGES=(
@@ -57,50 +60,22 @@ SYSTEM_PACKAGES=(
 
 install_gpu_packages() {
   log_section "GPU Packages (pacman)"
-
-  if ! command -v pacman &> /dev/null; then
-    log_item "Skipping: not on Arch Linux"
-    return 0
-  fi
-
-  log_item "Installing: ${GPU_PACKAGES[*]}"
-  sudo pacman -S --needed --noconfirm "${GPU_PACKAGES[@]}"
+  install_pacman_packages "${GPU_PACKAGES[@]}"
 }
 
 install_desktop_packages() {
   log_section "Desktop Packages (pacman)"
-
-  if ! command -v pacman &> /dev/null; then
-    log_item "Skipping: not on Arch Linux"
-    return 0
-  fi
-
-  log_item "Installing: ${DESKTOP_PACKAGES[*]}"
-  sudo pacman -S --needed --noconfirm "${DESKTOP_PACKAGES[@]}"
+  install_pacman_packages "${DESKTOP_PACKAGES[@]}"
 }
 
 install_gaming_packages() {
   log_section "Gaming Packages (pacman)"
-
-  if ! command -v pacman &> /dev/null; then
-    log_item "Skipping: not on Arch Linux"
-    return 0
-  fi
-
-  log_item "Installing: ${GAMING_PACKAGES[*]}"
-  sudo pacman -S --needed --noconfirm "${GAMING_PACKAGES[@]}"
+  install_pacman_packages "${GAMING_PACKAGES[@]}"
 }
 
 install_system_packages() {
   log_section "System Packages (pacman)"
-
-  if ! command -v pacman &> /dev/null; then
-    log_item "Skipping: not on Arch Linux"
-    return 0
-  fi
-
-  log_item "Installing: ${SYSTEM_PACKAGES[*]}"
-  sudo pacman -S --needed --noconfirm "${SYSTEM_PACKAGES[@]}"
+  install_pacman_packages "${SYSTEM_PACKAGES[@]}"
 }
 
 install_aur_packages() {
@@ -116,7 +91,28 @@ install_aur_packages() {
   fi
 
   log_item "Using $aur_helper for: ${AUR_PACKAGES[*]}"
-  "$aur_helper" -S --needed --noconfirm "${AUR_PACKAGES[@]}"
+  run_cmd "$aur_helper" -S --needed --noconfirm "${AUR_PACKAGES[@]}"
+}
+
+install_pacman_packages() {
+  local -a packages=("$@")
+
+  if [[ ${#packages[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  if ! (( ${DRY_RUN:-0} )) && ! command -v pacman &> /dev/null; then
+    log_item "Skipping: pacman not available"
+    return 0
+  fi
+
+  log_item "Installing: ${packages[*]}"
+  run_cmd sudo pacman -S --needed --noconfirm "${packages[@]}"
+}
+
+install_common_pacman_packages() {
+  log_section "Shared CLI Packages (pacman)"
+  install_pacman_packages "${COMMON_PACMAN_PACKAGES[@]}" "${COMMON_PACMAN_LINUX_PACKAGES[@]}"
 }
 
 # Run if executed directly
