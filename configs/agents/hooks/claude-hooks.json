@@ -1,0 +1,128 @@
+{
+  "SessionStart": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bun ~/.agents/hooks/project-commands/on-start.ts",
+          "timeout": 5000,
+          "statusMessage": "Detecting project tooling"
+        }
+      ]
+    }
+  ],
+  "UserPromptSubmit": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bun ~/.agents/hooks/skill-matcher/index.ts",
+          "timeout": 5000,
+          "statusMessage": "Matching skills"
+        }
+      ]
+    }
+  ],
+  "PostToolUseFailure": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bun ~/.agents/hooks/tool-failures/on-failure.ts",
+          "timeout": 2000,
+          "statusMessage": "Recording failure"
+        }
+      ]
+    }
+  ],
+  "PreToolUse": [
+    {
+      "matcher": "Bash|Write|Edit|MultiEdit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bun ~/.agents/hooks/guards/index.ts",
+          "timeout": 3000,
+          "statusMessage": "Checking safety guards"
+        }
+      ]
+    },
+    {
+      "matcher": "Bash|Edit|Write",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bun ~/.agents/hooks/tool-failures/on-pre-use.ts",
+          "timeout": 2000,
+          "statusMessage": "Checking failure history"
+        }
+      ]
+    }
+  ],
+  "PostToolUse": [
+    {
+      "matcher": "Write|Edit|MultiEdit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bun ~/.agents/hooks/auto-format/index.ts",
+          "timeout": 300000,
+          "async": true,
+          "statusMessage": "Auto-formatting"
+        },
+        {
+          "type": "command",
+          "command": "bun ~/.agents/hooks/verify/on-edit.ts",
+          "timeout": 2000,
+          "statusMessage": "Tracking edited files"
+        }
+      ]
+    },
+    {
+      "matcher": "Bash",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bun ~/.agents/hooks/verify/on-bash.ts",
+          "timeout": 2000,
+          "statusMessage": "Tracking verification results"
+        }
+      ]
+    },
+    {
+      "matcher": "Bash|Edit|Write",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bun ~/.agents/hooks/tool-failures/on-success.ts",
+          "timeout": 2000,
+          "statusMessage": "Clearing failure records"
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bun ~/.agents/hooks/verify/on-stop.ts",
+          "timeout": 5000,
+          "statusMessage": "Verifying test/lint results"
+        }
+      ]
+    }
+  ],
+  "SubagentStop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bun ~/.agents/hooks/verify/on-stop.ts",
+          "timeout": 5000,
+          "statusMessage": "Verifying subagent results"
+        }
+      ]
+    }
+  ]
+}

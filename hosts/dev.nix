@@ -19,11 +19,15 @@ in
   xdg.configFile."nvim".source = config.lib.file.mkOutOfStoreSymlink
     "${configsPath}/nvim";
 
-  home.file.".claude".source = config.lib.file.mkOutOfStoreSymlink
-    "${configsPath}/claude";
+  home.file.".agents".source = config.lib.file.mkOutOfStoreSymlink
+    "${configsPath}/agents";
 
   xdg.configFile."zellij".source = config.lib.file.mkOutOfStoreSymlink
     "${configsPath}/zellij";
+
+  home.activation.installAgents = lib.hm.dag.entryAfter ["linkGeneration"] ''
+    run ${configsPath}/agents/install.sh --yes
+  '';
 
   # Create work directories
   home.activation.createWorkDirs = lib.hm.dag.entryAfter ["writeBoundary"] ''

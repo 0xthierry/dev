@@ -8,7 +8,7 @@
 
     globalConfig = {
       tools = {
-        node = "lts";
+        node = "25.2.0";
         python = "3.12";
         go = "latest";
         bun = "latest";

@@ -1,0 +1,48 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun ~/.agents/hooks/project-commands/on-start.ts",
+            "timeout": 5,
+            "statusMessage": "Detecting project tooling"
+          },
+          {
+            "type": "command",
+            "command": "bun ~/.agents/hooks/verify/codex-on-start.ts",
+            "timeout": 5,
+            "statusMessage": "Capturing session baseline"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun ~/.agents/hooks/guards/index.ts",
+            "timeout": 3,
+            "statusMessage": "Checking safety guards"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun ~/.agents/hooks/verify/codex-on-stop.ts",
+            "timeout": 5,
+            "statusMessage": "Verifying test/lint results"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,56 @@
+[
+  {
+    "name": "test-failure-investigation",
+    "skills": ["systematic-debugging"],
+    "query": "The login test is failing with 'TypeError: Cannot read property email of undefined'. Fix it.",
+    "context": "User presents a failing test without showing the actual code or investigating the cause.",
+    "expected_behavior": [
+      "Does NOT immediately propose a fix",
+      "Asks to see the test code and relevant source files",
+      "Reads error message carefully and identifies the undefined object",
+      "Traces backward to find where the undefined value originates",
+      "Only proposes fix after understanding root cause"
+    ],
+    "failure_indicators": [
+      "Proposes adding null checks without investigation",
+      "Suggests 'try adding optional chaining' as first response",
+      "Provides fix without reading the actual code"
+    ]
+  },
+  {
+    "name": "multiple-failed-fixes",
+    "skills": ["systematic-debugging"],
+    "query": "I've tried 3 different fixes for this API timeout but none worked. The endpoint just keeps timing out randomly.",
+    "context": "User has already attempted multiple fixes, indicating potential architectural issue or need for ToT.",
+    "expected_behavior": [
+      "Recognizes 3+ failed fixes as trigger for architectural review",
+      "Does NOT propose 'Fix #4' immediately",
+      "Asks what was tried and what evidence was gathered",
+      "Suggests Tree of Thought approach OR questions the architecture",
+      "Gathers evidence about the timeout pattern before proposing solutions"
+    ],
+    "failure_indicators": [
+      "Immediately suggests another fix without investigation",
+      "Ignores the '3 fixes failed' signal",
+      "Does not ask about previous investigation efforts"
+    ]
+  },
+  {
+    "name": "multi-component-debugging",
+    "skills": ["systematic-debugging"],
+    "query": "Our CI build is failing on the signing step but it works locally. Can you fix the codesign command?",
+    "context": "Multi-layer system (CI → build → signing) where the issue could be at any layer.",
+    "expected_behavior": [
+      "Identifies this as multi-component system requiring evidence gathering",
+      "Does NOT immediately modify the codesign command",
+      "Suggests adding diagnostic logging at each layer boundary",
+      "Asks about environment differences between local and CI",
+      "Proposes gathering evidence to identify WHICH layer fails before fixing"
+    ],
+    "failure_indicators": [
+      "Immediately modifies codesign command flags",
+      "Assumes the signing script is the problem without verification",
+      "Does not consider environment/secrets propagation issues"
+    ]
+  }
+]

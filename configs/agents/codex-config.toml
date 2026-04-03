@@ -1,0 +1,48 @@
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+model_reasoning_summary = "detailed"
+model_verbosity = "high"
+personality = "pragmatic"
+developer_instructions = """
+Be explicit about uncertainty. Do not invent facts, sources, behavior, or implementation details.
+When a request is materially ambiguous about scope, target files, deliverable, or intended behavior, ask concise clarifying questions before acting.
+Only make reasonable assumptions when the ambiguity is minor and unlikely to change the result, and make those assumptions explicit to the user and confirm them.
+Do not preserve backward compatibility by default. When a change may affect backward compatibility, ask the user whether backward compatibility is required before proceeding.
+"""
+plan_mode_reasoning_effort = "high"
+hide_agent_reasoning = false
+show_raw_agent_reasoning = true
+notify = ["notify-send", "Codex"]
+service_tier = "fast"
+web_search = "live"
+file_opener = "none"
+
+[history]
+max_bytes = 1073741824
+persistence = "save-all"
+
+[features]
+multi_agent = true
+codex_hooks = true
+
+[agents]
+max_threads = 50
+max_depth = 3
+job_max_runtime_seconds = 1800
+
+[tui]
+alternate_screen = "never"
+animations = false
+show_tooltips = false
+status_line = ["model-with-reasoning", "context-remaining", "used-tokens", "current-dir", "git-branch", "five-hour-limit"]
+terminal_title = ["project", "spinner", "status", "git-branch", "model"]
+
+[tools.web_search]
+context_size = "high"
+
+[shell_environment_policy]
+inherit = "all"
+
+[memories]
+no_memories_if_mcp_or_web_search = true
+min_rollout_idle_hours = 24
