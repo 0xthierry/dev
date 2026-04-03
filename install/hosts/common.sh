@@ -12,22 +12,41 @@ source "$REPO_ROOT/install/tools.sh"
 source "$REPO_ROOT/install/hooks.sh"
 
 HOST_ENV_VARS=()
+# shellcheck disable=SC2034
 HOST_SSH_CONFIG_LINES=()
 HOST_WORK_DIRS=()
 HOST_CONFIG_TARGETS=()
+# shellcheck disable=SC2034
 HOST_PACMAN_PACKAGES=()
+# shellcheck disable=SC2034
 HOST_BREW_CASKS=()
 
+array_values() {
+  local var_name="$1"
+  eval "printf '%s\n' \"\${${var_name}[@]-}\""
+}
+
 setup_shared_cli_packages() {
+  local -a host_brew_casks=()
+  local -a host_pacman_packages=()
+
+  while IFS= read -r value; do
+    [[ -n "$value" ]] && host_brew_casks+=("$value")
+  done < <(array_values HOST_BREW_CASKS)
+
+  while IFS= read -r value; do
+    [[ -n "$value" ]] && host_pacman_packages+=("$value")
+  done < <(array_values HOST_PACMAN_PACKAGES)
+
   if [[ "$SETUP_HOST" == "macbook" ]]; then
     install_homebrew
     install_common_brew_formulae
-    install_brew_casks "${HOST_BREW_CASKS[@]}"
+    install_brew_casks "${host_brew_casks[@]}"
     return 0
   fi
 
   install_common_pacman_packages
-  install_pacman_packages "${HOST_PACMAN_PACKAGES[@]}"
+  install_pacman_packages "${host_pacman_packages[@]}"
 }
 
 apply_shared_machine_state() {

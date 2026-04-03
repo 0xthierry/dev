@@ -22,6 +22,7 @@ HOST_CONFIG_TARGETS=(
 
 # shellcheck disable=SC2034
 HOST_BREW_CASKS=(
+  brave-browser
   ghostty
 )
 

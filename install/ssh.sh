@@ -12,17 +12,22 @@ write_ssh_config() {
   local tmp_fragment=""
   local tmp_include=""
   local line=""
+  local -a host_ssh_config_lines=()
 
   log_section "SSH Configuration"
   ensure_dir "$ssh_dir"
   ensure_dir "$config_dir"
+
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && host_ssh_config_lines+=("$line")
+  done < <(eval "printf '%s\n' \"\${HOST_SSH_CONFIG_LINES[@]-}\"")
 
   tmp_fragment="$(mktemp)"
   {
     printf 'Host *\n'
     printf '  AddKeysToAgent yes\n'
 
-    for line in "${HOST_SSH_CONFIG_LINES[@]}"; do
+    for line in "${host_ssh_config_lines[@]}"; do
       printf '%s\n' "$line"
     done
   } > "$tmp_fragment"
