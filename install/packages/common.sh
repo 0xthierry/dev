@@ -64,6 +64,7 @@ COMMON_BREW_FORMULAE=(
   dust
   duf
   tree
+  tree-sitter-cli
   ncdu
   hexyl
   jq
