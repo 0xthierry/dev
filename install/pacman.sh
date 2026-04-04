@@ -125,6 +125,13 @@ install_common_pacman_packages() {
   install_pacman_packages "${COMMON_PACMAN_PACKAGES[@]}" "${COMMON_PACMAN_LINUX_PACKAGES[@]}"
 }
 
+install_common_aur_packages() {
+  if [[ ${#COMMON_AUR_PACKAGES[@]} -eq 0 ]]; then
+    return 0
+  fi
+  install_aur_packages "${COMMON_AUR_PACKAGES[@]}"
+}
+
 # Run if executed directly
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   install_gpu_packages

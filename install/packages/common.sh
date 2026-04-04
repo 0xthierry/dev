@@ -24,7 +24,6 @@ COMMON_PACMAN_PACKAGES=(
   fastfetch
   inxi
   github-cli
-  infisical
   gnumake
   shellcheck
   gitleaks
@@ -59,6 +58,10 @@ COMMON_PACMAN_LINUX_PACKAGES=(
   wl-clipboard
 )
 
+COMMON_AUR_PACKAGES=(
+  infisical-bin
+)
+
 COMMON_BREW_FORMULAE=(
   dust
   duf
@@ -81,6 +84,7 @@ COMMON_BREW_FORMULAE=(
   procs
   fastfetch
   gh
+  infisical/get-cli/infisical
   make
   shellcheck
   graphviz

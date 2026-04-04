@@ -58,6 +58,7 @@ setup_shared_cli_packages() {
 
   install_common_pacman_packages
   install_pacman_packages "${host_pacman_packages[@]}"
+  install_common_aur_packages
   install_aur_packages "${host_aur_packages[@]}"
 }
 
