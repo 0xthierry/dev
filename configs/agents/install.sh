@@ -14,6 +14,8 @@ SOURCE_HOOKS_DIR="$SCRIPT_DIR/hooks"
 SOURCE_BIN_DIR="$SCRIPT_DIR/bin"
 SOURCE_CODEX_CONFIG="$SCRIPT_DIR/codex-config.toml"
 SOURCE_CODEX_HOOKS="$SCRIPT_DIR/hooks/codex-hooks.json"
+SOURCE_CLAUDE_SETTINGS="$SCRIPT_DIR/claude-settings.json"
+SOURCE_STATUSLINE="$SCRIPT_DIR/statusline.ts"
 SOURCE_AGENTS_MD="$SCRIPT_DIR/AGENTS.md"
 SOURCE_USER_MD="$SCRIPT_DIR/USER.md"
 
@@ -388,6 +390,7 @@ install_agents_home_target() {
   force_link_path "$SOURCE_BIN_DIR" "$target_root/bin" ".agents bin"
   force_link_path "$SOURCE_AGENTS_MD" "$target_root/AGENTS.md" ".agents AGENTS.md"
   force_link_path "$SOURCE_USER_MD" "$target_root/USER.md" ".agents USER.md"
+  force_link_path "$SOURCE_STATUSLINE" "$target_root/statusline.ts" ".agents statusline.ts"
 }
 
 install_codex_target() {
@@ -405,46 +408,57 @@ install_codex_target() {
   fi
 }
 
-sync_hooks_to_settings() {
-  local hooks_json="$1"
-  local settings_path="$2"
-  local label="$3"
+sync_claude_settings() {
+  local base_settings="$1"
+  local hooks_json="$2"
+  local settings_path="$3"
+
+  if [[ ! -f "$base_settings" ]]; then
+    warn "Missing base settings: $base_settings"
+    return 0
+  fi
 
   if [[ ! -f "$hooks_json" ]]; then
     warn "Missing hooks config: $hooks_json"
     return 0
   fi
 
-  if [[ ! -f "$settings_path" ]]; then
-    warn "Missing settings file: $settings_path"
-    return 0
-  fi
-
   if ! command -v jq &>/dev/null; then
-    warn "jq not found — cannot sync hooks to $label settings.json"
+    warn "jq not found — cannot sync claude settings"
     return 0
   fi
 
-  local current_hooks new_hooks
-  current_hooks="$(jq -cS '.hooks // {}' "$settings_path")"
-  new_hooks="$(jq -cS '.' "$hooks_json")"
+  # Build the desired settings: base settings + hooks merged in
+  local desired
+  desired="$(jq -cS --argjson hooks "$(jq -cS '.' "$hooks_json")" '. + {hooks: $hooks}' "$base_settings")"
 
-  if [[ "$current_hooks" == "$new_hooks" ]]; then
-    log "skip: $label hooks already up to date"
-    ((SKIPPED_COUNT += 1))
-    return 0
+  # If settings.json exists, merge canonical keys on top of it (preserving any extra keys)
+  local current_sorted
+  if [[ -f "$settings_path" ]]; then
+    current_sorted="$(jq -cS '.' "$settings_path")"
+    local merged
+    merged="$(jq -cS --argjson canonical "$desired" '. * $canonical' "$settings_path")"
+    if [[ "$current_sorted" == "$merged" ]]; then
+      log "skip: claude settings already up to date"
+      ((SKIPPED_COUNT += 1))
+      return 0
+    fi
   fi
 
   if (( DRY_RUN )); then
-    log "[dry-run] sync hooks into $label settings.json"
+    log "[dry-run] sync claude settings into $settings_path"
     return 0
   fi
 
   local tmp_path
   tmp_path="$(mktemp)"
-  jq --argjson hooks "$new_hooks" '.hooks = $hooks' "$settings_path" > "$tmp_path"
+  if [[ -f "$settings_path" ]]; then
+    jq --argjson canonical "$desired" '. * $canonical' "$settings_path" > "$tmp_path"
+  else
+    printf '%s\n' "$desired" | jq '.' > "$tmp_path"
+  fi
   mv "$tmp_path" "$settings_path"
-  log "synced: $label hooks config"
+  log "synced: claude settings"
   ((LINKED_COUNT += 1))
 }
 
@@ -463,8 +477,8 @@ install_claude_target() {
   if [[ -d "$SOURCE_HOOKS_DIR/bin" ]]; then
     force_link_path "$SOURCE_HOOKS_DIR/bin" "$target_root/bin" "claude bin"
   fi
-  # Sync hooks config into settings.json
-  sync_hooks_to_settings "$claude_hooks_json" "$target_root/settings.json" "claude"
+  # Sync settings (env, permissions, model, plugins, etc.) + hooks into settings.json
+  sync_claude_settings "$SOURCE_CLAUDE_SETTINGS" "$claude_hooks_json" "$target_root/settings.json"
 }
 
 main() {
@@ -514,6 +528,16 @@ main() {
 
   if [[ ! -f "$SOURCE_CODEX_CONFIG" ]]; then
     warn "Missing source Codex config file: $SOURCE_CODEX_CONFIG"
+    exit 1
+  fi
+
+  if [[ ! -f "$SOURCE_CLAUDE_SETTINGS" ]]; then
+    warn "Missing source Claude settings file: $SOURCE_CLAUDE_SETTINGS"
+    exit 1
+  fi
+
+  if [[ ! -f "$SOURCE_STATUSLINE" ]]; then
+    warn "Missing source statusline file: $SOURCE_STATUSLINE"
     exit 1
   fi
 

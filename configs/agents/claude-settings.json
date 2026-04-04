@@ -1,0 +1,64 @@
+{
+  "env": {
+    "MAX_THINKING_TOKENS": "32199",
+    "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
+    "DISABLE_COST_WARNINGS": "1",
+    "USE_BUILTIN_RIPGREP": "1",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "DISABLE_TELEMETRY": "1",
+    "DISABLE_ERROR_REPORTING": "1",
+    "DISABLE_BUG_COMMAND": "1",
+    "DISABLE_AUTOUPDATER": "1",
+    "CLAUDE_CODE_DISABLE_TERMINAL_TITLE": "1",
+    "CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS": "50000",
+    "CLAUDE_CODE_NO_FLICKER": "1",
+    "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1",
+    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+    "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1",
+    "CLAUDE_CODE_EFFORT_LEVEL": "high",
+    "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1",
+    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+    "ENABLE_LSP_TOOL": "1",
+    "USER_TYPE": "ant"
+  },
+  "includeCoAuthoredBy": false,
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(ls:*)",
+      "Bash(bun build:*)",
+      "Bash(linear:*)",
+      "Bash(~/.agents/bin/*:*)",
+      "Bash(bash ~/.agents/bin/*:*)",
+      "Bash(bun ~/.agents/hooks/*:*)"
+    ],
+    "deny": [
+      "AskUserQuestion",
+      "EnterPlanMode",
+      "ExitPlanMode",
+      "SlashCommand",
+      "TaskOutput"
+    ],
+    "defaultMode": "default"
+  },
+  "model": "opus[1m]",
+  "enableAllProjectMcpServers": false,
+  "statusLine": {
+    "type": "command",
+    "command": "bun ~/.agents/statusline.ts"
+  },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true,
+    "rust-analyzer-lsp@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": true,
+    "lua-lsp@claude-plugins-official": true,
+    "clangd-lsp@claude-plugins-official": true
+  },
+  "effortLevel": "high",
+  "autoMemoryEnabled": true,
+  "skipDangerousModePermissionPrompt": true,
+  "skipAutoPermissionPrompt": true
+}
