@@ -20,7 +20,10 @@ write_ssh_config() {
   ensure_dir "$config_dir"
 
   if declare -p HOST_SSH_CONFIG_LINES >/dev/null 2>&1; then
+    # Older Bash versions can treat an empty declared array as unbound under nounset.
+    set +u
     host_ssh_config_lines=("${HOST_SSH_CONFIG_LINES[@]}")
+    set -u
   fi
 
   tmp_fragment="$(mktemp)"
