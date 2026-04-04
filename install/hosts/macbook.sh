@@ -45,6 +45,16 @@ HOST_BREW_CASKS=(
   zed
 )
 
+apply_macos_defaults() {
+  log_section "macOS Defaults"
+
+  log_item "Disabling native window tiling (using Rectangle instead)"
+  run_cmd defaults write com.apple.WindowManager EnableTilingByEdgeDrag -bool false
+  run_cmd defaults write com.apple.WindowManager EnableTopTilingByEdgeDrag -bool false
+  run_cmd defaults write com.apple.WindowManager EnableTilingOptionAccelerator -bool false
+  run_cmd defaults write com.apple.WindowManager EnableTiledWindowMargins -bool false
+}
+
 setup_host_prereqs() {
   log_section "Host Prerequisites"
   log_item "Preparing macbook host prerequisites"
@@ -64,6 +74,7 @@ setup_shared_machine_state() {
 
 setup_host_machine_state() {
   log_section "Host Machine State"
+  apply_macos_defaults
   apply_host_configs
   create_host_work_dirs
 }
