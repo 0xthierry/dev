@@ -52,6 +52,7 @@ COMMON_PACMAN_PACKAGES=(
   tealdeer
   lazygit
   git-delta
+  neovim
   mise
 )
 
@@ -103,5 +104,6 @@ COMMON_BREW_FORMULAE=(
   tealdeer
   lazygit
   git-delta
+  neovim
   mise
 )
