@@ -30,11 +30,21 @@ install_npm_global_cli() {
   run_cmd "${install_cmd[@]}"
 }
 
+install_claude_code_binary() {
+  if check_installed claude; then
+    log_item "Claude Code CLI: installed"
+    return 0
+  fi
+
+  log_item "Installing Claude Code CLI..."
+  run_cmd bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
+}
+
 install_ai_clis() {
   log_section "AI Coding CLIs"
 
-  # Claude Code (Anthropic)
-  install_npm_global_cli "Claude Code CLI" "claude" "@anthropic-ai/claude-code"
+  # Claude Code (Anthropic) — standalone binary, not npm
+  install_claude_code_binary
 
   # Codex (OpenAI)
   install_npm_global_cli "Codex CLI" "codex" "@openai/codex"
