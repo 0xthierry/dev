@@ -23,13 +23,13 @@ COMMON_PACMAN_PACKAGES=(
   procs
   fastfetch
   inxi
-  gh
+  github-cli
   infisical
   gnumake
   shellcheck
   gitleaks
   graphviz
-  tree-sitter
+  tree-sitter-cli
   tokei
   hyperfine
   entr
@@ -49,7 +49,6 @@ COMMON_PACMAN_PACKAGES=(
   zoxide
   direnv
   btop
-  tealdeer
   lazygit
   git-delta
   neovim

@@ -14,7 +14,7 @@ write_mise_config() {
   tmp="$(mktemp)"
   cat > "$tmp" <<'EOF'
 [tools]
-node = "25.2.0"
+node = "latest"
 python = "3.12"
 go = "latest"
 bun = "latest"
