@@ -57,6 +57,7 @@ Use `--dry-run` first when changing the setup flow or validating a host:
 4. Linux hosts also install and enable Docker
 5. Repo-owned config directories for the selected host
 6. Agent hook dependencies from `configs/agents/hooks`
+7. Agent code review tools from `configs/agents/bin/install-cr-tools.sh`
 
 The setup is intended to be idempotent and non-destructive. Existing unrelated paths are warned about and left in place instead of being overwritten.
 

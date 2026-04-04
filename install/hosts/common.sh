@@ -115,6 +115,7 @@ apply_host_configs() {
 run_post_setup_tasks() {
   "$REPO_ROOT/scripts/clone-repos.sh"
   install_hooks "$REPO_ROOT"
+  install_agent_review_tools "$REPO_ROOT"
 }
 
 setup_host_prereqs() { :; }
