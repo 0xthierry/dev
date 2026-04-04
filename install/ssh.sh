@@ -13,27 +13,24 @@ write_ssh_config() {
   local tmp_fragment=""
   local tmp_include=""
   local line=""
-  local -a host_ssh_config_lines=()
 
   log_section "SSH Configuration"
   ensure_dir "$ssh_dir"
   ensure_dir "$config_dir"
-
-  if declare -p HOST_SSH_CONFIG_LINES >/dev/null 2>&1; then
-    # Older Bash versions can treat an empty declared array as unbound under nounset.
-    set +u
-    host_ssh_config_lines=("${HOST_SSH_CONFIG_LINES[@]}")
-    set -u
-  fi
 
   tmp_fragment="$(mktemp)"
   {
     printf 'Host *\n'
     printf '  AddKeysToAgent yes\n'
 
-    for line in "${host_ssh_config_lines[@]}"; do
-      printf '%s\n' "$line"
-    done
+    if declare -p HOST_SSH_CONFIG_LINES >/dev/null 2>&1; then
+      # Older Bash versions can treat empty arrays as unbound under nounset.
+      set +u
+      for line in "${HOST_SSH_CONFIG_LINES[@]}"; do
+        printf '%s\n' "$line"
+      done
+      set -u
+    fi
   } > "$tmp_fragment"
   write_if_changed "$tmp_fragment" "$fragment_path"
   log_item "SSH fragment: $fragment_path"
