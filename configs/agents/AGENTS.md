@@ -76,4 +76,4 @@ If any answer is no, keep going. Do not declare completion with failing tests or
 
 ## Host Configuration
 
-- Arch Linux (Omarchy), 64GB RAM, 16 cores / 32 threads, 4TB SSD
+{{HOST_CONFIG}}
