@@ -11,6 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_AGENTS_DIR="$SCRIPT_DIR/agents"
 SOURCE_SKILLS_DIR="$SCRIPT_DIR/skills"
 SOURCE_HOOKS_DIR="$SCRIPT_DIR/hooks"
+SOURCE_BIN_DIR="$SCRIPT_DIR/bin"
 SOURCE_CODEX_CONFIG="$SCRIPT_DIR/codex-config.toml"
 SOURCE_CODEX_HOOKS="$SCRIPT_DIR/hooks/codex-hooks.json"
 SOURCE_AGENTS_MD="$SCRIPT_DIR/AGENTS.md"
@@ -344,6 +345,16 @@ install_target() {
   link_skill_entries "$target_root"
 }
 
+install_agents_home_target() {
+  local target_root="$1"
+
+  install_target "$target_root" "$HOME/.agents"
+  link_path "$SOURCE_HOOKS_DIR" "$target_root/hooks" ".agents hooks"
+  link_path "$SOURCE_BIN_DIR" "$target_root/bin" ".agents bin"
+  link_path "$SOURCE_AGENTS_MD" "$target_root/AGENTS.md" ".agents AGENTS.md"
+  link_path "$SOURCE_USER_MD" "$target_root/USER.md" ".agents USER.md"
+}
+
 install_codex_target() {
   local target_root="$1"
 
@@ -406,7 +417,7 @@ install_claude_target() {
   local target_root="$1"
   local claude_hooks_json="$SOURCE_HOOKS_DIR/claude-hooks.json"
 
-  install_target "$target_root" "~/.claude"
+  install_target "$target_root" "$HOME/.claude"
   force_link_path "$SOURCE_AGENTS_MD" "$target_root/CLAUDE.md" "claude CLAUDE.md"
   force_link_path "$SOURCE_USER_MD" "$target_root/USER.md" "claude USER.md"
   # Symlink hooks directory
@@ -456,6 +467,16 @@ main() {
     exit 1
   fi
 
+  if [[ ! -d "$SOURCE_HOOKS_DIR" ]]; then
+    warn "Missing source hooks directory: $SOURCE_HOOKS_DIR"
+    exit 1
+  fi
+
+  if [[ ! -d "$SOURCE_BIN_DIR" ]]; then
+    warn "Missing source bin directory: $SOURCE_BIN_DIR"
+    exit 1
+  fi
+
   if [[ ! -f "$SOURCE_CODEX_CONFIG" ]]; then
     warn "Missing source Codex config file: $SOURCE_CODEX_CONFIG"
     exit 1
@@ -483,6 +504,8 @@ main() {
     log "Nothing selected."
     exit 0
   fi
+
+  install_agents_home_target "$HOME/.agents"
 
   if (( install_codex )); then
     install_codex_target "$HOME/.codex"
