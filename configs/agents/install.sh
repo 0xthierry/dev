@@ -256,6 +256,22 @@ link_agent_entries() {
   done < <(find "$SOURCE_AGENTS_DIR" -mindepth 1 -maxdepth 1 \( -type f -o -type d -o -type l \) -print0)
 }
 
+force_link_agent_entries() {
+  local target_root="$1"
+  local target_agents_dir="$target_root/agents"
+  local source_path=""
+  local target_path=""
+  local name=""
+
+  ensure_dir "$target_agents_dir"
+
+  while IFS= read -r -d '' source_path; do
+    name="$(basename "$source_path")"
+    target_path="$target_agents_dir/$name"
+    force_link_path "$source_path" "$target_path" "agent $name"
+  done < <(find "$SOURCE_AGENTS_DIR" -mindepth 1 -maxdepth 1 \( -type f -o -type d -o -type l \) -print0)
+}
+
 strip_model_from_frontmatter() {
   # Reads stdin, removes "model: ..." lines from YAML frontmatter, writes to stdout.
   # Frontmatter is delimited by leading "---" lines.
@@ -335,6 +351,22 @@ link_skill_entries() {
   done < <(find "$SOURCE_SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*' -print0)
 }
 
+force_link_skill_entries() {
+  local target_root="$1"
+  local target_skills_dir="$target_root/skills"
+  local source_path=""
+  local target_path=""
+  local name=""
+
+  ensure_dir "$target_skills_dir"
+
+  while IFS= read -r -d '' source_path; do
+    name="$(basename "$source_path")"
+    target_path="$target_skills_dir/$name"
+    force_link_path "$source_path" "$target_path" "skill $name"
+  done < <(find "$SOURCE_SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*' -print0)
+}
+
 install_target() {
   local target_root="$1"
   local label="$2"
@@ -348,11 +380,14 @@ install_target() {
 install_agents_home_target() {
   local target_root="$1"
 
-  install_target "$target_root" "$HOME/.agents"
-  link_path "$SOURCE_HOOKS_DIR" "$target_root/hooks" ".agents hooks"
-  link_path "$SOURCE_BIN_DIR" "$target_root/bin" ".agents bin"
-  link_path "$SOURCE_AGENTS_MD" "$target_root/AGENTS.md" ".agents AGENTS.md"
-  link_path "$SOURCE_USER_MD" "$target_root/USER.md" ".agents USER.md"
+  log ""
+  log "Installing into $HOME/.agents ($target_root)"
+  force_link_agent_entries "$target_root"
+  force_link_skill_entries "$target_root"
+  force_link_path "$SOURCE_HOOKS_DIR" "$target_root/hooks" ".agents hooks"
+  force_link_path "$SOURCE_BIN_DIR" "$target_root/bin" ".agents bin"
+  force_link_path "$SOURCE_AGENTS_MD" "$target_root/AGENTS.md" ".agents AGENTS.md"
+  force_link_path "$SOURCE_USER_MD" "$target_root/USER.md" ".agents USER.md"
 }
 
 install_codex_target() {
