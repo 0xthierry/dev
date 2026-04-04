@@ -4,20 +4,43 @@ set -euo pipefail
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+install_npm_global_cli() {
+  local name="$1"
+  local cmd="$2"
+  local package_name="$3"
+  local npm_bin=""
+  local mise_bin=""
+  local -a install_cmd=()
+
+  if check_installed "$cmd"; then
+    log_item "$name: installed"
+    return 0
+  fi
+
+  if npm_bin="$(command -v npm 2>/dev/null)"; then
+    install_cmd=("$npm_bin" install -g "$package_name")
+  elif mise_bin="$(resolve_mise_bin 2>/dev/null)"; then
+    install_cmd=("$mise_bin" exec node -- npm install -g "$package_name")
+  else
+    printf 'error: npm is unavailable and mise is not installed; cannot install %s\n' "$name" >&2
+    return 1
+  fi
+
+  log_item "Installing $name..."
+  run_cmd "${install_cmd[@]}"
+}
+
 install_ai_clis() {
   log_section "AI Coding CLIs"
 
   # Claude Code (Anthropic)
-  install_if_missing "Claude Code CLI" "claude" \
-    "npm install -g @anthropic-ai/claude-code"
+  install_npm_global_cli "Claude Code CLI" "claude" "@anthropic-ai/claude-code"
 
   # Codex (OpenAI)
-  install_if_missing "Codex CLI" "codex" \
-    "npm install -g @openai/codex"
+  install_npm_global_cli "Codex CLI" "codex" "@openai/codex"
 
   # Gemini CLI (Google)
-  install_if_missing "Gemini CLI" "gemini" \
-    "npm install -g @google/gemini-cli"
+  install_npm_global_cli "Gemini CLI" "gemini" "@google/gemini-cli"
 }
 
 # Run if executed directly

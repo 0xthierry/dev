@@ -38,6 +38,30 @@ run_cmd() {
   "$@"
 }
 
+resolve_mise_bin() {
+  if command -v mise >/dev/null 2>&1; then
+    command -v mise
+    return 0
+  fi
+
+  if [[ -x /opt/homebrew/bin/mise ]]; then
+    printf '%s\n' /opt/homebrew/bin/mise
+    return 0
+  fi
+
+  if [[ -x /usr/local/bin/mise ]]; then
+    printf '%s\n' /usr/local/bin/mise
+    return 0
+  fi
+
+  if [[ -x /usr/bin/mise ]]; then
+    printf '%s\n' /usr/bin/mise
+    return 0
+  fi
+
+  return 1
+}
+
 ensure_dir() {
   local dir_path="$1"
 

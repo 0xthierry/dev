@@ -17,7 +17,7 @@ if ! infocmp "$TERM" >/dev/null 2>&1; then
   export TERM=xterm-256color
 fi
 
-export PATH="$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH"
+export PATH="$HOME/bin:$HOME/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:$PATH"
 export PATH="$HOME/.opencode/bin:$PATH"
 export PATH="/opt/rocm/bin:$PATH"
 export PATH="$HOME/.cache/.bun/bin:$PATH"
@@ -76,6 +76,10 @@ fi
 
 if command -v zoxide >/dev/null 2>&1; then
   eval "$(zoxide init zsh)"
+fi
+
+if command -v mise >/dev/null 2>&1; then
+  eval "$(mise activate zsh)"
 fi
 
 if [[ -f "$HOME/.local/share/omarchy/default/bash/aliases" ]]; then

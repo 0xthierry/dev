@@ -52,6 +52,7 @@ COMMON_PACMAN_PACKAGES=(
   tealdeer
   lazygit
   git-delta
+  mise
 )
 
 COMMON_PACMAN_LINUX_PACKAGES=(
@@ -87,6 +88,7 @@ COMMON_BREW_FORMULAE=(
   entr
   watchexec
   rsync
+  docker
   gum
   socat
   unzip
@@ -101,4 +103,5 @@ COMMON_BREW_FORMULAE=(
   tealdeer
   lazygit
   git-delta
+  mise
 )

@@ -44,6 +44,7 @@ Use `--dry-run` first when changing the setup flow or validating a host:
 
 - macOS setup
 - Installs the shared CLI layer through Homebrew
+- Uses OrbStack as the container engine and installs the `docker` CLI through Homebrew
 - Applies `nvim`, `zellij`, and `agents`
 
 ## What Setup Applies
@@ -52,9 +53,10 @@ Use `--dry-run` first when changing the setup flow or validating a host:
 
 1. Shared CLI packages for the selected host
 2. Shared CLI tool config under `configs/cli/`
-3. Shared env, shell, git, SSH, and mise setup
-4. Repo-owned config directories for the selected host
-5. Agent hook dependencies from `configs/agents/hooks`
+3. Shared env, shell, git, SSH, `mise`, and AI CLI setup
+4. Linux hosts also install and enable Docker
+5. Repo-owned config directories for the selected host
+6. Agent hook dependencies from `configs/agents/hooks`
 
 The setup is intended to be idempotent and non-destructive. Existing unrelated paths are warned about and left in place instead of being overwritten.
 

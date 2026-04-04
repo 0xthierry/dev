@@ -33,22 +33,28 @@ EOF
 }
 
 install_runtimes() {
+  local mise_bin=""
+
   log_section "Mise Runtimes"
   write_mise_config
 
-  if ! (( ${DRY_RUN:-0} )) && ! command -v mise &> /dev/null; then
+  if ! (( ${DRY_RUN:-0} )) && ! mise_bin="$(resolve_mise_bin 2>/dev/null)"; then
     log_item "Mise not installed, skipping runtimes"
     return 0
   fi
 
+  if (( ${DRY_RUN:-0} )); then
+    mise_bin="mise"
+  fi
+
   log_item "Installing language runtimes..."
-  run_cmd mise install
+  run_cmd "$mise_bin" install
 
   log_item "Activating mise shims..."
   if (( ${DRY_RUN:-0} )); then
     dry_run_cmd /bin/bash -lc "eval \"\$(mise activate bash)\""
   else
-    eval "$(mise activate bash)"
+    eval "$("$mise_bin" activate bash)"
   fi
 }
 
