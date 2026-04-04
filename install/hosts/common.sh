@@ -113,7 +113,11 @@ apply_host_configs() {
 }
 
 run_post_setup_tasks() {
-  "$REPO_ROOT/scripts/clone-repos.sh"
+  if (( ! SKIP_GIT_REPO_SYNC )); then
+    "$REPO_ROOT/scripts/clone-repos.sh"
+  else
+    log_item "Skipping git repo sync"
+  fi
   install_hooks "$REPO_ROOT"
   install_agent_review_tools "$REPO_ROOT"
 }

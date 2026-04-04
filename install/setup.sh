@@ -14,10 +14,12 @@ run_setup() {
   local repo_root="$1"
   local host="$2"
   local dry_run="$3"
+  local skip_git_repo_sync="${4:-0}"
 
   export REPO_ROOT="$repo_root"
   export SETUP_HOST="$host"
   export DRY_RUN="$dry_run"
+  export SKIP_GIT_REPO_SYNC="$skip_git_repo_sync"
 
   load_host_module "$repo_root" "$host"
 

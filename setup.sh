@@ -9,18 +9,22 @@ source "$REPO_ROOT/install/setup.sh"
 
 HOST=""
 DRY_RUN=0
+SKIP_GIT_REPO_SYNC=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run|-n)
       DRY_RUN=1
       ;;
+    --skip-git-repo-sync)
+      SKIP_GIT_REPO_SYNC=1
+      ;;
     dev|omarchy|macbook)
       HOST="$1"
       ;;
     *)
       printf 'Unknown argument: %s\n' "$1" >&2
-      printf 'Usage: ./setup.sh [--dry-run] <dev|omarchy|macbook>\n' >&2
+      printf 'Usage: ./setup.sh [--dry-run] [--skip-git-repo-sync] <dev|omarchy|macbook>\n' >&2
       exit 1
       ;;
   esac
@@ -28,8 +32,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$HOST" ]]; then
-  printf 'Usage: ./setup.sh [--dry-run] <dev|omarchy|macbook>\n' >&2
+  printf 'Usage: ./setup.sh [--dry-run] [--skip-git-repo-sync] <dev|omarchy|macbook>\n' >&2
   exit 1
 fi
 
-run_setup "$REPO_ROOT" "$HOST" "$DRY_RUN"
+run_setup "$REPO_ROOT" "$HOST" "$DRY_RUN" "$SKIP_GIT_REPO_SYNC"
