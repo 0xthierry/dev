@@ -62,11 +62,6 @@ COMMON_AUR_PACKAGES=(
   infisical-bin
 )
 
-COMMON_BREW_TAPS=(
-  FelixKratz/formulae
-  nikitabobko/tap
-)
-
 COMMON_BREW_FORMULAE=(
   dust
   duf

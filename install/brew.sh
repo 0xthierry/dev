@@ -69,19 +69,6 @@ install_homebrew() {
   eval "$("$brew_bin" shellenv)"
 }
 
-install_brew_taps() {
-  if [[ ${#COMMON_BREW_TAPS[@]} -eq 0 ]]; then
-    return 0
-  fi
-
-  log_section "Homebrew Taps"
-  local tap=""
-  for tap in "${COMMON_BREW_TAPS[@]}"; do
-    log_item "Tapping: $tap"
-    run_brew tap "$tap"
-  done
-}
-
 install_brew_formulae() {
   local -a packages=("$@")
 

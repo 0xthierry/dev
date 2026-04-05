@@ -1,9 +1,0 @@
-#!/bin/bash
-
-# Nord-themed JankyBorders config
-# Active: Nord9 (blue), Inactive: Nord1 (dark)
-borders \
-  active_color=0xff81a1c1 \
-  inactive_color=0xff3b4252 \
-  width=3.0 \
-  style=round
