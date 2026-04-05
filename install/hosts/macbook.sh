@@ -54,6 +54,9 @@ apply_macos_defaults() {
   run_cmd defaults write com.apple.WindowManager EnableTilingOptionAccelerator -bool false
   run_cmd defaults write com.apple.WindowManager EnableTiledWindowMargins -bool false
 
+  log_item "Enabling Rectangle launch at login"
+  run_cmd defaults write com.knollsoft.Rectangle launchOnLogin -bool true
+
   log_item "Setting default browser to Brave (may prompt for confirmation)"
   run_cmd open -a "Brave Browser" --args --make-default-browser
 }
