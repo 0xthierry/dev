@@ -18,15 +18,20 @@ HOST_CONFIG_TARGETS=(
   nvim
   zellij
   agents
+  aerospace
+  sketchybar
+  borders
 )
 
 # shellcheck disable=SC2034
 HOST_BREW_CASKS=(
+  aerospace
   bambu-studio
   bitwarden
   brave-browser
   chatgpt
   claude
+  conductor
   dbeaver-community
   discord
   figma
@@ -36,7 +41,6 @@ HOST_BREW_CASKS=(
   obsidian
   orbstack
   parallels
-  rectangle
   slack
   signal
   spotify
@@ -45,14 +49,22 @@ HOST_BREW_CASKS=(
   zed
 )
 
+HOST_BREW_FORMULAE=(
+  sketchybar
+  borders
+)
+
 apply_macos_defaults() {
   log_section "macOS Defaults"
 
-  log_item "Disabling native window tiling (using Rectangle instead)"
+  log_item "Disabling native window tiling (using AeroSpace instead)"
   run_cmd defaults write com.apple.WindowManager EnableTilingByEdgeDrag -bool false
   run_cmd defaults write com.apple.WindowManager EnableTopTilingByEdgeDrag -bool false
   run_cmd defaults write com.apple.WindowManager EnableTilingOptionAccelerator -bool false
   run_cmd defaults write com.apple.WindowManager EnableTiledWindowMargins -bool false
+
+  log_item "Auto-hide macOS menu bar (SketchyBar replaces it)"
+  run_cmd defaults write NSGlobalDomain _HIHideMenuBar -bool true
 
   log_item "Setting default browser to Brave (may prompt for confirmation)"
   run_cmd open -a "Brave Browser" --args --make-default-browser

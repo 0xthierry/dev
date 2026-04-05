@@ -1,0 +1,198 @@
+# AeroSpace config — omarchy-inspired keybindings
+# Modifier: alt (Option) instead of Super to avoid macOS cmd conflicts
+
+# Start AeroSpace at login
+start-at-login = true
+
+# Normalizations
+enable-normalization-flatten-containers = true
+enable-normalization-opposite-orientation-for-nested-containers = true
+
+# Mouse follows focus
+on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
+on-focus-changed = ['move-mouse window-lazy-center']
+
+# Accordion is the default layout (like i3 tabbed)
+accordion-padding = 30
+
+# Start JankyBorders and SketchyBar on launch
+after-startup-command = [
+  'exec-and-forget /opt/homebrew/bin/borders active_color=0xff81a1c1 inactive_color=0xff3b4252 width=3.0',
+  'exec-and-forget /opt/homebrew/bin/sketchybar',
+]
+
+# Notify SketchyBar on workspace change
+exec-on-workspace-change = [
+  '/bin/bash', '-c',
+  '/opt/homebrew/bin/sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE',
+]
+
+# Gaps (matching omarchy feel)
+[gaps]
+inner.horizontal = 8
+inner.vertical = 8
+outer.left = 8
+outer.right = 8
+outer.bottom = 8
+outer.top = 40  # space for SketchyBar
+
+# ==========================================
+# Window management (alt = primary modifier)
+# ==========================================
+
+[mode.main.binding]
+
+# Close window (omarchy: Super+W)
+alt-w = 'close'
+
+# Layout controls
+alt-t = 'layout floating tiling'
+alt-f = 'fullscreen'
+alt-l = 'layout tiles accordion'
+alt-slash = ['layout tiles horizontal vertical', 'layout accordion horizontal vertical']
+
+# Focus movement — vim keys (alt+arrows conflicts with macOS word navigation)
+alt-h = 'focus left'
+alt-j = 'focus down'
+alt-k = 'focus up'
+alt-semicolon = 'focus right'
+
+# Swap windows
+alt-shift-h = 'move left'
+alt-shift-j = 'move down'
+alt-shift-k = 'move up'
+alt-shift-semicolon = 'move right'
+
+# Resize (omarchy: Super+-/=)
+alt-minus = 'resize smart -100'
+alt-equal = 'resize smart +100'
+alt-shift-minus = 'resize smart -50'
+alt-shift-equal = 'resize smart +50'
+
+# Switch workspaces (omarchy: Super+1-0)
+alt-1 = 'workspace 1'
+alt-2 = 'workspace 2'
+alt-3 = 'workspace 3'
+alt-4 = 'workspace 4'
+alt-5 = 'workspace 5'
+alt-6 = 'workspace 6'
+alt-7 = 'workspace 7'
+alt-8 = 'workspace 8'
+alt-9 = 'workspace 9'
+alt-0 = 'workspace 10'
+
+# Move window to workspace (omarchy: Super+Shift+1-0)
+alt-shift-1 = 'move-node-to-workspace 1'
+alt-shift-2 = 'move-node-to-workspace 2'
+alt-shift-3 = 'move-node-to-workspace 3'
+alt-shift-4 = 'move-node-to-workspace 4'
+alt-shift-5 = 'move-node-to-workspace 5'
+alt-shift-6 = 'move-node-to-workspace 6'
+alt-shift-7 = 'move-node-to-workspace 7'
+alt-shift-8 = 'move-node-to-workspace 8'
+alt-shift-9 = 'move-node-to-workspace 9'
+alt-shift-0 = 'move-node-to-workspace 10'
+
+# Next/previous workspace (omarchy: Super+Tab/Shift+Tab)
+alt-period = 'workspace next'
+alt-comma = 'workspace prev'
+alt-tab = 'workspace-back-and-forth'
+
+# ==========================================
+# App launchers (omarchy: Super+Shift+key)
+# ==========================================
+
+# Terminal (omarchy: Super+Return)
+alt-enter = 'exec-and-forget open -a Ghostty'
+
+# Browser (omarchy: Super+Shift+Return)
+alt-shift-enter = 'exec-and-forget open -a "Brave Browser"'
+
+# Apps (omarchy: Super+Shift+letter)
+alt-shift-n = 'exec-and-forget open -a Ghostty --args -e nvim'
+alt-shift-f = 'exec-and-forget open -a Finder'
+alt-shift-m = 'exec-and-forget open -a Spotify'
+alt-shift-o = 'exec-and-forget open -a Obsidian'
+alt-shift-d = 'exec-and-forget open -a Ghostty --args -e lazydocker'
+alt-shift-a = ['workspace 5', 'exec-and-forget open "https://chatgpt.com"']
+alt-shift-c = ['workspace 5', 'exec-and-forget open "https://claude.ai"']
+alt-shift-g = 'exec-and-forget open "https://github.com"'
+alt-shift-e = 'exec-and-forget open "https://mail.google.com/mail/u/0/#inbox"'
+alt-shift-y = 'exec-and-forget open "https://youtube.com"'
+alt-shift-x = 'exec-and-forget open "https://x.com"'
+alt-shift-p = 'exec-and-forget open "https://photos.google.com"'
+alt-shift-b = 'exec-and-forget open -a "Brave Browser"'
+alt-shift-t = 'exec-and-forget open -a Ghostty --args -e btop'
+alt-shift-s = 'exec-and-forget open -a Steam'
+
+# Passwords (omarchy: Super+Shift+/)
+alt-shift-slash = 'exec-and-forget open -a Bitwarden'
+
+# ==========================================
+# Service mode (alt+ctrl+s)
+# Like omarchy's system menu (Super+Escape)
+# ==========================================
+
+alt-ctrl-s = 'mode service'
+
+[mode.service.binding]
+esc = 'mode main'
+r = ['flatten-workspace-tree', 'mode main']
+f = ['layout floating tiling', 'mode main']
+backspace = ['close-all-windows-but-current', 'mode main']
+
+# Reload config
+alt-ctrl-s = ['reload-config', 'mode main']
+
+# Join windows (like omarchy grouping)
+h = ['join-with left', 'mode main']
+j = ['join-with down', 'mode main']
+k = ['join-with up', 'mode main']
+l = ['join-with right', 'mode main']
+
+# ==========================================
+# Window rules
+# ==========================================
+
+# Float system dialogs and preferences
+[[on-window-detected]]
+if.app-name-regex-substring = 'System (Settings|Preferences)'
+run = 'layout floating'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'Calculator'
+run = 'layout floating'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'Archive Utility'
+run = 'layout floating'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'Finder'
+check-further-callbacks = true
+run = 'layout floating'
+
+# Assign apps to workspaces (like omarchy workspace rules)
+[[on-window-detected]]
+if.app-name-regex-substring = 'Ghostty'
+run = 'move-node-to-workspace 1'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'Brave'
+run = 'move-node-to-workspace 2'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'Obsidian'
+run = 'move-node-to-workspace 3'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'Slack'
+run = 'move-node-to-workspace 4'
+
+[[on-window-detected]]
+if.app-name-regex-substring = '(ChatGPT|Claude)'
+run = 'move-node-to-workspace 5'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'Spotify'
+run = 'move-node-to-workspace 6'

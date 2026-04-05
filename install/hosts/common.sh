@@ -26,6 +26,8 @@ HOST_PACMAN_PACKAGES=()
 HOST_AUR_PACKAGES=()
 # shellcheck disable=SC2034
 HOST_BREW_CASKS=()
+# shellcheck disable=SC2034
+HOST_BREW_FORMULAE=()
 
 array_values() {
   local var_name="$1"
@@ -50,8 +52,18 @@ setup_shared_cli_packages() {
   done < <(array_values HOST_AUR_PACKAGES)
 
   if [[ "$SETUP_HOST" == "macbook" ]]; then
+    local -a host_brew_formulae=()
+    while IFS= read -r value; do
+      [[ -n "$value" ]] && host_brew_formulae+=("$value")
+    done < <(array_values HOST_BREW_FORMULAE)
+
     install_homebrew
+    install_brew_taps
     install_common_brew_formulae
+    if [[ ${#host_brew_formulae[@]} -gt 0 ]]; then
+      log_section "Host-specific Formulae (brew)"
+      install_brew_formulae "${host_brew_formulae[@]}"
+    fi
     install_brew_casks "${host_brew_casks[@]}"
     return 0
   fi
@@ -105,6 +117,15 @@ apply_host_configs() {
         ;;
       agents)
         apply_agents
+        ;;
+      aerospace)
+        apply_aerospace
+        ;;
+      sketchybar)
+        apply_sketchybar
+        ;;
+      borders)
+        apply_borders
         ;;
       *)
         log_item "Unknown config target: $target"
