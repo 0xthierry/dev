@@ -87,6 +87,7 @@ COMMON_BREW_FORMULAE=(
   infisical/get-cli/infisical
   make
   shellcheck
+  gitleaks
   graphviz
   tokei
   hyperfine
@@ -94,6 +95,8 @@ COMMON_BREW_FORMULAE=(
   watchexec
   rsync
   docker
+  dive
+  lazydocker
   gum
   socat
   unzip
