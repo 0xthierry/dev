@@ -52,8 +52,21 @@ setup_shared_machine_state() {
   apply_shared_machine_state
 }
 
+set_default_browser_brave() {
+  log_section "Default Browser"
+
+  if ! check_installed xdg-settings; then
+    log_item "xdg-settings not available, skipping"
+    return 0
+  fi
+
+  log_item "Setting default browser to Brave"
+  run_cmd xdg-settings set default-web-browser brave-browser.desktop
+}
+
 setup_host_machine_state() {
   log_section "Host Machine State"
+  set_default_browser_brave
   apply_host_configs
 }
 
