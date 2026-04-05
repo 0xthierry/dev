@@ -103,6 +103,12 @@ apply_host_configs() {
       hypr)
         apply_hypr
         ;;
+      ghostty)
+        apply_ghostty
+        ;;
+      raycast)
+        apply_raycast
+        ;;
       agents)
         apply_agents
         ;;

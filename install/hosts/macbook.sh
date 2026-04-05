@@ -17,6 +17,8 @@ HOST_WORK_DIRS=(
 HOST_CONFIG_TARGETS=(
   nvim
   zellij
+  ghostty
+  raycast
   agents
 )
 
@@ -36,6 +38,7 @@ HOST_BREW_CASKS=(
   obsidian
   orbstack
   parallels
+  raycast
   rectangle
   slack
   signal
