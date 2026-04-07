@@ -40,6 +40,16 @@ install_claude_code_binary() {
   run_cmd bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
 }
 
+install_agent_slack_binary() {
+  if check_installed agent-slack; then
+    log_item "Agent Slack: installed"
+    return 0
+  fi
+
+  log_item "Installing Agent Slack..."
+  run_cmd bash -c 'curl -fsSL https://raw.githubusercontent.com/stablyai/agent-slack/main/install.sh | sh'
+}
+
 install_ai_clis() {
   log_section "AI Coding CLIs"
 
@@ -51,6 +61,9 @@ install_ai_clis() {
 
   # Gemini CLI (Google)
   install_npm_global_cli "Gemini CLI" "gemini" "@google/gemini-cli"
+
+  # Agent Slack (Stably) — standalone binary
+  install_agent_slack_binary
 }
 
 # Run if executed directly
