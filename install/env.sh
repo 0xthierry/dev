@@ -9,6 +9,7 @@ SHARED_ENV_VARS=(
   "VISUAL=nvim"
   "PAGER=less -R"
   "OPENCODE_ENABLE_EXA=true"
+  "NODE_OPTIONS=--localstorage-file=\$HOME/.node-localstorage"
 )
 
 write_env_file() {
@@ -26,13 +27,13 @@ write_env_file() {
     for entry in "${SHARED_ENV_VARS[@]}"; do
       key="${entry%%=*}"
       value="${entry#*=}"
-      printf 'export %s=%q\n' "$key" "$value"
+      printf 'export %s="%s"\n' "$key" "$value"
     done
 
     for entry in "${HOST_ENV_VARS[@]}"; do
       key="${entry%%=*}"
       value="${entry#*=}"
-      printf 'export %s=%q\n' "$key" "$value"
+      printf 'export %s="%s"\n' "$key" "$value"
     done
   } > "$tmp"
 
