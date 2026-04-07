@@ -4,7 +4,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "bun ~/.agents/hooks/project-commands/on-start.ts",
+          "command": "mise exec -- bun ~/.agents/hooks/project-commands/on-start.ts",
           "timeout": 5000,
           "statusMessage": "Detecting project tooling"
         }
@@ -16,7 +16,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "bun ~/.agents/hooks/skill-matcher/index.ts",
+          "command": "mise exec -- bun ~/.agents/hooks/skill-matcher/index.ts",
           "timeout": 5000,
           "statusMessage": "Matching skills"
         }
@@ -28,7 +28,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "bun ~/.agents/hooks/tool-failures/on-failure.ts",
+          "command": "mise exec -- bun ~/.agents/hooks/tool-failures/on-failure.ts",
           "timeout": 2000,
           "statusMessage": "Recording failure"
         }
@@ -41,7 +41,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "bun ~/.agents/hooks/guards/index.ts",
+          "command": "mise exec -- bun ~/.agents/hooks/guards/index.ts",
           "timeout": 3000,
           "statusMessage": "Checking safety guards"
         }
@@ -52,7 +52,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "bun ~/.agents/hooks/tool-failures/on-pre-use.ts",
+          "command": "mise exec -- bun ~/.agents/hooks/tool-failures/on-pre-use.ts",
           "timeout": 2000,
           "statusMessage": "Checking failure history"
         }
@@ -65,14 +65,14 @@
       "hooks": [
         {
           "type": "command",
-          "command": "bun ~/.agents/hooks/auto-format/index.ts",
+          "command": "mise exec -- bun ~/.agents/hooks/auto-format/index.ts",
           "timeout": 300000,
           "async": true,
           "statusMessage": "Auto-formatting"
         },
         {
           "type": "command",
-          "command": "bun ~/.agents/hooks/verify/on-edit.ts",
+          "command": "mise exec -- bun ~/.agents/hooks/verify/on-edit.ts",
           "timeout": 2000,
           "statusMessage": "Tracking edited files"
         }
@@ -83,7 +83,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "bun ~/.agents/hooks/verify/on-bash.ts",
+          "command": "mise exec -- bun ~/.agents/hooks/verify/on-bash.ts",
           "timeout": 2000,
           "statusMessage": "Tracking verification results"
         }
@@ -94,7 +94,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "bun ~/.agents/hooks/tool-failures/on-success.ts",
+          "command": "mise exec -- bun ~/.agents/hooks/tool-failures/on-success.ts",
           "timeout": 2000,
           "statusMessage": "Clearing failure records"
         }
@@ -106,7 +106,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "bun ~/.agents/hooks/verify/on-stop.ts",
+          "command": "mise exec -- bun ~/.agents/hooks/verify/on-stop.ts",
           "timeout": 5000,
           "statusMessage": "Verifying test/lint results"
         }
@@ -118,7 +118,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "bun ~/.agents/hooks/verify/on-stop.ts",
+          "command": "mise exec -- bun ~/.agents/hooks/verify/on-stop.ts",
           "timeout": 5000,
           "statusMessage": "Verifying subagent results"
         }

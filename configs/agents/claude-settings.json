@@ -47,7 +47,7 @@
   "enableAllProjectMcpServers": false,
   "statusLine": {
     "type": "command",
-    "command": "bun ~/.agents/statusline.ts"
+    "command": "mise exec -- bun ~/.agents/statusline.ts"
   },
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true,
