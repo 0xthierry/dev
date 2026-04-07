@@ -44,6 +44,7 @@ HOST_BREW_CASKS=(
   signal
   spotify
   steam
+  tailscale
   telegram
   zed
 )

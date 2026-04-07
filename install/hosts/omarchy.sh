@@ -21,6 +21,7 @@ HOST_PACMAN_PACKAGES=(
   ghostty
   obsidian
   steam
+  tailscale
   telegram-desktop
 )
 
