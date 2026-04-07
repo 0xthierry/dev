@@ -1,6 +1,7 @@
 ---
 name: iterate-design-discussion
 description: iterate on design discussion based on user feedback - do not use this if you already used create-design-discussion
+effort: max
 ---
 
 # Iterate Design Discussion

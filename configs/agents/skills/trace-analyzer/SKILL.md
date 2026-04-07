@@ -1,6 +1,7 @@
 ---
 name: trace-analyzer
 description: Analyze past Claude Code session transcripts to identify failure patterns, doom loops, and harness improvement opportunities. Use after a session went wrong, or periodically to improve your setup.
+effort: high
 ---
 
 # Trace Analyzer

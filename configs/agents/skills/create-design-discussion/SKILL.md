@@ -1,6 +1,7 @@
 ---
 name: create-design-discussion
 description:  first step of planning
+effort: max
 ---
 
 # Design Discussion Phase

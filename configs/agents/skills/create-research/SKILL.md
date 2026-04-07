@@ -1,6 +1,7 @@
 ---
 name: create-research-codebase
 description:  research the codebase 
+effort: max
 ---
 
 # Research Codebase

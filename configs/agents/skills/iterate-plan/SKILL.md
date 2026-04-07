@@ -1,6 +1,7 @@
 ---
 name: iterate-plan
 description: iterate on implementation plan based on user feedback
+effort: max
 ---
 
 # Iterate Plan

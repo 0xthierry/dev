@@ -1,6 +1,7 @@
 ---
 name: create-plan
 description: convert structure outline into a detailed implementation plan
+effort: max
 ---
 
 # Create Plan

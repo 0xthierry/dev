@@ -1,6 +1,7 @@
 ---
 name: create-structure-outline
 description: create a phased implementation plan based on research and design decisions
+effort: max
 ---
 
 # Create Structure Outline

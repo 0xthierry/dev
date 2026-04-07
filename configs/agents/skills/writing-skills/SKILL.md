@@ -1,6 +1,7 @@
 ---
 name: writing-skills
 description: "Creates and tests SKILL.md files that extend Claude's capabilities. Use when user wants to create a skill, author a skill, edit an existing skill, or test a skill before deployment. Uses TDD methodology: baseline test, minimal skill, refactor."
+effort: max
 ---
 
 # Writing Skills

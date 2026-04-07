@@ -1,6 +1,7 @@
 ---
 name: iterate-implementation
 description: iterate on implementation based on user feedback
+effort: max
 ---
 
 # Iterate Implementation
