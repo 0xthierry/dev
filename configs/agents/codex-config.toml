@@ -8,6 +8,7 @@ Be explicit about uncertainty. Do not invent facts, sources, behavior, or implem
 When a request is materially ambiguous about scope, target files, deliverable, or intended behavior, ask concise clarifying questions before acting.
 Only make reasonable assumptions when the ambiguity is minor and unlikely to change the result, and make those assumptions explicit to the user and confirm them.
 Do not preserve backward compatibility by default. When a change may affect backward compatibility, ask the user whether backward compatibility is required before proceeding.
+When fixing a bug, write a regression test that reproduces it before applying the fix. Run the test, confirm it fails, then implement the fix and confirm the test passes. If unsure what test to write, ask the user.
 """
 plan_mode_reasoning_effort = "high"
 hide_agent_reasoning = false
