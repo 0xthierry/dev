@@ -50,6 +50,32 @@ install_agent_slack_binary() {
   run_cmd bash -c 'curl -fsSL https://raw.githubusercontent.com/stablyai/agent-slack/main/install.sh | sh'
 }
 
+install_agent_browser_binary() {
+  if check_installed agent-browser; then
+    log_item "Agent Browser: installed"
+    return 0
+  fi
+
+  local cargo_bin=""
+  local mise_bin=""
+  local -a install_cmd=()
+
+  if cargo_bin="$(command -v cargo 2>/dev/null)"; then
+    install_cmd=("$cargo_bin" install agent-browser)
+  elif mise_bin="$(resolve_mise_bin 2>/dev/null)"; then
+    install_cmd=("$mise_bin" exec rust -- cargo install agent-browser)
+  else
+    printf 'error: cargo is unavailable and mise is not installed; cannot install agent-browser\n' >&2
+    return 1
+  fi
+
+  log_item "Installing Agent Browser..."
+  run_cmd "${install_cmd[@]}"
+
+  log_item "Running Agent Browser setup..."
+  run_cmd agent-browser install
+}
+
 install_ai_clis() {
   log_section "AI Coding CLIs"
 
@@ -64,6 +90,9 @@ install_ai_clis() {
 
   # Agent Slack (Stably) — standalone binary
   install_agent_slack_binary
+
+  # Agent Browser — cargo binary
+  install_agent_browser_binary
 }
 
 # Run if executed directly
