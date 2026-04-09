@@ -25,6 +25,13 @@ const DESTRUCTIVE_PATTERNS = [
   /\b:\s*>\s*\//,
 ]
 
+// Enforce declarative package lists — installs must go through install/packages/common.sh
+const PACKAGE_INSTALL_PATTERNS = [
+  /\bbrew\s+(?:install|reinstall)\b/,
+  /\b(?:sudo\s+)?pacman\s+-S[yu]*\b/,
+  /\b(?:sudo\s+)?yay\s+-S[yu]*\b/,
+]
+
 const GIT_PUSH_PATTERN = /\bgit\s+push\b/
 const BRANCH_COMMIT_PATTERN = /\bgit\s+(?:commit|push|merge)\b/
 const ENV_FILE_PATTERN = /\.env(?:$|\.)/
@@ -62,6 +69,13 @@ async function main(): Promise<void> {
       if (pattern.test(command)) {
         log(input, 'guards', 'block', `destructive: ${command.slice(0, 80)}`)
         block(`Destructive command blocked: ${command.slice(0, 80)}`)
+      }
+    }
+
+    for (const pattern of PACKAGE_INSTALL_PATTERNS) {
+      if (pattern.test(command)) {
+        log(input, 'guards', 'block', `package install: ${command.slice(0, 80)}`)
+        block(`Package install blocked: ${command.slice(0, 80)}. Add to install/packages/common.sh (or host arrays) and run ./setup.sh instead.`)
       }
     }
 
