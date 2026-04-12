@@ -24,7 +24,7 @@ COMMON_PACMAN_PACKAGES=(
   fastfetch
   inxi
   github-cli
-  gnumake
+  make
   shellcheck
   gitleaks
   graphviz
@@ -50,7 +50,6 @@ COMMON_PACMAN_PACKAGES=(
   btop
   lazygit
   git-delta
-  neovim
   mise
 )
 
@@ -61,6 +60,8 @@ COMMON_PACMAN_LINUX_PACKAGES=(
 COMMON_AUR_PACKAGES=(
   infisical-bin
 )
+
+NEOVIM_VERSION="0.12.1"
 
 COMMON_BREW_FORMULAE=(
   dust

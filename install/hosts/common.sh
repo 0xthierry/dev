@@ -12,6 +12,7 @@ source "$REPO_ROOT/install/ssh.sh"
 source "$REPO_ROOT/install/mise.sh"
 source "$REPO_ROOT/install/ai-cli.sh"
 source "$REPO_ROOT/install/docker.sh"
+source "$REPO_ROOT/install/neovim.sh"
 source "$REPO_ROOT/install/tools.sh"
 source "$REPO_ROOT/install/hooks.sh"
 
@@ -73,6 +74,7 @@ apply_shared_machine_state() {
 
   if [[ "$SETUP_HOST" != "macbook" ]]; then
     install_docker
+    install_neovim
   fi
 }
 
