@@ -1121,17 +1121,13 @@ require('lazy').setup({
     lazy = false,
     build = ':TSUpdate',
     config = function()
-      local langs = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' }
-
-      require('nvim-treesitter').install(langs)
-
-      vim.api.nvim_create_autocmd('FileType', {
-        pattern = langs,
-        callback = function()
-          vim.treesitter.start()
-          vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
-        end,
-      })
+      ---@diagnostic disable-next-line: missing-fields
+      require('nvim-treesitter.configs').setup {
+        ensure_installed = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' },
+        auto_install = true,
+        highlight = { enable = true },
+        indent = { enable = true },
+      }
     end,
   },
 
