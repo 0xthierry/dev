@@ -140,8 +140,8 @@ safe_link_path() {
   fi
 
   if [[ -e "$target_path" ]]; then
-    printf 'warning: %s already exists and will not be replaced: %s\n' "$label" "$target_path" >&2
-    return 0
+    mv "$target_path" "$target_path.bak"
+    log_item "$label: backed up to $target_path.bak"
   fi
 
   run_cmd ln -s "$source_path" "$target_path"
