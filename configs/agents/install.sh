@@ -125,50 +125,6 @@ prompt_yes_no() {
   done
 }
 
-link_path() {
-  local source_path="$1"
-  local target_path="$2"
-  local label="$3"
-  local current_target=""
-  local resolved_source_path=""
-  local resolved_current_target=""
-
-  resolved_source_path="$(canonicalize_path "$source_path")"
-
-  if [[ -L "$target_path" ]]; then
-    current_target="$(readlink "$target_path")"
-    resolved_current_target="$(resolve_symlink_target "$target_path")"
-
-    if [[ "$current_target" == "$source_path" || "$resolved_current_target" == "$resolved_source_path" ]]; then
-      log "skip: $label already linked"
-      ((SKIPPED_COUNT += 1))
-      return 0
-    fi
-
-    if [[ ! -e "$target_path" ]]; then
-      run_cmd rm -f "$target_path"
-      run_cmd ln -s "$source_path" "$target_path"
-      log "relinked: $label (replaced stale symlink)"
-      ((LINKED_COUNT += 1))
-      return 0
-    fi
-
-    warn "$label exists as a different symlink: $target_path -> $current_target"
-    ((SKIPPED_COUNT += 1))
-    return 0
-  fi
-
-  if [[ -e "$target_path" ]]; then
-    warn "$label already exists and will not be replaced: $target_path"
-    ((SKIPPED_COUNT += 1))
-    return 0
-  fi
-
-  run_cmd ln -s "$source_path" "$target_path"
-  log "linked: $label"
-  ((LINKED_COUNT += 1))
-}
-
 next_backup_path() {
   local target_path="$1"
   local candidate="${target_path}.bak"
@@ -329,22 +285,6 @@ copy_file_if_needed() {
   log "copied: $label"
 }
 
-link_agent_entries() {
-  local target_root="$1"
-  local target_agents_dir="$target_root/agents"
-  local source_path=""
-  local target_path=""
-  local name=""
-
-  ensure_dir "$target_agents_dir"
-
-  while IFS= read -r -d '' source_path; do
-    name="$(basename "$source_path")"
-    target_path="$target_agents_dir/$name"
-    link_path "$source_path" "$target_path" "agent $name"
-  done < <(find "$SOURCE_AGENTS_DIR" -mindepth 1 -maxdepth 1 \( -type f -o -type d -o -type l \) -print0)
-}
-
 force_link_agent_entries() {
   local target_root="$1"
   local target_agents_dir="$target_root/agents"
@@ -415,29 +355,13 @@ copy_agent_entries_stripped() {
     target_path="$target_agents_dir/$name"
 
     if [[ -d "$source_path" ]]; then
-      link_path "$source_path" "$target_path" "agent $name"
+      force_link_path "$source_path" "$target_path" "agent $name"
     elif [[ "$name" == *.md ]]; then
       copy_agent_stripped "$source_path" "$target_path" "agent $name"
     else
-      link_path "$source_path" "$target_path" "agent $name"
+      force_link_path "$source_path" "$target_path" "agent $name"
     fi
   done < <(find "$SOURCE_AGENTS_DIR" -mindepth 1 -maxdepth 1 \( -type f -o -type d -o -type l \) -print0)
-}
-
-link_skill_entries() {
-  local target_root="$1"
-  local target_skills_dir="$target_root/skills"
-  local source_path=""
-  local target_path=""
-  local name=""
-
-  ensure_dir "$target_skills_dir"
-
-  while IFS= read -r -d '' source_path; do
-    name="$(basename "$source_path")"
-    target_path="$target_skills_dir/$name"
-    link_path "$source_path" "$target_path" "skill $name"
-  done < <(find "$SOURCE_SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*' -print0)
 }
 
 force_link_skill_entries() {
@@ -462,8 +386,8 @@ install_target() {
 
   log ""
   log "Installing into $label ($target_root)"
-  link_agent_entries "$target_root"
-  link_skill_entries "$target_root"
+  force_link_agent_entries "$target_root"
+  force_link_skill_entries "$target_root"
 }
 
 install_agents_home_target() {
@@ -486,7 +410,7 @@ install_codex_target() {
   log ""
   log "Installing into ~/.codex ($target_root)"
   copy_agent_entries_stripped "$target_root"
-  link_skill_entries "$target_root"
+  force_link_skill_entries "$target_root"
   render_agents_md "$target_root/AGENTS.md" "codex AGENTS.md"
   copy_file_if_needed "$SOURCE_CODEX_CONFIG" "$target_root/config.toml" "codex config.toml"
   # Install hooks.json for Codex
