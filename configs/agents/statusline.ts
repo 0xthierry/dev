@@ -72,6 +72,25 @@ function contextBar(pct?: number | null): string {
   return colorize(bar) + " " + colorize(`${pct}%`);
 }
 
+async function fetchBdrPrice(): Promise<string | null> {
+  try {
+    const resp = await fetch(
+      "https://query1.finance.yahoo.com/v8/finance/chart/N2ET34.SA",
+      {
+        headers: { "User-Agent": "Mozilla/5.0" },
+        signal: AbortSignal.timeout(2000),
+      },
+    );
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const price = json?.chart?.result?.[0]?.meta?.regularMarketPrice;
+    if (price == null) return null;
+    return `R$${Number(price).toFixed(2)}`;
+  } catch {
+    return null;
+  }
+}
+
 async function gitBranch(cwd: string): Promise<string | null> {
   try {
     const proc = Bun.spawn(["git", "rev-parse", "--abbrev-ref", "HEAD"], {
@@ -97,7 +116,10 @@ function shortenPath(p: string): string {
 }
 
 const cwd = data.cwd ?? data.workspace?.current_dir ?? "";
-const branch = cwd ? await gitBranch(cwd) : null;
+const [branch, bdrPrice] = await Promise.all([
+  cwd ? gitBranch(cwd) : null,
+  fetchBdrPrice(),
+]);
 
 const parts: string[] = [];
 
@@ -122,6 +144,11 @@ if (cwd) {
 
 // Cost
 parts.push(green(formatCost(data.cost?.total_cost_usd)));
+
+// Cloudflare BDR (N2ET34)
+if (bdrPrice) {
+  parts.push(yellow(`NET ${bdrPrice}`));
+}
 
 // Context bar
 parts.push(contextBar(data.context_window?.used_percentage));
