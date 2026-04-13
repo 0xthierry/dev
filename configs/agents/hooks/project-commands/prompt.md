@@ -1,6 +1,6 @@
 # Generate project-commands.json
 
-Read the source files listed below, then write a `project-commands.json` file to the target path specified below. Use the Write tool to create the file.
+Use the Agent tool to spawn a subagent that reads the source files listed below and writes a `project-commands.json` file to the target path specified below. Pass the full instructions below (schema, rules, detected project structure, target path, source files, and after-writing command) to the subagent prompt so it has everything it needs. Do not do this work inline — delegate it entirely to the subagent.
 
 ## Schema
 
