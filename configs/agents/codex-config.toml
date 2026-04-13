@@ -1,4 +1,5 @@
 model = "gpt-5.4"
+model_auto_compact_token_limit = 176800
 model_reasoning_effort = "high"
 model_reasoning_summary = "detailed"
 model_verbosity = "high"
