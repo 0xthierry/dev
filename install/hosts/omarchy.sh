@@ -10,6 +10,7 @@ HOST_CONFIG_TARGETS=(
   nvim
   zellij
   hypr
+  ghostty
   agents
 )
 
