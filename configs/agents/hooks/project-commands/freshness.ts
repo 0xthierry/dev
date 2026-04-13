@@ -40,9 +40,36 @@ const CONFIG_FILES = [
   'pyproject.toml',
 ]
 
+const TOOLING_DEPS = [
+  'eslint', 'prettier', 'biome', '@biomejs/biome',
+  'vitest', 'jest', 'mocha', 'ava', 'tap',
+  'typescript', 'tsc',
+  '@typescript-eslint/eslint-plugin', '@typescript-eslint/parser',
+]
+
 function hashFile(path: string): string {
   const content = readFileSync(path)
   return createHash('sha256').update(content).digest('hex').slice(0, 16)
+}
+
+function hashPackageJson(path: string): string {
+  try {
+    const pkg = JSON.parse(readFileSync(path, 'utf-8'))
+    const relevant: Record<string, unknown> = {}
+
+    if (pkg.scripts) relevant.scripts = pkg.scripts
+
+    for (const section of ['dependencies', 'devDependencies', 'peerDependencies']) {
+      if (pkg[section] && typeof pkg[section] === 'object') {
+        const found = TOOLING_DEPS.filter(d => d in pkg[section]).sort()
+        if (found.length > 0) relevant[section] = found
+      }
+    }
+
+    return createHash('sha256').update(JSON.stringify(relevant)).digest('hex').slice(0, 16)
+  } catch {
+    return hashFile(path)
+  }
 }
 
 function getHashesPath(cwd: string, harness: HookHarness): string {
@@ -56,7 +83,7 @@ export function computeHashes(cwd: string): Record<string, string> {
   for (const file of CONFIG_FILES) {
     const abs = join(cwd, file)
     if (existsSync(abs)) {
-      hashes[file] = hashFile(abs)
+      hashes[file] = file === 'package.json' ? hashPackageJson(abs) : hashFile(abs)
     }
   }
 
@@ -92,12 +119,12 @@ export function computeHashes(cwd: string): Record<string, string> {
               const pkgPath = join(searchDir, entry, 'package.json')
               if (existsSync(pkgPath)) {
                 const relPath = `${base}/${entry}/package.json`
-                hashes[relPath] = hashFile(pkgPath)
+                hashes[relPath] = hashPackageJson(pkgPath)
               }
             }
           } else if (existsSync(join(searchDir, 'package.json'))) {
             const relPath = `${base}/package.json`
-            hashes[relPath] = hashFile(join(searchDir, 'package.json'))
+            hashes[relPath] = hashPackageJson(join(searchDir, 'package.json'))
           }
         } catch {}
       }
