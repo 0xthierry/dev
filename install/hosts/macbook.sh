@@ -37,7 +37,6 @@ HOST_BREW_CASKS=(
   obs
   obsidian
   orbstack
-  parallels
   raycast
   rectangle
   slack
