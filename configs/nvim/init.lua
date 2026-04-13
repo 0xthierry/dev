@@ -755,7 +755,7 @@ require('lazy').setup({
                 includeCompletionsForModuleExports = true,
                 includePackageJsonAutoImports = 'on',
               },
-              tsserver = { maxTsServerMemory = 12288 },
+              tsserver = { maxTsServerMemory = 16384 },
             },
             javascript = {
               suggest = { completeFunctionCalls = true },

@@ -9,7 +9,7 @@ SHARED_ENV_VARS=(
   "VISUAL=nvim"
   "PAGER=less -R"
   "OPENCODE_ENABLE_EXA=true"
-  "NODE_OPTIONS=--localstorage-file=\$HOME/.node-localstorage"
+  "NODE_OPTIONS=--max-old-space-size=16384 --localstorage-file=\$HOME/.node-localstorage"
 )
 
 write_env_file() {
