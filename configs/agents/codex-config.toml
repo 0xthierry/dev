@@ -18,9 +18,9 @@ plan_mode_reasoning_effort = "high"
 hide_agent_reasoning = false
 show_raw_agent_reasoning = true
 notify = ["notify-send", "Codex"]
-service_tier = "flex"
 web_search = "live"
 file_opener = "none"
+project_doc_max_bytes = 65536
 
 [history]
 max_bytes = 1073741824
