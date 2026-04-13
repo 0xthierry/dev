@@ -72,7 +72,17 @@ function contextBar(pct?: number | null): string {
   return colorize(bar) + " " + colorize(`${pct}%`);
 }
 
+const BDR_CACHE = "/tmp/statusline-bdr-n2et34.json";
+const BDR_TTL_MS = 5 * 60 * 1000;
+
 async function fetchBdrPrice(): Promise<string | null> {
+  try {
+    const file = Bun.file(BDR_CACHE);
+    if (await file.exists()) {
+      const cached = await file.json();
+      if (Date.now() - cached.ts < BDR_TTL_MS) return cached.price;
+    }
+  } catch {}
   try {
     const resp = await fetch(
       "https://query1.finance.yahoo.com/v8/finance/chart/N2ET34.SA",
@@ -83,9 +93,11 @@ async function fetchBdrPrice(): Promise<string | null> {
     );
     if (!resp.ok) return null;
     const json = await resp.json();
-    const price = json?.chart?.result?.[0]?.meta?.regularMarketPrice;
-    if (price == null) return null;
-    return `R$${Number(price).toFixed(2)}`;
+    const raw = json?.chart?.result?.[0]?.meta?.regularMarketPrice;
+    if (raw == null) return null;
+    const price = `R$${Number(raw).toFixed(2)}`;
+    await Bun.write(BDR_CACHE, JSON.stringify({ price, ts: Date.now() }));
+    return price;
   } catch {
     return null;
   }
