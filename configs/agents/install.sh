@@ -14,6 +14,7 @@ SOURCE_HOOKS_DIR="$SCRIPT_DIR/hooks"
 SOURCE_BIN_DIR="$SCRIPT_DIR/bin"
 SOURCE_CODEX_CONFIG="$SCRIPT_DIR/codex-config.toml"
 SOURCE_CODEX_HOOKS="$SCRIPT_DIR/hooks/codex-hooks.json"
+MD_TO_CODEX_TOML="$SCRIPT_DIR/md-to-codex-toml.sh"
 SOURCE_CLAUDE_SETTINGS="$SCRIPT_DIR/claude-settings.json"
 SOURCE_STATUSLINE="$SCRIPT_DIR/statusline.ts"
 SOURCE_AGENTS_MD="$SCRIPT_DIR/AGENTS.md"
@@ -404,12 +405,37 @@ install_agents_home_target() {
   force_link_path "$SOURCE_STATUSLINE" "$target_root/statusline.ts" ".agents statusline.ts"
 }
 
+generate_codex_agent_tomls() {
+  local target_root="$1"
+  local target_agents_dir="$target_root/agents"
+
+  ensure_dir "$target_agents_dir"
+
+  if (( DRY_RUN )); then
+    log "[dry-run] generate codex .toml agents from .md sources"
+    return 0
+  fi
+
+  "$MD_TO_CODEX_TOML" "$SOURCE_AGENTS_DIR" "$target_agents_dir"
+
+  # Clean up stale .md files from the previous install method.
+  local md_file basename_no_ext
+  for md_file in "$target_agents_dir"/*.md; do
+    [[ -f "$md_file" ]] || continue
+    basename_no_ext="$(basename "$md_file" .md)"
+    if [[ -f "$target_agents_dir/${basename_no_ext}.toml" ]] || [[ "$basename_no_ext" == "oracle" ]]; then
+      rm -f "$md_file"
+      log "removed stale: agent ${basename_no_ext}.md"
+    fi
+  done
+}
+
 install_codex_target() {
   local target_root="$1"
 
   log ""
   log "Installing into ~/.codex ($target_root)"
-  copy_agent_entries_stripped "$target_root"
+  generate_codex_agent_tomls "$target_root"
   force_link_skill_entries "$target_root"
   render_agents_md "$target_root/AGENTS.md" "codex AGENTS.md"
   copy_file_if_needed "$SOURCE_CODEX_CONFIG" "$target_root/config.toml" "codex config.toml"
@@ -534,6 +560,11 @@ main() {
 
   if [[ ! -d "$SOURCE_BIN_DIR" ]]; then
     warn "Missing source bin directory: $SOURCE_BIN_DIR"
+    exit 1
+  fi
+
+  if [[ ! -x "$MD_TO_CODEX_TOML" ]]; then
+    warn "Missing or non-executable md-to-codex-toml script: $MD_TO_CODEX_TOML"
     exit 1
   fi
 
