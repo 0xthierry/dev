@@ -102,6 +102,10 @@ alias wrks='cd ~/Work/Sideprojects'
 alias wrkm='cd ~/Work/Meistrari'
 alias wrkp='cd ~/Work/Pagarme'
 alias wrka='cd ~/Work/Arado'
+claude() {
+  command claude --append-system-prompt-file ~/.agents/developer-instructions.txt "$@"
+}
+
 alias zj='zellij'
 alias zl='zellij list-sessions'
 alias za='zellij attach'

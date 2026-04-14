@@ -19,6 +19,7 @@ SOURCE_CLAUDE_SETTINGS="$SCRIPT_DIR/claude-settings.json"
 SOURCE_STATUSLINE="$SCRIPT_DIR/statusline.ts"
 SOURCE_AGENTS_MD="$SCRIPT_DIR/AGENTS.md"
 SOURCE_USER_MD="$SCRIPT_DIR/USER.md"
+SOURCE_DEV_INSTRUCTIONS="$SCRIPT_DIR/developer-instructions.txt"
 
 usage() {
   cat <<'EOF'
@@ -402,6 +403,7 @@ install_agents_home_target() {
   force_link_path "$SOURCE_BIN_DIR" "$target_root/bin" ".agents bin"
   render_agents_md "$target_root/AGENTS.md" ".agents AGENTS.md"
   force_link_path "$SOURCE_USER_MD" "$target_root/USER.md" ".agents USER.md"
+  force_link_path "$SOURCE_DEV_INSTRUCTIONS" "$target_root/developer-instructions.txt" ".agents developer-instructions.txt"
   force_link_path "$SOURCE_STATUSLINE" "$target_root/statusline.ts" ".agents statusline.ts"
 }
 
@@ -430,6 +432,30 @@ generate_codex_agent_tomls() {
   done
 }
 
+render_codex_config() {
+  local target_path="$1"
+  local label="codex config.toml"
+  local instructions rendered
+
+  instructions="$(cat "$SOURCE_DEV_INSTRUCTIONS")"
+  rendered="$(awk -v instr="$instructions" '{ gsub(/\{\{DEVELOPER_INSTRUCTIONS\}\}/, instr); print }' "$SOURCE_CODEX_CONFIG")"
+
+  if [[ -f "$target_path" ]] && [[ "$(cat "$target_path")" == "$rendered" ]]; then
+    log "skip: $label already up to date"
+    ((SKIPPED_COUNT += 1))
+    return 0
+  fi
+
+  if (( DRY_RUN )); then
+    log "[dry-run] render $label with developer instructions"
+    return 0
+  fi
+
+  printf '%s\n' "$rendered" > "$target_path"
+  log "rendered: $label"
+  ((LINKED_COUNT += 1))
+}
+
 install_codex_target() {
   local target_root="$1"
 
@@ -438,7 +464,7 @@ install_codex_target() {
   generate_codex_agent_tomls "$target_root"
   force_link_skill_entries "$target_root"
   render_agents_md "$target_root/AGENTS.md" "codex AGENTS.md"
-  copy_file_if_needed "$SOURCE_CODEX_CONFIG" "$target_root/config.toml" "codex config.toml"
+  render_codex_config "$target_root/config.toml"
   # Install hooks.json for Codex
   if [[ -f "$SOURCE_CODEX_HOOKS" ]]; then
     copy_file_if_needed "$SOURCE_CODEX_HOOKS" "$target_root/hooks.json" "codex hooks.json"
@@ -590,6 +616,11 @@ main() {
 
   if [[ ! -f "$SOURCE_USER_MD" ]]; then
     warn "Missing source USER.md file: $SOURCE_USER_MD"
+    exit 1
+  fi
+
+  if [[ ! -f "$SOURCE_DEV_INSTRUCTIONS" ]]; then
+    warn "Missing source developer-instructions file: $SOURCE_DEV_INSTRUCTIONS"
     exit 1
   fi
 
