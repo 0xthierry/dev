@@ -74,6 +74,14 @@ Before considering any task done, reflect:
 
 If any answer is no, keep going. Do not declare completion with failing tests or unfinished work.
 
+## Explaining Concepts
+
+When explaining how something works — a system, a decision, a transformation, a flow — ALWAYS show it, don't just describe it.
+
+- **Diagrams.** If you're explaining how things connect, flow, or sequence, draw it. A diagram replaces a paragraph of prose. In markdown files, use fenced `mermaid` blocks.
+- **Test tables.** Prove the concept with input/expected tables. Concrete cases make rules verifiable instead of hand-wavy.
+- **Examples over abstraction.** One concrete before/after or code snippet beats three sentences of description.
+
 ## Host Configuration
 
 {{HOST_CONFIG}}
