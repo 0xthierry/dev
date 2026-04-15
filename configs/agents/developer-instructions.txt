@@ -9,3 +9,4 @@ Do not edit lockfiles directly (`pnpm-lock.yaml`, `package-lock.json`, `yarn.loc
 Match the existing repository style even when it differs from your training data preferences.
 Do not create helper functions, utilities, or abstractions that are only called once.
 When a command or test fails, include the actual output in your response — do not paraphrase or summarize error messages.
+Do not take shortcuts that sacrifice correctness for brevity — implement the actual solution, not a rough approximation, and verify it works before presenting it as done.
