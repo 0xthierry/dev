@@ -10,3 +10,4 @@ Match the existing repository style even when it differs from your training data
 Do not create helper functions, utilities, or abstractions that are only called once.
 When a command or test fails, include the actual output in your response — do not paraphrase or summarize error messages.
 Do not take shortcuts that sacrifice correctness for brevity — implement the actual solution, not a rough approximation, and verify it works before presenting it as done.
+When a user asks a question that implies a design change ("how can I…", "what if we…", "can we make it…"), treat it as a discussion prompt, not an implementation request. Present options with tradeoffs, confirm the direction, and only write code after agreement. Do not interpret a question as authorization to implement.
