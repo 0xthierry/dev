@@ -100,10 +100,16 @@ convert_md_to_toml() {
   local effort
   effort="$(reasoning_effort_for_model "$fm_model")"
 
-  # Strip leading blank lines from body
+  # Strip leading blank lines, then trailing blank lines (portable)
   body="$(printf '%s' "$body" | sed '/./,$!d')"
-  # Strip trailing whitespace
-  body="$(printf '%s' "$body" | sed -e :a -e '/^[[:space:]]*$/{ $d; N; ba; }')"
+  body="$(printf '%s\n' "$body" | awk '
+    { lines[NR] = $0 }
+    END {
+      last = NR
+      while (last > 0 && lines[last] ~ /^[[:space:]]*$/) last--
+      for (i = 1; i <= last; i++) print lines[i]
+    }
+  ')"
 
   local escaped_body
   escaped_body="$(printf '%s' "$body" | escape_toml_multiline)"

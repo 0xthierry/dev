@@ -438,7 +438,7 @@ render_codex_config() {
   local instructions rendered
 
   instructions="$(cat "$SOURCE_DEV_INSTRUCTIONS")"
-  rendered="$(awk -v instr="$instructions" '{ gsub(/\{\{DEVELOPER_INSTRUCTIONS\}\}/, instr); print }' "$SOURCE_CODEX_CONFIG")"
+  rendered="$(INSTR="$instructions" awk '{ gsub(/\{\{DEVELOPER_INSTRUCTIONS\}\}/, ENVIRON["INSTR"]); print }' "$SOURCE_CODEX_CONFIG")"
 
   if [[ -f "$target_path" ]] && [[ "$(cat "$target_path")" == "$rendered" ]]; then
     log "skip: $label already up to date"
