@@ -40,6 +40,7 @@ apply_shell_files() {
   safe_link_path "$REPO_ROOT/configs/shell/zshrc" "$HOME/.config/zsh/.zshrc" "zshrc"
   safe_link_path "$REPO_ROOT/configs/shell/fzf.sh" "$HOME/.config/zsh/fzf.sh" "fzf shell config"
   safe_link_path "$REPO_ROOT/configs/shell/prompt.sh" "$HOME/.config/zsh/prompt.sh" "prompt config"
+  safe_link_path "$REPO_ROOT/configs/shell/path.sh" "$HOME/.config/zsh/path.sh" "path config"
   safe_link_path "$REPO_ROOT/configs/shell/zshenv" "$HOME/.zshenv" "zshenv"
 }
 
