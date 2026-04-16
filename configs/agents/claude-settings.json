@@ -1,6 +1,5 @@
 {
   "env": {
-    "CLAUDE_CODE_EFFORT_LEVEL": "max",
     "MAX_THINKING_TOKENS": "32199",
     "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
     "DISABLE_COST_WARNINGS": "1",
@@ -58,7 +57,6 @@
     "lua-lsp@claude-plugins-official": true,
     "clangd-lsp@claude-plugins-official": true
   },
-  "effortLevel": "max",
   "skipDangerousModePermissionPrompt": true,
   "skipAutoPermissionPrompt": true
 }
