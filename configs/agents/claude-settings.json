@@ -47,7 +47,8 @@
   "enableAllProjectMcpServers": false,
   "statusLine": {
     "type": "command",
-    "command": "mise exec -- bun ~/.agents/statusline.ts"
+    "command": "mise exec -- bun ~/.agents/statusline.ts",
+    "refreshInterval": 60
   },
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true,
