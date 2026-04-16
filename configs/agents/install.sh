@@ -495,13 +495,11 @@ sync_claude_settings() {
   local desired
   desired="$(jq -cS --argjson hooks "$(jq -cS '.' "$hooks_json")" '. + {hooks: $hooks}' "$base_settings")"
 
-  # If settings.json exists, merge canonical keys on top of it (preserving any extra keys)
-  local current_sorted
+  # Repo is authoritative: replace the target with desired, dropping any local-only keys
   if [[ -f "$settings_path" ]]; then
+    local current_sorted
     current_sorted="$(jq -cS '.' "$settings_path")"
-    local merged
-    merged="$(jq -cS --argjson canonical "$desired" '. * $canonical' "$settings_path")"
-    if [[ "$current_sorted" == "$merged" ]]; then
+    if [[ "$current_sorted" == "$desired" ]]; then
       log "skip: claude settings already up to date"
       ((SKIPPED_COUNT += 1))
       return 0
@@ -509,17 +507,13 @@ sync_claude_settings() {
   fi
 
   if (( DRY_RUN )); then
-    log "[dry-run] sync claude settings into $settings_path"
+    log "[dry-run] replace claude settings at $settings_path"
     return 0
   fi
 
   local tmp_path
   tmp_path="$(mktemp)"
-  if [[ -f "$settings_path" ]]; then
-    jq --argjson canonical "$desired" '. * $canonical' "$settings_path" > "$tmp_path"
-  else
-    printf '%s\n' "$desired" | jq '.' > "$tmp_path"
-  fi
+  printf '%s\n' "$desired" | jq '.' > "$tmp_path"
   mv "$tmp_path" "$settings_path"
   log "synced: claude settings"
   ((LINKED_COUNT += 1))
