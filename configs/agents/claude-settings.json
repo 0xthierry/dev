@@ -31,7 +31,10 @@
       "Bash(linear:*)",
       "Bash(~/.agents/bin/*:*)",
       "Bash(bash ~/.agents/bin/*:*)",
-      "Bash(bun ~/.agents/hooks/*:*)"
+      "Bash(bun ~/.agents/hooks/*:*)",
+      "Write(~/.claude/projects/**)",
+      "Write(~/.codex/projects/**)",
+      "Read(~/.agents/**)"
     ],
     "deny": [
       "AskUserQuestion",
