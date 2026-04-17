@@ -114,6 +114,9 @@ apply_host_configs() {
       agents)
         apply_agents
         ;;
+      cameractrls)
+        apply_cameractrls
+        ;;
       *)
         log_item "Unknown config target: $target"
         ;;

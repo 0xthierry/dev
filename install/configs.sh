@@ -37,3 +37,21 @@ apply_agents() {
 
   "$REPO_ROOT/configs/agents/install.sh" --yes
 }
+
+apply_cameractrls() {
+  local preset_src="$REPO_ROOT/configs/cameractrls/usb-046d_Logitech_BRIO_B7068CAF-video-index0.ini"
+  local preset_dst="$HOME/.config/hu.irl.cameractrls/usb-046d_Logitech_BRIO_B7068CAF-video-index0.ini"
+  local service_src="$REPO_ROOT/configs/cameractrls/cameractrlsd.service"
+  local service_dst="$HOME/.config/systemd/user/cameractrlsd.service"
+
+  ensure_dir "$HOME/.config/hu.irl.cameractrls"
+  safe_link_path "$preset_src" "$preset_dst" "cameractrls BRIO preset"
+
+  ensure_dir "$HOME/.config/systemd/user"
+  safe_link_path "$service_src" "$service_dst" "cameractrlsd service unit"
+
+  if check_installed systemctl; then
+    run_cmd systemctl --user daemon-reload
+    run_cmd systemctl --user enable --now cameractrlsd.service
+  fi
+}

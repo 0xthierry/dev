@@ -1,0 +1,10 @@
+[Unit]
+Description=cameractrls daemon (apply saved camera presets on device appearance)
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/cameractrlsd
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

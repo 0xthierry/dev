@@ -12,11 +12,13 @@ HOST_CONFIG_TARGETS=(
   hypr
   ghostty
   agents
+  cameractrls
 )
 
 # shellcheck disable=SC2034
 HOST_PACMAN_PACKAGES=(
   bitwarden
+  cameractrls
   dbeaver
   discord
   ghostty
