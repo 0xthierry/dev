@@ -18,7 +18,6 @@ MD_TO_CODEX_TOML="$SCRIPT_DIR/md-to-codex-toml.sh"
 SOURCE_CLAUDE_SETTINGS="$SCRIPT_DIR/claude-settings.json"
 SOURCE_STATUSLINE="$SCRIPT_DIR/statusline.ts"
 SOURCE_AGENTS_MD="$SCRIPT_DIR/AGENTS.md"
-SOURCE_USER_MD="$SCRIPT_DIR/USER.md"
 SOURCE_DEV_INSTRUCTIONS="$SCRIPT_DIR/developer-instructions.txt"
 
 usage() {
@@ -402,7 +401,6 @@ install_agents_home_target() {
   force_link_path "$SOURCE_HOOKS_DIR" "$target_root/hooks" ".agents hooks"
   force_link_path "$SOURCE_BIN_DIR" "$target_root/bin" ".agents bin"
   render_agents_md "$target_root/AGENTS.md" ".agents AGENTS.md"
-  force_link_path "$SOURCE_USER_MD" "$target_root/USER.md" ".agents USER.md"
   force_link_path "$SOURCE_DEV_INSTRUCTIONS" "$target_root/developer-instructions.txt" ".agents developer-instructions.txt"
   force_link_path "$SOURCE_STATUSLINE" "$target_root/statusline.ts" ".agents statusline.ts"
 }
@@ -525,7 +523,6 @@ install_claude_target() {
 
   install_target "$target_root" "$HOME/.claude"
   render_agents_md "$target_root/CLAUDE.md" "claude CLAUDE.md"
-  force_link_path "$SOURCE_USER_MD" "$target_root/USER.md" "claude USER.md"
   # Symlink hooks directory
   if [[ -d "$SOURCE_HOOKS_DIR" ]]; then
     force_link_path "$SOURCE_HOOKS_DIR" "$target_root/hooks" "claude hooks"
@@ -605,11 +602,6 @@ main() {
 
   if [[ ! -f "$SOURCE_AGENTS_MD" ]]; then
     warn "Missing source AGENTS.md file: $SOURCE_AGENTS_MD"
-    exit 1
-  fi
-
-  if [[ ! -f "$SOURCE_USER_MD" ]]; then
-    warn "Missing source USER.md file: $SOURCE_USER_MD"
     exit 1
   fi
 

@@ -54,7 +54,6 @@ The agents installer (`configs/agents/install.sh`) is more complex than the othe
 | `configs/agents/skills/` | `~/.agents/skills/`, `~/.claude/skills/`, `~/.codex/skills/` | symlink |
 | `configs/agents/hooks/` | `~/.agents/hooks/`, `~/.claude/hooks/` | symlink |
 | `configs/agents/AGENTS.md` | `~/.agents/AGENTS.md`, `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md` | rendered (replaces `{{HOST_CONFIG}}` with detected hardware info) |
-| `configs/agents/USER.md` | `~/.agents/USER.md`, `~/.claude/USER.md` | symlink |
 | `configs/agents/claude-settings.json` | `~/.claude/settings.json` | `jq` recursive merge (preserves local keys) |
 | `configs/agents/codex-config.toml` | `~/.codex/config.toml` | copy |
 | `configs/agents/statusline.ts` | `~/.agents/statusline.ts` | symlink |
