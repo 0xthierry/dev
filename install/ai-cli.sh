@@ -51,25 +51,20 @@ install_agent_slack_binary() {
 }
 
 install_agent_browser_binary() {
-  if check_installed agent-browser; then
-    log_item "Agent Browser: installed"
-    return 0
-  fi
-
-  local cargo_bin=""
+  local npm_bin=""
   local mise_bin=""
   local -a install_cmd=()
 
-  if cargo_bin="$(command -v cargo 2>/dev/null)"; then
-    install_cmd=("$cargo_bin" install agent-browser)
+  if npm_bin="$(command -v npm 2>/dev/null)"; then
+    install_cmd=("$npm_bin" install -g agent-browser@latest)
   elif mise_bin="$(resolve_mise_bin 2>/dev/null)"; then
-    install_cmd=("$mise_bin" exec rust -- cargo install agent-browser)
+    install_cmd=("$mise_bin" exec node -- npm install -g agent-browser@latest)
   else
-    printf 'error: cargo is unavailable and mise is not installed; cannot install agent-browser\n' >&2
+    printf 'error: npm is unavailable and mise is not installed; cannot install agent-browser\n' >&2
     return 1
   fi
 
-  log_item "Installing Agent Browser..."
+  log_item "Installing/upgrading Agent Browser..."
   run_cmd "${install_cmd[@]}"
 
   log_item "Running Agent Browser setup..."
@@ -91,7 +86,7 @@ install_ai_clis() {
   # Agent Slack (Stably) — standalone binary
   install_agent_slack_binary
 
-  # Agent Browser — cargo binary
+  # Agent Browser — npm package (crates.io lags behind)
   install_agent_browser_binary
 }
 
