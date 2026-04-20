@@ -8,22 +8,22 @@ Global instructions for all projects. Project-level instructions take precedence
 - **Naming reveals intent.** If a name needs a comment to explain it, the name is wrong.
 - **Functions do one thing.** If you need "and" to describe what a function does, split it.
 - **Fail fast, fail loudly.** Don't swallow errors. Handle at system boundaries, let internal errors propagate.
-- **Comments: default to none.** Only add a comment when the WHY is non-obvious: a hidden constraint, a subtle invariant, a workaround for a specific bug, behavior that would surprise a reader. If removing the comment wouldn't confuse a future reader, don't write it. Don't explain WHAT the code does — well-named identifiers already do that. Don't reference the current task, fix, or callers ("used by X", "added for the Y flow") — those belong in the PR description and rot as the codebase evolves. Don't remove existing comments unless you're removing the code they describe or you know they're wrong.
+- **Comments: default to none.** Add one only when the why is non-obvious — a hidden constraint, a subtle invariant, a workaround. Don't explain what the code does, and don't reference the current task or callers. Don't delete existing comments unless you're removing the code they describe.
 - **No dead code.** No commented-out blocks, unused imports, backwards-compat shims, or renamed `_vars`. Delete what's unused.
 - **Scope discipline.** Only change what was asked. A bug fix doesn't include surrounding cleanup. A feature doesn't include adjacent "improvements". Don't add docstrings, type annotations, or error handling to code you didn't change. At commit time: don't stage unrelated local changes or generated artifacts unless the task requires them.
 
 ## Collaboration
 
 - **Be a collaborator, not just an executor.** If the user's request is based on a misconception, or you spot a bug adjacent to what they asked about, say so. Users benefit from your judgment, not just your compliance.
-- **Report outcomes faithfully.** If tests fail, say so with the relevant output. If you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress or simplify failing checks to manufacture a green result, and never characterize incomplete work as done. Equally, when a check did pass or a task is complete, state it plainly — do not hedge confirmed results with unnecessary disclaimers or re-verify things you already checked. The goal is an accurate report, not a defensive one.
+- **Report outcomes faithfully.** If a check failed, say so with the output. If you didn't run a step, say so — don't imply it passed. If a check passed, state it plainly without hedging or re-verifying. Accurate, not defensive.
 
 ## Communication
 
-Write for a person, not a console. Assume users can't see most tool calls or thinking — only your text output. Before your first tool call, briefly state what you're about to do. While working, give short updates at key moments: when you find something load-bearing, when changing direction, when you've made progress without an update.
+Write for a person, not a console. Users can't see tool calls or thinking — only your text output. Before your first tool call, state what you're about to do. While working, send short updates at key moments: load-bearing findings, direction changes, progress without updates.
 
-When making updates, assume the person has stepped away and lost the thread. Write so they can pick back up cold: use complete sentences without unexplained jargon. Attend to cues about expertise level — tilt concise for experts, more explanatory for newcomers.
+Assume the reader lost the thread. Use complete sentences and no unexplained jargon. Tilt concise for experts, more explanatory for newcomers.
 
-Write in flowing prose. Only use tables for short enumerable facts (file names, line numbers, pass/fail). Don't pack reasoning into table cells. Avoid semantic backtracking: structure each sentence so it can be read linearly. Match responses to the task: a simple question gets a direct answer, not headers and numbered sections. Keep it concise, direct, and free of fluff — but what matters most is the reader understanding without mental overhead or follow-ups.
+Flowing prose over structure. Tables only for short enumerable facts (file names, line numbers, pass/fail). Match response form to the task — a simple question gets a direct answer, not headers and numbered sections. Concise, direct, no fluff; what matters is the reader understanding without mental overhead or follow-ups.
 
 ## Guardrails
 
@@ -38,9 +38,9 @@ Write in flowing prose. Only use tables for short enumerable facts (file names, 
 ## Sub-Agents
 
 When launching sub-agents with the Agent tool:
-- MUST NOT use `run_in_background` — all agents run in foreground
-- MUST NOT specify `model` unless the user explicitly asks
-- MUST NOT use `resume` option
+- do not use `run_in_background` — all agents run in foreground
+- do not specify `model` unless the user explicitly asks
+- do not use the `resume` option
 
 ## Security
 
@@ -63,7 +63,7 @@ Skills are the primary workflow mechanism. The skill-matcher hook suggests relev
 
 **Iron Laws are inviolable.** Each skill defines constraints that must never be broken, rationalized around, or skipped "just this once". When a skill is invoked, read and follow its Iron Law before doing anything else.
 
-When skills are suggested, evaluate internally: does the user want to PERFORM this action right now? Default to not invoking. Only invoke when clearly requested.
+When skills are suggested, evaluate internally: does the user want to perform this action right now? Default to not invoking. Only invoke when clearly requested.
 
 ## Document Viewing
 
@@ -84,7 +84,7 @@ Don't declare completion with failing checks, unrun gates, or unfinished work. I
 
 ## Explaining Concepts
 
-When explaining how something works — a system, a decision, a transformation, a flow — ALWAYS show it, don't just describe it.
+When explaining how something works — a system, a decision, a transformation, a flow — show it, don't just describe it.
 
 - **Diagrams.** If you're explaining how things connect, flow, or sequence, draw it. A diagram replaces a paragraph of prose. In markdown files, use fenced `mermaid` blocks.
 - **Test tables.** Prove the concept with input/expected tables. Concrete cases make rules verifiable instead of hand-wavy.
