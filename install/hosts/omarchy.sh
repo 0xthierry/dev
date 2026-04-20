@@ -13,6 +13,7 @@ HOST_CONFIG_TARGETS=(
   ghostty
   agents
   cameractrls
+  brave
 )
 
 # shellcheck disable=SC2034

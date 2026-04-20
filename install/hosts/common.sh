@@ -117,6 +117,9 @@ apply_host_configs() {
       cameractrls)
         apply_cameractrls
         ;;
+      brave)
+        apply_brave
+        ;;
       *)
         log_item "Unknown config target: $target"
         ;;

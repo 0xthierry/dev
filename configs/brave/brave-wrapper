@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Launches Brave with CDP remote debugging enabled on 127.0.0.1:9222 so
+# agent-browser (and other CDP clients) can attach to the real user session.
+exec /usr/bin/brave --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 "$@"

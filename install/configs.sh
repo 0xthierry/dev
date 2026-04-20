@@ -38,6 +38,23 @@ apply_agents() {
   "$REPO_ROOT/configs/agents/install.sh" --yes
 }
 
+apply_brave() {
+  local wrapper_src="$REPO_ROOT/configs/brave/brave-wrapper"
+  local wrapper_dst="$HOME/.local/bin/brave-wrapper"
+  local desktop_src="$REPO_ROOT/configs/brave/brave-browser.desktop"
+  local desktop_dst="$HOME/.local/share/applications/brave-browser.desktop"
+
+  ensure_dir "$HOME/.local/bin"
+  safe_link_path "$wrapper_src" "$wrapper_dst" "brave wrapper"
+
+  ensure_dir "$HOME/.local/share/applications"
+  safe_link_path "$desktop_src" "$desktop_dst" "brave desktop entry"
+
+  if check_installed update-desktop-database; then
+    run_cmd update-desktop-database "$HOME/.local/share/applications"
+  fi
+}
+
 apply_cameractrls() {
   local preset_src="$REPO_ROOT/configs/cameractrls/usb-046d_Logitech_BRIO_B7068CAF-video-index0.ini"
   local preset_dst="$HOME/.config/hu.irl.cameractrls/usb-046d_Logitech_BRIO_B7068CAF-video-index0.ini"
