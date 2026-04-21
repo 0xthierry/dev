@@ -1,113 +1,48 @@
 # Bash Machine Setup Toolkit
 
-## What This Is
-
-A personal machine setup toolkit that bootstraps Thierry's development machines from a clean OS to a fully configured working environment. One repo, three hosts, one command: `./setup.sh <host>`.
-
-## Why It Exists
-
-Thierry works across multiple machines — a MacBook (macOS/Homebrew), a dev server (Arch Linux/pacman), and an omarchy desktop (Arch Linux/pacman). Rather than manually remembering what to install and configure on each, this repo is the single source of truth. Run setup on a fresh machine and everything appears: CLI tools, shell config, editor setup, AI agent configuration, SSH, git, and work directories.
-
-The repo has evolved from earlier approaches into a Bash-first design. No Ansible, no Nix, no abstraction frameworks — just shell scripts that are easy to read, debug, and extend.
+Personal machine setup. One repo, three hosts, one command: `./setup.sh <host>`. Single source of truth for every machine Thierry uses.
 
 ## Hosts
 
 | Host | OS | Package Manager | Notes |
 |---|---|---|---|
-| `macbook` | macOS | Homebrew | Primary laptop, also installs GUI apps (casks) |
+| `macbook` | macOS | Homebrew | Laptop, also installs GUI casks |
 | `dev` | Arch Linux | pacman + AUR | Remote dev server, runs Ollama |
-| `omarchy` | Arch Linux | pacman + AUR | Desktop, runs Hyprland (tiling WM) |
+| `omarchy` | Arch Linux | pacman + AUR | Desktop, runs Hyprland |
 
-All three share the same CLI tool set, shell config, and editor setup. Host-specific differences (GUI apps, SSH keys, Hyprland config, environment variables) live in `install/hosts/{host}.sh`.
+Shared CLI tools, shell, and editor across all three. Host-specific bits live in `install/hosts/{host}.sh`.
 
-## Architecture
+## Two-Layer Model
 
-Setup runs as a pipeline of phases. Each host module overrides these hooks from `install/hosts/common.sh`:
+Setup has two independent layers:
 
-```
-setup_host_prereqs     -> Host-specific prerequisites
-setup_host_packages    -> Package installation (shared + host-specific)
-setup_shared_machine_state -> Config deploy, env, shell, git, SSH, runtimes, AI CLIs
-setup_host_machine_state   -> Host config targets (nvim, zellij, hypr, agents), work dirs
-setup_post_host_state      -> Repo cloning, git hooks, agent review tools
-```
+- **Packages** — `install/packages/common.sh` plus host arrays (`HOST_BREW_CASKS`, `HOST_PACMAN_PACKAGES`, `HOST_AUR_PACKAGES`). Installed by `install/brew.sh` and `install/pacman.sh`.
+- **Configs** — `install/configs.sh` symlinks repo-owned directories into their expected locations. `HOST_CONFIG_TARGETS` picks which configs each host gets.
 
-Two separate layers do the real work:
-- **Package installation** — `install/packages/common.sh` defines shared tool lists. `install/brew.sh` and `install/pacman.sh` install them on the respective platforms. Host modules add extras via `HOST_BREW_CASKS`, `HOST_PACMAN_PACKAGES`, `HOST_AUR_PACKAGES`.
-- **Config deployment** — `install/configs.sh` symlinks repo-owned config directories into their expected locations. `HOST_CONFIG_TARGETS` controls which configs a host gets.
+The two layers don't validate each other. **Most recurring bug:** config deployed (e.g. `EDITOR=nvim`) but the binary missing from the package list. When adding a config target, also add the tool to the package list.
 
-### Config Deployment Targets
+## Config Targets
 
-| Source | Deployed To | Method | Hosts |
-|---|---|---|---|
-| `configs/nvim/` | `~/.config/nvim` | symlink | macbook, dev, omarchy |
-| `configs/zellij/` | `~/.config/zellij` | symlink | macbook, dev, omarchy |
-| `configs/hypr/` | `~/.config/hypr` | symlink | omarchy only |
-| `configs/shell/` | sourced via `~/.zshrc` / `~/.zshenv` | written by `install/shell.sh` | all |
-| `configs/agents/` | `~/.agents/`, `~/.claude/`, `~/.codex/` | special installer (see below) | macbook, dev, omarchy |
-
-The agents installer (`configs/agents/install.sh`) is more complex than the others. It deploys to three targets:
-
-| Source | Target | Method |
+| Source | Deployed To | Method |
 |---|---|---|
-| `configs/agents/agents/` | `~/.agents/agents/`, `~/.claude/agents/`, `~/.codex/agents/` | symlink (`.claude`/`.agents`), copy with model stripping (`.codex`) |
-| `configs/agents/skills/` | `~/.agents/skills/`, `~/.claude/skills/`, `~/.codex/skills/` | symlink |
-| `configs/agents/hooks/` | `~/.agents/hooks/`, `~/.claude/hooks/` | symlink |
-| `configs/agents/AGENTS.md` | `~/.agents/AGENTS.md`, `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md` | rendered (replaces `{{HOST_CONFIG}}` with detected hardware info) |
-| `configs/agents/claude-settings.json` | `~/.claude/settings.json` | `jq` recursive merge (preserves local keys) |
-| `configs/agents/codex-config.toml` | `~/.codex/config.toml` | copy |
-| `configs/agents/statusline.ts` | `~/.agents/statusline.ts` | symlink |
+| `configs/nvim/` | `~/.config/nvim` | symlink |
+| `configs/zellij/` | `~/.config/zellij` | symlink |
+| `configs/hypr/` | `~/.config/hypr` | symlink (omarchy only) |
+| `configs/shell/` | sourced via `~/.zshrc` / `~/.zshenv` | written by `install/shell.sh` |
+| `configs/agents/` | `~/.agents/`, `~/.claude/`, `~/.codex/` | special installer |
 
-These layers are deliberately independent. A host can deploy a config without installing the backing tool, or install a tool without deploying config. This separation is intentional but is also the source of the most common class of bugs (see below).
+**Agent config is special-cased.** `configs/agents/install.sh` renders `AGENTS.md` (replaces `{{HOST_CONFIG}}` with detected hardware) into `~/.agents/AGENTS.md`, `~/.claude/CLAUDE.md`, and `~/.codex/AGENTS.md`; symlinks agents/skills/hooks (Codex gets copies with model stripping); `jq`-merges `claude-settings.json` into `~/.claude/settings.json` (preserves local keys); copies `codex-config.toml`.
 
-## Design Principles
+## Principles
 
-**Everything goes through the repo.** This is the most important principle. The repo is the single source of truth for every machine. Never install packages directly, never edit deployed config files in-place (e.g., `~/.config/nvim/init.lua` or `~/.claude/settings.json`), never configure tools outside the project scripts. Always make changes here in the repo, then let setup deploy them. If a change can't be reproduced by running `./setup.sh <host>` on a fresh machine, it doesn't exist.
+- **Everything goes through the repo.** Never install packages or edit deployed configs directly (`~/.config/nvim`, `~/.claude/settings.json`, etc.). If a change can't be reproduced by `./setup.sh <host>` on a fresh machine, it doesn't exist.
+- **Idempotent and non-destructive.** Setup never deletes user data or removes packages.
+- **Shared by default, host-specific by exception.**
+- **Declarative package lists.** Add to `install/packages/common.sh` or a host array — never `brew install X` / `pacman -S X` directly.
 
-**Idempotent and non-destructive.** Running setup twice produces the same result. Setup never deletes user data, overwrites local customizations outside its managed paths, or removes packages.
+## Brew vs pacman naming
 
-**Shared by default, host-specific by exception.** Tools, shell config, and editor setup go in shared layers. Only put something in a host module when it genuinely varies per machine.
-
-**Declarative package lists, not imperative installs.** Never `brew install X` or `pacman -S X` directly in a session. Add it to the package list in `install/packages/common.sh` (or host arrays) so every machine gets it on next setup run.
-
-**Simple bash over clever abstractions.** Each installer is a small, focused script. No plugin systems, no registration, no dynamic dispatch beyond the host module pattern.
-
-## Known Pitfalls
-
-**Config without binary.** The most recurring bug class: a config is deployed (nvim config symlinked, `EDITOR=nvim` set) but the binary itself isn't in the package list. The two layers don't validate each other. If you add a config target, also ensure the tool is in the package list.
-
-**Brew vs pacman naming.** Package names differ between Homebrew and pacman. When adding a shared tool, you need to add it to both `COMMON_BREW_FORMULAE` and `COMMON_PACMAN_PACKAGES` in `install/packages/common.sh`, and the names may not match (e.g., `tree-sitter-cli` on Brew vs `tree-sitter` on pacman, `make` on Brew vs `gnumake` on pacman).
-
-**Agent config is special-cased.** `configs/agents/install.sh` has its own installer that renders templates, detects host config dynamically, and manages symlinks. It doesn't follow the simple symlink pattern of other configs. The `configs/agents/AGENTS.md` is a template with a `{{HOST_CONFIG}}` placeholder that gets replaced at install time.
-
-## The Agent Layer
-
-`configs/agents/` is the most actively evolving part of the repo. It manages:
-- Claude Code settings (`claude-settings.json`) — merged into the user's settings via `jq` recursive merge, preserving local keys
-- Claude Code hooks and skills — deployed to `~/.agents/`
-- Codex configuration (`codex-config.toml`)
-- A statusline script (`statusline.ts`)
-- A global `AGENTS.md` template rendered with host-specific hardware info
-
-The merge-not-replace strategy for settings is important: the installer applies canonical values from the repo but doesn't clobber locally-added keys.
-
-## Testing Changes
-
-```bash
-bash -n setup.sh install/*.sh install/hosts/*.sh
-shellcheck setup.sh install/*.sh install/hosts/*.sh
-./setup.sh dev --dry-run
-./setup.sh omarchy --dry-run
-./setup.sh macbook --dry-run
-```
-
-If you change agent hooks:
-
-```bash
-cd configs/agents/hooks
-bun test
-bun run lint
-```
+Names differ between Homebrew and pacman (`tree-sitter-cli` vs `tree-sitter`, `make` vs `gnumake`). Shared tools go in **both** `COMMON_BREW_FORMULAE` and `COMMON_PACMAN_PACKAGES`.
 
 ## Common Tasks
 
@@ -122,14 +57,32 @@ bun run lint
 
 ## Host Scope
 
-Default to shared setup unless the user names one host explicitly.
+Default to shared. Only touch `install/hosts/{host}.sh` when the user names a host.
 
-| User says | Location | Why |
-|---|---|---|
-| "add X" / "install X" / "for all hosts" | shared install/config layers | Default shared behavior |
-| "on omarchy" / "just on dev" / "only macbook" | `install/hosts/{host}.sh` | Explicit single-host scope |
-| Ambiguous host scope | Ask | Prevent accidental cross-host changes |
+| User says | Location |
+|---|---|
+| "add X" / "for all hosts" | shared layers |
+| "on omarchy" / "only macbook" | `install/hosts/{host}.sh` |
+| Ambiguous | Ask |
+
+## Testing
+
+```bash
+bash -n setup.sh install/*.sh install/hosts/*.sh
+shellcheck setup.sh install/*.sh install/hosts/*.sh
+./setup.sh dev --dry-run
+./setup.sh omarchy --dry-run
+./setup.sh macbook --dry-run
+```
+
+For agent hooks:
+
+```bash
+cd configs/agents/hooks
+bun test
+bun run lint
+```
 
 ## Workflow
 
-This is a personal repo with a trunk-based workflow. Commits go directly to `main`. Conventional commit messages are used (`feat(scope):`, `fix(scope):`). There are no PRs, no CI — the pre-commit hook runs `bash -n` syntax checks on shell scripts.
+Trunk-based — commits go directly to `main`. Conventional commit messages (`feat(scope):`, `fix(scope):`). No PRs, no CI; pre-commit hook runs `bash -n`.
