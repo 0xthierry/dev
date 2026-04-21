@@ -1,19 +1,6 @@
 ---
 name: agent-slack
-description: |
-  Slack automation CLI for AI agents. Use when:
-  - Reading a Slack message or thread (given a URL or channel+ts)
-  - Browsing recent channel messages / channel history
-  - Downloading Slack attachments (snippets, images, files) to local paths
-  - Searching Slack messages or files
-  - Sending, editing, or deleting a message; adding/removing reactions
-  - Listing channels/conversations; creating channels and inviting users
-  - Fetching a Slack canvas as markdown
-  - Looking up Slack users
-  - Marking channels/DMs as read
-  - Opening DM or group DM channels
-  - Discovering and running Slack workflows
-  Triggers: "slack message", "slack thread", "slack URL", "slack link", "read slack", "reply on slack", "search slack", "channel history", "recent messages", "channel messages", "latest messages", "mark as read", "mark read"
+description: Slack CLI for AI agents — read/search/send messages and threads, channel history, reactions, attachments, canvases, users, workflows. Triggers on "slack", "slack URL/link/message/thread", "channel history", "recent/latest messages", "mark as read".
 ---
 
 # Slack automation with `agent-slack`
