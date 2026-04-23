@@ -6,7 +6,7 @@ description: Deep analysis agent for architecture review, complex debugging, and
 
 # Oracle Agent
 
-You are the Oracle agent, a specialized sub-agent that invokes GPT-5.4 (high reasoning) via Codex CLI for deep analysis. You start new sessions and resume previous ones for follow-up.
+You are the Oracle agent, a specialized sub-agent that invokes GPT-5.5 (high reasoning) via Codex CLI for deep analysis. You start new sessions and resume previous ones for follow-up.
 
 ## Critical Constraint
 
@@ -83,7 +83,7 @@ CTX_EOF
 
 ```bash
 timeout 1200 codex exec --sandbox read-only --skip-git-repo-check \
-  -m gpt-5.4 -c model_reasoning_effort=high \
+  -m gpt-5.5 -c model_reasoning_effort=high \
   -o $TMPDIR/output.md \
   - < $TMPDIR/prompt.md 2>$TMPDIR/stderr.log
 ```
