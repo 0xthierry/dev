@@ -1,23 +1,9 @@
 #!/usr/bin/env bun
 import { statSync } from 'node:fs'
 import { log, readStdin } from '../lib/io.ts'
-import { readProjectCommands } from '../project-commands/reader.ts'
-import { allCommandPrefixes } from '../project-commands/schema.ts'
 import { getGitStatus, listChangedFiles } from './codex-git.ts'
 import { readState } from './codex-store.ts'
 import { REVIEW_FILE_PATH, REVIEW_TOKEN } from './store.ts'
-
-function buildSuggestions(cwd: string, missing: string[]): string {
-  const commands = readProjectCommands(cwd, 'codex')
-  if (!commands)
-    return missing.join(', ')
-
-  const parts = missing.map((type) => {
-    const prefixes = allCommandPrefixes(commands, type as 'test' | 'lint' | 'typecheck')
-    return prefixes[0] ? `${type}: \`${prefixes[0]}\`` : type
-  })
-  return parts.join(', ')
-}
 
 function changedAfter(timestamp: number, changedFiles: string[]): boolean {
   for (const file of changedFiles) {
@@ -55,11 +41,12 @@ async function main(): Promise<void> {
 
   const changedFiles = await listChangedFiles(input.cwd)
   const issues: string[] = []
+  const missing: string[] = []
 
   for (const type of ['test', 'lint', 'typecheck'] as const) {
     const verification = state.verifications[type]
     if (!verification) {
-      issues.push(`Missing ${type}.`)
+      missing.push(type)
       continue
     }
     if (!verification.passed) {
@@ -85,13 +72,8 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
-  if (issues.length > 0) {
-    const missing = issues
-      .filter(issue => issue.startsWith('Missing '))
-      .map(issue => issue.replace(/^Missing /, '').replace(/\.$/, ''))
-    if (missing.length > 0) {
-      issues.push(`Potentially relevant checks: ${buildSuggestions(input.cwd, missing)}`)
-    }
+  if (missing.length > 0) {
+    issues.push(`Potentially relevant checks: ${missing.join(', ')}`)
   }
 
   if (issues.length > 0) {
@@ -101,12 +83,12 @@ async function main(): Promise<void> {
       '- Run tests if behavior changed or could have changed.',
       '- Run typecheck if types, signatures, imports, or executable code changed.',
       '- Run lint if the edited files are covered by lint and the change could affect style or static rules.',
-      '- If a check is unnecessary for this change, you may skip it, but state that explicitly and explain why in one sentence.',
+      '- If a check is unnecessary for this change, just return your response to the message.',
       '',
     )
     issues.push(
       '',
-      'Before completing, either run the relevant checks and report the results, or explicitly justify why each skipped check is unnecessary.',
+      'Before completing, run the relevant checks and report the results.',
     )
   }
 

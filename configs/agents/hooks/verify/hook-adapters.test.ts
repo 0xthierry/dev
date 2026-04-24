@@ -1,9 +1,8 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { getProjectStateDir } from '../lib/harness.ts'
-import { getProjectCommandsPath } from '../project-commands/reader.ts'
 import { readState as readCodexState } from './codex-store.ts'
 import { addEditedFile, readState as readClaudeState } from './store.ts'
 
@@ -16,25 +15,6 @@ function makeCwd(name: string): string {
   const cwd = `/tmp/${name}-${Date.now()}-${Math.random().toString(36).slice(2)}`
   TEST_CWDS.push(cwd)
   return cwd
-}
-
-function writeProjectCommands(cwd: string, harness: 'claude' | 'codex'): void {
-  const path = getProjectCommandsPath(cwd, harness)
-  mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, JSON.stringify({
-    schemaVersion: 1,
-    projectRoot: cwd,
-    sourceFiles: ['package.json'],
-    scopes: [{
-      id: 'api',
-      pattern: '**',
-      cwd: '.',
-      test: [{ argv: ['npm', 'test'], mode: 'project' }],
-      lint: [],
-      typecheck: [],
-      format: [],
-    }],
-  }, null, 2))
 }
 
 async function runHook(scriptPath: string, input: Record<string, unknown>): Promise<{ stdout: string, stderr: string, exitCode: number }> {
@@ -64,11 +44,10 @@ afterEach(() => {
 })
 
 describe('verification hook adapters', () => {
-  test('Claude on-bash records scoped verification results', async () => {
+  test('Claude on-bash records verification results', async () => {
     const cwd = makeCwd('verify-claude-hook')
     const sessionId = 'claude-hook-session'
-    writeProjectCommands(cwd, 'claude')
-    addEditedFile(cwd, sessionId, `${cwd}/src/app.ts`, 'api')
+    addEditedFile(cwd, sessionId, `${cwd}/src/app.ts`)
 
     const result = await runHook(CLAUDE_SCRIPT_PATH, {
       hook_event_name: 'PostToolUse',
@@ -84,7 +63,7 @@ describe('verification hook adapters', () => {
     expect(result.stderr).toBe('')
 
     const state = readClaudeState(cwd, sessionId)
-    expect(state.scopes.api!.verifications.test).toMatchObject({
+    expect(state.verifications.test).toMatchObject({
       passed: true,
       command: 'npm test',
       errors: null,

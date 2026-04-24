@@ -1,58 +1,34 @@
 #!/usr/bin/env bun
-import type { Scope } from '../project-commands/schema.ts'
 import type { VerifyState } from './store.ts'
 import { log, readStdin } from '../lib/io.ts'
-import { readProjectCommands } from '../project-commands/reader.ts'
 import { readState, resetState, REVIEW_FILE_PATH, REVIEW_TOKEN } from './store.ts'
 
-function buildFeedback(state: VerifyState, scopes: Scope[]): string | null {
-  const details: string[] = []
+function buildFeedback(state: VerifyState): string | null {
+  const missing: string[] = []
+  const failed: string[] = []
 
-  for (const [scopeId, scopeState] of Object.entries(state.scopes)) {
-    if (scopeState.editedFiles.length === 0)
-      continue
-
-    const missing: string[] = []
-    const failed: string[] = []
-
-    for (const type of ['test', 'lint', 'typecheck'] as const) {
-      const v = scopeState.verifications[type]
-      if (!v) {
-        missing.push(type)
-      }
-      else if (!v.passed) {
-        const errorCtx = v.errors ? `:\n${v.errors}` : ''
-        failed.push(`${type} (\`${v.command}\`) failed${errorCtx}`)
-      }
+  for (const type of ['test', 'lint', 'typecheck'] as const) {
+    const v = state.verifications[type]
+    if (!v) {
+      missing.push(type)
     }
-
-    if (missing.length === 0 && failed.length === 0)
-      continue
-
-    details.push(`[${scopeId}] edited: ${scopeState.editedFiles.join(', ')}`)
-
-    if (failed.length > 0) {
-      for (const f of failed)
-        details.push(`  ✘ ${f}`)
-    }
-
-    if (missing.length > 0) {
-      const scope = scopes.find(s => s.id === scopeId)
-      if (scope) {
-        const suggestions = missing.map((type) => {
-          const cmds = scope[type as keyof Pick<Scope, 'test' | 'lint' | 'typecheck'>]
-          return cmds.length > 0 ? `${type}: \`${cmds[0]!.argv.join(' ')}\`` : type
-        })
-        details.push(`  Potentially relevant checks: ${suggestions.join(', ')}`)
-      }
-      else {
-        details.push(`  Potentially relevant checks: ${missing.join(', ')}`)
-      }
+    else if (!v.passed) {
+      const errorCtx = v.errors ? `:\n${v.errors}` : ''
+      failed.push(`${type} (\`${v.command}\`) failed${errorCtx}`)
     }
   }
 
-  if (details.length === 0)
+  if (missing.length === 0 && failed.length === 0)
     return null
+
+  const details: string[] = []
+  details.push(`Edited: ${state.editedFiles.join(', ')}`)
+
+  for (const f of failed)
+    details.push(`  ✘ ${f}`)
+
+  if (missing.length > 0)
+    details.push(`  Potentially relevant checks: ${missing.join(', ')}`)
 
   return [
     'Review your latest changes and decide whether verification is materially required.',
@@ -60,16 +36,12 @@ function buildFeedback(state: VerifyState, scopes: Scope[]): string | null {
     '- Run tests if behavior changed or could have changed.',
     '- Run typecheck if types, signatures, imports, or executable code changed.',
     '- Run lint if the edited files are covered by lint and the change could affect style or static rules.',
-    '- If a check is unnecessary for this change, you may skip it, but state that explicitly and explain why in one sentence.',
+    '- If a check is unnecessary for this change, just return your response to the message.',
     '',
     ...details,
     '',
-    'Before completing, either run the relevant checks and report the results, or explicitly justify why each skipped check is unnecessary.',
+    'Before completing, run the relevant checks and report the results.',
   ].join('\n')
-}
-
-function hasEdits(state: VerifyState): boolean {
-  return Object.values(state.scopes).some(s => s.editedFiles.length > 0)
 }
 
 async function main(): Promise<void> {
@@ -86,7 +58,7 @@ async function main(): Promise<void> {
   const sessionId = input.session_id || 'unknown'
   const state = readState(input.cwd, sessionId)
 
-  if (!hasEdits(state))
+  if (state.editedFiles.length === 0)
     process.exit(0)
 
   const lastMsg = (input as unknown as Record<string, unknown>).last_assistant_message
@@ -109,8 +81,7 @@ async function main(): Promise<void> {
   // First attempt — combine verifications + review token in one message
   const parts: string[] = []
 
-  const commands = readProjectCommands(input.cwd, 'claude')
-  const feedback = buildFeedback(state, commands?.scopes || [])
+  const feedback = buildFeedback(state)
   if (feedback) {
     parts.push(feedback)
   }

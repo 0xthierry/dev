@@ -1,8 +1,3 @@
-import type { HookHarness } from '../lib/harness.ts'
-import { resolveCommandCwd } from '../lib/io.ts'
-import { readProjectCommands } from '../project-commands/reader.ts'
-import { matchBashCommand } from '../project-commands/schema.ts'
-
 export type VerificationType = 'test' | 'lint' | 'typecheck'
 
 export interface VerificationResult {
@@ -14,7 +9,6 @@ export interface VerificationResult {
 
 export interface VerificationMatch {
   type: VerificationType
-  scopeId: string
 }
 
 const TEST_PATTERNS = [
@@ -48,30 +42,18 @@ const TYPECHECK_PATTERNS = [
   /\bpyright\b/,
 ]
 
-export function detectVerificationCommand(
-  command: string,
-  cwd: string,
-  harness: HookHarness,
-): VerificationMatch | null {
-  const commands = readProjectCommands(cwd, harness)
-  if (commands) {
-    const bashCwd = resolveCommandCwd(command, cwd)
-    const match = matchBashCommand(command, bashCwd, commands)
-    if (match)
-      return match
-  }
-
+export function detectVerificationCommand(command: string): VerificationMatch | null {
   for (const p of TEST_PATTERNS) {
     if (p.test(command))
-      return { type: 'test', scopeId: 'unknown' }
+      return { type: 'test' }
   }
   for (const p of LINT_PATTERNS) {
     if (p.test(command))
-      return { type: 'lint', scopeId: 'unknown' }
+      return { type: 'lint' }
   }
   for (const p of TYPECHECK_PATTERNS) {
     if (p.test(command))
-      return { type: 'typecheck', scopeId: 'unknown' }
+      return { type: 'typecheck' }
   }
 
   return null

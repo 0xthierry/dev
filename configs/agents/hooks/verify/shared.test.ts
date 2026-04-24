@@ -1,71 +1,28 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
-import { afterEach, describe, expect, test } from 'bun:test'
-import { getProjectStateDir } from '../lib/harness.ts'
-import { getProjectCommandsPath } from '../project-commands/reader.ts'
+import { describe, expect, test } from 'bun:test'
 import { detectVerificationCommand, extractVerificationOutcome } from './shared.ts'
 
-const TEST_CWDS: string[] = []
-
-function makeCwd(name: string): string {
-  const cwd = `/tmp/${name}-${Date.now()}-${Math.random().toString(36).slice(2)}`
-  TEST_CWDS.push(cwd)
-  return cwd
-}
-
-function writeCommands(cwd: string, harness: 'claude' | 'codex'): void {
-  const path = getProjectCommandsPath(cwd, harness)
-  mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, JSON.stringify({
-    schemaVersion: 1,
-    projectRoot: cwd,
-    sourceFiles: ['package.json'],
-    scopes: [{
-      id: 'api',
-      pattern: '**',
-      cwd: '.',
-      test: [{ argv: ['npm', 'test'], mode: 'project' }],
-      lint: [{ argv: ['npm', 'run', 'lint'], mode: 'project' }],
-      typecheck: [{ argv: ['npm', 'run', 'typecheck'], mode: 'project' }],
-      format: [],
-    }],
-  }, null, 2))
-}
-
-afterEach(() => {
-  for (const cwd of TEST_CWDS.splice(0)) {
-    rmSync(getProjectStateDir('claude', cwd), { recursive: true, force: true })
-    rmSync(getProjectStateDir('codex', cwd), { recursive: true, force: true })
-  }
-})
-
 describe('detectVerificationCommand', () => {
-  test('uses fallback regexes when no project commands exist', () => {
-    const cwd = makeCwd('verify-fallback')
-    expect(detectVerificationCommand('pytest', cwd, 'codex')).toEqual({
-      type: 'test',
-      scopeId: 'unknown',
-    })
+  test('recognizes test commands', () => {
+    expect(detectVerificationCommand('pytest')).toEqual({ type: 'test' })
+    expect(detectVerificationCommand('npm test')).toEqual({ type: 'test' })
+    expect(detectVerificationCommand('bun test')).toEqual({ type: 'test' })
   })
 
-  test('matches configured commands from the requested harness', () => {
-    const cwd = makeCwd('verify-configured')
-    writeCommands(cwd, 'codex')
-
-    expect(detectVerificationCommand('npm run lint', cwd, 'codex')).toEqual({
-      type: 'lint',
-      scopeId: 'api',
-    })
+  test('recognizes lint commands', () => {
+    expect(detectVerificationCommand('npm run lint')).toEqual({ type: 'lint' })
+    expect(detectVerificationCommand('npx eslint src/')).toEqual({ type: 'lint' })
+    expect(detectVerificationCommand('ruff check')).toEqual({ type: 'lint' })
   })
 
-  test('matches commands after a cd prefix', () => {
-    const cwd = makeCwd('verify-cd-prefix')
-    writeCommands(cwd, 'claude')
+  test('recognizes typecheck commands', () => {
+    expect(detectVerificationCommand('npm run typecheck')).toEqual({ type: 'typecheck' })
+    expect(detectVerificationCommand('npx tsc --noEmit')).toEqual({ type: 'typecheck' })
+    expect(detectVerificationCommand('mypy src/')).toEqual({ type: 'typecheck' })
+  })
 
-    expect(detectVerificationCommand(`cd ${cwd} && npm run typecheck`, cwd, 'claude')).toEqual({
-      type: 'typecheck',
-      scopeId: 'api',
-    })
+  test('returns null for unrelated commands', () => {
+    expect(detectVerificationCommand('ls -la')).toBeNull()
+    expect(detectVerificationCommand('git status')).toBeNull()
   })
 })
 

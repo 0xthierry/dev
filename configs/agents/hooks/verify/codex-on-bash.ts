@@ -14,7 +14,7 @@ async function main(): Promise<void> {
     process.exit(0)
 
   const command = getCommand(input.tool_input || {})
-  const result = detectVerificationCommand(command, input.cwd, 'codex')
+  const result = detectVerificationCommand(command)
   if (!result) {
     log(input, 'verify/codex-on-bash', 'skip', `not a verification command: ${command.slice(0, 60)}`)
     process.exit(0)

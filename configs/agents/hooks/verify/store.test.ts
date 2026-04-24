@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import {
   addEditedFile,
-  getEditedScopes,
+  hasEdits,
   readState,
   recordVerification,
   resetState,
@@ -18,24 +18,23 @@ afterEach(() => {
   // Clean up any state files created during tests
 })
 
-describe('addEditedFile with scopeId', () => {
-  test('creates scope entry when adding first file', () => {
+describe('addEditedFile', () => {
+  test('records first edited file', () => {
     const sid = uniqueSession()
-    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts', 'api')
+    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts')
 
     const state = readState(TEST_CWD, sid)
-    expect(state.scopes.api).toBeDefined()
-    expect(state.scopes.api!.editedFiles).toEqual(['/src/api/handler.ts'])
-    expect(state.scopes.api!.lastEditAt).toBeGreaterThan(0)
+    expect(state.editedFiles).toEqual(['/src/api/handler.ts'])
+    expect(state.lastEditAt).toBeGreaterThan(0)
   })
 
-  test('multiple files in same scope share state', () => {
+  test('appends subsequent files', () => {
     const sid = uniqueSession()
-    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts', 'api')
-    addEditedFile(TEST_CWD, sid, '/src/api/router.ts', 'api')
+    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts')
+    addEditedFile(TEST_CWD, sid, '/src/api/router.ts')
 
     const state = readState(TEST_CWD, sid)
-    expect(state.scopes.api!.editedFiles).toEqual([
+    expect(state.editedFiles).toEqual([
       '/src/api/handler.ts',
       '/src/api/router.ts',
     ])
@@ -43,134 +42,83 @@ describe('addEditedFile with scopeId', () => {
 
   test('does not duplicate the same file path', () => {
     const sid = uniqueSession()
-    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts', 'api')
-    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts', 'api')
+    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts')
+    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts')
 
     const state = readState(TEST_CWD, sid)
-    expect(state.scopes.api!.editedFiles).toEqual(['/src/api/handler.ts'])
-  })
-
-  test('files in different scopes have independent state', () => {
-    const sid = uniqueSession()
-    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts', 'api')
-    addEditedFile(TEST_CWD, sid, '/src/workflow/step.ts', 'workflow')
-
-    const state = readState(TEST_CWD, sid)
-    expect(state.scopes.api!.editedFiles).toEqual(['/src/api/handler.ts'])
-    expect(state.scopes.workflow!.editedFiles).toEqual(['/src/workflow/step.ts'])
+    expect(state.editedFiles).toEqual(['/src/api/handler.ts'])
   })
 })
 
-describe('invalidation per scope', () => {
-  test('editing a file invalidates only that scope verifications', () => {
+describe('invalidation', () => {
+  test('editing a file invalidates all recorded verifications', () => {
     const sid = uniqueSession()
 
-    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts', 'api')
-    addEditedFile(TEST_CWD, sid, '/src/workflow/step.ts', 'workflow')
+    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts')
+    recordVerification(TEST_CWD, sid, 'test', 'bun test', true, null)
+    recordVerification(TEST_CWD, sid, 'lint', 'bun lint', true, null)
+    recordVerification(TEST_CWD, sid, 'typecheck', 'tsc --noEmit', true, null)
 
-    recordVerification(TEST_CWD, sid, 'test', 'api', 'bun test api', true, null)
-    recordVerification(TEST_CWD, sid, 'test', 'workflow', 'bun test workflow', true, null)
-
-    const before = readState(TEST_CWD, sid)
-    expect(before.scopes.api!.verifications.test).not.toBeNull()
-    expect(before.scopes.workflow!.verifications.test).not.toBeNull()
-
-    // Edit a file in api scope — should invalidate api but not workflow
-    addEditedFile(TEST_CWD, sid, '/src/api/routes.ts', 'api')
-
-    const after = readState(TEST_CWD, sid)
-    expect(after.scopes.api!.verifications.test).toBeNull()
-    expect(after.scopes.workflow!.verifications.test).not.toBeNull()
-  })
-
-  test('invalidation clears all verification types in the edited scope', () => {
-    const sid = uniqueSession()
-
-    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts', 'api')
-    recordVerification(TEST_CWD, sid, 'test', 'api', 'bun test', true, null)
-    recordVerification(TEST_CWD, sid, 'lint', 'api', 'bun lint', true, null)
-    recordVerification(TEST_CWD, sid, 'typecheck', 'api', 'tsc --noEmit', true, null)
-
-    addEditedFile(TEST_CWD, sid, '/src/api/new-file.ts', 'api')
+    addEditedFile(TEST_CWD, sid, '/src/api/new-file.ts')
 
     const state = readState(TEST_CWD, sid)
-    expect(state.scopes.api!.verifications.test).toBeNull()
-    expect(state.scopes.api!.verifications.lint).toBeNull()
-    expect(state.scopes.api!.verifications.typecheck).toBeNull()
+    expect(state.verifications.test).toBeNull()
+    expect(state.verifications.lint).toBeNull()
+    expect(state.verifications.typecheck).toBeNull()
   })
 })
 
-describe('recordVerification with scopeId', () => {
-  test('records verification for specific scope', () => {
+describe('recordVerification', () => {
+  test('records a passing verification', () => {
     const sid = uniqueSession()
-    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts', 'api')
+    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts')
 
-    recordVerification(TEST_CWD, sid, 'test', 'api', 'bun test api', true, null)
+    recordVerification(TEST_CWD, sid, 'test', 'bun test', true, null)
 
-    const state = readState(TEST_CWD, sid)
-    const v = state.scopes.api!.verifications.test
+    const v = readState(TEST_CWD, sid).verifications.test
     expect(v).not.toBeNull()
     expect(v!.passed).toBe(true)
-    expect(v!.command).toBe('bun test api')
+    expect(v!.command).toBe('bun test')
     expect(v!.errors).toBeNull()
   })
 
-  test('records failed verification with errors', () => {
+  test('records a failing verification with errors', () => {
     const sid = uniqueSession()
-    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts', 'api')
+    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts')
 
-    recordVerification(TEST_CWD, sid, 'lint', 'api', 'eslint .', false, 'error: unused var')
+    recordVerification(TEST_CWD, sid, 'lint', 'eslint .', false, 'error: unused var')
 
-    const state = readState(TEST_CWD, sid)
-    const v = state.scopes.api!.verifications.lint
+    const v = readState(TEST_CWD, sid).verifications.lint
     expect(v).not.toBeNull()
     expect(v!.passed).toBe(false)
     expect(v!.errors).toBe('error: unused var')
   })
-
-  test('creates scope entry if it does not exist yet', () => {
-    const sid = uniqueSession()
-
-    recordVerification(TEST_CWD, sid, 'test', 'new-scope', 'bun test', true, null)
-
-    const state = readState(TEST_CWD, sid)
-    expect(state.scopes['new-scope']).toBeDefined()
-    expect(state.scopes['new-scope']!.verifications.test!.passed).toBe(true)
-  })
 })
 
-describe('getEditedScopes', () => {
-  test('returns only scopes with edited files', () => {
+describe('hasEdits', () => {
+  test('returns true when files have been edited', () => {
     const sid = uniqueSession()
-    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts', 'api')
-    addEditedFile(TEST_CWD, sid, '/src/workflow/step.ts', 'workflow')
-
-    // Record a verification for a third scope (no edits)
-    recordVerification(TEST_CWD, sid, 'test', 'empty-scope', 'bun test', true, null)
-
-    const scopes = getEditedScopes(TEST_CWD, sid)
-    expect(scopes).toContain('api')
-    expect(scopes).toContain('workflow')
-    expect(scopes).not.toContain('empty-scope')
+    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts')
+    expect(hasEdits(TEST_CWD, sid)).toBe(true)
   })
 
-  test('returns empty array when no edits', () => {
+  test('returns false when no edits', () => {
     const sid = uniqueSession()
-    expect(getEditedScopes(TEST_CWD, sid)).toEqual([])
+    expect(hasEdits(TEST_CWD, sid)).toBe(false)
   })
 })
 
 describe('resetState', () => {
-  test('clears all scopes', () => {
+  test('clears edits and verifications', () => {
     const sid = uniqueSession()
-    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts', 'api')
-    addEditedFile(TEST_CWD, sid, '/src/workflow/step.ts', 'workflow')
-    recordVerification(TEST_CWD, sid, 'test', 'api', 'bun test', true, null)
+    addEditedFile(TEST_CWD, sid, '/src/api/handler.ts')
+    recordVerification(TEST_CWD, sid, 'test', 'bun test', true, null)
 
     resetState(TEST_CWD, sid)
 
     const state = readState(TEST_CWD, sid)
-    expect(state.scopes).toEqual({})
-    expect(getEditedScopes(TEST_CWD, sid)).toEqual([])
+    expect(state.editedFiles).toEqual([])
+    expect(state.verifications.test).toBeNull()
+    expect(hasEdits(TEST_CWD, sid)).toBe(false)
   })
 })

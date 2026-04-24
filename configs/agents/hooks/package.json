@@ -8,14 +8,10 @@
   "peerDependencies": {
     "typescript": "^5"
   },
-  "dependencies": {
-    "picomatch": "^4.0.4"
-  },
   "devDependencies": {
     "@antfu/eslint-config": "^7.0.0",
     "@types/bun": "latest",
     "@types/node": "^25.0.7",
-    "@types/picomatch": "^4.0.2",
     "@typescript-eslint/eslint-plugin": "^8.53.0",
     "@typescript-eslint/parser": "^8.53.0",
     "eslint": "^9.39.2",

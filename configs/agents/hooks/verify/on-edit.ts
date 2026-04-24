@@ -1,8 +1,44 @@
 #!/usr/bin/env bun
 import { getFilePath, log, readStdin } from '../lib/io.ts'
-import { readProjectCommands } from '../project-commands/reader.ts'
-import { findScope, isSourceFile, isTestFile } from '../project-commands/schema.ts'
 import { addEditedFile } from './store.ts'
+
+const SOURCE_EXTENSIONS = new Set([
+  'ts',
+  'tsx',
+  'js',
+  'jsx',
+  'mjs',
+  'cjs',
+  'py',
+  'rs',
+  'go',
+  'java',
+  'rb',
+  'ex',
+  'exs',
+  'c',
+  'cpp',
+  'h',
+  'hpp',
+  'swift',
+  'kt',
+])
+
+const TEST_FILE_PATTERNS = [
+  /\.test\.[^/]+$/,
+  /\.spec\.[^/]+$/,
+  /_test\.[^/]+$/,
+  /(?:^|\/)__tests__\//,
+]
+
+function isSourceFile(filePath: string): boolean {
+  const ext = filePath.match(/\.([^./]+)$/)?.[1]
+  return !!ext && SOURCE_EXTENSIONS.has(ext)
+}
+
+function isTestFile(filePath: string): boolean {
+  return TEST_FILE_PATTERNS.some(p => p.test(filePath))
+}
 
 async function main(): Promise<void> {
   let input
@@ -16,20 +52,11 @@ async function main(): Promise<void> {
     process.exit(0)
 
   const filePath = getFilePath(input.tool_input || {})
-  const commands = readProjectCommands(input.cwd, 'claude')
-  const scope = commands ? findScope(commands, filePath) : null
-
-  if (!isSourceFile(scope, filePath))
+  if (!isSourceFile(filePath) || isTestFile(filePath))
     process.exit(0)
 
-  const root = commands?.projectRoot ?? input.cwd
-  const relative = filePath.startsWith(root) ? filePath.slice(root.length + 1) : filePath
-  if (isTestFile(scope, relative))
-    process.exit(0)
-
-  const scopeId = scope?.id || 'unknown'
-  addEditedFile(input.cwd, input.session_id || 'unknown', filePath, scopeId)
-  log(input, 'verify/on-edit', 'tracked', `${filePath} [${scopeId}]`)
+  addEditedFile(input.cwd, input.session_id || 'unknown', filePath)
+  log(input, 'verify/on-edit', 'tracked', filePath)
   process.exit(0)
 }
 

@@ -6,7 +6,7 @@ export const REVIEW_TOKEN = 'review-checklist-complete'
 export const REVIEW_FILE_PATH = `${homedir()}/.agents/hooks/verify/review.md`
 export type { VerificationResult, VerificationType } from './shared.ts'
 
-export interface ScopeState {
+export interface VerifyState {
   editedFiles: string[]
   lastEditAt: number
   verifications: {
@@ -16,15 +16,7 @@ export interface ScopeState {
   }
 }
 
-export interface VerifyState {
-  scopes: Record<string, ScopeState>
-}
-
 function emptyState(): VerifyState {
-  return { scopes: {} }
-}
-
-function emptyScopeState(): ScopeState {
   return {
     editedFiles: [],
     lastEditAt: 0,
@@ -44,20 +36,16 @@ export function resetState(cwd: string, sessionId: string): void {
   writeState(cwd, sessionId, emptyState())
 }
 
-export function addEditedFile(cwd: string, sessionId: string, filePath: string, scopeId: string): void {
+export function addEditedFile(cwd: string, sessionId: string, filePath: string): void {
   const state = readState(cwd, sessionId)
-  if (!state.scopes[scopeId]) {
-    state.scopes[scopeId] = emptyScopeState()
+  if (!state.editedFiles.includes(filePath)) {
+    state.editedFiles.push(filePath)
   }
-  const scope = state.scopes[scopeId]!
-  if (!scope.editedFiles.includes(filePath)) {
-    scope.editedFiles.push(filePath)
-  }
-  scope.lastEditAt = Date.now()
+  state.lastEditAt = Date.now()
   for (const key of ['test', 'lint', 'typecheck'] as const) {
-    const v = scope.verifications[key]
-    if (v && v.at <= scope.lastEditAt) {
-      scope.verifications[key] = null
+    const v = state.verifications[key]
+    if (v && v.at <= state.lastEditAt) {
+      state.verifications[key] = null
     }
   }
   writeState(cwd, sessionId, state)
@@ -67,16 +55,12 @@ export function recordVerification(
   cwd: string,
   sessionId: string,
   type: VerificationType,
-  scopeId: string,
   command: string,
   passed: boolean,
   errors: string | null,
 ): void {
   const state = readState(cwd, sessionId)
-  if (!state.scopes[scopeId]) {
-    state.scopes[scopeId] = emptyScopeState()
-  }
-  state.scopes[scopeId]!.verifications[type] = {
+  state.verifications[type] = {
     at: Date.now(),
     passed,
     command,
@@ -85,9 +69,6 @@ export function recordVerification(
   writeState(cwd, sessionId, state)
 }
 
-export function getEditedScopes(cwd: string, sessionId: string): string[] {
-  const state = readState(cwd, sessionId)
-  return Object.entries(state.scopes)
-    .filter(([_, s]) => s.editedFiles.length > 0)
-    .map(([id]) => id)
+export function hasEdits(cwd: string, sessionId: string): boolean {
+  return readState(cwd, sessionId).editedFiles.length > 0
 }

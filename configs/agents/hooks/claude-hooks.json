@@ -1,16 +1,4 @@
 {
-  "SessionStart": [
-    {
-      "hooks": [
-        {
-          "type": "command",
-          "command": "mise exec -- bun ~/.agents/hooks/project-commands/on-start.ts",
-          "timeout": 5000,
-          "statusMessage": "Detecting project tooling"
-        }
-      ]
-    }
-  ],
   "UserPromptSubmit": [
     {
       "hooks": [
@@ -63,13 +51,6 @@
     {
       "matcher": "Write|Edit|MultiEdit",
       "hooks": [
-        {
-          "type": "command",
-          "command": "mise exec -- bun ~/.agents/hooks/auto-format/index.ts",
-          "timeout": 300000,
-          "async": true,
-          "statusMessage": "Auto-formatting"
-        },
         {
           "type": "command",
           "command": "mise exec -- bun ~/.agents/hooks/verify/on-edit.ts",

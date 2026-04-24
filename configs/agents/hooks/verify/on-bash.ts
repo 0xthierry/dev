@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { getCommand, log, readStdin } from '../lib/io.ts'
 import { detectVerificationCommand, extractVerificationOutcome } from './shared.ts'
-import { getEditedScopes, recordVerification } from './store.ts'
+import { hasEdits, recordVerification } from './store.ts'
 
 async function main(): Promise<void> {
   let input
@@ -16,16 +16,13 @@ async function main(): Promise<void> {
 
   const command = getCommand(input.tool_input || {})
   const sessionId = input.session_id || 'unknown'
-  const result = detectVerificationCommand(command, input.cwd, 'claude')
+  const result = detectVerificationCommand(command)
   if (!result) {
     log(input, 'verify/on-bash', 'skip', `not a verification command: ${command.slice(0, 60)}`)
     process.exit(0)
   }
 
-  const { type, scopeId } = result
-  const editedScopes = getEditedScopes(input.cwd, sessionId)
-
-  if (editedScopes.length === 0) {
+  if (!hasEdits(input.cwd, sessionId)) {
     log(input, 'verify/on-bash', 'skip', 'no edited files')
     process.exit(0)
   }
@@ -33,8 +30,8 @@ async function main(): Promise<void> {
   const toolResponse = (input as unknown as Record<string, unknown>).tool_response
   const { passed, errors } = extractVerificationOutcome(toolResponse)
 
-  recordVerification(input.cwd, sessionId, type, scopeId, command, passed, errors)
-  log(input, 'verify/on-bash', passed ? 'pass' : 'fail', `${type}[${scopeId}]: ${command.slice(0, 80)}`)
+  recordVerification(input.cwd, sessionId, result.type, command, passed, errors)
+  log(input, 'verify/on-bash', passed ? 'pass' : 'fail', `${result.type}: ${command.slice(0, 80)}`)
   process.exit(0)
 }
 
