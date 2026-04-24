@@ -24,14 +24,8 @@ CHARS_PER_TOKEN = 4
 
 # Measured output sizes (chars) per hook outcome, from reading hook source code.
 # Only hooks that produce additionalContext or stdout are listed.
-# "injected" outcome = tool-failures/on-pre-use writes up to MAX_INJECT_CHARS=500
-# "detected"/"generic" = reminders writes ~80-200 chars
 # "block" = verify/on-stop writes ~500-1500 chars (failure details + instructions)
-# skill-matcher outputs ~100-300 chars per matched skill (not in hooks.jsonl)
 HOOK_OUTPUT_CHARS = {
-    ("PreToolUse", "tool-failures/on-pre-use", "injected"): 400,
-    ("PostToolUse", "reminders", "detected"): 150,
-    ("PostToolUse", "reminders", "generic"): 120,
     ("Stop", "verify/on-stop", "block"): 1000,
     ("PreToolUse", "guards", "block"): 200,
     ("PreToolUse", "guards", "warn"): 150,
@@ -40,13 +34,9 @@ HOOK_OUTPUT_CHARS = {
 # Hooks that fire but produce NO context injection (logging/state only)
 SILENT_HOOKS = {
     ("PreToolUse", "guards", "allow"),
-    ("PostToolUse", "tool-failures/on-success", "checked"),
     ("PostToolUse", "verify/on-edit", "tracked"),
-    ("PostToolUse", "verify/on-edit", "review-created"),
     ("PostToolUse", "verify/on-bash", "skip"),
     ("PostToolUse", "verify/on-bash", "pass"),
-    ("PostToolUse", "auto-format", "skip"),
-    ("PostToolUseFailure", "tool-failures/on-failure", "recorded"),
     ("Stop", "verify/on-stop", "allow"),
     ("Stop", "verify/on-stop", "allow-token-verified"),
     ("Stop", "verify/on-stop", "allow-circuit-breaker"),
@@ -330,22 +320,9 @@ def main():
         top_tok = tokens(top[1]["est_chars"])
         print(f"  Biggest consumer: {top[0]}")
         print(f"    {top[1]['count']} fires, ~{format_tok(top_tok)} tokens total")
-        if "tool-failures" in top[0]:
-            print(
-                "    -> Fires on EVERY tool call with matching failures."
-            )
-            print(
-                "    -> Each injects up to 300 chars (~75 tok)."
-            )
-            print(
-                "    -> Deduped once per signature per session. Expires after 4h."
-            )
-            print(
-                "    -> If still high, consider reducing MAX_INJECT further."
-            )
-        elif "reminders" in top[0]:
-            print("    -> Inject test/lint suggestions after each Write/Edit.")
-            print("    -> Consider: inject only once per file, not every edit.")
+        if "verify/on-stop" in top[0]:
+            print("    -> Blocks Stop until tests/lint/typecheck are run.")
+            print("    -> Review the block message — tighten if too verbose.")
 
     if avg_pct < 1:
         print("  Overall: hook overhead is negligible (<1%).")

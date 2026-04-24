@@ -46,7 +46,7 @@ Validate at system boundaries. No secrets in code — use env vars. Parameterize
 
 ## Skills
 
-Skills are the primary workflow mechanism. The skill-matcher hook suggests relevant skills on every message. **Iron Laws are inviolable** — when a skill is invoked, read and follow its Iron Law before anything else. Don't auto-invoke a suggested skill; wait until the user clearly wants the action.
+Skills are the primary workflow mechanism. **Iron Laws are inviolable** — when a skill is invoked, read and follow its Iron Law before anything else. Don't auto-invoke a skill; wait until the user clearly wants the action.
 
 ## Document Viewing
 
