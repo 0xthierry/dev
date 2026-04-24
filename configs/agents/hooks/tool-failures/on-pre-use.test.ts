@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, test } from 'bun:test'
 import { rmSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { getProjectStateDir } from '../lib/harness.ts'
 import { addFailure } from './store.ts'
 
@@ -84,4 +84,3 @@ describe('on-pre-use hook', () => {
     })
   })
 })
-

@@ -6,8 +6,8 @@
 import { createHash } from 'node:crypto'
 
 export interface SkillFrontmatter {
-  name: string
-  description: string
+  'name': string
+  'description': string
   'user-invocable'?: boolean
 }
 
@@ -22,12 +22,14 @@ export interface SkillFrontmatter {
 export function parseFrontmatter(content: string, skillName?: string): SkillFrontmatter | null {
   const match = content.match(/^---\n([\s\S]*?)\n---/)
   if (!match) {
-    if (skillName) console.warn(`  Warning: ${skillName} has no frontmatter`)
+    if (skillName)
+      console.warn(`  Warning: ${skillName} has no frontmatter`)
     return null
   }
 
   const yaml = match[1]
-  if (!yaml) return null
+  if (!yaml)
+    return null
 
   const result: Record<string, unknown> = {}
 
@@ -35,31 +37,37 @@ export function parseFrontmatter(content: string, skillName?: string): SkillFron
     // Simple YAML parser for flat key-value pairs
     for (const line of yaml.split('\n')) {
       const colonIndex = line.indexOf(':')
-      if (colonIndex === -1) continue
+      if (colonIndex === -1)
+        continue
 
       const key = line.slice(0, colonIndex).trim()
       let value: unknown = line.slice(colonIndex + 1).trim()
 
       // Handle quoted strings (preserves colons inside quotes)
       if (typeof value === 'string') {
-        if ((value.startsWith('"') && value.endsWith('"')) ||
-            (value.startsWith("'") && value.endsWith("'"))) {
+        if ((value.startsWith('"') && value.endsWith('"'))
+          || (value.startsWith('\'') && value.endsWith('\''))) {
           value = value.slice(1, -1)
         }
         // Handle booleans
-        if (value === 'true') value = true
-        if (value === 'false') value = false
+        if (value === 'true')
+          value = true
+        if (value === 'false')
+          value = false
       }
 
       result[key] = value
     }
-  } catch (error) {
-    if (skillName) console.warn(`  Warning: ${skillName} frontmatter parse error: ${error}`)
+  }
+  catch (error) {
+    if (skillName)
+      console.warn(`  Warning: ${skillName} frontmatter parse error: ${error}`)
     return null
   }
 
   if (!result.name || !result.description) {
-    if (skillName) console.warn(`  Warning: ${skillName} missing required name or description`)
+    if (skillName)
+      console.warn(`  Warning: ${skillName} missing required name or description`)
     return null
   }
 

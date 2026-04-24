@@ -6,8 +6,9 @@
  * - Reciprocal Rank Fusion (RRF) to combine results
  */
 
+import type { SkillRow } from './db.ts'
 import { CONFIG } from './config.ts'
-import { getAllSkills, getSkillByName, searchFts, type SkillRow } from './db.ts'
+import { getAllSkills, getSkillByName, searchFts } from './db.ts'
 import { generateEmbedding } from './embed.ts'
 
 export interface SearchResult {
@@ -37,7 +38,8 @@ export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   }
 
   const denominator = Math.sqrt(normA) * Math.sqrt(normB)
-  if (denominator === 0) return 0
+  if (denominator === 0)
+    return 0
 
   return dotProduct / denominator
 }
@@ -56,8 +58,8 @@ export function blobToFloat32Array(blob: Uint8Array): Float32Array {
 function semanticSearch(
   queryEmbedding: Float32Array,
   skills: SkillRow[],
-  limit: number
-): Array<{ name: string; description: string; similarity: number }> {
+  limit: number,
+): Array<{ name: string, description: string, similarity: number }> {
   const results = skills.map(skill => ({
     name: skill.name,
     description: skill.description,
@@ -75,10 +77,10 @@ function semanticSearch(
  * Score = sum of 1/(k + rank) for each list where item appears.
  */
 export function reciprocalRankFusion(
-  semanticResults: Array<{ name: string; description: string; similarity: number }>,
-  ftsResults: Array<{ name: string; description: string; rank: number }>,
-  k: number
-): Map<string, { description: string; score: number; semanticRank: number | null; ftsRank: number | null }> {
+  semanticResults: Array<{ name: string, description: string, similarity: number }>,
+  ftsResults: Array<{ name: string, description: string, rank: number }>,
+  k: number,
+): Map<string, { description: string, score: number, semanticRank: number | null, ftsRank: number | null }> {
   const scores = new Map<string, {
     description: string
     score: number
@@ -108,7 +110,8 @@ export function reciprocalRankFusion(
     if (existing) {
       existing.score += rrfScore
       existing.ftsRank = rank
-    } else {
+    }
+    else {
       scores.set(result.name, {
         description: result.description,
         score: rrfScore,
@@ -126,7 +129,7 @@ export function reciprocalRankFusion(
  */
 export function filterExcluded(
   results: SearchResult[],
-  excludeSkills: readonly string[]
+  excludeSkills: readonly string[],
 ): SearchResult[] {
   const excluded = new Set(excludeSkills)
   return results.filter(r => !excluded.has(r.name))
@@ -186,7 +189,7 @@ export async function hybridSearch(query: string): Promise<SearchResult[]> {
   if (semanticEnabled) {
     // Generate embedding for query with instruction prefix (1-5% better matching)
     const queryEmbedding = await generateEmbedding(
-      `Match this request to relevant skills: ${query}`
+      `Match this request to relevant skills: ${query}`,
     )
 
     // Semantic search
@@ -208,7 +211,8 @@ export async function hybridSearch(query: string): Promise<SearchResult[]> {
         ftsRank: data.ftsRank,
       }))
       .sort((a, b) => b.score - a.score)
-  } else {
+  }
+  else {
     // FTS-only fallback (no semantic search)
     const ftsResults = searchFts(query, 20)
 

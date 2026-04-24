@@ -2,6 +2,15 @@
   "name": "hooks",
   "type": "module",
   "private": true,
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "picomatch": "^4.0.4"
+  },
   "devDependencies": {
     "@antfu/eslint-config": "^7.0.0",
     "@types/bun": "latest",
@@ -11,11 +20,5 @@
     "@typescript-eslint/parser": "^8.53.0",
     "eslint": "^9.39.2",
     "globals": "^17.0.0"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
-  },
-  "dependencies": {
-    "picomatch": "^4.0.4"
   }
 }

@@ -10,7 +10,7 @@ import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { dbExists } from './db.ts'
-import { hybridSearch, formatResults } from './search.ts'
+import { formatResults, hybridSearch } from './search.ts'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const LOGS_DIR = join(__dirname, '..', '.logs')
@@ -63,7 +63,8 @@ async function main(): Promise<void> {
   try {
     const stdin = await readStdin()
     input = JSON.parse(stdin)
-  } catch (error) {
+  }
+  catch (error) {
     logEvent('ERROR', `Failed to parse stdin: ${error}`)
     process.exit(0) // Fail open
   }
@@ -93,7 +94,8 @@ async function main(): Promise<void> {
     console.log(output)
 
     process.exit(0)
-  } catch (error) {
+  }
+  catch (error) {
     logEvent('ERROR', `Search failed: ${error}`)
     process.exit(0) // Fail open
   }

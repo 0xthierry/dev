@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { resolve } from 'node:path'
 import { getFilePath, log, readStdin } from '../lib/io.ts'
-import { buildCommandArgs, findScope } from '../project-commands/schema.ts'
 import { readProjectCommands } from '../project-commands/reader.ts'
+import { buildCommandArgs, findScope } from '../project-commands/schema.ts'
 
 const SOURCE_EXTENSIONS = /\.(?:ts|tsx|js|jsx|py|rs|go|java|rb|css|scss|html|vue|svelte|json|yaml|yml|toml|md|mdx)$/
 
@@ -35,7 +35,7 @@ async function main(): Promise<void> {
 
   const ext = filePath.match(/\.([^.]+)$/)?.pop() || ''
   const cmd = scope.format.find(f =>
-    f.mode === 'file' && (!f.extensions || f.extensions.includes(ext))
+    f.mode === 'file' && (!f.extensions || f.extensions.includes(ext)),
   )
   if (!cmd) {
     log(input, 'auto-format', 'skip', `no file-mode formatter for .${ext}`)

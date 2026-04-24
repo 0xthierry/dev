@@ -58,4 +58,3 @@ export async function listChangedFiles(cwd: string): Promise<string[]> {
   }
   return [...paths]
 }
-

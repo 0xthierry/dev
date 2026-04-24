@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import type { FailureRecord } from './store.ts'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   addFailure,
   encodeProjectPath,
@@ -14,7 +15,6 @@ import {
   resolveFailure,
   writeStore,
 } from './store.ts'
-import type { FailureRecord } from './store.ts'
 
 let testBaseDir: string
 

@@ -4,7 +4,7 @@
  * Focus on pure functions that don't require external dependencies.
  */
 
-import { describe, test, expect } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 
 // Import will be from the indexer utilities module
 // Since index-skills.ts is an executable script, we'll extract testable functions

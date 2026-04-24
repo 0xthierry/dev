@@ -1,6 +1,7 @@
+import type { HookHarness } from '../lib/harness.ts'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { encodeProjectPath, getProjectsBaseDir, type HookHarness } from '../lib/harness.ts'
+import { encodeProjectPath, getProjectsBaseDir } from '../lib/harness.ts'
 
 const EXPIRY_MS = 4 * 60 * 60 * 1000 // 4 hours
 const MAX_INJECT = 3
@@ -43,11 +44,16 @@ export function makeSignature(toolName: string, toolInput: Record<string, unknow
 }
 
 export function makeInputSummary(toolName: string, toolInput: Record<string, unknown>): string {
-  if (toolName === 'Bash') return String(toolInput.command ?? '').slice(0, 200)
-  if (toolName === 'Edit') return `Edit ${toolInput.file_path ?? ''}`
-  if (toolName === 'Write') return `Write ${toolInput.file_path ?? ''}`
-  if (toolName === 'Grep') return `Grep ${toolInput.pattern ?? ''}`
-  if (toolName === 'Glob') return `Glob ${toolInput.pattern ?? ''}`
+  if (toolName === 'Bash')
+    return String(toolInput.command ?? '').slice(0, 200)
+  if (toolName === 'Edit')
+    return `Edit ${toolInput.file_path ?? ''}`
+  if (toolName === 'Write')
+    return `Write ${toolInput.file_path ?? ''}`
+  if (toolName === 'Grep')
+    return `Grep ${toolInput.pattern ?? ''}`
+  if (toolName === 'Glob')
+    return `Glob ${toolInput.pattern ?? ''}`
   return toolName
 }
 
@@ -58,11 +64,13 @@ function isExpired(record: FailureRecord): boolean {
 
 export function readStore(cwd: string, baseDir?: string, harness: HookHarness = 'claude'): FailureRecord[] {
   const path = getStorePath(cwd, baseDir, harness)
-  if (!existsSync(path)) return []
+  if (!existsSync(path))
+    return []
 
   try {
     const data: unknown = JSON.parse(readFileSync(path, 'utf-8'))
-    if (!Array.isArray(data)) return []
+    if (!Array.isArray(data))
+      return []
     return (data as FailureRecord[]).filter(r => !isExpired(r))
   }
   catch {
@@ -132,7 +140,8 @@ export function resolveFailure(
   harness: HookHarness = 'claude',
 ): void {
   const records = readStore(cwd, baseDir, harness)
-  if (records.length === 0) return
+  if (records.length === 0)
+    return
 
   const sig = makeSignature(toolName, toolInput)
   const filtered = records.filter(r => r.signature !== sig)
@@ -150,7 +159,8 @@ export function getMatchingFailures(
   harness: HookHarness = 'claude',
 ): FailureRecord[] {
   const records = readStore(cwd, baseDir, harness)
-  if (records.length === 0) return []
+  if (records.length === 0)
+    return []
 
   const sig = makeSignature(toolName, toolInput)
 
@@ -160,14 +170,17 @@ export function getMatchingFailures(
 function timeAgo(isoDate: string): string {
   const diff = Date.now() - new Date(isoDate).getTime()
   const hours = Math.floor(diff / (1000 * 60 * 60))
-  if (hours < 1) return 'just now'
-  if (hours < 24) return `${hours}h ago`
+  if (hours < 1)
+    return 'just now'
+  if (hours < 24)
+    return `${hours}h ago`
   const days = Math.floor(hours / 24)
   return `${days}d ago`
 }
 
 export function formatInjection(failures: FailureRecord[]): string {
-  if (failures.length === 0) return ''
+  if (failures.length === 0)
+    return ''
 
   const lines = ['\u26A0 Known failures for this tool:']
   for (const f of failures) {

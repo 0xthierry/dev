@@ -1,3 +1,4 @@
+import type { ProjectCommands, Scope } from './schema.ts'
 import { describe, expect, test } from 'bun:test'
 import {
   allCommandPrefixes,
@@ -8,7 +9,6 @@ import {
   matchBashCommand,
   parseProjectCommands,
 } from './schema.ts'
-import type { ProjectCommands, Scope } from './schema.ts'
 
 function makeScope(overrides: Partial<Scope> = {}): Scope {
   return {

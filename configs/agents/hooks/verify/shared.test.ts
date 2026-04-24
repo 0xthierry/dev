@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { getProjectStateDir } from '../lib/harness.ts'
 import { getProjectCommandsPath } from '../project-commands/reader.ts'
 import { detectVerificationCommand, extractVerificationOutcome } from './shared.ts'
@@ -91,4 +91,3 @@ describe('extractVerificationOutcome', () => {
     })
   })
 })
-

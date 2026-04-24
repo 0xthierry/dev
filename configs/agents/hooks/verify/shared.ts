@@ -111,4 +111,3 @@ function extractErrors(toolResponse: unknown): string | null {
     return null
   return toolResponse.length > 2000 ? toolResponse.slice(-2000) : toolResponse
 }
-

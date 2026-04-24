@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 import { statSync } from 'node:fs'
-import { allCommandPrefixes } from '../project-commands/schema.ts'
-import { readProjectCommands } from '../project-commands/reader.ts'
 import { log, readStdin } from '../lib/io.ts'
-import { REVIEW_FILE_PATH, REVIEW_TOKEN } from './store.ts'
+import { readProjectCommands } from '../project-commands/reader.ts'
+import { allCommandPrefixes } from '../project-commands/schema.ts'
 import { getGitStatus, listChangedFiles } from './codex-git.ts'
 import { readState } from './codex-store.ts'
+import { REVIEW_FILE_PATH, REVIEW_TOKEN } from './store.ts'
 
 function buildSuggestions(cwd: string, missing: string[]): string {
   const commands = readProjectCommands(cwd, 'codex')

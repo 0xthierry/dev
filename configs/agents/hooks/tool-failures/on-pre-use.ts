@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 import { writeFileSync } from 'node:fs'
 import { detectHookHarness } from '../lib/harness.ts'
-import { readStdin, log } from '../lib/io.ts'
-import { formatInjection, getMatchingFailures } from './store.ts'
+import { log, readStdin } from '../lib/io.ts'
 import { getInjectedPath, readInjected, writePreToolUseMessage } from './adapters.ts'
+import { formatInjection, getMatchingFailures } from './store.ts'
 
 async function main(): Promise<void> {
   try {
@@ -14,15 +14,21 @@ async function main(): Promise<void> {
     const toolInput = input.tool_input || {}
     const harness = detectHookHarness(input)
 
-    if (!sessionId) { process.exit(0) }
+    if (!sessionId) {
+      process.exit(0)
+    }
 
     const failures = getMatchingFailures(cwd, toolName, toolInput, undefined, harness)
-    if (failures.length === 0) { process.exit(0) }
+    if (failures.length === 0) {
+      process.exit(0)
+    }
 
     const injectedPath = getInjectedPath(input, cwd, sessionId)
     const already = readInjected(injectedPath)
     const unseen = failures.filter(f => !already.has(f.signature))
-    if (unseen.length === 0) { process.exit(0) }
+    if (unseen.length === 0) {
+      process.exit(0)
+    }
 
     for (const f of unseen) already.add(f.signature)
     writeFileSync(injectedPath, JSON.stringify([...already]))
@@ -30,7 +36,8 @@ async function main(): Promise<void> {
     log(input, 'tool-failures/on-pre-use', 'injected', `${unseen.length} failures`)
     const message = formatInjection(unseen)
     writePreToolUseMessage(input, message)
-  } catch {}
+  }
+  catch {}
   process.exit(0)
 }
 

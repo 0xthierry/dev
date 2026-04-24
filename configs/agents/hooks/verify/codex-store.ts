@@ -1,5 +1,6 @@
-import { readVerifyState, writeVerifyState } from './store-io.ts'
 import type { VerificationResult, VerificationType } from './shared.ts'
+import { readVerifyState, writeVerifyState } from './store-io.ts'
+
 export type { VerificationResult, VerificationType } from './shared.ts'
 
 export interface CodexVerifyState {

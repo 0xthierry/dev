@@ -1,7 +1,7 @@
+import type { HookInput } from '../lib/io.ts'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { detectHookHarness, getSessionStateDir } from '../lib/harness.ts'
-import type { HookInput } from '../lib/io.ts'
 
 export function getInjectedPath(input: HookInput, cwd: string, sessionId: string): string {
   const dir = getSessionStateDir(detectHookHarness(input), cwd, sessionId)
@@ -36,4 +36,3 @@ export function writePreToolUseMessage(input: HookInput, message: string): void 
     },
   }))
 }
-

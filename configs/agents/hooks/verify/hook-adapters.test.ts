@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { getProjectStateDir } from '../lib/harness.ts'
 import { getProjectCommandsPath } from '../project-commands/reader.ts'
-import { addEditedFile, readState as readClaudeState } from './store.ts'
 import { readState as readCodexState } from './codex-store.ts'
+import { addEditedFile, readState as readClaudeState } from './store.ts'
 
 const ROOT_DIR = dirname(fileURLToPath(new URL('../package.json', import.meta.url)))
 const CLAUDE_SCRIPT_PATH = fileURLToPath(new URL('./on-bash.ts', import.meta.url))
@@ -117,4 +117,3 @@ describe('verification hook adapters', () => {
     })
   })
 })
-

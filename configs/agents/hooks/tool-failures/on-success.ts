@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { detectHookHarness } from '../lib/harness.ts'
-import { readStdin, log } from '../lib/io.ts'
+import { log, readStdin } from '../lib/io.ts'
 import { resolveFailure } from './store.ts'
 
 async function main(): Promise<void> {
@@ -11,7 +11,8 @@ async function main(): Promise<void> {
     const toolInput = input.tool_input || {}
     resolveFailure(cwd, toolName, toolInput, undefined, detectHookHarness(input))
     log(input, 'tool-failures/on-success', 'checked', toolName)
-  } catch {}
+  }
+  catch {}
   process.exit(0)
 }
 

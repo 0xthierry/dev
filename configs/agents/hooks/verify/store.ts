@@ -1,6 +1,6 @@
+import type { VerificationResult, VerificationType } from './shared.ts'
 import { homedir } from 'node:os'
 import { readVerifyState, writeVerifyState } from './store-io.ts'
-import type { VerificationResult, VerificationType } from './shared.ts'
 
 export const REVIEW_TOKEN = 'review-checklist-complete'
 export const REVIEW_FILE_PATH = `${homedir()}/.agents/hooks/verify/review.md`

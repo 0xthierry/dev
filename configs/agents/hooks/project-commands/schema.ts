@@ -16,8 +16,8 @@ export interface Scope {
   lint: Command[]
   typecheck: Command[]
   format: Command[]
-  testFilePatterns?: string[]    // globs for test files, e.g. ["**/*.test.ts", "**/__tests__/**"]
-  sourceExtensions?: string[]   // source extensions this scope cares about, e.g. ["ts", "tsx"]
+  testFilePatterns?: string[] // globs for test files, e.g. ["**/*.test.ts", "**/__tests__/**"]
+  sourceExtensions?: string[] // source extensions this scope cares about, e.g. ["ts", "tsx"]
 }
 
 export interface ProjectCommands {
@@ -125,7 +125,8 @@ export function isTestFile(scope: Scope | null, repoRelativePath: string): boole
 
 export function isSourceFile(scope: Scope | null, filePath: string): boolean {
   const ext = filePath.match(/\.([^.]+)$/)?.pop()
-  if (!ext) return false
+  if (!ext)
+    return false
   const extensions = scope?.sourceExtensions ?? DEFAULT_SOURCE_EXTENSIONS
   return extensions.includes(ext)
 }

@@ -4,10 +4,10 @@
  * Uses bun:sqlite for high-performance synchronous access.
  */
 
-import { Database } from 'bun:sqlite'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { Database } from 'bun:sqlite'
 import { CONFIG } from './config.ts'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -104,7 +104,7 @@ function initSchema(db: Database): void {
 export function upsertSkill(
   name: string,
   description: string,
-  embedding: Float32Array
+  embedding: Float32Array,
 ): void {
   const db = getDb()
   const embeddingBlob = new Uint8Array(embedding.buffer)
@@ -138,10 +138,10 @@ export function getAllSkills(): SkillRow[] {
 /**
  * Get a single skill by name.
  */
-export function getSkillByName(name: string): { name: string; description: string } | null {
+export function getSkillByName(name: string): { name: string, description: string } | null {
   const db = getDb()
   const result = db.query('SELECT name, description FROM skills WHERE name = ?').get(name)
-  return result as { name: string; description: string } | null
+  return result as { name: string, description: string } | null
 }
 
 /**
@@ -153,13 +153,14 @@ export function searchFts(query: string, limit: number = 20): FtsMatch[] {
 
   // Sanitize query: keep only alphanumeric and spaces, then create prefix search
   const sanitized = query
-    .replace(/[^a-zA-Z0-9\s]/g, ' ')  // Replace non-alphanumeric with space
+    .replace(/[^a-z0-9\s]/gi, ' ') // Replace non-alphanumeric with space
     .split(/\s+/)
-    .filter(term => term.length > 1)  // Skip single chars
+    .filter(term => term.length > 1) // Skip single chars
     .map(term => `"${term}"*`)
     .join(' OR ')
 
-  if (!sanitized) return []
+  if (!sanitized)
+    return []
 
   try {
     const results = db.query(`
@@ -175,7 +176,8 @@ export function searchFts(query: string, limit: number = 20): FtsMatch[] {
     `).all({ $query: sanitized, $limit: limit })
 
     return results as FtsMatch[]
-  } catch (error) {
+  }
+  catch (error) {
     // FTS query errors (malformed query) - return empty results
     console.error(`FTS search error: ${error}`)
     return []

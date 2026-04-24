@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { detectHookHarness } from '../lib/harness.ts'
-import { readStdin, log } from '../lib/io.ts'
+import { log, readStdin } from '../lib/io.ts'
 import { addFailure } from './store.ts'
 
 async function main(): Promise<void> {
@@ -19,7 +19,8 @@ async function main(): Promise<void> {
       transcript_path: input.transcript_path,
     }, harness)
     log(input, 'tool-failures/on-failure', 'recorded', error.slice(0, 120))
-  } catch {}
+  }
+  catch {}
   process.exit(0)
 }
 

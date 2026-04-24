@@ -8,8 +8,8 @@
  */
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 // Import from skill-matcher hook directory
@@ -46,7 +46,8 @@ function loadIndexState(): IndexState {
   }
   try {
     return JSON.parse(readFileSync(INDEX_STATE_PATH, 'utf-8'))
-  } catch {
+  }
+  catch {
     return {}
   }
 }
@@ -61,8 +62,8 @@ function saveIndexState(state: IndexState): void {
 /**
  * Discover all skills in the skills directory.
  */
-function discoverSkills(): Array<{ name: string; path: string }> {
-  const skills: Array<{ name: string; path: string }> = []
+function discoverSkills(): Array<{ name: string, path: string }> {
+  const skills: Array<{ name: string, path: string }> = []
 
   if (!existsSync(SKILLS_DIR)) {
     console.error(`Skills directory not found: ${SKILLS_DIR}`)
@@ -72,7 +73,8 @@ function discoverSkills(): Array<{ name: string; path: string }> {
   const entries = readdirSync(SKILLS_DIR, { withFileTypes: true })
 
   for (const entry of entries) {
-    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
+    if (!entry.isDirectory() && !entry.isSymbolicLink())
+      continue
 
     const skillPath = join(SKILLS_DIR, entry.name, 'SKILL.md')
     if (existsSync(skillPath)) {
@@ -92,14 +94,15 @@ async function main() {
   console.log()
 
   // Load modules
-  const { upsertSkill, deleteSkill, getAllSkills, closeDb, generateEmbedding, checkOllamaAvailable, getOllamaModelError, CONFIG, parseFrontmatter, hashContent } = await loadModules()
+  const { upsertSkill, deleteSkill, getAllSkills, closeDb, generateEmbedding, checkOllamaAvailable, CONFIG, parseFrontmatter, hashContent } = await loadModules()
 
   // Check Ollama availability (optional — FTS works without it)
   console.log('Checking Ollama availability...')
   const ollamaAvailable = await checkOllamaAvailable()
   if (!ollamaAvailable) {
     console.log('Ollama not available — indexing with FTS only (no semantic search)')
-  } else {
+  }
+  else {
     console.log(`Ollama is available with model: ${CONFIG.embeddingModel}`)
   }
   console.log()
@@ -161,21 +164,23 @@ async function main() {
       if (ollamaAvailable) {
         embedding = await generateEmbedding(indexableContent)
         console.log(`  ✓ Indexed with ${embedding.length}-dimensional embedding`)
-      } else {
+      }
+      else {
         embedding = new Float32Array(1) // dummy — FTS handles search
         console.log(`  ✓ Indexed (FTS only)`)
       }
       upsertSkill(frontmatter.name, frontmatter.description, embedding)
       newState[frontmatter.name] = contentHash
       indexed++
-    } catch (error) {
+    }
+    catch (error) {
       console.error(`  ✗ Failed: ${error}`)
     }
   }
 
   // Remove skills no longer present
   const existingSkills = getAllSkills()
-  const currentSkillNames = new Set(skills.map(s => {
+  const currentSkillNames = new Set(skills.map((s) => {
     const content = readFileSync(s.path, 'utf-8')
     const fm = parseFrontmatter(content)
     return fm?.name
@@ -206,7 +211,7 @@ async function main() {
   console.log()
 }
 
-main().catch(error => {
+main().catch((error) => {
   console.error('Fatal error:', error)
   process.exit(1)
 })

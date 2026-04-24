@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import type { HookHarness } from '../lib/harness.ts'
+import type { ProjectCommands } from './schema.ts'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { getProjectStateDir, type HookHarness } from '../lib/harness.ts'
+import { afterEach, describe, expect, test } from 'bun:test'
+import { getProjectStateDir } from '../lib/harness.ts'
 import { getProjectCommandsPath, readProjectCommands } from './reader.ts'
-import type { ProjectCommands } from './schema.ts'
 
 const TEST_CWDS: string[] = []
 
@@ -77,4 +78,3 @@ describe('readProjectCommands', () => {
     expect(readProjectCommands(cwd, 'claude')).toBeNull()
   })
 })
-

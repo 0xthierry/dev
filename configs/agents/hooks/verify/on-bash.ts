@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { getCommand, log, readStdin } from '../lib/io.ts'
-import { getEditedScopes, recordVerification } from './store.ts'
 import { detectVerificationCommand, extractVerificationOutcome } from './shared.ts'
+import { getEditedScopes, recordVerification } from './store.ts'
 
 async function main(): Promise<void> {
   let input

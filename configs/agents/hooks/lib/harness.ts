@@ -27,4 +27,3 @@ export function getSessionStateDir(harness: HookHarness, cwd: string, sessionId:
 export function alternateHookHarness(harness: HookHarness): HookHarness {
   return harness === 'codex' ? 'claude' : 'codex'
 }
-

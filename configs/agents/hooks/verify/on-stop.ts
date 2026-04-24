@@ -17,8 +17,9 @@ function buildFeedback(state: VerifyState, scopes: Scope[]): string | null {
 
     for (const type of ['test', 'lint', 'typecheck'] as const) {
       const v = scopeState.verifications[type]
-      if (!v)
+      if (!v) {
         missing.push(type)
+      }
       else if (!v.passed) {
         const errorCtx = v.errors ? `:\n${v.errors}` : ''
         failed.push(`${type} (\`${v.command}\`) failed${errorCtx}`)

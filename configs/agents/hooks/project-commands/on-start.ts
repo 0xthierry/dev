@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, relative, basename, dirname } from 'node:path'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { basename, dirname, join, relative } from 'node:path'
 import { detectHookHarness } from '../lib/harness.ts'
-import { readStdin, injectContext, log } from '../lib/io.ts'
-import { getProjectCommandsPath } from './reader.ts'
+import { injectContext, log, readStdin } from '../lib/io.ts'
 import { checkFreshness } from './freshness.ts'
+import { getProjectCommandsPath } from './reader.ts'
 
 interface WorkspacePackage {
   path: string
@@ -55,10 +55,19 @@ const CONFIG_FILES = [
 ]
 
 const TOOLING_DEPS = [
-  'eslint', 'prettier', 'biome', '@biomejs/biome',
-  'vitest', 'jest', 'mocha', 'ava', 'tap',
-  'typescript', 'tsc',
-  '@typescript-eslint/eslint-plugin', '@typescript-eslint/parser',
+  'eslint',
+  'prettier',
+  'biome',
+  '@biomejs/biome',
+  'vitest',
+  'jest',
+  'mocha',
+  'ava',
+  'tap',
+  'typescript',
+  'tsc',
+  '@typescript-eslint/eslint-plugin',
+  '@typescript-eslint/parser',
 ]
 
 function fileExists(dir: string, name: string): boolean {
@@ -68,7 +77,8 @@ function fileExists(dir: string, name: string): boolean {
 function readJson(path: string): Record<string, unknown> | null {
   try {
     return JSON.parse(readFileSync(path, 'utf-8'))
-  } catch {
+  }
+  catch {
     return null
   }
 }
@@ -76,14 +86,16 @@ function readJson(path: string): Record<string, unknown> | null {
 function readText(path: string): string | null {
   try {
     return readFileSync(path, 'utf-8')
-  } catch {
+  }
+  catch {
     return null
   }
 }
 
 function extractScripts(pkg: Record<string, unknown>): string[] {
   const scripts = pkg.scripts as Record<string, string> | undefined
-  if (!scripts || typeof scripts !== 'object') return []
+  if (!scripts || typeof scripts !== 'object')
+    return []
   return Object.keys(scripts)
 }
 
@@ -91,9 +103,11 @@ function extractToolingDeps(pkg: Record<string, unknown>): string[] {
   const found: string[] = []
   for (const section of ['dependencies', 'devDependencies', 'peerDependencies']) {
     const deps = pkg[section] as Record<string, string> | undefined
-    if (!deps || typeof deps !== 'object') continue
+    if (!deps || typeof deps !== 'object')
+      continue
     for (const dep of TOOLING_DEPS) {
-      if (dep in deps && !found.includes(dep)) found.push(dep)
+      if (dep in deps && !found.includes(dep))
+        found.push(dep)
     }
   }
   return found
@@ -105,7 +119,8 @@ function findWorkspacePackageDirs(root: string, pkg: Record<string, unknown>): s
 
   if (Array.isArray(workspaces)) {
     patterns = workspaces
-  } else if (workspaces && Array.isArray(workspaces.packages)) {
+  }
+  else if (workspaces && Array.isArray(workspaces.packages)) {
     patterns = workspaces.packages
   }
 
@@ -120,16 +135,19 @@ function findWorkspacePackageDirs(root: string, pkg: Record<string, unknown>): s
     }
   }
 
-  if (patterns.length === 0) return []
+  if (patterns.length === 0)
+    return []
 
   const dirs: string[] = []
   for (const pattern of patterns) {
     const base = pattern.replace(/\/?\*$/, '')
     const searchDir = join(root, base)
-    if (!existsSync(searchDir) || !statSync(searchDir).isDirectory()) continue
+    if (!existsSync(searchDir) || !statSync(searchDir).isDirectory())
+      continue
 
     if (!pattern.includes('*')) {
-      if (fileExists(searchDir, 'package.json')) dirs.push(searchDir)
+      if (fileExists(searchDir, 'package.json'))
+        dirs.push(searchDir)
       continue
     }
 
@@ -140,7 +158,8 @@ function findWorkspacePackageDirs(root: string, pkg: Record<string, unknown>): s
           dirs.push(full)
         }
       }
-    } catch { /* skip unreadable dirs */ }
+    }
+    catch { /* skip unreadable dirs */ }
   }
   return dirs
 }
@@ -157,7 +176,8 @@ function scanProject(root: string): ProjectInfo {
 
   for (const dir of packageDirs) {
     const pkg = readJson(join(dir, 'package.json'))
-    if (!pkg) continue
+    if (!pkg)
+      continue
     const name = (pkg.name as string) || basename(dir)
     packages.push({
       path: relative(root, dir),
@@ -191,11 +211,14 @@ function formatProjectSummary(info: ProjectInfo): string {
     lines.push(`Monorepo: yes (${info.packages.length} packages)`)
     for (const pkg of info.packages) {
       let line = `  ${pkg.path} (${pkg.name})`
-      if (pkg.scripts.length > 0) line += ` scripts: ${pkg.scripts.join(', ')}`
-      if (pkg.deps.length > 0) line += ` deps: ${pkg.deps.join(', ')}`
+      if (pkg.scripts.length > 0)
+        line += ` scripts: ${pkg.scripts.join(', ')}`
+      if (pkg.deps.length > 0)
+        line += ` deps: ${pkg.deps.join(', ')}`
       lines.push(line)
     }
-  } else {
+  }
+  else {
     lines.push('Monorepo: no')
   }
 

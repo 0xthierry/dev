@@ -14,12 +14,13 @@ let _ollamaHost: string | null = null
  * Otherwise: use localhost
  */
 export async function getOllamaHost(): Promise<string> {
-  if (_ollamaHost) return _ollamaHost
+  if (_ollamaHost)
+    return _ollamaHost
 
   // Check if running in devcontainer
-  const isDevcontainer = process.env.DEVCONTAINER === 'true' ||
-    process.env.REMOTE_CONTAINERS === 'true' ||
-    Bun.env.DEVCONTAINER === 'true'
+  const isDevcontainer = process.env.DEVCONTAINER === 'true'
+    || process.env.REMOTE_CONTAINERS === 'true'
+    || Bun.env.DEVCONTAINER === 'true'
 
   if (!isDevcontainer) {
     _ollamaHost = `http://127.0.0.1:${CONFIG.ollamaPort}`
@@ -36,7 +37,8 @@ export async function getOllamaHost(): Promise<string> {
     const match = output.match(/default via (\S+)/)
     const gateway = match?.[1] || '172.17.0.1'
     _ollamaHost = `http://${gateway}:${CONFIG.ollamaPort}`
-  } catch {
+  }
+  catch {
     // Fallback to common Docker gateway
     _ollamaHost = `http://172.17.0.1:${CONFIG.ollamaPort}`
   }
@@ -83,14 +85,16 @@ export async function checkOllamaAvailable(): Promise<boolean> {
       method: 'GET',
       signal: AbortSignal.timeout(2000),
     })
-    if (!response.ok) return false
+    if (!response.ok)
+      return false
 
     // Verify the embedding model is available
     const data = await response.json() as { models?: Array<{ name: string }> }
     const models = data.models || []
-    const modelName = CONFIG.embeddingModel.split(':')[0] ?? CONFIG.embeddingModel  // Handle 'model:tag' format
+    const modelName = CONFIG.embeddingModel.split(':')[0] ?? CONFIG.embeddingModel // Handle 'model:tag' format
     return models.some(m => m.name.startsWith(modelName))
-  } catch {
+  }
+  catch {
     return false
   }
 }
@@ -102,7 +106,8 @@ export async function getOllamaModelError(): Promise<string | null> {
   try {
     const host = await getOllamaHost()
     const response = await fetch(`${host}/api/tags`, { method: 'GET' })
-    if (!response.ok) return `Ollama server not responding at ${host}`
+    if (!response.ok)
+      return `Ollama server not responding at ${host}`
 
     const data = await response.json() as { models?: Array<{ name: string }> }
     const models = data.models || []
@@ -112,7 +117,8 @@ export async function getOllamaModelError(): Promise<string | null> {
       return `Model '${modelName}' not found. Run: ollama pull ${modelName}`
     }
     return null
-  } catch (error) {
+  }
+  catch (error) {
     return `Ollama connection failed: ${error}`
   }
 }

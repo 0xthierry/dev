@@ -1,7 +1,8 @@
+import type { HookHarness } from '../lib/harness.ts'
 import type { ProjectCommands } from './schema.ts'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { alternateHookHarness, getProjectStateDir, type HookHarness } from '../lib/harness.ts'
+import { alternateHookHarness, getProjectStateDir } from '../lib/harness.ts'
 import { parseProjectCommands } from './schema.ts'
 
 export function readProjectCommands(cwd: string, harness: HookHarness = 'claude'): ProjectCommands | null {

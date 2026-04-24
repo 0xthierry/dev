@@ -1,6 +1,7 @@
+import type { HookHarness } from '../lib/harness.ts'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { getSessionStateDir, type HookHarness } from '../lib/harness.ts'
+import { getSessionStateDir } from '../lib/harness.ts'
 
 function getStorePath(harness: HookHarness, cwd: string, sessionId: string): string {
   return join(getSessionStateDir(harness, cwd, sessionId), 'verify.json')
@@ -38,4 +39,3 @@ export function writeVerifyState<T>(
     mkdirSync(dir, { recursive: true })
   writeFileSync(path, JSON.stringify(state, null, 2))
 }
-

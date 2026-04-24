@@ -3,8 +3,8 @@ import {
   alternateHookHarness,
   detectHookHarness,
   encodeProjectPath,
-  getProjectStateDir,
   getProjectsBaseDir,
+  getProjectStateDir,
   getSessionStateDir,
 } from './harness.ts'
 
@@ -44,4 +44,3 @@ describe('alternateHookHarness', () => {
     expect(alternateHookHarness('codex')).toBe('claude')
   })
 })
-

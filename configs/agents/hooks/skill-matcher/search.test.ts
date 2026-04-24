@@ -4,7 +4,7 @@
  * Focus on pure algorithmic functions that don't require external dependencies.
  */
 
-import { describe, test, expect } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 
 // We'll test the exported functions and some internal logic
 // Import will be added after implementation
