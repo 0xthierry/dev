@@ -7,20 +7,21 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 install_npm_global_cli() {
   local name="$1"
   local package_name="$2"
+  local version="$3"
   local npm_bin=""
   local mise_bin=""
   local -a install_cmd=()
 
   if npm_bin="$(command -v npm 2>/dev/null)"; then
-    install_cmd=("$npm_bin" install -g "${package_name}@latest")
+    install_cmd=("$npm_bin" install -g "${package_name}@${version}")
   elif mise_bin="$(resolve_mise_bin 2>/dev/null)"; then
-    install_cmd=("$mise_bin" exec node -- npm install -g "${package_name}@latest")
+    install_cmd=("$mise_bin" exec node -- npm install -g "${package_name}@${version}")
   else
     printf 'error: npm is unavailable and mise is not installed; cannot install %s\n' "$name" >&2
     return 1
   fi
 
-  log_item "Installing/upgrading $name..."
+  log_item "Installing $name @ $version..."
   run_cmd "${install_cmd[@]}"
 }
 
@@ -35,20 +36,21 @@ install_agent_slack_binary() {
 }
 
 install_agent_browser_binary() {
+  local version="$1"
   local npm_bin=""
   local mise_bin=""
   local -a install_cmd=()
 
   if npm_bin="$(command -v npm 2>/dev/null)"; then
-    install_cmd=("$npm_bin" install -g agent-browser@latest)
+    install_cmd=("$npm_bin" install -g "agent-browser@${version}")
   elif mise_bin="$(resolve_mise_bin 2>/dev/null)"; then
-    install_cmd=("$mise_bin" exec node -- npm install -g agent-browser@latest)
+    install_cmd=("$mise_bin" exec node -- npm install -g "agent-browser@${version}")
   else
     printf 'error: npm is unavailable and mise is not installed; cannot install agent-browser\n' >&2
     return 1
   fi
 
-  log_item "Installing/upgrading Agent Browser..."
+  log_item "Installing Agent Browser @ $version..."
   run_cmd "${install_cmd[@]}"
 
   log_item "Running Agent Browser setup..."
@@ -62,19 +64,19 @@ install_ai_clis() {
   install_claude_code_binary
 
   # Codex (OpenAI)
-  install_npm_global_cli "Codex CLI" "@openai/codex"
+  install_npm_global_cli "Codex CLI" "@openai/codex" "0.125.0"
 
   # Gemini CLI (Google)
-  install_npm_global_cli "Gemini CLI" "@google/gemini-cli"
+  install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.39.1"
 
   # Pi Coding Agent (badlogic) — minimal terminal coding harness
-  install_npm_global_cli "Pi Coding Agent" "@mariozechner/pi-coding-agent"
+  install_npm_global_cli "Pi Coding Agent" "@mariozechner/pi-coding-agent" "0.70.2"
 
   # Agent Slack (Stably) — standalone binary
   install_agent_slack_binary
 
   # Agent Browser — npm package (crates.io lags behind)
-  install_agent_browser_binary
+  install_agent_browser_binary "0.26.0"
 }
 
 # Run if executed directly
