@@ -67,6 +67,9 @@ install_ai_clis() {
   # Gemini CLI (Google)
   install_npm_global_cli "Gemini CLI" "@google/gemini-cli"
 
+  # Pi Coding Agent (badlogic) — minimal terminal coding harness
+  install_npm_global_cli "Pi Coding Agent" "@mariozechner/pi-coding-agent"
+
   # Agent Slack (Stably) — standalone binary
   install_agent_slack_binary
 
