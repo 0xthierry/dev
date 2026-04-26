@@ -1127,8 +1127,8 @@ require('lazy').setup({
         'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc',
         -- web / TS stack (vtsls, vue_ls, tailwindcss)
         'typescript', 'tsx', 'javascript', 'jsdoc', 'vue', 'css', 'scss',
-        -- data formats (jsonls, yamlls)
-        'json', 'jsonc', 'yaml', 'toml',
+        -- data formats (jsonls, yamlls) — jsonc has no dedicated parser, registered as json below
+        'json', 'yaml', 'toml',
         -- go (gopls)
         'go', 'gomod', 'gosum', 'gowork',
         -- rust
@@ -1137,6 +1137,9 @@ require('lazy').setup({
         'dockerfile', 'helm', 'gitcommit', 'gitignore', 'regex',
       }
       require('nvim-treesitter').install(ensure_installed)
+
+      -- jsonc has no dedicated tree-sitter grammar; reuse the json parser
+      vim.treesitter.language.register('json', 'jsonc')
 
       vim.api.nvim_create_autocmd('FileType', {
         group = vim.api.nvim_create_augroup('kickstart-treesitter-start', { clear = true }),
