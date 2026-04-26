@@ -15,7 +15,7 @@
 To continue this session, use a prompt like the below:
 
 ```text
-use the create-research skill with the questions document at ai_docs/tasks/ENG-XXXX-description/YYYY-MM-DD-research-questions.md
+use the create-research-codebase skill with the questions document at ai_docs/tasks/ENG-XXXX-description/YYYY-MM-DD-research-questions.md
 ```
 
 The research phase will extract the questions and conduct comprehensive codebase research to answer them.

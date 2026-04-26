@@ -1,5 +1,5 @@
 ---
-name: managing-linear
+name: linear
 description: "Manage Linear app issues and projects using the Linear CLI. Use when user mentions Linear, linear.app, Linear issues, Linear tickets, or wants to create/update/query issues in Linear. Triggers on 'Linear', 'linear.app', 'create Linear issue', 'Linear backlog'."
 ---
 

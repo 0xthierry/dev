@@ -15,7 +15,7 @@
 To continue this session, use a prompt like the below (notably, exclude details about the ticket or the prompt)
 
 ```text
-use the create-research skill with the following questions (write the doc to ai_docs/tasks/eng-xxxx-.../YYYY-MM-DD-research-DESCRIPTION.md)
+use the create-research-codebase skill with the following questions (write the doc to ai_docs/tasks/eng-xxxx-.../YYYY-MM-DD-research-DESCRIPTION.md)
 
 - [question 1]
 - [question 2]
