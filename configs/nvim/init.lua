@@ -1122,7 +1122,20 @@ require('lazy').setup({
     lazy = false,
     build = ':TSUpdate',
     config = function()
-      local ensure_installed = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' }
+      local ensure_installed = {
+        -- core
+        'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc',
+        -- web / TS stack (vtsls, vue_ls, tailwindcss)
+        'typescript', 'tsx', 'javascript', 'jsdoc', 'vue', 'css', 'scss',
+        -- data formats (jsonls, yamlls)
+        'json', 'jsonc', 'yaml', 'toml',
+        -- go (gopls)
+        'go', 'gomod', 'gosum', 'gowork',
+        -- rust
+        'rust',
+        -- ops
+        'dockerfile', 'helm', 'gitcommit', 'gitignore', 'regex',
+      }
       require('nvim-treesitter').install(ensure_installed)
 
       vim.api.nvim_create_autocmd('FileType', {
