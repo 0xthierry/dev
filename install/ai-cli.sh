@@ -39,6 +39,13 @@ install_agent_slack_binary() {
     bash -c 'curl -fsSL https://raw.githubusercontent.com/stablyai/agent-slack/main/install.sh | sh'
 }
 
+install_notion_cli_binary() {
+  local version="$1"
+  log_item "Installing Notion CLI @ $version..."
+  run_cmd env "NTN_VERSION=$version" \
+    bash -c 'curl -fsSL https://ntn.dev | bash'
+}
+
 install_agent_browser_binary() {
   local version="$1"
   local npm_bin=""
@@ -84,6 +91,9 @@ install_ai_clis() {
 
   # Linear CLI (schpet) — agent-friendly Linear.app CLI
   install_npm_global_cli "Linear CLI" "@schpet/linear-cli" "2.0.0"
+
+  # Notion CLI (makenotion) — `ntn` binary, pairs with notion-cli skill
+  install_notion_cli_binary "v0.10.3"
 }
 
 # Run if executed directly
