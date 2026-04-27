@@ -75,7 +75,7 @@ function contextBar(pct?: number | null): string {
 const BDR_CACHE = "/tmp/statusline-bdr-n2et34.json";
 const BDR_TTL_MS = 5 * 60 * 1000;
 
-async function fetchBdrPrice(): Promise<string | null> {
+async function fetchBdrPrice(): Promise<number | null> {
   try {
     const file = Bun.file(BDR_CACHE);
     if (await file.exists()) {
@@ -95,7 +95,7 @@ async function fetchBdrPrice(): Promise<string | null> {
     const json = await resp.json();
     const raw = json?.chart?.result?.[0]?.meta?.regularMarketPrice;
     if (raw == null) return null;
-    const price = `R$${Number(raw).toFixed(2)}`;
+    const price = Number(raw);
     await Bun.write(BDR_CACHE, JSON.stringify({ price, ts: Date.now() }));
     return price;
   } catch {
@@ -157,9 +157,9 @@ if (cwd) {
 // Cost
 parts.push(green(formatCost(data.cost?.total_cost_usd)));
 
-// Cloudflare BDR (N2ET34)
-if (bdrPrice) {
-  parts.push(yellow(`NET ${bdrPrice}`));
+// Cloudflare BDR (N2ET34) — only show when price drops below R$50
+if (bdrPrice != null && bdrPrice < 50) {
+  parts.push(yellow(`NET R$${bdrPrice.toFixed(2)}`));
 }
 
 // Context bar
