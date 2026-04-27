@@ -81,6 +81,9 @@ install_ai_clis() {
 
   # Agent Browser — npm package (crates.io lags behind)
   install_agent_browser_binary "0.26.0"
+
+  # Linear CLI (schpet) — agent-friendly Linear.app CLI
+  install_npm_global_cli "Linear CLI" "@schpet/linear-cli" "2.0.0"
 }
 
 # Run if executed directly
