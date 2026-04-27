@@ -10,6 +10,7 @@ SHARED_ENV_VARS=(
   "PAGER=less -R"
   "OPENCODE_ENABLE_EXA=true"
   "NODE_OPTIONS=--max-old-space-size=16384 --localstorage-file=\$HOME/.node-localstorage"
+  "PI_SKIP_VERSION_CHECK=1"
 )
 
 write_env_file() {

@@ -29,9 +29,9 @@ The two layers don't validate each other. **Most recurring bug:** config deploye
 | `configs/zellij/` | `~/.config/zellij` | symlink |
 | `configs/hypr/` | `~/.config/hypr` | symlink (omarchy only) |
 | `configs/shell/` | sourced via `~/.zshrc` / `~/.zshenv` | written by `install/shell.sh` |
-| `configs/agents/` | `~/.agents/`, `~/.claude/`, `~/.codex/` | special installer |
+| `configs/agents/` | `~/.agents/`, `~/.claude/`, `~/.codex/`, `~/.pi/agent/` | special installer |
 
-**Agent config is special-cased.** `configs/agents/install.sh` renders `AGENTS.md` (replaces `{{HOST_CONFIG}}` with detected hardware) into `~/.agents/AGENTS.md`, `~/.claude/CLAUDE.md`, and `~/.codex/AGENTS.md`; symlinks agents/skills/hooks (Codex gets copies with model stripping); `jq`-merges `claude-settings.json` into `~/.claude/settings.json` (preserves local keys); copies `codex-config.toml`.
+**Agent config is special-cased.** `configs/agents/install.sh` renders `AGENTS.md` (replaces `{{HOST_CONFIG}}` with detected hardware) into `~/.agents/AGENTS.md`, `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, and `~/.pi/agent/AGENTS.md`; symlinks agents/skills/hooks (Codex gets copies with model stripping); `jq`-merges `claude-settings.json` into `~/.claude/settings.json` (preserves local keys); copies `codex-config.toml`; copies `pi-settings.json` into `~/.pi/agent/settings.json`.
 
 ## Principles
 

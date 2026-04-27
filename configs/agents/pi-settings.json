@@ -1,0 +1,13 @@
+{
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.5",
+  "defaultThinkingLevel": "high",
+  "theme": "dark",
+  "hideThinkingBlock": false,
+  "quietStartup": false,
+  "enableInstallTelemetry": false,
+  "enableSkillCommands": true,
+  "warnings": {
+    "anthropicExtraUsage": true
+  }
+}

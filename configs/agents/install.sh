@@ -16,6 +16,7 @@ SOURCE_CODEX_CONFIG="$SCRIPT_DIR/codex-config.toml"
 SOURCE_CODEX_HOOKS="$SCRIPT_DIR/hooks/codex-hooks.json"
 MD_TO_CODEX_TOML="$SCRIPT_DIR/md-to-codex-toml.sh"
 SOURCE_CLAUDE_SETTINGS="$SCRIPT_DIR/claude-settings.json"
+SOURCE_PI_SETTINGS="$SCRIPT_DIR/pi-settings.json"
 SOURCE_STATUSLINE="$SCRIPT_DIR/statusline.ts"
 SOURCE_AGENTS_MD="$SCRIPT_DIR/AGENTS.md"
 SOURCE_DEV_INSTRUCTIONS="$SCRIPT_DIR/developer-instructions.txt"
@@ -26,7 +27,7 @@ Usage: ./install.sh [--dry-run] [--yes]
 
 Options:
   -n, --dry-run   Print the actions without creating directories or symlinks.
-  -y, --yes       Skip confirmation prompts (install both ~/.claude and ~/.codex).
+  -y, --yes       Skip confirmation prompts (install ~/.claude, ~/.codex, and ~/.pi/agent).
   -h, --help      Show this help message.
 EOF
 }
@@ -284,6 +285,7 @@ copy_file_if_needed() {
 
   run_cmd cp "$source_path" "$target_path"
   log "copied: $label"
+  ((LINKED_COUNT += 1))
 }
 
 force_link_agent_entries() {
@@ -535,9 +537,20 @@ install_claude_target() {
   sync_claude_settings "$SOURCE_CLAUDE_SETTINGS" "$claude_hooks_json" "$target_root/settings.json"
 }
 
+install_pi_target() {
+  local target_root="$1"
+
+  log ""
+  log "Installing into ~/.pi/agent ($target_root)"
+  ensure_dir "$target_root"
+  render_agents_md "$target_root/AGENTS.md" "pi AGENTS.md"
+  copy_file_if_needed "$SOURCE_PI_SETTINGS" "$target_root/settings.json" "pi settings.json"
+}
+
 main() {
   local install_codex=1
   local install_claude=1
+  local install_pi=1
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -595,6 +608,11 @@ main() {
     exit 1
   fi
 
+  if [[ ! -f "$SOURCE_PI_SETTINGS" ]]; then
+    warn "Missing source Pi settings file: $SOURCE_PI_SETTINGS"
+    exit 1
+  fi
+
   if [[ ! -f "$SOURCE_STATUSLINE" ]]; then
     warn "Missing source statusline file: $SOURCE_STATUSLINE"
     exit 1
@@ -618,7 +636,11 @@ main() {
     install_claude=0
   fi
 
-  if (( install_codex == 0 && install_claude == 0 )); then
+  if ! prompt_yes_no "Install Pi config into ~/.pi/agent?"; then
+    install_pi=0
+  fi
+
+  if (( install_codex == 0 && install_claude == 0 && install_pi == 0 )); then
     log "Nothing selected."
     exit 0
   fi
@@ -631,6 +653,10 @@ main() {
 
   if (( install_claude )); then
     install_claude_target "$HOME/.claude"
+  fi
+
+  if (( install_pi )); then
+    install_pi_target "$HOME/.pi/agent"
   fi
 
   log ""
