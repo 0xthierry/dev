@@ -21,11 +21,21 @@ has_working_dotnet() {
 }
 
 is_ghidra_cli_installed() {
-  command -v ghidra >/dev/null 2>&1 && ghidra --version 2>/dev/null | grep -qi 'ghidra-cli'
+  local pinned_version="${GHIDRA_CLI_VERSION#v}"
+  local version_output=""
+
+  command -v ghidra >/dev/null 2>&1 || return 1
+  version_output="$(ghidra --version 2>/dev/null)"
+  [[ "$version_output" == "ghidra $pinned_version" ]]
 }
 
 is_ilspy_cli_installed() {
-  command -v ilspy >/dev/null 2>&1 && ilspy --version 2>/dev/null | grep -qi 'ilspy-cli'
+  local pinned_version="${GHIDRA_CLI_VERSION#v}"
+  local version_output=""
+
+  command -v ilspy >/dev/null 2>&1 || return 1
+  version_output="$(ilspy --version 2>/dev/null)"
+  [[ "$version_output" == "ilspy $pinned_version" ]]
 }
 
 sync_ghidra_cli_source() {
@@ -58,7 +68,7 @@ install_ghidra_binary() {
   fi
 
   log_item "Installing ghidra-cli"
-  run_cmd cargo install --path "$GHIDRA_CLI_SOURCE_DIR" --locked
+  run_cmd cargo install --path "$GHIDRA_CLI_SOURCE_DIR" --locked --force
 }
 
 install_ilspy_binary() {
@@ -78,7 +88,7 @@ install_ilspy_binary() {
   fi
 
   log_item "Installing ilspy-cli"
-  run_cmd cargo install --path "$GHIDRA_CLI_SOURCE_DIR/ilspy-cli" --locked
+  run_cmd cargo install --path "$GHIDRA_CLI_SOURCE_DIR/ilspy-cli" --locked --force
 }
 
 install_ghidra_runtime() {
