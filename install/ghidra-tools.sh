@@ -6,7 +6,9 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 GHIDRA_CLI_REPO_URL="https://github.com/akiselev/ghidra-cli.git"
+GHIDRA_CLI_VERSION="v0.1.10"
 GHIDRA_CLI_SOURCE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/ghidra-cli/source"
+GHIDRA_VERSION="12.0.4"
 
 export PATH="$HOME/.cargo/bin:$PATH"
 
@@ -28,8 +30,9 @@ is_ilspy_cli_installed() {
 
 sync_ghidra_cli_source() {
   if [[ -d "$GHIDRA_CLI_SOURCE_DIR/.git" ]]; then
-    log_item "Updating ghidra-cli source"
-    run_cmd git -C "$GHIDRA_CLI_SOURCE_DIR" pull --ff-only
+    log_item "Checking out ghidra-cli $GHIDRA_CLI_VERSION"
+    run_cmd git -C "$GHIDRA_CLI_SOURCE_DIR" fetch --depth=1 origin "refs/tags/$GHIDRA_CLI_VERSION:refs/tags/$GHIDRA_CLI_VERSION"
+    run_cmd git -C "$GHIDRA_CLI_SOURCE_DIR" checkout --detach "$GHIDRA_CLI_VERSION"
     return 0
   fi
 
@@ -39,8 +42,8 @@ sync_ghidra_cli_source() {
   fi
 
   ensure_dir "$(dirname "$GHIDRA_CLI_SOURCE_DIR")"
-  log_item "Cloning ghidra-cli source"
-  run_cmd git clone --depth=1 "$GHIDRA_CLI_REPO_URL" "$GHIDRA_CLI_SOURCE_DIR"
+  log_item "Cloning ghidra-cli $GHIDRA_CLI_VERSION"
+  run_cmd git clone --depth=1 --branch "$GHIDRA_CLI_VERSION" "$GHIDRA_CLI_REPO_URL" "$GHIDRA_CLI_SOURCE_DIR"
 }
 
 install_ghidra_binary() {
@@ -80,8 +83,8 @@ install_ilspy_binary() {
 
 install_ghidra_runtime() {
   if (( ${DRY_RUN:-0} )); then
-    log_item "Installing Ghidra runtime"
-    run_cmd ghidra setup
+    log_item "Installing Ghidra runtime $GHIDRA_VERSION"
+    run_cmd ghidra setup --version "$GHIDRA_VERSION"
     return 0
   fi
 
@@ -100,8 +103,8 @@ install_ghidra_runtime() {
     return 0
   fi
 
-  log_item "Installing Ghidra runtime"
-  run_cmd ghidra setup
+  log_item "Installing Ghidra runtime $GHIDRA_VERSION"
+  run_cmd ghidra setup --version "$GHIDRA_VERSION"
 }
 
 install_ghidra_cli_tools() {
