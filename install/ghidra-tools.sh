@@ -38,6 +38,28 @@ is_ilspy_cli_installed() {
   [[ "$version_output" == "ilspy $pinned_version" ]]
 }
 
+is_ghidra_runtime_path_valid() {
+  local install_dir="$1"
+
+  [[ -n "$install_dir" ]] || return 1
+  [[ "$install_dir" != "null" ]] || return 1
+  [[ -x "$install_dir/support/analyzeHeadless" ]]
+}
+
+is_ghidra_runtime_configured() {
+  local install_dir="${GHIDRA_INSTALL_DIR:-}"
+
+  if is_ghidra_runtime_path_valid "$install_dir"; then
+    return 0
+  fi
+
+  command -v ghidra >/dev/null 2>&1 || return 1
+  install_dir="$(ghidra config get ghidra_install_dir 2>/dev/null)"
+  install_dir="${install_dir%%$'\n'*}"
+
+  is_ghidra_runtime_path_valid "$install_dir"
+}
+
 sync_ghidra_cli_source() {
   if [[ -d "$GHIDRA_CLI_SOURCE_DIR/.git" ]]; then
     log_item "Checking out ghidra-cli $GHIDRA_CLI_VERSION"
@@ -103,7 +125,7 @@ install_ghidra_runtime() {
     return 0
   fi
 
-  if ghidra doctor >/dev/null 2>&1; then
+  if is_ghidra_runtime_configured; then
     log_item "Ghidra runtime: configured"
     return 0
   fi
