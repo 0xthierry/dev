@@ -54,6 +54,7 @@ COMMON_PACMAN_PACKAGES=(
 )
 
 COMMON_PACMAN_LINUX_PACKAGES=(
+  libxtst
   wl-clipboard
 )
 

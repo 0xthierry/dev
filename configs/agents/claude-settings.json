@@ -44,6 +44,8 @@
       "Bash(agent-slack:*)",
       "Bash(agent-browser:*)",
       "Bash(npx agent-browser:*)",
+      "Bash(ghidra:*)",
+      "Bash(ilspy:*)",
       "Bash(codex exec:*)",
       "Bash(claude:*)",
       "Bash(~/.agents/bin/*:*)",

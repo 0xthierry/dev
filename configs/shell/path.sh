@@ -1,4 +1,5 @@
 export PATH="$HOME/bin:$HOME/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:$PATH"
+export PATH="$HOME/.cargo/bin:$PATH"
 export PATH="$HOME/.local/share/mise/shims:$PATH"
 export PATH="$HOME/.opencode/bin:$PATH"
 export PATH="/opt/rocm/bin:$PATH"

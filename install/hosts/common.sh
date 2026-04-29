@@ -12,6 +12,7 @@ source "$REPO_ROOT/install/ssh.sh"
 source "$REPO_ROOT/install/mise.sh"
 source "$REPO_ROOT/install/ai-cli.sh"
 source "$REPO_ROOT/install/docker.sh"
+source "$REPO_ROOT/install/ghidra-tools.sh"
 source "$REPO_ROOT/install/neovim.sh"
 source "$REPO_ROOT/install/tools.sh"
 source "$REPO_ROOT/install/hooks.sh"
@@ -135,6 +136,7 @@ run_post_setup_tasks() {
   fi
   install_hooks "$REPO_ROOT"
   install_agent_review_tools "$REPO_ROOT"
+  install_ghidra_cli_tools
 }
 
 setup_host_prereqs() { :; }

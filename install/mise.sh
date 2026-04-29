@@ -19,6 +19,8 @@ python = "3.12"
 go = "latest"
 bun = "latest"
 rust = "latest"
+java = "temurin-17"
+dotnet = "8"
 zig = "latest"
 aws = "latest"
 
