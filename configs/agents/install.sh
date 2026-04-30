@@ -17,6 +17,10 @@ SOURCE_CODEX_HOOKS="$SCRIPT_DIR/hooks/codex-hooks.json"
 MD_TO_CODEX_TOML="$SCRIPT_DIR/md-to-codex-toml.sh"
 SOURCE_CLAUDE_SETTINGS="$SCRIPT_DIR/claude-settings.json"
 SOURCE_PI_SETTINGS="$SCRIPT_DIR/pi-settings.json"
+SOURCE_PI_DIR="$SCRIPT_DIR/pi"
+SOURCE_PI_AGENTS_DIR="$SOURCE_PI_DIR/agents"
+SOURCE_PI_PROMPTS_DIR="$SOURCE_PI_DIR/prompts"
+SOURCE_PI_EXTENSIONS_DIR="$SOURCE_PI_DIR/extensions"
 SOURCE_STATUSLINE="$SCRIPT_DIR/statusline.ts"
 SOURCE_AGENTS_MD="$SCRIPT_DIR/AGENTS.md"
 SOURCE_DEV_INSTRUCTIONS="$SCRIPT_DIR/developer-instructions.txt"
@@ -545,6 +549,9 @@ install_pi_target() {
   ensure_dir "$target_root"
   render_agents_md "$target_root/AGENTS.md" "pi AGENTS.md"
   copy_file_if_needed "$SOURCE_PI_SETTINGS" "$target_root/settings.json" "pi settings.json"
+  force_link_path "$SOURCE_PI_AGENTS_DIR" "$target_root/agents" "pi agents"
+  force_link_path "$SOURCE_PI_PROMPTS_DIR" "$target_root/prompts" "pi prompts"
+  force_link_path "$SOURCE_PI_EXTENSIONS_DIR" "$target_root/extensions" "pi extensions"
 }
 
 main() {
@@ -610,6 +617,21 @@ main() {
 
   if [[ ! -f "$SOURCE_PI_SETTINGS" ]]; then
     warn "Missing source Pi settings file: $SOURCE_PI_SETTINGS"
+    exit 1
+  fi
+
+  if [[ ! -d "$SOURCE_PI_AGENTS_DIR" ]]; then
+    warn "Missing source Pi agents directory: $SOURCE_PI_AGENTS_DIR"
+    exit 1
+  fi
+
+  if [[ ! -d "$SOURCE_PI_PROMPTS_DIR" ]]; then
+    warn "Missing source Pi prompts directory: $SOURCE_PI_PROMPTS_DIR"
+    exit 1
+  fi
+
+  if [[ ! -d "$SOURCE_PI_EXTENSIONS_DIR" ]]; then
+    warn "Missing source Pi extensions directory: $SOURCE_PI_EXTENSIONS_DIR"
     exit 1
   fi
 
