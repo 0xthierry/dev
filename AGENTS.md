@@ -31,7 +31,7 @@ The two layers don't validate each other. **Most recurring bug:** config deploye
 | `configs/shell/` | sourced via `~/.zshrc` / `~/.zshenv` | written by `install/shell.sh` |
 | `configs/agents/` | `~/.agents/`, `~/.claude/`, `~/.codex/`, `~/.pi/agent/` | special installer |
 
-**Agent config is special-cased.** `configs/agents/install.sh` renders `AGENTS.md` (replaces `{{HOST_CONFIG}}` with detected hardware) into `~/.agents/AGENTS.md`, `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, and `~/.pi/agent/AGENTS.md`; symlinks agents/skills/hooks (Codex gets copies with model stripping); syncs `claude-settings.json` into `~/.claude/settings.json`; copies `codex-config.toml`; copies `pi-settings.json` into `~/.pi/agent/settings.json`; and links Pi-owned `configs/agents/pi/{agents,prompts,extensions}` to `~/.pi/agent/{agents,prompts,extensions}`.
+**Agent config is special-cased.** `configs/agents/install.sh` renders `AGENTS.md` (replaces `{{HOST_CONFIG}}` with detected hardware) into `~/.agents/AGENTS.md`; symlinks `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, and `~/.pi/agent/AGENTS.md` to that rendered file; symlinks agents/skills/hooks (Codex gets copies with model stripping); syncs `claude-settings.json` into `~/.claude/settings.json`; copies `codex-config.toml`; copies `pi-settings.json` into `~/.pi/agent/settings.json`; links Pi-owned `configs/agents/pi/{agents,prompts,extensions}` to `~/.pi/agent/{agents,prompts,extensions}`; and links `configs/agents/pi/APPEND_SYSTEM.md` to `~/.pi/agent/APPEND_SYSTEM.md` for Pi-specific appended system instructions.
 
 ## Principles
 

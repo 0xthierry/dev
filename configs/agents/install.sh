@@ -21,6 +21,7 @@ SOURCE_PI_DIR="$SCRIPT_DIR/pi"
 SOURCE_PI_AGENTS_DIR="$SOURCE_PI_DIR/agents"
 SOURCE_PI_PROMPTS_DIR="$SOURCE_PI_DIR/prompts"
 SOURCE_PI_EXTENSIONS_DIR="$SOURCE_PI_DIR/extensions"
+SOURCE_PI_APPEND_SYSTEM="$SOURCE_PI_DIR/APPEND_SYSTEM.md"
 SOURCE_STATUSLINE="$SCRIPT_DIR/statusline.ts"
 SOURCE_AGENTS_MD="$SCRIPT_DIR/AGENTS.md"
 SOURCE_DEV_INSTRUCTIONS="$SCRIPT_DIR/developer-instructions.txt"
@@ -467,7 +468,7 @@ install_codex_target() {
   log "Installing into ~/.codex ($target_root)"
   generate_codex_agent_tomls "$target_root"
   force_link_skill_entries "$target_root"
-  render_agents_md "$target_root/AGENTS.md" "codex AGENTS.md"
+  force_link_path "$HOME/.agents/AGENTS.md" "$target_root/AGENTS.md" "codex AGENTS.md"
   render_codex_config "$target_root/config.toml"
   # Install hooks.json for Codex
   if [[ -f "$SOURCE_CODEX_HOOKS" ]]; then
@@ -528,7 +529,7 @@ install_claude_target() {
   local claude_hooks_json="$SOURCE_HOOKS_DIR/claude-hooks.json"
 
   install_target "$target_root" "$HOME/.claude"
-  render_agents_md "$target_root/CLAUDE.md" "claude CLAUDE.md"
+  force_link_path "$HOME/.agents/AGENTS.md" "$target_root/CLAUDE.md" "claude CLAUDE.md"
   # Symlink hooks directory
   if [[ -d "$SOURCE_HOOKS_DIR" ]]; then
     force_link_path "$SOURCE_HOOKS_DIR" "$target_root/hooks" "claude hooks"
@@ -547,8 +548,9 @@ install_pi_target() {
   log ""
   log "Installing into ~/.pi/agent ($target_root)"
   ensure_dir "$target_root"
-  render_agents_md "$target_root/AGENTS.md" "pi AGENTS.md"
+  force_link_path "$HOME/.agents/AGENTS.md" "$target_root/AGENTS.md" "pi AGENTS.md"
   copy_file_if_needed "$SOURCE_PI_SETTINGS" "$target_root/settings.json" "pi settings.json"
+  force_link_path "$SOURCE_PI_APPEND_SYSTEM" "$target_root/APPEND_SYSTEM.md" "pi APPEND_SYSTEM.md"
   force_link_path "$SOURCE_PI_AGENTS_DIR" "$target_root/agents" "pi agents"
   force_link_path "$SOURCE_PI_PROMPTS_DIR" "$target_root/prompts" "pi prompts"
   force_link_path "$SOURCE_PI_EXTENSIONS_DIR" "$target_root/extensions" "pi extensions"
@@ -632,6 +634,11 @@ main() {
 
   if [[ ! -d "$SOURCE_PI_EXTENSIONS_DIR" ]]; then
     warn "Missing source Pi extensions directory: $SOURCE_PI_EXTENSIONS_DIR"
+    exit 1
+  fi
+
+  if [[ ! -f "$SOURCE_PI_APPEND_SYSTEM" ]]; then
+    warn "Missing source Pi append-system file: $SOURCE_PI_APPEND_SYSTEM"
     exit 1
   fi
 
