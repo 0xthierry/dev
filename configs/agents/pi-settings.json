@@ -10,6 +10,9 @@
   "warnings": {
     "anthropicExtraUsage": true
   },
+  "compaction": {
+    "enabled": false
+  },
   "extensions": [
     "!../../.agents/**",
     "!../../.claude/**",
