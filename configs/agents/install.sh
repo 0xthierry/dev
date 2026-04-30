@@ -19,6 +19,7 @@ SOURCE_CLAUDE_SETTINGS="$SCRIPT_DIR/claude-settings.json"
 SOURCE_PI_SETTINGS="$SCRIPT_DIR/pi-settings.json"
 SOURCE_PI_DIR="$SCRIPT_DIR/pi"
 SOURCE_PI_AGENTS_DIR="$SOURCE_PI_DIR/agents"
+SOURCE_PI_SKILLS_DIR="$SOURCE_PI_DIR/skills"
 SOURCE_PI_PROMPTS_DIR="$SOURCE_PI_DIR/prompts"
 SOURCE_PI_EXTENSIONS_DIR="$SOURCE_PI_DIR/extensions"
 SOURCE_PI_APPEND_SYSTEM="$SOURCE_PI_DIR/APPEND_SYSTEM.md"
@@ -548,10 +549,11 @@ install_pi_target() {
   log ""
   log "Installing into ~/.pi/agent ($target_root)"
   ensure_dir "$target_root"
-  force_link_path "$HOME/.agents/AGENTS.md" "$target_root/AGENTS.md" "pi AGENTS.md"
+  render_agents_md "$target_root/AGENTS.md" "pi AGENTS.md"
   copy_file_if_needed "$SOURCE_PI_SETTINGS" "$target_root/settings.json" "pi settings.json"
   force_link_path "$SOURCE_PI_APPEND_SYSTEM" "$target_root/APPEND_SYSTEM.md" "pi APPEND_SYSTEM.md"
   force_link_path "$SOURCE_PI_AGENTS_DIR" "$target_root/agents" "pi agents"
+  force_link_path "$SOURCE_PI_SKILLS_DIR" "$target_root/skills" "pi skills"
   force_link_path "$SOURCE_PI_PROMPTS_DIR" "$target_root/prompts" "pi prompts"
   force_link_path "$SOURCE_PI_EXTENSIONS_DIR" "$target_root/extensions" "pi extensions"
 }
@@ -624,6 +626,11 @@ main() {
 
   if [[ ! -d "$SOURCE_PI_AGENTS_DIR" ]]; then
     warn "Missing source Pi agents directory: $SOURCE_PI_AGENTS_DIR"
+    exit 1
+  fi
+
+  if [[ ! -d "$SOURCE_PI_SKILLS_DIR" ]]; then
+    warn "Missing source Pi skills directory: $SOURCE_PI_SKILLS_DIR"
     exit 1
   fi
 

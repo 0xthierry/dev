@@ -9,5 +9,25 @@
   "enableSkillCommands": true,
   "warnings": {
     "anthropicExtraUsage": true
-  }
+  },
+  "extensions": [
+    "!../../.agents/**",
+    "!../../.claude/**",
+    "!../../.codex/**"
+  ],
+  "skills": [
+    "!../../.agents/**",
+    "!../../.claude/**",
+    "!../../.codex/**"
+  ],
+  "prompts": [
+    "!../../.agents/**",
+    "!../../.claude/**",
+    "!../../.codex/**"
+  ],
+  "themes": [
+    "!../../.agents/**",
+    "!../../.claude/**",
+    "!../../.codex/**"
+  ]
 }

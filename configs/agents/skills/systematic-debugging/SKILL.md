@@ -1,6 +1,6 @@
 ---
 name: systematic-debugging
-description: "Use when encountering errors, bugs, crashes, exceptions, stack traces, test failures, or unexpected behavior. Use when something broke, stopped working, or behaves differently than expected. Use ESPECIALLY when tempted to 'just try this quick fix'."
+description: "Use for bugs, errors, crashes, test failures, regressions, or unexpected behavior; investigate before fixing."
 effort: max
 ---
 

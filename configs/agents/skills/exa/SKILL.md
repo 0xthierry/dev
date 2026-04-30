@@ -1,6 +1,6 @@
 ---
 name: exa
-description: Use this skill when the task involves Exa for web search, page-content retrieval, similar-link discovery, citation-backed answers, asynchronous web research, or Exa Code context retrieval. Invoke it when choosing between Exa endpoints, writing Exa API calls, shaping Exa queries, or polling Exa research tasks.
+description: "Use for Exa web/code search, page contents, similar links, citation answers, or async research via Exa API."
 ---
 
 # Exa

@@ -1,6 +1,6 @@
 ---
-name: ci-commit
-description: Commit Changes in CI with no user interaction
+name: commit
+description: "Use to commit changes"
 ---
 
 # Commit Changes

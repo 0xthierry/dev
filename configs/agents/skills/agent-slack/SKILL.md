@@ -1,6 +1,6 @@
 ---
 name: agent-slack
-description: Slack CLI for AI agents — read/search/send messages and threads, channel history, reactions, attachments, canvases, users, workflows. Triggers on "slack", "slack URL/link/message/thread", "channel history", "recent/latest messages", "mark as read".
+description: "Use for Slack: read/search/send messages, inspect channels/threads/users, add reactions, manage canvases, or mark read."
 ---
 
 # Slack automation with `agent-slack`
