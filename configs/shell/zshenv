@@ -7,5 +7,7 @@ if [[ -f "${HOME}/.config/dev-setup/env.sh" ]]; then
 fi
 
 if [[ -f "${HOME}/.secrets" ]]; then
+  set -a
   source "${HOME}/.secrets"
+  set +a
 fi
