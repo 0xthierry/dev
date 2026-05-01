@@ -1,0 +1,120 @@
+import { afterEach, describe, expect, test } from "bun:test";
+import { createFakePi } from "../../../_shared/testing/fake-pi";
+import { fetchFailedError, searchFailedError } from "../shared/errors";
+import { clearResults, storeResult } from "../storage/result-store";
+import { registerGetSearchContentTool } from "./get-search-content-tool";
+
+type ToolResult = {
+  content: Array<{ type: string; text?: string }>;
+  details: Record<string, unknown>;
+};
+
+afterEach(() => {
+  clearResults();
+});
+
+describe("registerGetSearchContentTool", () => {
+  test("returns a structured error for missing stored results", async () => {
+    // Arrange
+    const fake = createFakePi();
+    registerGetSearchContentTool(fake.pi);
+
+    // Act
+    const result = (await fake.runTool("get_search_content", { responseId: "missing" })) as ToolResult;
+
+    // Assert
+    expect(result.content[0]?.text).toContain("Stored result not found");
+    expect(result.details.error).toMatchObject({ code: "STORED_RESULT_NOT_FOUND", retriable: false });
+  });
+
+  test("retrieves stored search results by query index", async () => {
+    // Arrange
+    const fake = createFakePi();
+    storeResult("search-id", {
+      id: "search-id",
+      type: "search",
+      timestamp: 1,
+      queries: [
+        { query: "first", answer: "First answer", results: [], error: null },
+        {
+          query: "second",
+          answer: "Second answer",
+          results: [{ title: "Source", url: "https://example.com", snippet: "Snippet" }],
+          error: null,
+        },
+      ],
+    });
+    registerGetSearchContentTool(fake.pi);
+
+    // Act
+    const result = (await fake.runTool("get_search_content", { responseId: "search-id", queryIndex: 1 })) as ToolResult;
+
+    // Assert
+    expect(result.content[0]?.text).toContain("Second answer");
+    expect(result.content[0]?.text).toContain("https://example.com");
+    expect(result.details).toEqual({ query: "second", resultCount: 1 });
+  });
+
+  test("returns stored structured failures", async () => {
+    // Arrange
+    const fake = createFakePi();
+    const errorDetails = searchFailedError("provider failed", { query: "bad" });
+    storeResult("search-id", {
+      id: "search-id",
+      type: "search",
+      timestamp: 1,
+      queries: [{ query: "bad", answer: "", results: [], error: "provider failed", errorDetails }],
+    });
+    registerGetSearchContentTool(fake.pi);
+
+    // Act
+    const result = (await fake.runTool("get_search_content", { responseId: "search-id" })) as ToolResult;
+
+    // Assert
+    expect(result.content[0]?.text).toContain("Web search failed");
+    expect(result.details.error).toBe(errorDetails);
+  });
+
+  test("retrieves stored fetch content by URL", async () => {
+    // Arrange
+    const fake = createFakePi();
+    storeResult("fetch-id", {
+      id: "fetch-id",
+      type: "fetch",
+      timestamp: 1,
+      urls: [{ url: "https://example.com", title: "Example", content: "Body", error: null, provider: "http" }],
+    });
+    registerGetSearchContentTool(fake.pi);
+
+    // Act
+    const result = (await fake.runTool("get_search_content", {
+      responseId: "fetch-id",
+      url: "https://example.com",
+    })) as ToolResult;
+
+    // Assert
+    expect(result.content[0]?.text).toContain("# Example");
+    expect(result.content[0]?.text).toContain("Body");
+    expect(result.details).toMatchObject({ url: "https://example.com", contentLength: 4 });
+  });
+
+  test("returns stored fetch failures", async () => {
+    // Arrange
+    const fake = createFakePi();
+    const errorDetails = fetchFailedError("https://example.com", "blocked");
+    storeResult("fetch-id", {
+      id: "fetch-id",
+      type: "fetch",
+      timestamp: 1,
+      urls: [{ url: "https://example.com", title: "", content: "", error: "blocked", errorDetails }],
+    });
+    registerGetSearchContentTool(fake.pi);
+
+    // Act
+    const result = (await fake.runTool("get_search_content", { responseId: "fetch-id" })) as ToolResult;
+
+    // Assert
+    expect(result.content[0]?.text).toContain("Content extraction failed");
+    expect(result.details.error).toBe(errorDetails);
+  });
+});
