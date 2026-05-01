@@ -81,6 +81,8 @@ Use the filename suffix to communicate the boundary being tested:
   - May call configured models and cost money.
   - These tests run only through the E2E test command.
 
+Every extension must include E2E coverage in a `*.spec.ts` file. If an extension registers a command, tool, shortcut, flag, custom UI flow, event-driven visible behavior, or other user-facing capability, the E2E must exercise that actual capability through Pi rather than only checking startup or registration. Prefer a no-cost deterministic path when live providers would cost money or require credentials, and put gated live provider coverage behind explicit environment flags when needed.
+
 Every behavior module should have a colocated same-basename `*.test.ts`, except type-only files and static schema/constant-only files.
 
 Use Bun for tests and write every test in Arrange / Act / Assert form:
@@ -138,6 +140,6 @@ Prefer Pi RPC mode for E2E tests because it is observable and scriptable:
 pi --mode rpc --no-session -e configs/agents/pi/extensions/my-extension
 ```
 
-Use `_shared/testing/pi-rpc-harness.ts` for RPC-based E2E tests. E2E specs must exercise the extension's actual user-visible behavior, not only prove that Pi starts or that a command is registered. Prefer no-cost real-agent E2E coverage with `_shared/testing/faux-provider-extension.ts` when model behavior can be deterministic. The shared faux provider registers a local in-process model for tests; configure its response per spec with `PI_EXTENSION_E2E_FAUX_RESPONSE_TEXT` instead of hardcoding extension-specific behavior in the shared helper. Paid E2E tests can send prompts to configured real models and assert streamed events such as `tool_execution_start`, `tool_execution_end`, and `agent_end`.
+Use `_shared/testing/pi-rpc-harness.ts` for RPC-based E2E tests. E2E specs must exercise the extension's actual user-visible behavior, not only prove that Pi starts or that a command is registered. For commands, send the slash command through Pi and assert the resulting messages, files, tools, UI events, or other user-visible effects. For custom tools, drive the tool through the agent loop when practical and assert streamed tool events/results. Prefer no-cost real-agent E2E coverage with `_shared/testing/faux-provider-extension.ts` when model behavior can be deterministic. The shared faux provider registers a local in-process model for tests; configure its response per spec with `PI_EXTENSION_E2E_FAUX_RESPONSE_TEXT` instead of hardcoding extension-specific behavior in the shared helper. Paid E2E tests can send prompts to configured real models and assert streamed events such as `tool_execution_start`, `tool_execution_end`, and `agent_end`.
 
 Only expose deterministic commands or health-check behavior when they are genuinely useful to the user, not solely to make tests easier.

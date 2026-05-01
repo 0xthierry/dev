@@ -4,10 +4,11 @@
   "type": "module",
   "keywords": ["pi-package"],
   "pi": {
-    "extensions": ["./desktop-notification", "./web-access"]
+    "extensions": ["./desktop-notification", "./web-access", "./create-image"]
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",
+    "impit": "0.13.1",
     "linkedom": "0.18.12",
     "p-limit": "7.3.0",
     "turndown": "7.2.4"

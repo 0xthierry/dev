@@ -8,7 +8,8 @@
   "pi": {
     "extensions": [
       "./configs/agents/pi/extensions/desktop-notification",
-      "./configs/agents/pi/extensions/web-access"
+      "./configs/agents/pi/extensions/web-access",
+      "./configs/agents/pi/extensions/create-image"
     ]
   },
   "scripts": {
@@ -29,6 +30,7 @@
   "dependencies": {
     "@mozilla/readability": "0.6.0",
     "@types/turndown": "5.0.6",
+    "impit": "0.13.1",
     "linkedom": "0.18.12",
     "p-limit": "7.3.0",
     "turndown": "7.2.4"
