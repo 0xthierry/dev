@@ -8,6 +8,8 @@
   "quietStartup": false,
   "enableInstallTelemetry": false,
   "enableSkillCommands": true,
+  "shellPath": "/bin/zsh",
+  "shellCommandPrefix": "source ~/.zshenv",
   "warnings": {
     "anthropicExtraUsage": true
   },

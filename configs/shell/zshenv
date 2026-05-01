@@ -5,3 +5,7 @@ export ZDOTDIR="${HOME}/.config/zsh"
 if [[ -f "${HOME}/.config/dev-setup/env.sh" ]]; then
   source "${HOME}/.config/dev-setup/env.sh"
 fi
+
+if [[ -f "${HOME}/.secrets" ]]; then
+  source "${HOME}/.secrets"
+fi
