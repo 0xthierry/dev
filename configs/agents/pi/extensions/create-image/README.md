@@ -26,6 +26,8 @@ The provider boundary is intentionally generic so future providers, such as Chat
 
 Options:
 
+Argument autocomplete suggests the common options, provider/profile values, output/name examples, and prompt starters such as `generate an image of`.
+
 - `--provider, -p <id>`: image provider. Default: `nano-banana`.
 - `--out, -o <dir>`: output directory relative to the current project. Default: `generated-images`.
 - `--name <file>`: base filename. The extension chooses the file extension from image bytes.

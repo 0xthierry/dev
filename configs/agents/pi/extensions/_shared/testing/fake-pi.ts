@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { AutocompleteItem } from "@mariozechner/pi-tui";
 
 type Handler = (event: unknown, ctx: unknown) => unknown | Promise<unknown>;
 
@@ -18,6 +19,8 @@ type FakePiOptions = {
 
 export type FakeRegisteredCommand = {
   description?: string;
+  argumentHint?: string;
+  getArgumentCompletions?: (prefix: string) => AutocompleteItem[] | Promise<AutocompleteItem[] | null> | null;
   handler: (args: string, ctx: unknown) => unknown | Promise<unknown>;
   [key: string]: unknown;
 };

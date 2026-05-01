@@ -38,6 +38,21 @@ describe("registerCreateImageExtension", () => {
 });
 
 describe("registerCreateImageCommand", () => {
+  test("registers argument completions for the command", () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const fakeRuntime = runtime();
+    registerCreateImageCommand(fakePi.pi, fakeRuntime);
+
+    // Act
+    const command = fakePi.commands.get("create-image");
+    const completions = command?.getArgumentCompletions?.("--provider n");
+
+    // Assert
+    expect(command?.getArgumentCompletions).toBeFunction();
+    expect(completions).toEqual([expect.objectContaining({ value: "--provider nano-banana ", label: "nano-banana" })]);
+  });
+
   test("runs the registered command", async () => {
     // Arrange
     const fakePi = createFakePi();
