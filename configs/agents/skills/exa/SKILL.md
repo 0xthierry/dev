@@ -1,6 +1,7 @@
 ---
 name: exa
 description: "Use for Exa web/code search, page contents, similar links, citation answers, or async research via Exa API."
+disable_model_invocation: true
 ---
 
 # Exa
