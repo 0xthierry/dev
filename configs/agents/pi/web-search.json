@@ -1,0 +1,16 @@
+{
+  "$schema": "./agent/extensions/web-access/web-search.schema.json",
+  "exaApiKeyEnv": "EXA_API_KEY",
+  "medium": {
+    "enabled": true
+  },
+  "youtube": {
+    "enabled": true,
+    "preferredModel": "gemini-3-flash-preview"
+  },
+  "githubClone": {
+    "enabled": true,
+    "cloneTimeoutSeconds": 30,
+    "clonePath": "/tmp/pi-github-repos"
+  }
+}
