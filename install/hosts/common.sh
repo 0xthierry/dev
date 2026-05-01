@@ -15,6 +15,7 @@ source "$REPO_ROOT/install/docker.sh"
 source "$REPO_ROOT/install/ghidra-tools.sh"
 source "$REPO_ROOT/install/neovim.sh"
 source "$REPO_ROOT/install/tools.sh"
+source "$REPO_ROOT/install/dependencies.sh"
 source "$REPO_ROOT/install/hooks.sh"
 
 HOST_ENV_VARS=()
@@ -134,6 +135,7 @@ run_post_setup_tasks() {
   else
     log_item "Skipping git repo sync"
   fi
+  install_repo_dependencies "$REPO_ROOT"
   install_hooks "$REPO_ROOT"
   install_agent_review_tools "$REPO_ROOT"
   install_ghidra_cli_tools
