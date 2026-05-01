@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { fetchWithExaContents, mapDomainFilter } from "./exa";
+import { fetchWithExaContents, mapDomainFilter, searchWithExa } from "./exa";
 
 const originalFetch = globalThis.fetch;
 const originalExaKey = process.env.EXA_API_KEY;
@@ -30,6 +30,49 @@ describe("mapDomainFilter", () => {
     // Arrange / Act / Assert
     expect(mapDomainFilter(undefined)).toEqual({});
     expect(mapDomainFilter([])).toEqual({});
+  });
+});
+
+describe("searchWithExa", () => {
+  test("retries once when Exa returns a rate limit response", async () => {
+    // Arrange
+    process.env.EXA_API_KEY = "test-key";
+    let callCount = 0;
+    const fetchMock = mock(async (_url: string | URL | Request, _init?: RequestInit) => {
+      callCount++;
+      if (callCount === 1) {
+        return new Response("Too many requests", { status: 429, headers: { "retry-after": "0" } });
+      }
+      return new Response(
+        JSON.stringify({ results: [{ url: "https://example.com", title: "Example", text: "Snippet" }] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    // Act
+    const result = await searchWithExa("docs", { numResults: 1 });
+
+    // Assert
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.provider).toBe("exa");
+    expect(result.results[0]?.url).toBe("https://example.com");
+  });
+
+  test("reports Exa rate limits with retry guidance", async () => {
+    // Arrange
+    process.env.EXA_API_KEY = "test-key";
+    const fetchMock = mock(
+      async (_url: string | URL | Request, _init?: RequestInit) =>
+        new Response("Too many requests", { status: 429, headers: { "retry-after": "30" } }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    // Act / Assert
+    await expect(searchWithExa("docs", { numResults: 1 })).rejects.toThrow(
+      "Exa API rate limit exceeded (429). Retry after 30 second(s). Response: Too many requests",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

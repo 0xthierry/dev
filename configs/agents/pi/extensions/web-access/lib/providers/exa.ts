@@ -4,6 +4,9 @@ import type { ExtractedContent, SearchOptions, SearchResponse } from "../types";
 const EXA_SEARCH_URL = "https://api.exa.ai/search";
 const EXA_CONTENTS_URL = "https://api.exa.ai/contents";
 const DEFAULT_EXA_STATUS_TAG = "unknown";
+const EXA_MAX_ATTEMPTS = 2;
+const EXA_DEFAULT_RATE_LIMIT_DELAY_MS = 1_000;
+const EXA_MAX_RATE_LIMIT_DELAY_MS = 10_000;
 
 interface ExaSearchResponse {
   results?: Array<{
@@ -119,6 +122,74 @@ function requestSignal(signal?: AbortSignal): AbortSignal {
   return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
+function retryAfterMs(headers: Headers): number | undefined {
+  const value = headers.get("retry-after")?.trim();
+  if (!value) return undefined;
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+
+  const dateMs = Date.parse(value);
+  if (Number.isNaN(dateMs)) return undefined;
+  return Math.max(0, dateMs - Date.now());
+}
+
+function wait(ms: number, signal?: AbortSignal): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  if (signal?.aborted) return Promise.reject(new Error("Aborted"));
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(resolve, ms);
+    const abort = () => {
+      clearTimeout(timeout);
+      reject(new Error("Aborted"));
+    };
+    signal?.addEventListener("abort", abort, { once: true });
+  });
+}
+
+function exaApiErrorMessage(status: number, errorText: string, retryDelayMs?: number): string {
+  const body = errorText.slice(0, 300);
+  if (status !== 429) return `Exa API error ${status}: ${body}`;
+
+  const retryHint = retryDelayMs === undefined ? "" : ` Retry after ${Math.ceil(retryDelayMs / 1000)} second(s).`;
+  return `Exa API rate limit exceeded (429).${retryHint}${body ? ` Response: ${body}` : ""}`;
+}
+
+async function postExaJson<T>(
+  url: string,
+  apiKey: string,
+  body: Record<string, unknown>,
+  signal?: AbortSignal,
+): Promise<T> {
+  for (let attempt = 1; attempt <= EXA_MAX_ATTEMPTS; attempt++) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: requestSignal(signal),
+    });
+
+    if (response.ok) return (await response.json()) as T;
+
+    const errorText = await response.text();
+    const retryDelayMs = retryAfterMs(response.headers) ?? EXA_DEFAULT_RATE_LIMIT_DELAY_MS;
+    const canRetryRateLimit =
+      response.status === 429 && attempt < EXA_MAX_ATTEMPTS && retryDelayMs <= EXA_MAX_RATE_LIMIT_DELAY_MS;
+    if (canRetryRateLimit) {
+      await wait(retryDelayMs, signal);
+      continue;
+    }
+
+    throw new Error(exaApiErrorMessage(response.status, errorText, retryDelayMs));
+  }
+
+  throw new Error("Exa API request failed after retrying rate-limited responses.");
+}
+
 export async function searchWithExa(query: string, options: SearchOptions = {}): Promise<SearchResponse> {
   const apiKey = getExaApiKey();
   if (!apiKey) {
@@ -131,13 +202,10 @@ export async function searchWithExa(query: string, options: SearchOptions = {}):
   const domainFilters = mapDomainFilter(options.domainFilter);
   const startPublishedDate = options.recencyFilter ? recencyToStartDate(options.recencyFilter) : undefined;
 
-  const response = await fetch(EXA_SEARCH_URL, {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  const data = await postExaJson<ExaSearchResponse>(
+    EXA_SEARCH_URL,
+    apiKey,
+    {
       query,
       type: "auto",
       numResults,
@@ -147,16 +215,9 @@ export async function searchWithExa(query: string, options: SearchOptions = {}):
         highlights: true,
         ...(options.includeContent ? { text: { maxCharacters: 30_000 } } : {}),
       },
-    }),
-    signal: requestSignal(options.signal),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Exa API error ${response.status}: ${errorText.slice(0, 300)}`);
-  }
-
-  const data = (await response.json()) as ExaSearchResponse;
+    },
+    options.signal,
+  );
   const results = data.results ?? [];
   const mapped: SearchResponse = {
     answer: buildAnswer(results),
@@ -186,27 +247,17 @@ export async function fetchWithExaContents(url: string, signal?: AbortSignal): P
   const apiKey = getExaApiKey();
   if (!apiKey) return null;
 
-  const response = await fetch(EXA_CONTENTS_URL, {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  const data = await postExaJson<ExaContentsResponse>(
+    EXA_CONTENTS_URL,
+    apiKey,
+    {
       urls: [url],
       text: { maxCharacters: 50_000 },
       maxAgeHours: 24,
       livecrawlTimeout: 15_000,
-    }),
-    signal: requestSignal(signal),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Exa Contents API error ${response.status}: ${errorText.slice(0, 300)}`);
-  }
-
-  const data = (await response.json()) as ExaContentsResponse;
+    },
+    signal,
+  );
   const status = data.statuses?.find((item) => item.id === url || item.id === data.results?.[0]?.id);
   if (status?.status === "error") {
     const tag = status.error?.tag ?? DEFAULT_EXA_STATUS_TAG;

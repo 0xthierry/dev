@@ -10,6 +10,14 @@ type ToolResult = {
   details: Record<string, unknown>;
 };
 
+async function waitFor(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (predicate()) return;
+    await Bun.sleep(1);
+  }
+  throw new Error("Timed out waiting for condition");
+}
+
 function runtime(): WebAccessRuntime {
   return {
     search: mock(
@@ -60,5 +68,51 @@ describe("registerWebSearchTool", () => {
     expect(result.content[0]?.text).toContain("No search query provided");
     expect(result.details.error).toMatchObject({ code: "NO_QUERY_PROVIDED", retriable: false });
     expect(fakeRuntime.search).not.toHaveBeenCalled();
+  });
+
+  test("runs multiple queries with a concurrency limit of 3", async () => {
+    // Arrange
+    const fake = createFakePi();
+    const releases: Array<() => void> = [];
+    const started: string[] = [];
+    let active = 0;
+    let maxActive = 0;
+    const fakeRuntime: WebAccessRuntime = {
+      ...runtime(),
+      search: mock(async (query: string): Promise<SearchResponse> => {
+        started.push(query);
+        active++;
+        maxActive = Math.max(maxActive, active);
+        await new Promise<void>((resolve) => releases.push(resolve));
+        active--;
+        return {
+          answer: `Answer ${query}`,
+          provider: "exa",
+          results: [{ title: `Source ${query}`, url: `https://example.com/${query}`, snippet: "Snippet" }],
+        };
+      }),
+    };
+    registerWebSearchTool(fake.pi, fakeRuntime);
+
+    // Act
+    const pendingResult = fake.runTool("web_search", { queries: ["a", "b", "c", "d", "e"] }) as Promise<ToolResult>;
+    await waitFor(() => started.length === 3);
+
+    // Assert
+    expect(started).toEqual(["a", "b", "c"]);
+    expect(fakeRuntime.search).toHaveBeenCalledTimes(3);
+
+    // Act
+    for (const release of releases.splice(0)) release();
+    await waitFor(() => started.length === 5);
+    for (const release of releases.splice(0)) release();
+    const result = await pendingResult;
+
+    // Assert
+    expect(maxActive).toBe(3);
+    expect(fakeRuntime.search).toHaveBeenCalledTimes(5);
+    expect(result.details.queries).toEqual(["a", "b", "c", "d", "e"]);
+    const output = result.content[0]?.text ?? "";
+    expect(output.indexOf('## Query: "a"')).toBeLessThan(output.indexOf('## Query: "e"'));
   });
 });

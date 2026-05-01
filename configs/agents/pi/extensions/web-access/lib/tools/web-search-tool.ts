@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import pLimit from "p-limit";
 import { noSearchQueryError, searchAbortedError, searchFailedError, unknownCause } from "../shared/errors";
 import { trimText } from "../shared/text";
 import type { ExtractedContent, QueryResultData } from "../types";
@@ -10,6 +11,8 @@ import { storeAndPublish } from "./result-publisher";
 import type { WebAccessRuntime } from "./runtime";
 
 const DEFAULT_QUERY_PROVIDER_LABEL = "unknown";
+const CONCURRENT_SEARCH_LIMIT = 3;
+const searchLimit = pLimit(CONCURRENT_SEARCH_LIMIT);
 
 export function registerWebSearchTool(pi: ExtensionAPI, runtime: WebAccessRuntime): void {
   pi.registerTool({
@@ -28,43 +31,50 @@ export function registerWebSearchTool(pi: ExtensionAPI, runtime: WebAccessRuntim
         );
       }
 
-      const queryResults: QueryResultData[] = [];
-      const inlineContent: ExtractedContent[] = [];
-      for (let index = 0; index < queryList.length; index++) {
-        const query = queryList[index];
-        onUpdate?.({
-          content: [{ type: "text", text: `Searching ${index + 1}/${queryList.length}: ${query}` }],
-          details: { phase: "search", progress: index / queryList.length, query },
-        });
-        try {
-          const result = await runtime.search(query, {
-            numResults: params.numResults,
-            includeContent: params.includeContent,
-            recencyFilter: normalizeRecencyFilter(params.recencyFilter),
-            domainFilter: params.domainFilter,
-            signal,
+      const searchTasks = queryList.map((query, index) =>
+        searchLimit(async (): Promise<{ result: QueryResultData; inlineContent: ExtractedContent[] }> => {
+          onUpdate?.({
+            content: [{ type: "text", text: `Searching ${index + 1}/${queryList.length}: ${query}` }],
+            details: { phase: "search", progress: index / queryList.length, query },
           });
-          queryResults.push({
-            query,
-            answer: result.answer,
-            results: result.results,
-            error: null,
-            provider: result.provider,
-          });
-          if (result.inlineContent) inlineContent.push(...result.inlineContent);
-        } catch (err) {
-          const cause = unknownCause(err);
-          queryResults.push({
-            query,
-            answer: "",
-            results: [],
-            error: cause,
-            errorDetails: cause.toLowerCase().includes("abort")
-              ? searchAbortedError(cause, { query })
-              : searchFailedError(cause, { query }),
-          });
-        }
-      }
+          try {
+            const result = await runtime.search(query, {
+              numResults: params.numResults,
+              includeContent: params.includeContent,
+              recencyFilter: normalizeRecencyFilter(params.recencyFilter),
+              domainFilter: params.domainFilter,
+              signal,
+            });
+            return {
+              result: {
+                query,
+                answer: result.answer,
+                results: result.results,
+                error: null,
+                provider: result.provider,
+              },
+              inlineContent: result.inlineContent ?? [],
+            };
+          } catch (err) {
+            const cause = unknownCause(err);
+            return {
+              result: {
+                query,
+                answer: "",
+                results: [],
+                error: cause,
+                errorDetails: cause.toLowerCase().includes("abort")
+                  ? searchAbortedError(cause, { query })
+                  : searchFailedError(cause, { query }),
+              },
+              inlineContent: [],
+            };
+          }
+        }),
+      );
+      const taskResults = await Promise.all(searchTasks);
+      const queryResults = taskResults.map((task) => task.result);
+      const inlineContent = taskResults.flatMap((task) => task.inlineContent);
 
       const output = queryResults
         .map((result) => {

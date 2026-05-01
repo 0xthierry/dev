@@ -159,11 +159,11 @@ If no Medium cookies are found, or the authenticated response is still incomplet
 
 ## How search works
 
-`web_search` normalizes `query` or `queries` into a list and searches each query sequentially.
+`web_search` normalizes `query` or `queries` into a list and searches queries with a shared concurrency limit of 3.
 
 Provider order:
 
-1. Exa, when an API key is configured.
+1. Exa, when an API key is configured. Rate-limit responses are retried once when Exa provides a short retry delay.
 2. Codex CLI fallback.
 
 Supported parameters:
