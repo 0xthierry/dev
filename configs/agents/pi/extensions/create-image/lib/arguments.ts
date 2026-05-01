@@ -21,7 +21,7 @@ export const CREATE_IMAGE_USAGE = [
   "  --provider, -p <id>   Image provider to use. Default: nano-banana.",
   "  --out, -o <dir>       Output directory relative to the current project. Default: generated-images.",
   "  --name <file>         Base filename. Extension is chosen from the generated image type.",
-  "  --profile <name>      Browser profile to read Gemini cookies from.",
+  "  --profile <name>      Browser profile to read provider cookies from, when supported.",
   "  --help, -h            Show this help.",
   "",
   "Example:",
@@ -72,7 +72,7 @@ const OPTION_COMPLETIONS: Array<{
     aliases: [],
     value: "--profile Default ",
     label: "--profile",
-    description: "Browser profile to read Gemini cookies from.",
+    description: "Browser profile to read provider cookies from, when supported.",
   },
   {
     option: "--help",
