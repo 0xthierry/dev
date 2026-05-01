@@ -14,7 +14,7 @@ No LLM tools, shortcuts, flags, or custom UI components are registered.
 
 The default provider is `nano-banana`, implemented through Gemini Web image generation using browser cookies from a local Brave, Chromium, or Chrome profile.
 
-A `chatgpt-web` provider is also available. It drives the logged-in ChatGPT web UI through `agent-browser`, waits for the generated image asset in the conversation, and downloads the resulting PNG through ChatGPT's authenticated file endpoint.
+A `chatgpt-web` provider is also available. It first uses ChatGPT Web's authenticated private HTTP flow with local browser cookies: it obtains the ChatGPT session access token, completes the Sentinel chat-requirements prepare/finalize flow, sends a `/backend-api/f/conversation` image prompt, polls the conversation for an `image_asset_pointer`, and downloads the resulting PNG through ChatGPT's authenticated file endpoint. If direct HTTP generation fails, it falls back to the browser/CDP implementation through `agent-browser`.
 
 ## Usage
 
@@ -47,9 +47,11 @@ For the `nano-banana` provider:
 
 For the `chatgpt-web` provider:
 
-- `agent-browser` must be installed and able to control a browser session signed into `https://chatgpt.com`.
+- You must be signed into `https://chatgpt.com` in Brave, Chromium, or Chrome.
 - ChatGPT image generation must be available for the account and region.
-- The provider opens a temporary ChatGPT tab, submits the prompt, polls the authenticated conversation for an `image_asset_pointer`, downloads the generated image bytes in the browser context, then closes the temporary tab.
+- Direct HTTP generation reads local ChatGPT cookies, calls `/api/auth/session`, `/backend-api/sentinel/chat-requirements/prepare`, `/backend-api/sentinel/chat-requirements/finalize`, and `/backend-api/f/conversation`, then downloads the generated file with ChatGPT cookies.
+- If the private direct HTTP flow fails, `agent-browser` must be installed and able to control a browser session signed into `https://chatgpt.com` for the browser/CDP fallback.
+- The direct provider defaults to the current ChatGPT Thinking model used by the web image flow; set `PI_CREATE_IMAGE_CHATGPT_MODEL` to override it.
 
 Cookie values are read locally or used in the controlled browser session only for provider authentication and image download requests. They are not printed, written to generated files, or stored in Pi session details.
 
@@ -79,5 +81,6 @@ E2E command validation exercises `/create-image` through Pi RPC. Live Nano Banan
 bun run test:pi-extensions:e2e create-image
 PI_CREATE_IMAGE_LIVE_SPEC=1 bun test configs/agents/pi/extensions/create-image/index.spec.ts
 PI_CREATE_IMAGE_LIVE_SPEC=1 bun test configs/agents/pi/extensions/create-image/lib/providers/gemini/nano-banana.spec.ts
+PI_CREATE_IMAGE_CHATGPT_LIVE_SPEC=1 bun test configs/agents/pi/extensions/create-image/lib/providers/chatgpt/direct.spec.ts
 PI_CREATE_IMAGE_CHATGPT_LIVE_SPEC=1 bun test configs/agents/pi/extensions/create-image/lib/providers/chatgpt/agent-browser.spec.ts
 ```

@@ -1,5 +1,5 @@
 import { saveGeneratedImages } from "./files";
-import { createChatGptAgentBrowserProvider } from "./providers/chatgpt/agent-browser";
+import { createChatGptWebProvider } from "./providers/chatgpt/web";
 import { createGeminiNanoBananaProvider } from "./providers/gemini/nano-banana";
 import type { ImageGenerationProvider } from "./providers/types";
 
@@ -11,7 +11,7 @@ export interface CreateImageRuntime {
 
 export function createCreateImageRuntime(): CreateImageRuntime {
   return {
-    providers: [createGeminiNanoBananaProvider(), createChatGptAgentBrowserProvider()],
+    providers: [createGeminiNanoBananaProvider(), createChatGptWebProvider()],
     saveImages: saveGeneratedImages,
     now: () => new Date(),
   };

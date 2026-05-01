@@ -3,11 +3,13 @@ import { createChatGptAgentBrowserProvider } from "./agent-browser";
 
 const ENABLE_LIVE_SPEC = process.env.PI_CREATE_IMAGE_CHATGPT_LIVE_SPEC === "1";
 
-describe("create-image ChatGPT Web live contract", () => {
+describe("create-image ChatGPT browser/CDP fallback live contract", () => {
   test("generates downloadable image bytes through agent-browser", async () => {
     // Arrange
     if (!ENABLE_LIVE_SPEC) {
-      console.warn("Skipping ChatGPT Web live contract. Set PI_CREATE_IMAGE_CHATGPT_LIVE_SPEC=1 to enable.");
+      console.warn(
+        "Skipping ChatGPT browser/CDP fallback live contract. Set PI_CREATE_IMAGE_CHATGPT_LIVE_SPEC=1 to enable.",
+      );
       return;
     }
     const provider = createChatGptAgentBrowserProvider();
