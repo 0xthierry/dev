@@ -82,6 +82,8 @@ describe("registerWebAccessExtension", () => {
       queryIndex: getSearchContentProperties.queryIndex,
       urlIndex: getSearchContentProperties.urlIndex,
       storedUrl: getSearchContentProperties.url,
+      offset: getSearchContentProperties.offset,
+      limit: getSearchContentProperties.limit,
     })) {
       expect(schema?.description, `${name} description`).toContain(". Use ");
     }

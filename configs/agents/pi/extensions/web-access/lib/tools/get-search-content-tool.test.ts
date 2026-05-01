@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { createFakePi } from "../../../_shared/testing/fake-pi";
 import { fetchFailedError, searchFailedError } from "../shared/errors";
 import { clearResults, storeResult } from "../storage/result-store";
-import { registerGetSearchContentTool } from "./get-search-content-tool";
+import { registerGetSearchContentTool, sliceContentRange } from "./get-search-content-tool";
 
 type ToolResult = {
   content: Array<{ type: string; text?: string }>;
@@ -11,6 +11,24 @@ type ToolResult = {
 
 afterEach(() => {
   clearResults();
+});
+
+describe("sliceContentRange", () => {
+  test("normalizes and caps stored content ranges", () => {
+    // Arrange
+    const content = "abcdefghijklmnopqrstuvwxyz";
+
+    // Act
+    const first = sliceContentRange(content, undefined, 10);
+    const second = sliceContentRange(content, 10, 10);
+    const capped = sliceContentRange(content, -1, 999_999);
+
+    // Assert
+    expect(first).toEqual({ offset: 0, limit: 10, endOffset: 10, text: "abcdefghij", hasMore: true });
+    expect(second).toEqual({ offset: 10, limit: 10, endOffset: 20, text: "klmnopqrst", hasMore: true });
+    expect(capped.limit).toBe(30_000);
+    expect(capped.offset).toBe(0);
+  });
 });
 
 describe("registerGetSearchContentTool", () => {
@@ -96,6 +114,46 @@ describe("registerGetSearchContentTool", () => {
     expect(result.content[0]?.text).toContain("# Example");
     expect(result.content[0]?.text).toContain("Body");
     expect(result.details).toMatchObject({ url: "https://example.com", contentLength: 4 });
+  });
+
+  test("retrieves stored fetch content by offset and limit", async () => {
+    // Arrange
+    const fake = createFakePi();
+    storeResult("fetch-id", {
+      id: "fetch-id",
+      type: "fetch",
+      timestamp: 1,
+      urls: [
+        {
+          url: "https://example.com",
+          title: "Example",
+          content: "abcdefghijklmnopqrstuvwxyz",
+          error: null,
+          provider: "http",
+        },
+      ],
+    });
+    registerGetSearchContentTool(fake.pi);
+
+    // Act
+    const result = (await fake.runTool("get_search_content", {
+      responseId: "fetch-id",
+      urlIndex: 0,
+      offset: 10,
+      limit: 5,
+    })) as ToolResult;
+
+    // Assert
+    expect(result.content[0]?.text).toContain("klmno");
+    expect(result.content[0]?.text).not.toContain("abcdef");
+    expect(result.content[0]?.text).toContain("offset: 15, limit: 5");
+    expect(result.details).toMatchObject({
+      offset: 10,
+      limit: 5,
+      returnedChars: 5,
+      nextOffset: 15,
+      truncated: true,
+    });
   });
 
   test("returns stored fetch failures", async () => {

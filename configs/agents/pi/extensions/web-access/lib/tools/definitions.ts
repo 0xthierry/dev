@@ -80,4 +80,17 @@ export const GET_SEARCH_CONTENT_PARAMETERS = Type.Object({
   ),
   urlIndex: Type.Optional(Type.Number({ description: "Fetched URL index. Use to retrieve one URL from a batch." })),
   url: Type.Optional(Type.String({ description: "Fetched URL. Use when selecting stored content by exact URL." })),
+  offset: Type.Optional(
+    Type.Integer({
+      minimum: 0,
+      description: "Character offset into stored fetched content (default 0). Use to page through long content.",
+    }),
+  ),
+  limit: Type.Optional(
+    Type.Integer({
+      minimum: 1,
+      maximum: MAX_INLINE_CONTENT,
+      description: "Maximum fetched-content characters to return. Use to request smaller chunks.",
+    }),
+  ),
 });

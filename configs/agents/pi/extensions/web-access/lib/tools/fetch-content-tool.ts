@@ -65,7 +65,7 @@ export function registerFetchContentTool(pi: ExtensionAPI, runtime: WebAccessRun
         content.push({
           type: "text",
           text: trimmed.truncated
-            ? `${trimmed.text}\n\nUse get_search_content({ responseId: "${responseId}", urlIndex: 0 }) for stored content.`
+            ? `${trimmed.text}\n\nUse get_search_content({ responseId: "${responseId}", urlIndex: 0, offset: ${MAX_INLINE_CONTENT} }) for the next chunk.`
             : trimmed.text,
         });
         return {

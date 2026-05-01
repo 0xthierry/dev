@@ -67,6 +67,13 @@ fetch_content({
 })
 
 get_search_content({ responseId: "<responseId>", urlIndex: 0 })
+
+get_search_content({
+  responseId: "<responseId>",
+  urlIndex: 0,
+  offset: 30000,
+  limit: 30000,
+})
 ```
 
 The model normally calls these tools itself. The examples above show the parameter shapes.
@@ -240,7 +247,10 @@ It can retrieve:
 
 - a stored search query by `responseId` and optional `queryIndex`;
 - fetched content by `responseId` and optional `urlIndex`;
-- fetched content by exact `url`.
+- fetched content by exact `url`;
+- long fetched content chunks with optional `offset` and `limit` character parameters.
+
+For fetched content, `offset` defaults to `0`, and `limit` defaults to the inline safety limit of 30,000 characters. `limit` is capped at 30,000 characters. When more content remains, the tool returns `nextOffset` in details and includes a ready-to-call `get_search_content` hint for the next chunk.
 
 Storage behavior:
 
@@ -250,7 +260,7 @@ Storage behavior:
 - In-memory stored results are cleared on `session_shutdown`.
 - Images from thumbnails/frames are stripped before session persistence; they are returned only in the immediate `fetch_content` response.
 
-Inline text returned to the model is capped at 30,000 characters. When output is truncated, the tool response includes a hint to call `get_search_content` with the generated ID.
+Inline text returned to the model is capped at 30,000 characters. When output is truncated, the tool response includes a hint to call `get_search_content` with the generated ID and next `offset`.
 
 ## Error behavior
 

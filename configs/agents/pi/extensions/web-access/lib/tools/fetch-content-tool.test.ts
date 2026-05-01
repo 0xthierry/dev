@@ -44,6 +44,23 @@ describe("registerFetchContentTool", () => {
     expect(fake.appendedEntries).toHaveLength(1);
   });
 
+  test("points to the next stored chunk when inline content is truncated", async () => {
+    // Arrange
+    const fake = createFakePi();
+    const fakeRuntime = runtime([
+      { url: "https://example.com", title: "Example", content: "x".repeat(30_001), error: null, provider: "http" },
+    ]);
+    registerFetchContentTool(fake.pi, fakeRuntime);
+
+    // Act
+    const result = (await fake.runTool("fetch_content", { url: "https://example.com" })) as ToolResult;
+
+    // Assert
+    expect(result.content.at(-1)?.text).toContain("offset: 30000");
+    expect(result.content.at(-1)?.text).toContain("Use get_search_content");
+    expect(result.details).toMatchObject({ truncated: true, totalChars: 30_001 });
+  });
+
   test("returns a structured validation error when no URL is provided", async () => {
     // Arrange
     const fake = createFakePi();
