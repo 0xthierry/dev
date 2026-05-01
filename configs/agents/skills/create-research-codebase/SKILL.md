@@ -1,151 +1,215 @@
 ---
 name: create-research-codebase
-description:  research the codebase 
-effort: max
+description: "Use when answering a research-questions document or user research query by producing objective, evidence-backed current-state codebase research."
+effort: high
 disable_model_invocation: true
 ---
 
-# Research Codebase
+# Create Research Codebase
 
-You are tasked with conducting comprehensive research across the codebase to answer user questions by spawning parallel sub-agents and synthesizing their findings.
+## Goal
 
-## CRITICAL: YOUR ONLY JOB IS TO DOCUMENT AND EXPLAIN THE CODEBASE AS IT EXISTS TODAY
-- DO NOT suggest improvements or changes unless the user explicitly asks for them
-- DO NOT perform root cause analysis unless the user explicitly asks for them
-- DO NOT propose future enhancements unless the user explicitly asks for them
-- DO NOT critique the implementation or identify problems
-- DO NOT recommend refactoring, optimization, or architectural changes
-- ONLY describe what exists, where it exists, how it works, and how components interact
-- You are creating a technical map/documentation of the existing system
+Produce a self-contained `ai_docs/tasks/.../*-research.md` document that answers current-state research questions with concrete codebase evidence.
 
-## Initial Setup:
+Good research describes what exists today: flows, contracts, data shapes, dependencies, state, configuration, tests, and operational constraints. It gives later design and planning phases enough facts to make decisions without mixing in recommendations, proposed changes, or implementation planning.
 
-When this command is invoked, respond with:
+## When to Use
+
+Use this skill when the user provides:
+
+- a `*-research-questions.md` file from `create-research-questions`;
+- an `ai_docs/tasks/...` directory that contains research questions;
+- a direct request to research how part of the current codebase works.
+
+Use a different skill when the user wants design tradeoffs (`create-design-discussion`), a phased outline (`create-structure-outline`), a detailed implementation plan (`create-plan`), or code changes (`implement-plan`).
+
+## Success Criteria
+
+Before final response:
+
+- A research document exists at `ai_docs/tasks/TASKNAME/YYYY-MM-DD-research.md`.
+- Every research question is answered with current codebase evidence, or is listed under open questions with the exact missing evidence.
+- Important claims about behavior, ownership, data shape, tests, configuration, or integrations include file paths and line references.
+- Testing patterns are documented for each researched component area, or the absence of discoverable tests is stated with the search performed.
+- The document contains no implementation recommendations, design decisions, critique, or future work disguised as research.
+- Metadata records date/time, branch, commit, repository, source research-questions file, and working-tree state.
+- The research document names the research agents used and the area each one covered, or records the blocker if subagents were unavailable.
+- The final response follows `references/research_final_answer.md`.
+
+## Operating Rules
+
+- Start multi-step work with a brief user-visible preamble before tool calls.
+- Treat a `*-research-questions.md` file as the primary input. Read it fully before searching the codebase.
+- If a task directory is provided, inspect the directory and prefer the latest `*-research-questions.md`. If multiple plausible question files conflict, ask which one to use.
+- Do not read desired-state ticket/spec files unless needed to identify the task directory or source label. If read, do not use them as evidence for current codebase behavior.
+- Source code and tests are primary evidence. Existing docs are secondary evidence and should be labeled as documentation, not runtime fact.
+- Do not recommend changes, explain what should be built, assign blame, critique design, or perform root-cause analysis unless the user explicitly asks for that separate mode.
+- Use web research only when the user explicitly asks for external documentation or when a current external API contract is required to explain code already present. Cite links when used.
+- Ask for clarification only when the research target or output location cannot be safely inferred. Otherwise make a reasonable assumption, continue, and record it.
+- When the runtime provides Task/subagent support, use the specialized research agents for codebase exploration. The main session owns input reading, agenda design, synthesis, spot-checking, document writing, and validation; it should not absorb broad source context that a research agent can inspect and summarize.
+
+## Available Research Agents
+
+Use these agents to reduce main-session context and improve coverage:
+
+- **codebase-locator**: finds relevant source files, configs, routes, schemas, migrations, tests, fixtures, and docs. Use first when the relevant files or boundaries are not already clear.
+- **codebase-analyzer**: traces how a known component, flow, function, class, endpoint, job, or data path works. Use for current behavior, data/control flow, contracts, errors, and lifecycle details.
+- **codebase-pattern-finder**: finds comparable existing implementations and testing patterns. Use when later design/planning will need examples to follow, or when the research questions ask about patterns.
+- **web-search-researcher**: researches external documentation only when explicitly requested or needed to explain a current external API/SDK integration in the codebase. Require source links in its findings.
+
+Agent use is part of the research workflow, not optional decoration. If the runtime does not expose subagents, state that blocker in the research notes and perform direct research with the same evidence requirements.
+
+## Retrieval Budget
+
+Use the minimum evidence that can answer the questions correctly. Do not under-research core claims, but do not keep searching for decorative completeness.
+
+1. Start from the research-questions document: extract the research goal, boundaries, source materials, and numbered questions.
+2. Group related questions into 2-5 research areas so searches follow code boundaries rather than question numbering.
+3. For each area, inspect the smallest useful evidence set:
+   - entry points and callers;
+   - core functions/classes/modules;
+   - types, schemas, models, migrations, or config definitions;
+   - integration boundaries and error/failure paths;
+   - tests, fixtures, mocks, and helpers.
+4. Expand search only when:
+   - a question cannot be answered from the current evidence;
+   - a referenced type, function, schema, config key, or external boundary is not defined yet;
+   - tests or fixtures are needed to understand expected behavior;
+   - evidence conflicts and the source of truth must be resolved;
+   - a claim would otherwise be unsupported.
+5. Stop when every question has either a cited answer or an explicit open question/blocker.
+
+## Workflow
+
+### 1. Resolve input and output
+
+- If invoked without a query or path, ask for the research question, research-questions file, or task directory.
+- If given `ai_docs/tasks/TASKNAME`, list the directory and locate the latest relevant `*-research-questions.md`.
+- If given a direct topic without an existing task directory, create or reuse an appropriate `ai_docs/tasks/TASKNAME/` directory.
+- Use today's local date for `YYYY-MM-DD-research.md` and place it in the same task directory as the questions when possible.
+
+### 2. Read the research input
+
+Read the research-questions document fully. Extract:
+
+- research goal;
+- source materials listed in the document;
+- boundaries and notes for the research agent;
+- numbered questions;
+- any explicit external-documentation requirement.
+
+Read directly mentioned code/docs fully when they are current-state evidence. Avoid using ticket/spec desired behavior as current-state evidence.
+
+### 3. Build agenda and launch research agents
+
+Create a short internal agenda that maps each question to research areas. Prefer area-based grouping such as UI flow, API boundary, persistence/state, background jobs, external provider, or tests.
+
+Launch research agents for codebase exploration. For a narrow single-area query, use at least one focused locator/analyzer/pattern agent when subagents are available. For broader research, launch 2-6 focused agents for different areas. Combine related questions that touch the same code boundary; do not launch one agent per question by default. Use foreground/awaited agents only: wait for all research agents to complete before synthesis.
+
+Use concise, outcome-first prompts:
+
+```text
+Research the current-state behavior for [area]. Return factual findings only: file:line evidence, data/control flow, contracts, tests/fixtures, configuration or external boundaries, and open questions. Do not recommend changes or discuss implementation plans.
 ```
-I'm ready to research the codebase. Please provide your research question or area of interest, and I'll analyze it thoroughly by exploring relevant components and connections.
-```
 
-Then wait for the user's research query.
+Choose agents by need:
 
-## Steps to follow after receiving the research query:
+- Start with **codebase-locator** when files or boundaries are unknown.
+- Use **codebase-analyzer** for known flows/components that need behavior tracing.
+- Use **codebase-pattern-finder** for comparable implementations, conventions, and testing patterns.
+- Use **web-search-researcher** only for explicitly requested external docs or current external API/SDK contracts.
 
-1. **Read any directly mentioned files first:**
-   - If the user mentions specific files (docs, JSON, research questions), read them FULLY first
-   - **IMPORTANT**: Use the Read tool WITHOUT limit/offset parameters to read entire files
-   - **CRITICAL**: Read these files yourself in the main context before spawning any sub-tasks
-   - **DO NOT read ticket files** - research must stay objective about the current codebase, not be influenced by what a ticket wants to build. The research questions already capture what needs to be investigated.
-   - This ensures you have full context before decomposing the research
+### 4. Gather evidence
 
-2. **Analyze and decompose the research question:**
-   - Break down the user's query into composable research areas
-   - Take time to ultrathink about the underlying patterns, connections, and architectural implications the user might be seeking
-   - Identify specific components, patterns, or concepts to investigate
-   - Create a research plan using TodoWrite to track all subtasks
-   - Consider which directories, files, or architectural patterns are relevant
+Compile all agent results before writing. For each area:
 
-3. **Spawn parallel sub-agent tasks for comprehensive research:**
-   - Create multiple Task agents to research different aspects concurrently
-   - We now have specialized agents that know how to do specific research tasks:
+- use agent findings as the first evidence map;
+- spot-check important, surprising, or cross-cutting claims by reading the referenced source directly;
+- locate source files and tests with targeted search when agent results expose gaps;
+- read enough surrounding code to understand behavior, not just symbol names;
+- trace important data/control flow across boundaries;
+- read actual type/schema/config definitions before describing shapes;
+- record line references as you go;
+- note absent tests only after searching likely test locations and naming the search.
 
-   **For codebase research:**
-   - Use the **codebase-locator** agent to find WHERE files and components live
-   - Use the **codebase-analyzer** agent to understand HOW specific code works 
-   - Use the **codebase-pattern-finder** agent to find examples of existing patterns 
+Prefer permalinks when repository and commit are available. Otherwise use stable `path:line` references.
 
-   **For web research (only if user explicitly asks):**
-   - Use the **web-search-researcher** agent for external documentation and resources
-   - IF you use web-research agents, instruct them to return LINKS with their findings, and please INCLUDE those links in your final report
+### 5. Synthesize without designing
 
-   The key is to use these agents intelligently:
-   - **Combine related questions**: Don't necessarily launch one subagent per research question. Group related questions that touch the same area of the codebase into a single subagent prompt. For example, if 3 questions are about how the daemon handles sessions, combine them into one codebase-analyzer call.
-   - Aim for 2-6 well-scoped subagents rather than 1:1 question-to-agent mapping - this is not a hard rule, just guidance
-   - Start with locator agents to find what exists
-   - Then use analyzer agents on the most promising findings to document how they work
-   - Run multiple agents in parallel when they're searching for **different areas** of the codebase
-   - Each agent knows its job - just tell it what you're looking for
-   - Don't write detailed prompts about HOW to search - the agents already know
+Write findings in the language of current behavior:
 
-4. **Wait for all sub-agents to complete and synthesize findings:**
-   - IMPORTANT: Wait for ALL sub-agent tasks to complete before proceeding
-   - Compile all sub-agent results
-   - Prioritize live codebase findings as primary source of truth
-   - Connect findings across different components
-   - Include specific file paths and line numbers for reference
-   - Highlight patterns, connections, and architectural decisions
-   - Answer the user's specific questions with concrete evidence
+- "`X` calls `Y` with `{a, b}` and handles `Z` errors..."
+- "The current tests cover..."
+- "No tests were found under... after searching..."
+- "The code does not show..." only when supported by a named search.
 
-5. **Gather metadata for the research document:**
-   - Filename: `ai_docs/tasks/TASKNAME/YYYY-MM-DD-research.md`
-     - First, find the task directory: `ls ai_docs/tasks | grep -i "eng-XXXX"`
-     - If the directory doesn't exist, create: `ai_docs/tasks/ENG-XXXX-description/`
-     - Format: `YYYY-MM-DD-research.md` where YYYY-MM-DD is today's date
-     - Directory naming:
-       - With ticket: `ai_docs/tasks/ENG-1478-parent-child-tracking/2025-01-08-research.md`
-       - Without ticket: `ai_docs/tasks/authentication-flow/2025-01-08-research.md`
+Avoid design/planning language:
 
-6. **Generate research document:**
-   - Use the metadata gathered in step 4
-   - Read the research template:
+- "should", "would", "we need to", "recommended", "future enhancement", "missing feature", "bad", "problem", "fix", "refactor", "implement".
 
-   `Read({SKILLBASE}/references/research_template.md)`
+It is acceptable to use "open question" for evidence gaps that matter to codebase understanding.
 
-   - Write the document to `ai_docs/tasks/TASKNAME/YYYY-MM-DD-research.md`
+### 6. Write the research document
 
+Read `references/research_template.md` before writing. Populate every section with real values; do not leave placeholders.
 
-   For code references (if on main or pushed):
-   - Get repo info: `gh repo view --json owner,name`
-   - Create permalinks: `https://github.com/{owner}/{repo}/blob/{commit}/{file}#L{line}`
+Include:
 
+- metadata and source inputs;
+- research goal and questions answered;
+- research method, including agents used and areas covered;
+- concise summary;
+- detailed findings grouped by component/area;
+- testing patterns for each area;
+- question-by-question answers;
+- code references with line numbers/permalinks where possible;
+- external references only if used;
+- open questions limited to current-state understanding.
 
-8. **Respond to the user according to the template**
-   - Read the final output template:
-   `Read({SKILLBASE}/references/research_final_answer.md)`
-   - Respond with a summary following the template, including GitHub permalinks.
+### 7. Handle follow-up research
 
-9. **Handle follow-up questions:**
-   - If the user has follow-up questions, append to the same research document
-   - Update the frontmatter fields `last_updated` and `last_updated_by` to reflect the update
-   - Add `last_updated_note: "Added follow-up research for [brief description]"` to frontmatter
-   - Add a new section: `## Follow-up Research [timestamp]`
-   - Spawn new sub-agents as needed for additional investigation
-   - Continue updating the document 
+If the user asks a follow-up after a research document already exists:
 
-<guidance>
-## Important notes:
-- Use parallel Task agents to maximize efficiency and minimize context usage
-- Focus on finding concrete file paths and line numbers for developer reference
-- Research documents should be self-contained with all necessary context
-- Each sub-agent prompt should be specific and focused on read-only documentation operations
-- Document cross-component connections and how systems interact
-- Link to GitHub when possible for permanent references
-- Stay focused on synthesis, not deep file reading
-- Have sub-agents document examples and usage patterns as they exist
-- **REMEMBER**: Document and Ask about what IS and WHY, not what SHOULD BE
-- **NO RECOMMENDATIONS OR IMPLEMENTATION SUGGESTIONS**: Only describe the current state of the codebase
-- **Testing patterns**: For each component area you research, document how it's currently tested (unit, integration, e2e). Include test file locations and patterns. The research template has a "Testing patterns" section under each component - always fill it in.
-- **File reading**: Always read mentioned files FULLY (no limit/offset) before spawning sub-tasks
-- **Critical ordering**: Follow the numbered steps exactly
-  - ALWAYS read mentioned files first before spawning sub-tasks (step 1)
-  - ALWAYS wait for all sub-agents to complete before synthesizing (step 4)
-  - ALWAYS gather metadata before writing the document (step 5 before step 6)
-  - NEVER write the research document with placeholder values
-- **Path handling**: Task-specific research goes in ai_docs/tasks/
-  - Use `ai_docs/tasks/ENG-XXXX-description/YYYY-MM-DD-research.md` for task research
+- append a new `## Follow-up Research: YYYY-MM-DD HH:MM TZ` section;
+- update frontmatter `last_updated`, `last_updated_by`, and `last_updated_note`;
+- answer the follow-up with the same evidence standards;
+- preserve earlier findings unless new evidence supersedes them, in which case state the supersession clearly.
 
-## Response
+## Validation
 
-Remember, you must respond to the user according to the output template at `{SKILLBASE}/references/research_final_answer.md`
+After writing or updating the document, verify as much as practical:
 
+- the output file exists at the reported path;
+- frontmatter parses as YAML;
+- no template placeholders remain;
+- each numbered research question appears in the question-by-question answers;
+- key findings include file references with line numbers;
+- the document does not contain recommendation/planning language except inside quoted user input or explicit boundary notes;
+- research agents used are named, or subagent unavailability is recorded;
+- source documents and searches used for absent-test claims are named.
 
-## Markdown Formatting
+If a check cannot run, report the exact blocker and the next best check.
 
-When writing markdown files that contain code blocks showing other markdown (like README examples or SKILL.md templates), use 4 backticks (````) for the outer fence so inner 3-backtick code blocks don't prematurely close it:
+## Output
 
-````markdown
-# Example README
-## Installation
-```bash
-npm install example
-```
-````
-</guidance>
+Read `references/research_final_answer.md` before responding. Keep the final response concise and include:
+
+- research document path;
+- number of questions answered;
+- 2-3 sentence summary;
+- key code references;
+- open questions or "none";
+- validation performed;
+- next prompt for `create-design-discussion`.
+
+When a research document needs to show Markdown that itself contains fenced code blocks, use four backticks for the outer fence so inner triple-backtick examples do not close it early.
+
+## Common Mistakes
+
+- Answering the ticket instead of the research questions.
+- Mixing recommendations into the research document.
+- Citing docs while ignoring source code that defines runtime behavior.
+- Describing data shapes without reading the actual type/schema/model definition.
+- Reporting "no tests" without searching likely test locations.
+- Launching too many narrow research threads instead of grouping by code boundary.
+- Writing broad architecture prose without concrete `path:line` evidence.

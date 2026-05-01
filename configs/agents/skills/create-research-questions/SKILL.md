@@ -33,6 +33,7 @@ Before final response:
 - Every question is answerable by inspecting the current codebase or explicitly requested external docs.
 - Questions are phrased as current-state exploration, not implementation planning.
 - The set covers the likely end-to-end flow plus relevant contracts, state/data, patterns, edge cases, and testing conventions.
+- If codebase discovery was needed, specialized research agents were used and the document records what they clarified.
 - The final response follows `references/research_questions_final_answer.md`.
 
 ## Operating Rules
@@ -41,16 +42,29 @@ Before final response:
 - Read directly mentioned files fully before drafting questions. If a task directory or ticket ID is mentioned, inspect that task directory and read the relevant task/spec/ticket files.
 - Use the task request as context, but do not leak the proposed implementation into the question wording.
 - Do not conduct full codebase research. Use only enough discovery to identify the right current systems and names for good questions.
+- When codebase discovery is needed, use specialized research agents instead of loading broad source context into the main session.
 - Ask a narrow clarification only when the task/topic or destination directory cannot be inferred. Otherwise make a reasonable assumption, proceed, and state it.
 - If the user gives feedback, treat it as an instruction to update the questions document, not to start research/design/implementation.
+
+## Available Research Agents
+
+Use these agents for light discovery so the main session can stay focused on question design:
+
+- **codebase-locator**: finds relevant files and boundaries. Use when the target subsystem, source files, tests, config, schemas, or routes are unclear.
+- **codebase-analyzer**: answers a narrow current-state fact needed to phrase a useful question. Use sparingly; this phase should not become full research.
+- **codebase-pattern-finder**: finds names of comparable existing flows/features so questions can ask about real patterns instead of vague analogies.
+- **web-search-researcher**: researches external docs only when the task explicitly depends on an external SDK/API and the research questions need to name that boundary.
+
+Agent use is part of discovery when codebase context is unclear. Keep prompts short and ask for concise file/path oriented findings, not full explanations.
 
 ## Retrieval Budget
 
 Use the smallest evidence set that can produce useful questions:
 
 1. Read provided task/spec/ticket files and any existing files in the referenced task directory.
-2. If component names are unclear, do one light discovery pass with `rg`, `find`, or a locator-style subagent if available.
-3. Stop discovery once you can name the existing area, adjacent flows, or likely code boundaries well enough to write 2-8 questions.
+2. If component names are unclear, use **codebase-locator** for a light discovery pass before reading source files in the main session.
+3. If a question would otherwise be vague, use **codebase-analyzer** or **codebase-pattern-finder** for one narrow discovery pass.
+4. Stop discovery once you can name the existing area, adjacent flows, or likely code boundaries well enough to write 2-8 questions.
 
 Expand only when a missing fact would materially change the question set, such as the target subsystem, framework boundary, data entity, external provider, or task directory.
 
@@ -110,23 +124,29 @@ Good: Where is account status represented today, and which services, validations
    - Identify existing nouns and boundaries likely to exist in the codebase: UI surfaces, endpoints, jobs, tables, schemas, services, providers, config, tests.
    - Note unknowns that should become research questions rather than assumptions.
 
-3. Draft 2-8 questions:
+3. Use agent-assisted light discovery when names or boundaries are unclear:
+   - Prefer **codebase-locator** to find relevant files, tests, and directories.
+   - Use **codebase-pattern-finder** when comparable patterns need real codebase names.
+   - Use **codebase-analyzer** only for a narrow fact that materially improves the question set.
+   - Keep the main session from reading large source files unless needed to verify a discovery result.
+
+4. Draft 2-8 questions:
    - Start with one broad end-to-end current-state question when applicable.
    - Add targeted questions for contracts, data/state, comparable patterns, operational constraints, and tests.
    - Combine overlapping questions; split only when separate agents would need to inspect different areas.
 
-4. Quality pass:
+5. Quality pass:
    - Remove solution wording and future-tense implementation prompts.
    - Check that each question can be answered with evidence from current code/docs.
    - Check that the set would let `create-research-codebase` produce useful findings for later design and planning.
    - Ensure at least one question asks for current testing patterns unless the task is purely documentation.
 
-5. Write the document:
+6. Write the document:
    - Read `references/research_questions_template.md`.
    - Write `ai_docs/tasks/TASKNAME/YYYY-MM-DD-research-questions.md`.
    - Use today's local date for `YYYY-MM-DD`.
 
-6. Final response:
+7. Final response:
    - Read `references/research_questions_final_answer.md`.
    - Summarize the document path, question count, the questions, and the next prompt to run `create-research-codebase`.
 
@@ -146,6 +166,7 @@ After writing the document, verify:
 - The document has 2-8 numbered questions.
 - No question uses banned implementation-planning phrasing such as "should we", "would we", "changes are needed", "where should", or "implement".
 - Source/task files that informed the questions are listed or named in the document.
+- If research agents were used, their discovery role is listed in the document.
 
 If a validation step cannot run, report the exact blocker and the next best check.
 

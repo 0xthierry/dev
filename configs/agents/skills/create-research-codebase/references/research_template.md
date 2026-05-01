@@ -1,54 +1,110 @@
 ---
-date: [Current date and time with timezone in ISO format]
-git_commit: [Current commit hash]
-branch: [Current branch name]
-repository: [Repository name]
-topic: "[User's Question/Topic]"
 type: research
-tags: [research, codebase, relevant-component-names]
+task: "[task-slug-or-ticket-id]"
+topic: "[research topic]"
+date: "[ISO-8601 timestamp with timezone]"
+repository: "[repository name or owner/name]"
+branch: "[current branch]"
+git_commit: "[current commit SHA]"
+working_tree: "[clean|dirty]"
+research_questions: "[path/to/YYYY-MM-DD-research-questions.md]"
+source_documents:
+  - "[path/to/source-document.md]"
 status: complete
 ---
 
-# Research: [User's Question/Topic]
+# Research: [Research Topic]
 
-**Date**: [Current date and time with timezone from step 4]
-**Git Commit**: [Current commit hash from step 4]
-**Branch**: [Current branch name from step 4]
-**Repository**: [Repository name]
+## Research Goal
 
-## Research Question
-[Original user query]
+[One concise paragraph describing the current-state codebase behavior this research documents. Do not describe desired changes or proposed implementation.]
 
-## Research Methodology (verbatim)
+## Questions Answered
 
-This document will remain objective and factual. It does not contain any recommendations or implementation suggestions.
-Open questions will not ask Why things haven't been built or what should be built in the future.
+1. [Question copied from the research-questions document]
+2. [Question copied from the research-questions document]
 
-There is no "implementation" section - that is intentional.
+## Research Method
 
-## Summary
-[High-level documentation of what was found, answering the user's question by describing what exists]
+- Main-session role: read the research-questions document, designed the research agenda, synthesized findings, spot-checked key claims, and wrote this document.
+- Research agents used:
+
+| Agent | Area | Purpose |
+| --- | --- | --- |
+| codebase-locator | [area] | [files/boundaries located] |
+| codebase-analyzer | [area] | [behavior/contracts traced] |
+| codebase-pattern-finder | [area] | [patterns/tests identified] |
+
+[If subagents were unavailable, replace the table with the blocker and the direct-research fallback used.]
+
+## Executive Summary
+
+[2-4 bullets summarizing the most important current-state findings with file references. Keep this factual and free of recommendations.]
+
+- [Finding with `path/to/file.ext:line`]
+- [Finding with `path/to/file.ext:line`]
+
+## Evidence Map
+
+| Area | Primary Evidence | Tests / Fixtures | Notes |
+| --- | --- | --- | --- |
+| [Component/flow] | [`path/to/file.ext:10`](link) | [`path/to/test.ext:20`](link) | [short factual note] |
 
 ## Detailed Findings
 
-### [Component/Area 1]
-- Description of what exists ([file.ext:line](link))
-- How it connects to other components
-- Current implementation details (without evaluation)
+### [Component or Area]
+
+#### Current behavior
+
+[Describe what the code does today. Include line references for concrete claims.]
+
+#### Data, contracts, and boundaries
+
+[Describe relevant types, schemas, request/response shapes, config keys, external boundaries, ownership, and lifecycle behavior. Include line references.]
+
+#### Control flow
+
+[Trace important flow across files/components. Use a short ordered list when that is clearer.]
+
+1. [`path/to/entry.ext:10`](link) receives/starts [event/request/action].
+2. [`path/to/worker.ext:42`](link) calls [function/service] with [shape].
+3. [`path/to/store.ext:80`](link) persists/returns [state/output].
 
 #### Testing patterns
-- [concrete examples of how this component is tested in the codebase]
-- [unit or integration or e2e or whatever else exists]
 
-### [Component/Area 2]
+[Describe current tests, fixtures, helpers, mocks, and assertion style. If no tests were found, name the searches/locations checked.]
+
+### [Second Component or Area]
+
 ...
 
-## Code References
-- `path/to/file.py:123` - Description of what's there
-- `another/file.ts:45-67` - Description of the code block
+## Question-by-Question Answers
 
-## Architecture Documentation
-[Current patterns, conventions, and design implementations found in the codebase]
+### 1. [Question]
+
+[Direct answer with the evidence needed to support it.]
+
+### 2. [Question]
+
+[Direct answer with the evidence needed to support it.]
+
+## Code References
+
+- [`path/to/file.ext:10-35`](link) - [what this block defines or does]
+- [`path/to/test.ext:50-90`](link) - [what this test covers]
+
+## External References
+
+[Only include if external documentation or web research was explicitly used. Otherwise write "None.".]
+
+- [Source title](https://example.com) - [what fact it supports]
 
 ## Open Questions
-[Any areas that need further investigation - keep it focused to codebase understanding - "How does X Work" not "Should Y be the case"]
+
+[Current-state codebase questions that could not be answered from available evidence. Do not include future-planning questions. If none, write "None.".]
+
+- [Question] — [evidence searched / blocker]
+
+## Research Notes
+
+- [Any assumptions, excluded sources, ambiguous evidence, or validation caveats relevant to interpreting this research.]

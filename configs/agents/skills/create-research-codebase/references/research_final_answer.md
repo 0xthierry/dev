@@ -1,26 +1,32 @@
 ### Status
 
 - Document: [ai_docs/tasks/ENG-XXXX-description/YYYY-MM-DD-research.md]
-- Ticket: [ENG-XXXX](ticket URL if known, otherwise omit link)
-- Open Questions: [count or "none"]
+- Source questions: [ai_docs/tasks/ENG-XXXX-description/YYYY-MM-DD-research-questions.md or direct query]
+- Questions answered: [count]
+- Research agents used: [agent list/count, or blocker]
+- Open questions: [count or "none"]
 
 ### Summary
 
-[2-3 sentence summary of key findings]
+[2-3 sentences summarizing current-state findings only. Do not include recommendations or implementation direction.]
 
 ### Key Code References
 
 - `path/to/file.ts:123` - [brief description]
-- ...
+- `path/to/test.ts:45` - [testing pattern or coverage]
+
+### Validation
+
+- [check run and result]
+- [check run and result]
 
 ### Open Questions
 
-- [any questions that could not be answered by your research]
-- ...
+- [question and blocker, or "None"]
 
-### Next Steps
+### Next Step
 
-To proceed to the next phase, use a prompt like
+To proceed to the design phase, use a prompt like:
 
 ```text
 use the create-design-discussion skill for [ai_docs/tasks/ENG-XXXX-description]

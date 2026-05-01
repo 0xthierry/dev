@@ -3,6 +3,7 @@
 - Document: [ai_docs/tasks/ENG-XXXX-description/YYYY-MM-DD-research-questions.md]
 - Source: [ticket/spec/task path or brief user request]
 - Questions: [count]
+- Discovery agents used: [agent list/count, or "none needed"]
 - Scope: current-state codebase research only
 
 ### Research Questions
@@ -16,6 +17,7 @@
 - Current-state phrasing: [passed/notes]
 - Implementation-free wording: [passed/notes]
 - Testing-pattern coverage: [included/not applicable]
+- Agent-assisted discovery: [used/not needed/blocker]
 
 ### Next Step
 

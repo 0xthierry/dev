@@ -1,9 +1,9 @@
 ---
 type: research-questions
-task: [task-slug-or-ticket-id]
-date: [YYYY-MM-DD]
+task: "[task-slug-or-ticket-id]"
+date: "[YYYY-MM-DD]"
 source_documents:
-  - [path/to/source-or-ticket.md]
+  - "[path/to/source-or-ticket.md]"
 status: ready-for-research
 ---
 
@@ -17,6 +17,11 @@ Create objective, current-state codebase research for [brief topic]. These quest
 
 - `[path/to/source-or-ticket.md]` - [brief description]
 - `[path/to/related-doc.md]` - [brief description]
+
+## Discovery Notes
+
+- Research agents used for light discovery: [codebase-locator/codebase-analyzer/codebase-pattern-finder/web-search-researcher, or "none needed"]
+- Discovery clarified: [current subsystem names, adjacent flows, test locations, or external boundaries]
 
 ## Boundaries
 
