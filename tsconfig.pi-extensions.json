@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "allowSyntheticDefaultImports": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "noImplicitAny": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022",
+    "types": ["bun"]
+  },
+  "include": ["configs/agents/pi/extensions/**/*.ts", "scripts/pi-extension-tests.ts"],
+  "exclude": ["configs/agents/pi/extensions/**/node_modules/**", "node_modules/**"]
+}

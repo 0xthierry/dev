@@ -1,5 +1,6 @@
 ai_docs/
 .direnv/
+node_modules/
 
 # Editor
 *.swp
