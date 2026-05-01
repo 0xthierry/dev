@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { normalizeGitHubConfig } from "./clone";
+import { buildCloneDir, normalizeGitHubConfig } from "./clone";
 
 describe("normalizeGitHubConfig", () => {
   test("uses defaults for missing or invalid config values", () => {
@@ -32,5 +32,31 @@ describe("normalizeGitHubConfig", () => {
       cloneTimeoutSeconds: 9,
       clonePath: "/tmp/repos",
     });
+  });
+});
+
+describe("buildCloneDir", () => {
+  test("keeps repository paths inside the configured clone root", () => {
+    // Arrange
+    const cfg = normalizeGitHubConfig({ clonePath: "/tmp/pi-github-repos" });
+    const info = { owner: "owner", repo: "repo", type: "root" as const, refIsFullSha: false };
+
+    // Act
+    const result = buildCloneDir(cfg, info);
+
+    // Assert
+    expect(result).toBe("/tmp/pi-github-repos/owner/repo");
+  });
+
+  test("rejects repository paths that would escape the clone root", () => {
+    // Arrange
+    const cfg = normalizeGitHubConfig({ clonePath: "/tmp/pi-github-repos" });
+    const info = { owner: "..", repo: "outside", type: "root" as const, refIsFullSha: false };
+
+    // Act
+    const result = buildCloneDir(cfg, info);
+
+    // Assert
+    expect(result).toBeNull();
   });
 });

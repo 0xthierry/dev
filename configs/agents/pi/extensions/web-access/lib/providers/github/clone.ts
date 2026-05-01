@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import {
   loadConfig,
   normalizedBoolean,
@@ -35,8 +35,12 @@ export function githubConfig(): GitHubConfig {
   return normalizeGitHubConfig(loadConfig().githubClone);
 }
 
-function cloneDir(cfg: GitHubConfig, info: GitHubUrlInfo): string {
-  return join(cfg.clonePath, info.owner, info.ref ? `${info.repo}@${info.ref}` : info.repo);
+export function buildCloneDir(cfg: GitHubConfig, info: GitHubUrlInfo): string | null {
+  const rootPath = resolve(cfg.clonePath);
+  const repoDirName = info.ref ? `${info.repo}@${info.ref}` : info.repo;
+  const localPath = resolve(rootPath, info.owner, repoDirName);
+  const rootPrefix = rootPath.endsWith(sep) ? rootPath : rootPath + sep;
+  return localPath.startsWith(rootPrefix) ? localPath : null;
 }
 
 function execClone(args: string[], localPath: string, timeoutMs: number, signal?: AbortSignal): Promise<string | null> {
@@ -67,7 +71,8 @@ async function commandExists(command: string, signal?: AbortSignal): Promise<boo
 }
 
 async function cloneRepo(info: GitHubUrlInfo, cfg: GitHubConfig, signal?: AbortSignal): Promise<string | null> {
-  const localPath = cloneDir(cfg, info);
+  const localPath = buildCloneDir(cfg, info);
+  if (!localPath) return null;
   rmSync(localPath, { recursive: true, force: true });
   mkdirSync(join(localPath, ".."), { recursive: true });
   const timeoutMs = cfg.cloneTimeoutSeconds * 1000;
@@ -114,7 +119,14 @@ export function clearCloneCache(): void {
   for (const key of cloneCache.keys()) {
     const [ownerRepo, ref] = key.split("@");
     const [owner, repo] = ownerRepo.split("/");
-    rmSync(join(cfg.clonePath, owner, ref ? `${repo}@${ref}` : repo), { recursive: true, force: true });
+    const localPath = buildCloneDir(cfg, {
+      owner,
+      repo,
+      ref,
+      type: "root",
+      refIsFullSha: Boolean(ref?.match(/^[0-9a-f]{40}$/)),
+    });
+    if (localPath) rmSync(localPath, { recursive: true, force: true });
   }
   cloneCache.clear();
 }

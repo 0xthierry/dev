@@ -64,6 +64,30 @@ describe("parseGitHubUrl", () => {
     // Assert
     expect(result).toBeNull();
   });
+
+  test("rejects encoded traversal in clone path segments", () => {
+    // Arrange
+    const urls = [
+      "https://github.com/%2e%2e/repo",
+      "https://github.com/owner/%2e%2e",
+      "https://github.com/owner/repo%2f..",
+      "https://github.com/owner/repo/tree/%2e%2e/src",
+    ];
+
+    // Act / Assert
+    for (const url of urls) expect(parseGitHubUrl(url)).toBeNull();
+  });
+
+  test("rejects traversal in content path segments", () => {
+    // Arrange
+    const url = "https://github.com/owner/repo/blob/main/src%2f..%2fpackage.json";
+
+    // Act
+    const result = parseGitHubUrl(url);
+
+    // Assert
+    expect(result).toBeNull();
+  });
 });
 
 describe("gitHubCacheKey", () => {
