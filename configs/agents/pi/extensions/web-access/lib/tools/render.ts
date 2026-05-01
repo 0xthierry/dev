@@ -1,6 +1,9 @@
 import type { ExtractedContent, QueryResultData, SearchResult } from "../types";
 
 export function formatSearchSummary(results: SearchResult[], answer: string): string {
+  if (results.length === 0)
+    return answer ? `${answer}\n\n---\n\n**Sources:**\nNo source URLs found.` : "No source URLs found.";
+
   let output = answer ? `${answer}\n\n---\n\n**Sources:**\n` : "**Sources:**\n";
   output += results
     .map(

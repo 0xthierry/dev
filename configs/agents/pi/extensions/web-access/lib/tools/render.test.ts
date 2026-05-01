@@ -16,6 +16,14 @@ describe("formatSearchSummary", () => {
     expect(summary).toContain("https://example.com");
     expect(summary).toContain("Snippet");
   });
+
+  test("does not render an empty sources heading without URLs", () => {
+    // Arrange / Act
+    const summary = formatSearchSummary([], "");
+
+    // Assert
+    expect(summary).toBe("No source URLs found.");
+  });
 });
 
 describe("uniqueUrls", () => {

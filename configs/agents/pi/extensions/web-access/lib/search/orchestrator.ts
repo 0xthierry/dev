@@ -45,7 +45,13 @@ export async function searchWithProviderChain(
     }
 
     try {
-      return await provider.search(query, options);
+      const result = await provider.search(query, options);
+      if (result.results.length === 0) {
+        const reason =
+          result.answer.trim().length > 0 ? "returned no source URLs" : "returned no answer or source URLs";
+        throw new Error(reason);
+      }
+      return result;
     } catch (err) {
       if (isAbortError(err)) throw err;
       errors.push(`${provider.name}: ${err instanceof Error ? err.message : String(err)}`);

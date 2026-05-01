@@ -175,7 +175,7 @@ Supported parameters:
 - `recencyFilter`: `day`, `week`, `month`, or `year`.
 - `domainFilter`: include domains like `example.com`; exclude domains with a leading `-`, like `-spam.example`.
 
-Search output is formatted as a concise answer plus a `Sources` list. Each successful call stores a search result under a generated `searchId`. If `includeContent` returns inline page content, that content is stored as a separate fetch result under a generated `fetchId`.
+Search output is formatted as a concise answer plus a `Sources` list. Provider responses with no source URLs are treated as failures so the tool does not return an empty `Sources` section. Each successful call stores a search result under a generated `searchId`. If `includeContent` returns inline page content, that content is stored as a separate fetch result under a generated `fetchId`.
 
 ## How fetching works
 

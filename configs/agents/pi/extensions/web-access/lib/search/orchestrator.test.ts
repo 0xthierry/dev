@@ -70,6 +70,30 @@ describe("searchWithProviderChain", () => {
     expect(result).toBe(codexResponse);
   });
 
+  test("falls back when a provider returns no source URLs", async () => {
+    // Arrange
+    const emptyExa = provider("Exa", { answer: "", provider: "exa", results: [] });
+    const codex = provider("Codex", codexResponse);
+
+    // Act
+    const result = await searchWithProviderChain("query", {}, [emptyExa, codex]);
+
+    // Assert
+    expect(result).toBe(codexResponse);
+    expect(codex.search).toHaveBeenCalledWith("query", {});
+  });
+
+  test("throws an aggregated error when all providers return no source URLs", async () => {
+    // Arrange
+    const emptyExa = provider("Exa", { answer: "", provider: "exa", results: [] });
+    const emptyCodex = provider("Codex", { answer: "answer without links", provider: "codex", results: [] });
+
+    // Act / Assert
+    await expect(searchWithProviderChain("query", {}, [emptyExa, emptyCodex])).rejects.toThrow(
+      "Web search failed:\n  - Exa: returned no answer or source URLs\n  - Codex: returned no source URLs",
+    );
+  });
+
   test("throws aggregated provider errors", async () => {
     await expect(
       searchWithProviderChain("query", {}, [
