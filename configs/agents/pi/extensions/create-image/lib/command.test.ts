@@ -83,7 +83,7 @@ describe("handleCreateImageCommand", () => {
     await handleCreateImageCommand(fakePi.pi, fakeRuntime, "", context({ hasUI: true, ui: { editor } } as never));
 
     // Assert
-    expect(editor).toHaveBeenCalledTimes(1);
+    expect(editor).toHaveBeenCalledWith("Create image prompt", "generate an image of ");
     const provider = fakeRuntime.providers[0];
     expect(provider).toBeDefined();
     expect(provider?.generate).toHaveBeenCalledWith(expect.objectContaining({ prompt: "an orange robot" }));

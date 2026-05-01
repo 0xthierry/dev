@@ -1,6 +1,7 @@
 ai_docs/
 .direnv/
 node_modules/
+generated-images/
 
 # Sensitive/generated local artifacts
 *.rayconfig

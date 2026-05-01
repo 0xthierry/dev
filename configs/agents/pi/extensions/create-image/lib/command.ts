@@ -87,7 +87,7 @@ function publishCreateImageMessage(pi: ExtensionAPI, content: string, details: R
 async function getPrompt(prompt: string, ctx: ExtensionCommandContext): Promise<string> {
   if (prompt) return prompt;
   if (!ctx.hasUI) return "";
-  const value = await ctx.ui.editor("Create image prompt", "Describe the image you want to generate...");
+  const value = await ctx.ui.editor("Create image prompt", "generate an image of ");
   return value?.trim() ?? "";
 }
 

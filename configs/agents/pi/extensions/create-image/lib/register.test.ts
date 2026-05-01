@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
+import type { AutocompleteProvider } from "@mariozechner/pi-tui";
 import { createFakePi } from "../../_shared/testing/fake-pi";
 import { registerCreateImageCommand, registerCreateImageExtension } from "./register";
 import type { CreateImageRuntime } from "./runtime";
@@ -51,6 +52,33 @@ describe("registerCreateImageCommand", () => {
     // Assert
     expect(command?.getArgumentCompletions).toBeFunction();
     expect(completions).toEqual([expect.objectContaining({ value: "--provider nano-banana ", label: "nano-banana" })]);
+  });
+
+  test("registers a UI autocomplete provider for explicit tab completions", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const fakeRuntime = runtime();
+    registerCreateImageCommand(fakePi.pi, fakeRuntime);
+
+    // Act
+    await fakePi.emit("session_start", { reason: "startup" }, { hasUI: true });
+    const baseProvider: AutocompleteProvider = {
+      getSuggestions: async () => null,
+      applyCompletion: (lines, cursorLine, cursorCol) => ({ lines, cursorLine, cursorCol }),
+    };
+    const provider = fakePi.autocompleteProviderFactories[0]?.(baseProvider);
+    const line = "/create-image --provider n";
+    const suggestions = await provider?.getSuggestions([line], 0, line.length, {
+      signal: new AbortController().signal,
+      force: true,
+    });
+
+    // Assert
+    expect(fakePi.autocompleteProviderFactories).toHaveLength(1);
+    expect(suggestions).toMatchObject({
+      prefix: "--provider n",
+      items: [expect.objectContaining({ value: "--provider nano-banana ", label: "nano-banana" })],
+    });
   });
 
   test("runs the registered command", async () => {

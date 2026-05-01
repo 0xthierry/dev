@@ -1,4 +1,4 @@
-import type { AutocompleteItem } from "@mariozechner/pi-tui";
+import type { AutocompleteItem, AutocompleteProvider } from "@mariozechner/pi-tui";
 import type { ImageGenerationProvider } from "./providers/types";
 
 export interface CreateImageCommandArgs {
@@ -25,7 +25,7 @@ export const CREATE_IMAGE_USAGE = [
   "  --help, -h            Show this help.",
   "",
   "Example:",
-  "  /create-image --out assets 'a minimal fox logo on a transparent background'",
+  "  /create-image --out assets 'generate an image of a minimal fox logo on a transparent background'",
 ].join("\n");
 
 type StringOptionKey = "provider" | "outputDir" | "fileName" | "profile";
@@ -122,6 +122,32 @@ const PROMPT_STARTERS: AutocompleteItem[] = [
   },
 ];
 
+export function createCreateImageAutocompleteProvider(
+  current: AutocompleteProvider,
+  providers: ImageGenerationProvider[] = [],
+): AutocompleteProvider {
+  return {
+    async getSuggestions(lines, cursorLine, cursorCol, options) {
+      const argumentText = extractCreateImageArgumentText(lines[cursorLine] ?? "", cursorCol);
+      if (argumentText === null) return current.getSuggestions(lines, cursorLine, cursorCol, options);
+
+      const items = getCreateImageArgumentCompletions(argumentText, providers);
+      if (!items) return current.getSuggestions(lines, cursorLine, cursorCol, options);
+      return { items, prefix: argumentText };
+    },
+
+    applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+      return current.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
+    },
+
+    shouldTriggerFileCompletion(lines, cursorLine, cursorCol) {
+      const argumentText = extractCreateImageArgumentText(lines[cursorLine] ?? "", cursorCol);
+      if (argumentText !== null) return true;
+      return current.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? true;
+    },
+  };
+}
+
 export function getCreateImageArgumentCompletions(
   argumentText: string,
   providers: ImageGenerationProvider[] = [],
@@ -217,6 +243,12 @@ export function parseCreateImageArgs(input: string): ParseCreateImageArgsResult 
 
   args.prompt = promptTokens.join(" ").trim();
   return { ok: true, args };
+}
+
+function extractCreateImageArgumentText(line: string, cursorCol: number): string | null {
+  const beforeCursor = line.slice(0, cursorCol);
+  const match = beforeCursor.match(/^\/create-image(?::\d+)?(?:\s+(.*))$/);
+  return match ? (match[1] ?? "") : null;
 }
 
 function getOptionValueCompletions(

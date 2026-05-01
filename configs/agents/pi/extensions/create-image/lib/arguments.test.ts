@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { getCreateImageArgumentCompletions, parseCreateImageArgs, tokenizeArgs } from "./arguments";
+import type { AutocompleteProvider } from "@mariozechner/pi-tui";
+import {
+  createCreateImageAutocompleteProvider,
+  getCreateImageArgumentCompletions,
+  parseCreateImageArgs,
+  tokenizeArgs,
+} from "./arguments";
 
 describe("tokenizeArgs", () => {
   test("keeps quoted prompt fragments together", () => {
@@ -11,6 +17,30 @@ describe("tokenizeArgs", () => {
 
     // Assert
     expect(tokens).toEqual(["--out", "assets", "a red fox", "with blue eyes"]);
+  });
+});
+
+describe("createCreateImageAutocompleteProvider", () => {
+  test("handles forced tab completion in create-image command arguments", async () => {
+    // Arrange
+    const baseProvider: AutocompleteProvider = {
+      getSuggestions: async () => null,
+      applyCompletion: (lines, cursorLine, cursorCol) => ({ lines, cursorLine, cursorCol }),
+    };
+    const provider = createCreateImageAutocompleteProvider(baseProvider, []);
+    const line = "/create-image gen";
+
+    // Act
+    const suggestions = await provider.getSuggestions([line], 0, line.length, {
+      signal: new AbortController().signal,
+      force: true,
+    });
+
+    // Assert
+    expect(suggestions).toMatchObject({
+      prefix: "gen",
+      items: [expect.objectContaining({ value: "generate an image of " })],
+    });
   });
 });
 

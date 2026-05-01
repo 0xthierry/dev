@@ -19,9 +19,9 @@ The provider boundary is intentionally generic so future providers, such as Chat
 ## Usage
 
 ```text
-/create-image a minimal red fox app icon on a white background
-/create-image --out assets --name fox-icon a minimal red fox app icon
-/create-image --provider nano-banana --profile Default a watercolor robot holding coffee
+/create-image generate an image of a minimal red fox app icon on a white background
+/create-image --out assets --name fox-icon generate an image of a minimal red fox app icon
+/create-image --provider nano-banana --profile Default generate an image of a watercolor robot holding coffee
 ```
 
 Options:
@@ -34,7 +34,7 @@ Argument autocomplete suggests the common options, provider/profile values, outp
 - `--profile <name>`: browser profile to read Gemini cookies from.
 - `--help, -h`: show usage.
 
-If no prompt is supplied in interactive mode, Pi opens an editor prompt. In non-interactive contexts, a prompt is required in the command arguments.
+If no prompt is supplied in interactive mode, Pi opens an editor prompt prefilled with `generate an image of `. In non-interactive contexts, a prompt is required in the command arguments.
 
 ## Requirements
 

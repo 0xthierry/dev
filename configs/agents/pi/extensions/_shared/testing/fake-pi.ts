@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import type { AutocompleteItem } from "@mariozechner/pi-tui";
+import type { AutocompleteItem, AutocompleteProvider } from "@mariozechner/pi-tui";
 
 type Handler = (event: unknown, ctx: unknown) => unknown | Promise<unknown>;
 
@@ -48,6 +48,7 @@ export type FakePi = {
   appendedEntries: Array<{ customType: string; data?: unknown }>;
   sentMessages: Array<{ message: unknown; options?: unknown }>;
   sentUserMessages: Array<{ content: unknown; options?: unknown }>;
+  autocompleteProviderFactories: Array<(current: AutocompleteProvider) => AutocompleteProvider>;
   emit: (eventName: string, event?: unknown, ctx?: Record<string, unknown>) => Promise<unknown[]>;
   runCommand: (name: string, args?: string, ctx?: Record<string, unknown>) => Promise<unknown>;
   runTool: (name: string, params?: unknown, ctx?: Record<string, unknown>) => Promise<unknown>;
@@ -62,13 +63,14 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
   const appendedEntries: FakePi["appendedEntries"] = [];
   const sentMessages: FakePi["sentMessages"] = [];
   const sentUserMessages: FakePi["sentUserMessages"] = [];
+  const autocompleteProviderFactories: FakePi["autocompleteProviderFactories"] = [];
   const eventBus = new EventEmitter();
 
   const createContext = (overrides: Record<string, unknown> = {}) => ({
     cwd: options.cwd ?? process.cwd(),
     hasUI: false,
     signal: undefined,
-    ui: createFakeUi(),
+    ui: createFakeUi(autocompleteProviderFactories),
     sessionManager: createFakeSessionManager(),
     modelRegistry: undefined,
     model: undefined,
@@ -165,6 +167,7 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
     appendedEntries,
     sentMessages,
     sentUserMessages,
+    autocompleteProviderFactories,
 
     async emit(eventName, event = {}, ctx = {}) {
       const eventHandlers = handlers.get(eventName) ?? [];
@@ -197,7 +200,7 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
   return fakePi;
 }
 
-function createFakeUi() {
+function createFakeUi(autocompleteProviderFactories: FakePi["autocompleteProviderFactories"]) {
   return {
     notify: () => undefined,
     confirm: async () => false,
@@ -211,7 +214,9 @@ function createFakeUi() {
     setEditorText: () => undefined,
     getEditorText: () => "",
     pasteToEditor: () => undefined,
-    addAutocompleteProvider: () => undefined,
+    addAutocompleteProvider: (factory: (current: AutocompleteProvider) => AutocompleteProvider) => {
+      autocompleteProviderFactories.push(factory);
+    },
     getToolsExpanded: () => false,
     setToolsExpanded: () => undefined,
     theme: {
