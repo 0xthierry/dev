@@ -2,6 +2,7 @@
 name: iterate-research
 description: iterate on research document based on user feedback. This skill requires a path to a document and feedback from the human - dont use if you already used create-research-codebase
 effort: max
+disable_model_invocation: true
 ---
 
 # Iterate Research

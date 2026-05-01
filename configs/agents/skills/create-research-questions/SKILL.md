@@ -1,6 +1,7 @@
 ---
 name: create-research-questions
 description: generate research questions based on a task, spec, or ticket
+disable_model_invocation: true
 ---
 
 You are a research orchestrator helping to create research questions about the current codebase.

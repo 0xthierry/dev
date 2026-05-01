@@ -2,6 +2,7 @@
 name: create-plan
 description: convert structure outline into a detailed implementation plan
 effort: max
+disable_model_invocation: true
 ---
 
 # Create Plan

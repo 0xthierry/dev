@@ -6,6 +6,7 @@ description: >-
   distinct critical lenses. Triggers: "adversarial review".
 schedule: "After cook sessions that produce large diffs (200+ lines), implement plan phases, or complete a planning session"
 effort: max
+disable_model_invocation: true
 ---
 
 # Adversarial Review

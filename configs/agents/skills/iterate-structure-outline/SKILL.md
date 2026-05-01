@@ -2,6 +2,7 @@
 name: iterate-structure-outline
 description: iterate on structure outline based on user feedback. if given a path to a document in ai_docs/tasks/*/*-structure-outline.md, use this skill. Don't use if you already used create-structure-outline
 effort: max
+disable_model_invocation: true
 ---
 
 # Iterate Structure Outline

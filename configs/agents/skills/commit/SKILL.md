@@ -1,6 +1,7 @@
 ---
 name: commit
 description: "Use to commit changes"
+disable_model_invocation: true
 ---
 
 # Commit Changes

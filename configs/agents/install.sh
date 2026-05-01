@@ -19,7 +19,6 @@ SOURCE_CLAUDE_SETTINGS="$SCRIPT_DIR/claude-settings.json"
 SOURCE_PI_SETTINGS="$SCRIPT_DIR/pi-settings.json"
 SOURCE_PI_DIR="$SCRIPT_DIR/pi"
 SOURCE_PI_AGENTS_DIR="$SOURCE_PI_DIR/agents"
-SOURCE_PI_SKILLS_DIR="$SOURCE_PI_DIR/skills"
 SOURCE_PI_PROMPTS_DIR="$SOURCE_PI_DIR/prompts"
 SOURCE_PI_EXTENSIONS_DIR="$SOURCE_PI_DIR/extensions"
 SOURCE_PI_APPEND_SYSTEM="$SOURCE_PI_DIR/APPEND_SYSTEM.md"
@@ -105,6 +104,27 @@ ensure_dir() {
   run_cmd mkdir -p "$dir_path"
 }
 
+ensure_real_dir() {
+  local dir_path="$1"
+  local label="$2"
+  local backup_path=""
+
+  if [[ -d "$dir_path" && ! -L "$dir_path" ]]; then
+    return 0
+  fi
+
+  if [[ -L "$dir_path" ]]; then
+    run_cmd rm -f -- "$dir_path"
+    log "removed: $label symlink"
+  elif [[ -e "$dir_path" ]]; then
+    backup_path="$(next_backup_path "$dir_path")"
+    run_cmd mv "$dir_path" "$backup_path"
+    log "backed up: $label existing entry -> $backup_path"
+  fi
+
+  run_cmd mkdir -p "$dir_path"
+}
+
 prompt_yes_no() {
   local prompt="$1"
   local reply=""
@@ -177,6 +197,33 @@ force_link_path() {
   run_cmd ln -s "$source_path" "$target_path"
   log "linked: $label"
   ((LINKED_COUNT += 1))
+}
+
+force_link_path_replacing_symlink() {
+  local source_path="$1"
+  local target_path="$2"
+  local label="$3"
+  local current_target=""
+  local resolved_source_path=""
+  local resolved_current_target=""
+
+  resolved_source_path="$(canonicalize_path "$source_path")"
+
+  if [[ -L "$target_path" ]]; then
+    current_target="$(readlink "$target_path")"
+    resolved_current_target="$(resolve_symlink_target "$target_path")"
+
+    if [[ "$current_target" == "$source_path" || "$resolved_current_target" == "$resolved_source_path" ]]; then
+      log "skip: $label already linked"
+      ((SKIPPED_COUNT += 1))
+      return 0
+    fi
+
+    run_cmd rm -f -- "$target_path"
+    log "removed: $label existing symlink"
+  fi
+
+  force_link_path "$source_path" "$target_path" "$label"
 }
 
 detect_host_config() {
@@ -389,7 +436,7 @@ force_link_skill_entries() {
   done < <(find "$SOURCE_SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*' -print0)
 }
 
-skill_disables_model_invocation() {
+skill_uses_underscore_model_invocation_key() {
   local skill_md="$1"
 
   awk '
@@ -398,44 +445,114 @@ skill_disables_model_invocation() {
       if (!seen_open) { in_fm = 1; seen_open = 1; next }
       exit
     }
-    in_fm && /^[[:space:]]*disable_model_invocation:[[:space:]]*true[[:space:]]*$/ { found = 1; exit }
+    in_fm && /^[[:space:]]*disable_model_invocation:/ { found = 1; exit }
     END { exit found ? 0 : 1 }
   ' "$skill_md"
 }
 
-prune_pi_skills_disabled_for_model_invocation() {
-  local skill_entry=""
+rewrite_pi_skill_frontmatter() {
+  # Reads a SKILL.md from stdin and rewrites the non-standard Claude/Codex
+  # disable_model_invocation key to Pi's Agent Skills key.
+  awk '
+    BEGIN { in_fm = 0; seen_open = 0 }
+    /^---[[:space:]]*$/ {
+      if (!seen_open) { in_fm = 1; seen_open = 1; print; next }
+      in_fm = 0; print; next
+    }
+    in_fm && /^[[:space:]]*disable_model_invocation:/ { sub(/disable_model_invocation:/, "disable-model-invocation:") }
+    { print }
+  '
+}
+
+copy_pi_skill_file_rewritten() {
+  local source_path="$1"
+  local target_path="$2"
+  local label="$3"
+  local tmp_path=""
+
+  tmp_path="$(mktemp)"
+  rewrite_pi_skill_frontmatter < "$source_path" > "$tmp_path"
+
+  if [[ -f "$target_path" ]] && cmp -s "$tmp_path" "$target_path"; then
+    log "skip: $label already up to date"
+    rm -f "$tmp_path"
+    ((SKIPPED_COUNT += 1))
+    return 0
+  fi
+
+  if (( DRY_RUN )); then
+    log "[dry-run] copy (pi frontmatter rewritten): $label"
+    rm -f "$tmp_path"
+  else
+    rm -rf -- "$target_path"
+    mv "$tmp_path" "$target_path"
+    log "copied (pi frontmatter rewritten): $label"
+  fi
+  ((LINKED_COUNT += 1))
+}
+
+copy_pi_skill_dir_rewritten() {
+  local source_path="$1"
+  local target_path="$2"
+  local label="$3"
+  local tmp_parent=""
+  local tmp_path=""
+
+  if (( DRY_RUN )); then
+    log "[dry-run] copy (pi frontmatter rewritten): $label"
+    ((LINKED_COUNT += 1))
+    return 0
+  fi
+
+  tmp_parent="$(mktemp -d)"
+  tmp_path="$tmp_parent/$(basename "$target_path")"
+  mkdir -p "$tmp_path"
+  cp -a "$source_path"/. "$tmp_path"/
+  rewrite_pi_skill_frontmatter < "$source_path/SKILL.md" > "$tmp_path/SKILL.md"
+
+  if [[ -d "$target_path" && ! -L "$target_path" ]] && diff -qr "$tmp_path" "$target_path" >/dev/null; then
+    log "skip: $label already up to date"
+    rm -rf -- "$tmp_parent"
+    ((SKIPPED_COUNT += 1))
+    return 0
+  fi
+
+  rm -rf -- "$target_path"
+  mv "$tmp_path" "$target_path"
+  rmdir "$tmp_parent"
+  log "copied (pi frontmatter rewritten): $label"
+  ((LINKED_COUNT += 1))
+}
+
+force_link_pi_skill_entries() {
+  local target_root="$1"
+  local target_skills_dir="$target_root/skills"
+  local source_path=""
+  local target_path=""
   local skill_md=""
-  local skill_name=""
-  local resolved_entry=""
+  local name=""
 
-  for skill_entry in "$SOURCE_PI_SKILLS_DIR"/*; do
-    [[ -e "$skill_entry" || -L "$skill_entry" ]] || continue
+  ensure_real_dir "$target_skills_dir" "pi skills"
 
-    if [[ -d "$skill_entry" || -L "$skill_entry" ]]; then
-      skill_md="$skill_entry/SKILL.md"
-      skill_name="$(basename "$skill_entry")"
-    elif [[ -f "$skill_entry" && "$skill_entry" == *.md ]]; then
-      skill_md="$skill_entry"
-      skill_name="$(basename "$skill_entry" .md)"
-    else
-      continue
-    fi
+  while IFS= read -r -d '' source_path; do
+    name="$(basename "$source_path")"
+    target_path="$target_skills_dir/$name"
 
-    if [[ ! -f "$skill_md" ]]; then
-      continue
-    fi
-
-    if skill_disables_model_invocation "$skill_md"; then
-      if [[ -L "$skill_entry" ]]; then
-        resolved_entry="$(resolve_symlink_target "$skill_entry")"
+    if [[ -d "$source_path" || -L "$source_path" ]]; then
+      skill_md="$source_path/SKILL.md"
+      if [[ -f "$skill_md" ]] && skill_uses_underscore_model_invocation_key "$skill_md"; then
+        copy_pi_skill_dir_rewritten "$source_path" "$target_path" "pi skill $name"
       else
-        resolved_entry="$(canonicalize_path "$skill_entry")"
+        force_link_path_replacing_symlink "$source_path" "$target_path" "pi skill $name"
       fi
-      run_cmd rm -rf -- "$skill_entry"
-      log "removed: Pi skill $skill_name disables model invocation ($resolved_entry)"
+    elif [[ -f "$source_path" && "$source_path" == *.md ]]; then
+      if skill_uses_underscore_model_invocation_key "$source_path"; then
+        copy_pi_skill_file_rewritten "$source_path" "$target_path" "pi skill $name"
+      else
+        force_link_path_replacing_symlink "$source_path" "$target_path" "pi skill $name"
+      fi
     fi
-  done
+  done < <(find "$SOURCE_SKILLS_DIR" -mindepth 1 -maxdepth 1 \( -type f -o -type d -o -type l \) ! -name '.*' -print0)
 }
 
 install_target() {
@@ -602,7 +719,7 @@ install_pi_target() {
   copy_file_if_needed "$SOURCE_PI_SETTINGS" "$target_root/settings.json" "pi settings.json"
   force_link_path "$SOURCE_PI_APPEND_SYSTEM" "$target_root/APPEND_SYSTEM.md" "pi APPEND_SYSTEM.md"
   force_link_path "$SOURCE_PI_AGENTS_DIR" "$target_root/agents" "pi agents"
-  force_link_path "$SOURCE_PI_SKILLS_DIR" "$target_root/skills" "pi skills"
+  force_link_pi_skill_entries "$target_root"
   force_link_path "$SOURCE_PI_PROMPTS_DIR" "$target_root/prompts" "pi prompts"
   force_link_path "$SOURCE_PI_EXTENSIONS_DIR" "$target_root/extensions" "pi extensions"
 }
@@ -678,11 +795,6 @@ main() {
     exit 1
   fi
 
-  if [[ ! -d "$SOURCE_PI_SKILLS_DIR" ]]; then
-    warn "Missing source Pi skills directory: $SOURCE_PI_SKILLS_DIR"
-    exit 1
-  fi
-
   if [[ ! -d "$SOURCE_PI_PROMPTS_DIR" ]]; then
     warn "Missing source Pi prompts directory: $SOURCE_PI_PROMPTS_DIR"
     exit 1
@@ -741,7 +853,6 @@ main() {
   fi
 
   if (( install_pi )); then
-    prune_pi_skills_disabled_for_model_invocation
     install_pi_target "$HOME/.pi/agent"
   fi
 

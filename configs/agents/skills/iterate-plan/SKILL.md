@@ -2,6 +2,7 @@
 name: iterate-plan
 description: iterate on implementation plan based on user feedback
 effort: max
+disable_model_invocation: true
 ---
 
 # Iterate Plan

@@ -2,6 +2,7 @@
 name: iterate-implementation
 description: iterate on implementation based on user feedback
 effort: max
+disable_model_invocation: true
 ---
 
 # Iterate Implementation

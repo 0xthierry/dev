@@ -2,6 +2,7 @@
 name: implement-plan
 description: phased implementation of a structured plan you must use this skill when asked to implement a plan file in ai_docs/tasks/*
 effort: high
+disable_model_invocation: true
 ---
 
 # Phased Implementation Orchestrator

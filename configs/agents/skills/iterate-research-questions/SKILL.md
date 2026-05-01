@@ -1,6 +1,7 @@
 ---
 name: iterate-research-questions
 description: iterate on ai_docs/tasks/*/*-research-questions.md doc based on user feedback. don't use if you already used create-research-questions 
+disable_model_invocation: true
 ---
 
 # Iterate Research Questions

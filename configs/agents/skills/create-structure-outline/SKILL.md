@@ -2,6 +2,7 @@
 name: create-structure-outline
 description: create a phased implementation plan based on research and design decisions
 effort: max
+disable_model_invocation: true
 ---
 
 # Create Structure Outline

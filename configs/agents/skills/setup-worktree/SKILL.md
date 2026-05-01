@@ -1,6 +1,7 @@
 ---
 name: setup-worktree
 description: facilitate pre-implementation setups for worktree setup
+disable_model_invocation: true
 ---
 
 ## steps to follow

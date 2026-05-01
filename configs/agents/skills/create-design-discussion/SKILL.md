@@ -2,6 +2,7 @@
 name: create-design-discussion
 description:  first step of planning
 effort: max
+disable_model_invocation: true
 ---
 
 # Design Discussion Phase

@@ -2,6 +2,7 @@
 name: iterate-design-discussion
 description: iterate on design discussion based on user feedback - do not use this if you already used create-design-discussion
 effort: max
+disable_model_invocation: true
 ---
 
 # Iterate Design Discussion

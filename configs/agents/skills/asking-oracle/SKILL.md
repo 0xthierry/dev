@@ -1,6 +1,7 @@
 ---
 name: asking-oracle
 description: Use when facing complex analysis, architecture decisions, debugging that requires deep reasoning, or when you need senior-level code review. Use when uncertain about build-vs-buy, system design trade-offs, or need research synthesis. Triggers on "ask oracle", "get oracle opinion", multi-step reasoning problems.
+disable_model_invocation: true
 ---
 
 # Asking Oracle

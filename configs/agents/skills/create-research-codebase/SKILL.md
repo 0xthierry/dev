@@ -2,6 +2,7 @@
 name: create-research-codebase
 description:  research the codebase 
 effort: max
+disable_model_invocation: true
 ---
 
 # Research Codebase
