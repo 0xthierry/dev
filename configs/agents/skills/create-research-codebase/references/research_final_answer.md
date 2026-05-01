@@ -3,7 +3,7 @@
 - Document: [ai_docs/tasks/ENG-XXXX-description/YYYY-MM-DD-research.md]
 - Source questions: [ai_docs/tasks/ENG-XXXX-description/YYYY-MM-DD-research-questions.md or direct query]
 - Questions answered: [count]
-- Research agents used: [agent list/count, or blocker]
+- Research agents used: [agent list/count]
 - Open questions: [count or "none"]
 
 ### Summary

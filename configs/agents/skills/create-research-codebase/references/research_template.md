@@ -35,7 +35,7 @@ status: complete
 | codebase-analyzer | [area] | [behavior/contracts traced] |
 | codebase-pattern-finder | [area] | [patterns/tests identified] |
 
-[If subagents were unavailable, replace the table with the blocker and the direct-research fallback used.]
+[Add one row per research agent used.]
 
 ## Executive Summary
 

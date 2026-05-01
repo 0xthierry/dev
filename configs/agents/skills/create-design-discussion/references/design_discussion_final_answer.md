@@ -1,38 +1,47 @@
 ### Status
 
 - Document: [ai_docs/tasks/ENG-XXXX-description/YYYY-MM-DD-design-discussion.md]
-- Ticket: [ENG-XXXX](ticket URL if known, otherwise omit link)
-- Open Design Questions: [count or "none - all resolved"]
+- Source research: [ai_docs/tasks/ENG-XXXX-description/YYYY-MM-DD-research.md or blocker]
+- Source task inputs: [ticket/spec/grill paths or "none"]
+- Decisions: [resolved count] resolved, [proposed count] proposed, [open count] open/blocked
+- Status: [ready-for-outline|needs-user-input|blocked]
+
+### Summary
+
+[2-3 sentences describing the design direction, the main recommendation, and any material open decision.]
 
 ### Patterns to Follow
 
-- [pattern 1]
-- [pattern 2]
-- ...
+- [pattern 1 with key file reference]
+- [pattern 2 with key file reference]
 
-### Design Questions
+### Design Preferences Captured
 
-#### [Question Title]
+- [preference, or "None stated — follow existing codebase conventions."]
 
-[The design question]
+### Key Decisions
 
-- Option A: [description]
-- Option B: [description]
+- **[D1 title]**: [decision/recommendation and status]
+- **[D2 title]**: [decision/recommendation and status]
 
-Recommendation: [recommendation with rationale]
+### Validation
 
-#### [Second Question Title]
+- [check run and result]
+- [check run and result]
 
-...
+### Open Questions
 
+- [question and owner/blocker, or "None"]
 
-### Next Steps
+### Next Step
 
-Please let me know any feedback you want and I'll incorporate it, or, to continue to the next phase, use a prompt like
+If this design looks right, continue with:
 
 ```text
-use the create-structure-outline skill for [ai_docs/tasks/ENG-XXX-description]
+use the create-structure-outline skill for [ai_docs/tasks/ENG-XXXX-description]
 ```
+
+If any decision or preference is wrong, tell me what to change and I will update the design discussion before outlining.
 
 ---
 

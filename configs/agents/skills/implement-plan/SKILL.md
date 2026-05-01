@@ -1,140 +1,180 @@
 ---
 name: implement-plan
-description: phased implementation of a structured plan you must use this skill when asked to implement a plan file in ai_docs/tasks/*
+description: "Use when implementing an ai_docs/tasks/* plan phase-by-phase with implementer/evaluator agents, sprint-contract validation, human checkpoints, and commits."
 effort: high
 disable_model_invocation: true
 ---
 
-# Phased Implementation Orchestrator
+# Implement Plan
 
-You are responsible for orchestrating the phased implementation of technical plans from `ai_docs/tasks/`. Each phase follows a generate → evaluate → fix loop with a max of 3 retries before escalating to the human.
+## Goal
+
+Orchestrate phased implementation of an approved `ai_docs/tasks/.../*-plan.md` file.
+
+Good execution keeps each phase bounded, uses `implementer-agent` for code changes, uses `evaluator-agent` for empirical verification, fixes only evaluator-confirmed failures, pauses for human review at the right checkpoints, and commits clean phase-sized changes without unrelated work.
+
+## When to Use
+
+Use this skill when the user asks to implement, execute, continue, resume, or run phases from a plan file under `ai_docs/tasks/`.
+
+Use a different skill when the user wants to create or revise the plan (`create-plan`), structure outline (`create-structure-outline`), design discussion (`create-design-discussion`), or research artifacts.
+
+## Success Criteria
+
+Before final response:
+
+- Every requested phase has completed the implementer → evaluator → fix loop.
+- The evaluator has run full regression checks and phase-specific `.sprint-contract.json` criteria when present.
+- No phase is treated as passing unless automated criteria pass and evaluator quality review has no blocking issues/concerns.
+- Human-required manual verification has been surfaced and confirmed before committing/proceeding, unless the user explicitly authorized batching or skipping the pause.
+- Each committed phase contains only that phase's code, tests, plan/checkbox updates, and directly related generated files.
+- Any failed phase stops after the retry budget and reports all evaluator evidence instead of silently continuing.
+- Final response follows `references/implement_plan_final_answer.md`.
+
+## Operating Rules
+
+- Start multi-step work with a brief user-visible preamble before tool calls.
+- If no plan path is provided, ask for it. Do not guess among multiple plan files.
+- Read the plan fully before launching agents. Read `.sprint-contract.json` if present.
+- Check `git status --short` before starting and before each commit. Do not include unrelated user changes in phase commits.
+- The orchestrator coordinates; it does not bypass the implementer/evaluator loop for normal code changes.
+- Keep subagent prompts short and outcome-first. The agents read the plan and contract themselves.
+- Do not proceed to the next phase or commit unless the user has approved the phase checkpoint, except when the user explicitly requested consecutive phases without intermediate pauses.
+- Do not create AI attribution in commits, code comments, or generated artifacts.
+
+## Phase Selection Rules
+
+- If the user names a phase or range, implement only that scope.
+- If resuming without a named phase, read plan checkboxes and start with the first incomplete phase.
+- Treat a checked phase as complete unless current evidence suggests mismatch or the user asks to re-evaluate it.
+- If `.sprint-contract.json` and plan text disagree on automated criteria, the contract is primary for evaluator automation; record the mismatch if it affects execution.
+- If the plan has a material open question or missing automated criteria for the target phase, stop and ask whether to revise the plan first.
+
+## Retry Budget
+
+Each phase gets:
+
+- one initial implementation attempt;
+- up to three targeted fix attempts after evaluator failures.
+
+After the third fix attempt, run the evaluator one final time. If it still fails, escalate to the human with all evaluator reports and what was attempted. Do not silently retry beyond the budget.
 
 ## Workflow
 
-For each phase in the implementation plan:
+### 1. Pre-flight
 
-### 1. Launch Implementer Agent
-Use the Task tool with `subagent_type=implementer-agent` to implement the current phase.
+1. Resolve the plan path and working directory.
+2. Read the full plan and `.sprint-contract.json` if present.
+3. Identify phases, phase checkboxes, manual verification requirements, and requested phase scope.
+4. Run `git status --short` and note pre-existing changes.
+5. If unrelated dirty files could be swept into commits, ask how to proceed before launching implementation.
 
-```
-Implement Phase [N] of the plan at ai_docs/tasks/ENG-XXXX-description/YYYY-MM-DD-plan.md
-Focus only on Phase [N] and stop after completing it.
-```
+### 2. Implement the current phase
 
-Keep the prompt short — the implementer reads the plan itself.
+Launch `implementer-agent` with a short prompt:
 
-### 2. Launch Evaluator Agent
-After the implementer finishes, launch the evaluator to verify the work:
-
-```
-Evaluate Phase [N] of the plan at ai_docs/tasks/ENG-XXXX-description/YYYY-MM-DD-plan.md
-Run the full regression suite AND all phase-specific success criteria.
+```text
+Implement Phase [N] of [plan path].
 Working directory: [cwd]
+Scope: Phase [N] only.
+Do not commit. Stop and report if the plan cannot be followed without a design decision.
 ```
 
-Use the Task tool with `subagent_type=evaluator-agent`.
+If this is a targeted fix after evaluator failure:
 
-### 3. Handle Evaluation Result
-
-**If PASS** (all criteria met):
-- Proceed to step 4 (report to human)
-
-**If FAIL** (any criterion failed):
-- Send the evaluator's feedback to the implementer:
-
-```
-Fix Phase [N] failures. Evaluator report:
-[paste evaluator's structured feedback]
-
-Focus only on fixing the failures — do not redo work that passed.
-Plan: ai_docs/tasks/ENG-XXXX-description/YYYY-MM-DD-plan.md
+```text
+Fix Phase [N] evaluator failures for [plan path].
+Working directory: [cwd]
+Scope: fix only the failures below; do not redo passing work and do not commit.
+Evaluator report:
+[paste full evaluator report]
 ```
 
-- Re-run the evaluator after fixes
-- **Max 3 rounds.** If still failing after 3 attempts, escalate to the human with the full failure report and ask for guidance.
+### 3. Evaluate the phase
 
-### 4. Report to Human
+Launch `evaluator-agent` after each implementation/fix attempt:
 
+```text
+Evaluate Phase [N] of [plan path].
+Working directory: [cwd]
+Use .sprint-contract.json if present. Run regression commands, phase criteria, and read-only quality review.
 ```
-## Phase [N]: [PASS after N attempts / ESCALATED]
 
-**Evaluator verdict:** [PASS/FAIL] ([X]/[Y] criteria)
+Treat evaluator output as authoritative evidence. A clean pass requires automated success plus no blocking quality issues/concerns.
 
-**Regression suite:**
-- [results from evaluator]
+### 4. Handle evaluator result
 
-**Phase criteria:**
-- [results from evaluator]
+- **Clean PASS:** report the checkpoint to the human.
+- **PASS with quality issues/concerns:** treat as failure unless the evaluator labels them non-blocking nits only; send the report to the implementer for targeted fixes.
+- **FAIL:** send the report to the implementer for targeted fixes within the retry budget.
+- **Blocked/unclear:** stop and ask the human with the concrete blocker and evidence.
+
+### 5. Report checkpoint to human
+
+Use this shape after a clean evaluator pass:
+
+```markdown
+## Phase [N]: PASS after [attempt count] implementation attempt(s)
+
+**Evaluator verdict:** PASS ([passed]/[total] criteria)
+
+**Regression suite:** [concise result]
+**Phase criteria:** [concise result]
+**Quality review:** [clean, or nits only]
 
 **Manual verification required:**
-- [manual steps from plan, if any]
+- [manual step, or "None"]
 
-Ready to proceed to Phase [N+1], or let me know if any issues need addressing.
+Ready to commit Phase [N] and proceed to Phase [N+1], or tell me what to adjust.
 ```
 
-### 5. Wait for Human Confirmation
-Wait for the human to:
-- Confirm manual checks passed (if any)
-- Report any issues found
-- Give permission to continue
+If manual verification is required, wait for explicit confirmation that it passed before committing or proceeding. If no manual verification is required, still wait for approval unless the user explicitly requested automatic consecutive phase execution.
 
-### 6. Commit the changes
-- Create a new commit for the phase's changes
-- Do not include any claude attribution
+### 6. Commit the phase
 
-### 7. Repeat for Next Phase
+After human approval:
 
-## Special Instructions
+1. Run `git status --short`.
+2. Stage only files belonging to the approved phase.
+3. Mark the phase complete in the plan if the plan uses phase checkboxes and the evaluator/human checkpoint has passed.
+4. Create a conventional commit for the phase, e.g. `feat(scope): implement phase 1 [short title]`.
+5. Confirm the commit hash and continue only within the user's requested scope.
 
-### Resuming Work
-If resuming a partially completed plan:
-- Check the plan file for existing checkmarks (- [x])
-- Resume from the first unchecked phase
-- Trust completed work unless something seems off
+Do not commit unrelated changes. If unrelated files are dirty, leave them unstaged and mention them.
 
-### Handling Evaluator Escalation
-When the evaluator fails 3 rounds:
-- Present ALL three evaluator reports to the human
-- Explain what the implementer tried each round
-- Ask whether to continue trying, modify the plan, or skip the criterion
-- Do NOT silently retry beyond 3 rounds
+### 7. Escalate when needed
 
-### Multiple Phases
-If instructed to implement multiple phases consecutively:
-- Still run implementer + evaluator for each phase
-- Only pause for human verification after the final phase
-- If any phase escalates, stop and report
+If a phase still fails after the retry budget, report:
 
-### Waiting for Input
-Unless expressly asked, don't commit or proceed to the next phase until the human has reviewed and approved.
+- all evaluator reports or links/summaries with exact failures;
+- what the implementer attempted each round;
+- current git status;
+- options: revise plan, continue with a new approach, skip/relax a criterion, or stop.
 
-## TODO per phase:
+Then wait for the human.
 
-- [ ] launch implementer
-- [ ] launch evaluator
-- [ ] if fail: retry loop (max 3)
-- [ ] report to human
-- [ ] wait for confirmation
-- [ ] commit changes
-- [ ] next phase
+### 8. Complete final handoff
 
-## After Final Phase Completion
+When all requested phases are implemented, evaluated, approved, and committed:
 
-When ALL phases are complete and verified:
+1. Read `references/implement_plan_final_answer.md`.
+2. Respond with implementation status, commits, validation evidence, remaining risks/open questions, and next `describe-pr` prompt.
 
-1. Commit the final changes
-2. Read the final output template:
+## Multiple-Phase Requests
 
-`Read({SKILLBASE}/references/implement_plan_final_answer.md)`
+If the user explicitly asks to run multiple phases consecutively:
 
-3. Respond with a summary following the template
+- still run implementer and evaluator per phase;
+- stop immediately on escalation or manual verification that must happen before later phases are safe;
+- if manual verification can safely be batched, report all deferred manual checks before the final commit/proceed decision;
+- commit per phase unless the user explicitly asks for a single final commit.
 
-## Getting Started
+## Common Mistakes
 
-When invoked:
-1. Ask for the plan path if not provided
-2. Read the plan to understand the phases
-3. Begin with Phase 1 (or first unchecked phase if resuming)
-4. Follow the workflow above
-
-Your role is orchestration. The implementer writes code, the evaluator verifies it, you coordinate and communicate with the human.
+- Letting the implementer self-certify without evaluator verification.
+- Treating passing tests as enough when evaluator quality review found a blocking issue.
+- Retrying indefinitely instead of escalating with evidence.
+- Committing before human confirmation.
+- Sweeping unrelated dirty files into a phase commit.
+- Implementing the next phase while manual verification for the current phase is still pending.
+- Editing code directly in the orchestrator and bypassing the phase loop.

@@ -1,108 +1,209 @@
 ---
-task: eng-xxxx-description
+task: "[task-slug-or-ticket-id]"
 type: structure-outline
-repo: [current repository]
-branch: [current branch name]
-sha: [result of git rev-parse HEAD]
+repo: "[repository name or owner/name]"
+branch: "[current branch]"
+sha: "[current commit SHA]"
+date: "[ISO-8601 timestamp with timezone]"
+status: "[ready-for-plan|needs-design-input|blocked]"
+source_design: "[path/to/YYYY-MM-DD-design-discussion.md]"
+source_research: "[path/to/YYYY-MM-DD-research.md]"
+source_documents:
+  - "[path/to/ticket-or-spec.md]"
+related_grills:
+  - "[path/to/grill.md]"
 ---
 
-# [Plan Title]
+# Structure Outline: [Task / Change Name]
 
-[2-3 sentence plan summary]
+## Outline Goal
+
+[One concise paragraph describing the implementation shape this outline creates and the user/system outcome it supports.]
+
+## Source Context
+
+| Source | Role in this outline | Notes |
+| --- | --- | --- |
+| `[design-discussion.md]` | Desired behavior, decisions, preferences | [brief note] |
+| `[research.md]` | Current architecture, patterns, tests | [brief note] |
+| `[ticket-or-spec.md]` | Original request | [brief note or "None"] |
+| `[grill.md]` | Prior resolved preferences/decisions | [brief note or "None"] |
 
 ## Current State
 
-- [current state of codebase relevant to this change]
-- ...
+[Current product/system behavior and codebase architecture relevant to phase sequencing. Include file references for technical facts.]
+
+- [current behavior or architecture fact]
+- [`path/to/file.ext:10`](link) - [technical fact]
 
 ## Desired End State
 
-- [what will be true when this is done]
-- ...
+[Observable behavior or system state after all phases are complete.]
 
-## What we're not doing
+- [desired outcome]
+- [desired outcome]
 
-- [things that are out of scope]
-- ...
+## What We're Not Doing
 
-### Design Preferences
+[Out-of-scope work carried forward from design discussion or added to prevent phase creep.]
 
-[Carried forward from the design discussion. Cross-cutting preferences that apply to every new module — code organization style, naming, cohesion rules. Every new file/class/function in the phases below must conform to these preferences unless there's a stated reason not to.]
+- [non-goal]
+- [non-goal]
 
-- [preference 1]
-- ..
+## Design Preferences Carried Forward
 
-### Patterns to follow
+[Cross-cutting user preferences from the design discussion. If none were stated, write "None stated — follow existing codebase conventions."]
 
-#### [title First pattern from research]
+- [preference]
 
-[summary of the pattern] - e.g. [path/to/file]
+## Patterns to Follow
 
+### [Pattern Name]
+
+**Use in phases:** [phase numbers]
+
+**Evidence:** [`path/to/file.ext:10-30`](link)
+
+```[language]
+[short existing-code pattern or signature]
 ```
-[succinct code examples demonstrating the pattern]
+
+**Testing pattern:** [`path/to/test.ext:40-70`](link)
+
+```[language]
+[short existing-test pattern]
 ```
 
-```
-[succinct code examples demonstrating the pattern]
-```
-
-#### [title Second pattern from the research]
+### [Second Pattern Name]
 
 ...
 
-### Design Summary
+## Design Decisions Carried Forward
 
-Full discussion doc: [YYYY-MM-DD-design-discussion.md]
+| Decision ID | Decision | Source | Phase impact |
+| --- | --- | --- | --- |
+| D1 | [decision summary] | [`design-discussion.md`](path) | [phase(s) affected] |
+| D2 | [decision summary] | [`design-discussion.md`](path) | [phase(s) affected] |
 
-#### [decision 1, e.g. use x column on y table]
+## Coverage Map
 
-[decision, rationale, code snippets]
+| Requirement / Desired Outcome / Decision | Covered by phase(s) | Validation signal |
+| --- | --- | --- |
+| [outcome or decision] | Phase [N] | [test/check/manual validation] |
+| [outcome or decision] | Phase [N, M] | [test/check/manual validation] |
 
-#### [decision 2]
+## Phase Strategy
 
-...
+[2-4 bullets explaining why the phases are ordered this way, what risk is reduced early, and how the sequence stays vertical/testable.]
+
+- [ordering rationale]
+- [risk-reduction rationale]
 
 ---
 
 ## Phase 1: [Phase Title]
 
-[Overview of what this phase accomplishes]
+### Objective
 
-### File Changes
+[What this phase accomplishes and what user/system behavior becomes testable.]
 
-- **`path/to/file.ts`**: [what changes in this file]
-- **`path/to/file.ts`**: [what changes in this file]
+### Why this phase is first/next
 
+[Ordering rationale: dependency, risk, vertical slice, migration safety, external integration, etc.]
 
-[optional - show new method signatures or changes, use ... verbatim in body]
-```typescript
-async function [name]([args]): [returntype] { ... }
+### Expected File Changes
+
+- **`path/to/file.ext`**: [outline-level change]
+- **`path/to/other.ext`**: [outline-level change]
+
+### Interface / Contract Shape
+
+[Optional. Include signatures, schema shape, endpoint shape, event shape, or short diffs only when they clarify the structure. Do not include full implementation bodies. If not needed, write "No new public contract in this phase.".]
+
+```[language]
+[signature or contract shape only]
 ```
 
-- **`path/to/file.ts`**: [what changes in this file]
+### Tests and Validation
 
-[optional - show new method signatures or changes, use ... verbatim in body]
-```diff
- async function [name](
-   [arg1],
-+  [arg3],
--  [arg2],
- ): [returntype] { ... }
-```
+**Automated:**
 
-### Validation
+- [test file or command category and expected signal]
+- [typecheck/lint/build/smoke check if known]
 
-[How we'll know it's working as intended - what part of the vertical slice will be testable]
+**Manual:** [specific manual check, or "None expected." ]
+
+### Dependencies and Risks
+
+- **Dependencies:** [dependencies, or "None."]
+- **Risks:** [risk and mitigation, or "None identified."]
+
+### Plan-Prep Notes
+
+[Files/types/contracts the `create-plan` phase must read or verify before writing full code.]
+
+- [type/schema/function/test fixture to inspect]
 
 ---
 
 ## Phase 2: [Phase Title]
 
+### Objective
+
 ...
+
+### Why this phase is first/next
+
+...
+
+### Expected File Changes
+
+- **`path/to/file.ext`**: [outline-level change]
+
+### Interface / Contract Shape
+
+...
+
+### Tests and Validation
+
+**Automated:**
+
+- [test/check]
+
+**Manual:** [manual check or "None expected."]
+
+### Dependencies and Risks
+
+- **Dependencies:** [dependencies, or "None."]
+- **Risks:** [risk and mitigation, or "None identified."]
+
+### Plan-Prep Notes
+
+- [plan-prep note]
 
 ---
 
+## Cross-Phase Validation Strategy
+
+[Checks that should run after multiple phases or in the final detailed plan: regression suite, typecheck, lint, build, e2e, migration smoke, external integration smoke, etc.]
+
+- [validation command/check if known]
+- [validation command/check if known]
+
 ## Open Questions
 
-- [questions about plan structure that need clarification]
-- ...
+[Only questions that materially affect plan writing or phase structure. If none, write "None.".]
+
+- [question] — [owner/evidence needed/phase impact]
+
+## Handoff to Create Plan
+
+[Concise instructions for the plan writer.]
+
+- [decision/preference/pattern that must be preserved]
+- [file/type/schema/test fixture that must be read before writing full code]
+- [validation requirement to turn into concrete success criteria]
+
+## Outline Notes
+
+[Any assumptions, document conflicts resolved, phase tradeoffs, agent research notes, or superseded prior outline details that matter for future readers.]

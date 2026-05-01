@@ -33,7 +33,7 @@ Before final response:
 - Testing patterns are documented for each researched component area, or the absence of discoverable tests is stated with the search performed.
 - The document contains no implementation recommendations, design decisions, critique, or future work disguised as research.
 - Metadata records date/time, branch, commit, repository, source research-questions file, and working-tree state.
-- The research document names the research agents used and the area each one covered, or records the blocker if subagents were unavailable.
+- The research document names the research agents used and the area each one covered.
 - The final response follows `references/research_final_answer.md`.
 
 ## Operating Rules
@@ -46,7 +46,7 @@ Before final response:
 - Do not recommend changes, explain what should be built, assign blame, critique design, or perform root-cause analysis unless the user explicitly asks for that separate mode.
 - Use web research only when the user explicitly asks for external documentation or when a current external API contract is required to explain code already present. Cite links when used.
 - Ask for clarification only when the research target or output location cannot be safely inferred. Otherwise make a reasonable assumption, continue, and record it.
-- When the runtime provides Task/subagent support, use the specialized research agents for codebase exploration. The main session owns input reading, agenda design, synthesis, spot-checking, document writing, and validation; it should not absorb broad source context that a research agent can inspect and summarize.
+- Use the specialized research agents for codebase exploration. The main session owns input reading, agenda design, synthesis, spot-checking, document writing, and validation; it should not absorb broad source context that a research agent can inspect and summarize.
 
 ## Available Research Agents
 
@@ -57,7 +57,7 @@ Use these agents to reduce main-session context and improve coverage:
 - **codebase-pattern-finder**: finds comparable existing implementations and testing patterns. Use when later design/planning will need examples to follow, or when the research questions ask about patterns.
 - **web-search-researcher**: researches external documentation only when explicitly requested or needed to explain a current external API/SDK integration in the codebase. Require source links in its findings.
 
-Agent use is part of the research workflow, not optional decoration. If the runtime does not expose subagents, state that blocker in the research notes and perform direct research with the same evidence requirements.
+Agent use is part of the research workflow, not optional decoration.
 
 ## Retrieval Budget
 
@@ -104,7 +104,7 @@ Read directly mentioned code/docs fully when they are current-state evidence. Av
 
 Create a short internal agenda that maps each question to research areas. Prefer area-based grouping such as UI flow, API boundary, persistence/state, background jobs, external provider, or tests.
 
-Launch research agents for codebase exploration. For a narrow single-area query, use at least one focused locator/analyzer/pattern agent when subagents are available. For broader research, launch 2-6 focused agents for different areas. Combine related questions that touch the same code boundary; do not launch one agent per question by default. Use foreground/awaited agents only: wait for all research agents to complete before synthesis.
+Launch research agents for codebase exploration. For a narrow single-area query, use at least one focused locator/analyzer/pattern agent. For broader research, launch 2-6 focused agents for different areas. Combine related questions that touch the same code boundary; do not launch one agent per question by default. Use foreground/awaited agents only: wait for all research agents to complete before synthesis.
 
 Use concise, outcome-first prompts:
 
@@ -185,7 +185,7 @@ After writing or updating the document, verify as much as practical:
 - each numbered research question appears in the question-by-question answers;
 - key findings include file references with line numbers;
 - the document does not contain recommendation/planning language except inside quoted user input or explicit boundary notes;
-- research agents used are named, or subagent unavailability is recorded;
+- research agents used are named;
 - source documents and searches used for absent-test claims are named.
 
 If a check cannot run, report the exact blocker and the next best check.
