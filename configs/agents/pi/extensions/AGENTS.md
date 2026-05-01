@@ -2,6 +2,11 @@
 
 Repository-owned Pi extensions live here and are installed by symlinking this directory to `~/.pi/agent/extensions`.
 
+Before implementing or refactoring an extension, also follow:
+
+- [`taste.md`](./taste.md) — module boundaries, TypeScript design, no barrels, and tasty code principles.
+- [`testing.md`](./testing.md) — test coverage, Arrange / Act / Assert, `bun:test` mocks, and E2E rules.
+
 ## Structure
 
 Each extension must have its own directory:
@@ -10,12 +15,13 @@ Each extension must have its own directory:
 configs/agents/pi/extensions/
   my-extension/
     index.ts
+    index.test.ts
+    index.spec.ts
     lib/
       register.ts
+      register.test.ts
       feature.ts
       feature.test.ts
-      register.test.ts
-    index.spec.ts
 ```
 
 Rules:
@@ -23,8 +29,10 @@ Rules:
 - Use `extensions/<extension-name>/index.ts` as the only Pi entrypoint.
 - `index.ts` must only wire/register the extension and export the default function.
 - Keep behavior, parsing, command/tool handlers, and side-effectful helpers under `extensions/<extension-name>/lib/*.ts`.
+- Keep Pi-specific code at the boundary: `index.ts` and `lib/register.ts`.
 - Keep shared test helpers under `extensions/_shared/testing/`.
 - Do not create `extensions/_shared/index.ts`; Pi auto-discovers `extensions/*/index.ts` as extensions.
+- Do not add barrel exports or wrapper modules (`export * from ...`, re-export-only files). Import concrete modules directly.
 - Avoid root-level `extensions/*.ts` unless it is intentionally a single-file extension.
 
 Preferred `index.ts` shape:
@@ -41,9 +49,11 @@ export default function (pi: ExtensionAPI) {
 ## Maintainability principles
 
 - Treat every extension as a small, testable package.
-- Keep Pi-specific code at the boundary (`index.ts` and `lib/register.ts`).
 - Prefer pure functions for domain logic.
 - Use small modules with explicit names instead of large catch-all files.
+- Normalize/classify inputs once near the boundary, then pass typed shapes through the workflow.
+- Prefer typed results/errors over string matching in tool handlers.
+- Use complete fake runtimes/implementations for tests instead of `resolveDependencies(overrides: Partial<...>)` patterns.
 - Namespace commands, tools, and event-bus messages to avoid collisions as the extension set grows.
 - Keep top-level side effects minimal; do startup work inside registration/event handlers.
 - Check `ctx.hasUI` before prompting or showing UI in handlers that may run outside interactive mode.
@@ -52,20 +62,28 @@ export default function (pi: ExtensionAPI) {
 - Use `withFileMutationQueue()` for custom tools that mutate files.
 - Use `StringEnum` from `@mariozechner/pi-ai` for string enum tool parameters.
 
+See [`taste.md`](./taste.md) for examples and refactor checklists.
+
 ## Tests
 
 Tests are colocated with the code they verify.
 
+Use the filename suffix to communicate the boundary being tested:
+
 - `*.test.ts` is for default no-cost tests.
-  - Use pure functions or fake Pi integration.
-  - Do not call real models.
+  - Use for pure functions, local parsing/formatting, validation, storage helpers, or fake Pi integration.
+  - Mock or avoid network, credentials, browsers, provider CLIs, subprocess E2E, and real model calls.
+  - Use `mock()` from `bun:test` for spies/fakes instead of handwritten counters or workaround objects.
   - These tests run by default.
-- `*.spec.ts` is for real Pi E2E tests.
+- `*.spec.ts` is for integration, live-contract, and E2E tests.
+  - Use when the test crosses a process, network, browser-cookie, credential, real provider/model, or real Pi agent boundary.
   - May spawn Pi.
   - May call configured models and cost money.
   - These tests run only through the E2E test command.
 
-Use Bun for tests and write tests in Arrange / Act / Assert form:
+Every behavior module should have a colocated same-basename `*.test.ts`, except type-only files and static schema/constant-only files.
+
+Use Bun for tests and write every test in Arrange / Act / Assert form:
 
 ```ts
 test("registers the command", async () => {
@@ -82,7 +100,9 @@ test("registers the command", async () => {
 
 Prefer behavioral integration tests over implementation-detail tests. For extension registration, use the shared fake Pi harness from `_shared/testing/fake-pi.ts` and exercise registered commands, tools, and event handlers.
 
-Do not register user-facing commands, tools, shortcuts, flags, messages, or UI solely for testing. Anything registered by an extension is available to the user after installation. If testability needs a seam, inject dependencies through `lib/register.ts` or test pure `lib/*.ts` functions instead.
+Do not register user-facing commands, tools, shortcuts, flags, messages, or UI solely for testing. Anything registered by an extension is available to the user after installation. If testability needs a seam, inject a complete fake runtime/implementation through `lib/register.ts` or test pure `lib/*.ts` functions instead.
+
+See [`testing.md`](./testing.md) for detailed examples and checklists.
 
 ## Test commands
 
