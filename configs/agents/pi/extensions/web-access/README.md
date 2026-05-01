@@ -24,6 +24,22 @@ For an ad-hoc run from the repository root:
 pi -e configs/agents/pi/extensions/web-access
 ```
 
+To install this extension as a Pi package from a local checkout:
+
+```bash
+pi install ./configs/agents/pi/extensions/web-access
+```
+
+To install the GitHub package that contains this extension:
+
+```bash
+pi install git:github.com/0xthierry/dev
+# or
+pi install https://github.com/0xthierry/dev
+```
+
+The GitHub package installs all extensions declared by the repository root. To install only `web-access`, clone the repo and use the local per-extension command above, or install the GitHub package and use `pi config` to disable resources you do not want.
+
 After changing the extension in an interactive Pi session, use `/reload` to reload auto-discovered extensions.
 
 ## Quick usage examples

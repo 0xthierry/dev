@@ -1,6 +1,16 @@
 {
+  "name": "@0xthierry/dev-pi-extensions",
   "private": true,
   "type": "module",
+  "keywords": [
+    "pi-package"
+  ],
+  "pi": {
+    "extensions": [
+      "./configs/agents/pi/extensions/desktop-notification",
+      "./configs/agents/pi/extensions/web-access"
+    ]
+  },
   "scripts": {
     "test:pi-extensions": "bun scripts/pi-extension-tests.ts test",
     "test:pi-extensions:e2e": "bun scripts/pi-extension-tests.ts e2e",
