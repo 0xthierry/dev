@@ -403,7 +403,7 @@ skill_disables_model_invocation() {
   ' "$skill_md"
 }
 
-validate_pi_skills() {
+prune_pi_skills_disabled_for_model_invocation() {
   local skill_entry=""
   local skill_md=""
   local skill_name=""
@@ -432,9 +432,8 @@ validate_pi_skills() {
       else
         resolved_entry="$(canonicalize_path "$skill_entry")"
       fi
-      warn "Pi skill $skill_name points to a skill with disable_model_invocation: true: $resolved_entry"
-      warn "Remove $skill_entry from configs/agents/pi/skills before installing Pi skills."
-      return 1
+      run_cmd rm -rf -- "$skill_entry"
+      log "removed: Pi skill $skill_name disables model invocation ($resolved_entry)"
     fi
   done
 }
@@ -742,7 +741,7 @@ main() {
   fi
 
   if (( install_pi )); then
-    validate_pi_skills
+    prune_pi_skills_disabled_for_model_invocation
     install_pi_target "$HOME/.pi/agent"
   fi
 
