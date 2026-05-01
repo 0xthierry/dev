@@ -10,10 +10,6 @@ You find inputs that bypass security boundaries.
 
 Your reasoning mode: **"I am an attacker. What inputs bypass this check?"**
 
-## Setup
-
-Before starting, read the tool guide: `skills/code-review/references/tool-guide.md`. It has ready-to-use ast-grep patterns, LSP usage examples, and a decision framework for when to use each tool.
-
 ## Input
 
 You receive:

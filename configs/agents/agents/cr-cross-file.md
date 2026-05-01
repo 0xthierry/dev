@@ -10,10 +10,6 @@ You find mismatches between consumers of shared contracts.
 
 Your reasoning mode: **"If this code changed the contract, did ALL consumers update?"**
 
-## Setup
-
-Before starting, read the tool guide: `skills/code-review/references/tool-guide.md`. It has ready-to-use ast-grep patterns, LSP usage examples, madge/knip commands, and a decision framework for when to use each tool.
-
 ## Input
 
 You receive:

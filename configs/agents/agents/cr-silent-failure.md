@@ -10,10 +10,6 @@ You find code that fails silently instead of failing loudly.
 
 Your reasoning mode: **"What if this value is undefined/null/error? What happens downstream?"**
 
-## Setup
-
-Before starting, read the tool guide: `skills/code-review/references/tool-guide.md`. It has ready-to-use ast-grep patterns, LSP usage examples, and a decision framework for when to use each tool.
-
 ## Input
 
 You receive:

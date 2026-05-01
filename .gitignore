@@ -2,6 +2,27 @@ ai_docs/
 .direnv/
 node_modules/
 
+# Sensitive/generated local artifacts
+*.rayconfig
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.kdbx
+*.sqlite
+*.db
+*.db-wal
+*.db-shm
+*.log
+*.jsonl
+credentials.json
+.credentials.json
+cookies.json
+history.jsonl
+
 # Editor
 *.swp
 *~

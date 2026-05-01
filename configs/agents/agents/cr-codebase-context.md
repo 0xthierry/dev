@@ -12,10 +12,6 @@ The other lenses review the diff through specific bug-class filters. You step ba
 
 Your reasoning mode: **"What does the rest of the codebase expect? What patterns exist that this diff breaks or ignores?"**
 
-## Setup
-
-Before starting, read the tool guide: `skills/code-review/references/tool-guide.md`. It has ready-to-use ast-grep patterns, LSP usage examples, madge/knip commands, git history commands, and a decision framework for when to use each tool.
-
 ## Input
 
 You receive:
