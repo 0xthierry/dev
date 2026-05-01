@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { createFakePi } from "../../_shared/testing/fake-pi";
 import type { DesktopNotification } from "./format-notification";
 import { registerDesktopNotificationExtension } from "./register";
@@ -6,9 +6,9 @@ import { registerDesktopNotificationExtension } from "./register";
 describe("registerDesktopNotificationExtension", () => {
   test("notifies with the latest assistant response when the agent ends", async () => {
     // Arrange
-    const notifications: DesktopNotification[] = [];
+    const notify = mock((notification: DesktopNotification) => notification);
     const fakePi = createFakePi();
-    registerDesktopNotificationExtension(fakePi.pi, (notification) => notifications.push(notification));
+    registerDesktopNotificationExtension(fakePi.pi, notify);
 
     // Act
     await fakePi.emit("agent_end", {
@@ -20,6 +20,7 @@ describe("registerDesktopNotificationExtension", () => {
     });
 
     // Assert
-    expect(notifications).toEqual([{ title: "π", body: "Done Tests passed." }]);
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith({ title: "π", body: "Done Tests passed." });
   });
 });
