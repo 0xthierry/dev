@@ -389,6 +389,56 @@ force_link_skill_entries() {
   done < <(find "$SOURCE_SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*' -print0)
 }
 
+skill_disables_model_invocation() {
+  local skill_md="$1"
+
+  awk '
+    BEGIN { in_fm = 0; seen_open = 0; found = 0 }
+    /^---[[:space:]]*$/ {
+      if (!seen_open) { in_fm = 1; seen_open = 1; next }
+      exit
+    }
+    in_fm && /^[[:space:]]*disable_model_invocation:[[:space:]]*true[[:space:]]*$/ { found = 1; exit }
+    END { exit found ? 0 : 1 }
+  ' "$skill_md"
+}
+
+validate_pi_skills() {
+  local skill_entry=""
+  local skill_md=""
+  local skill_name=""
+  local resolved_entry=""
+
+  for skill_entry in "$SOURCE_PI_SKILLS_DIR"/*; do
+    [[ -e "$skill_entry" || -L "$skill_entry" ]] || continue
+
+    if [[ -d "$skill_entry" || -L "$skill_entry" ]]; then
+      skill_md="$skill_entry/SKILL.md"
+      skill_name="$(basename "$skill_entry")"
+    elif [[ -f "$skill_entry" && "$skill_entry" == *.md ]]; then
+      skill_md="$skill_entry"
+      skill_name="$(basename "$skill_entry" .md)"
+    else
+      continue
+    fi
+
+    if [[ ! -f "$skill_md" ]]; then
+      continue
+    fi
+
+    if skill_disables_model_invocation "$skill_md"; then
+      if [[ -L "$skill_entry" ]]; then
+        resolved_entry="$(resolve_symlink_target "$skill_entry")"
+      else
+        resolved_entry="$(canonicalize_path "$skill_entry")"
+      fi
+      warn "Pi skill $skill_name points to a skill with disable_model_invocation: true: $resolved_entry"
+      warn "Remove $skill_entry from configs/agents/pi/skills before installing Pi skills."
+      return 1
+    fi
+  done
+}
+
 install_target() {
   local target_root="$1"
   local label="$2"
@@ -692,6 +742,7 @@ main() {
   fi
 
   if (( install_pi )); then
+    validate_pi_skills
     install_pi_target "$HOME/.pi/agent"
   fi
 
