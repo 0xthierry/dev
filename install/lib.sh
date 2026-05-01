@@ -123,6 +123,7 @@ safe_link_path() {
   local current_target=""
   local resolved_source_path=""
   local resolved_current_target=""
+  local backup_path=""
 
   resolved_source_path="$(canonicalize_path "$source_path")"
 
@@ -140,8 +141,9 @@ safe_link_path() {
   fi
 
   if [[ -e "$target_path" ]]; then
-    mv "$target_path" "$target_path.bak"
-    log_item "$label: backed up to $target_path.bak"
+    backup_path="$(next_backup_path "$target_path")"
+    run_cmd mv "$target_path" "$backup_path"
+    log_item "$label: backed up to $backup_path"
   fi
 
   run_cmd ln -s "$source_path" "$target_path"

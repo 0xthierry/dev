@@ -27,6 +27,7 @@ HOST_PACMAN_PACKAGES=(
   steam
   tailscale
   telegram-desktop
+  xorg-setxkbmap
 )
 
 # shellcheck disable=SC2034
@@ -69,10 +70,42 @@ set_default_browser_brave() {
   run_cmd xdg-settings set default-web-browser brave-browser.desktop
 }
 
+configure_keyboard() {
+  log_section "Keyboard"
+
+  if ! check_installed localectl; then
+    log_item "localectl not available, skipping"
+    return 0
+  fi
+
+  log_item "Setting console keymap to us-acentos"
+  run_cmd sudo localectl set-keymap us-acentos
+
+  log_item "Setting X11 fallback keymap to us / pc105 / intl"
+  run_cmd sudo localectl set-x11-keymap us pc105 intl terminate:ctrl_alt_bksp
+
+  if check_installed setxkbmap && [[ -n "${DISPLAY:-}" ]]; then
+    log_item "Setting current Xwayland keymap to us / pc105 / intl"
+    run_cmd setxkbmap -layout us -model pc105 -variant intl -option compose:caps
+  fi
+}
+
+reload_hyprland_if_running() {
+  if ! check_installed hyprctl || [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    return 0
+  fi
+
+  log_section "Hyprland"
+  log_item "Reloading Hyprland configuration"
+  run_cmd hyprctl reload
+}
+
 setup_host_machine_state() {
   log_section "Host Machine State"
+  configure_keyboard
   set_default_browser_brave
   apply_host_configs
+  reload_hyprland_if_running
 }
 
 setup_post_host_state() {
