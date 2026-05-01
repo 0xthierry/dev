@@ -5,6 +5,7 @@ import { join } from "node:path";
 export const CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
 
 export interface WebSearchConfig {
+  $schema?: unknown;
   exaApiKey?: unknown;
   exaApiKeyEnv?: unknown;
   provider?: unknown;
@@ -12,6 +13,7 @@ export interface WebSearchConfig {
   braveProfile?: unknown;
   searchModel?: unknown;
   youtube?: { enabled?: unknown; preferredModel?: unknown };
+  medium?: { enabled?: unknown; profile?: unknown };
   githubClone?: {
     enabled?: unknown;
     maxRepoSizeMB?: unknown;

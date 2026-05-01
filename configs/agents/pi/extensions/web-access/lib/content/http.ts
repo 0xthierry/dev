@@ -18,22 +18,61 @@ const DEFAULT_HEADER_VALUE = "";
 const DEFAULT_CONTENT_LENGTH_HEADER = "0";
 const DEFAULT_ARTICLE_CONTENT = "";
 const DEFAULT_ARTICLE_TITLE = "";
+const MAX_SCOPED_HEADER_REDIRECTS = 10;
+const DEFAULT_REQUEST_HEADERS = {
+  "User-Agent": "Mozilla/5.0 AppleWebKit/537.36 Chrome/122 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.5",
+  "Accept-Language": "en-US,en;q=0.9",
+};
 const turndown = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced" });
 
-export async function extractViaHttp(url: string, signal?: AbortSignal): Promise<ExtractedContent> {
+export interface HttpExtractOptions {
+  headers?: Record<string, string>;
+  isHeaderAllowedForUrl?: (url: URL) => boolean;
+}
+
+function headersForUrl(url: URL, options: HttpExtractOptions): Record<string, string> {
+  const extraHeaders =
+    options.headers && (!options.isHeaderAllowedForUrl || options.isHeaderAllowedForUrl(url)) ? options.headers : {};
+  return { ...DEFAULT_REQUEST_HEADERS, ...extraHeaders };
+}
+
+async function fetchWithScopedHeaders(
+  url: string,
+  signal: AbortSignal,
+  options: HttpExtractOptions,
+): Promise<Response> {
+  if (!options.headers) return fetch(url, { signal, headers: DEFAULT_REQUEST_HEADERS });
+
+  let currentUrl = url;
+  for (let redirectCount = 0; redirectCount <= MAX_SCOPED_HEADER_REDIRECTS; redirectCount++) {
+    const parsed = new URL(currentUrl);
+    const response = await fetch(currentUrl, {
+      signal,
+      redirect: "manual",
+      headers: headersForUrl(parsed, options),
+    });
+    if (response.status < 300 || response.status >= 400) return response;
+
+    const location = response.headers.get("location");
+    if (!location) return response;
+    currentUrl = new URL(location, currentUrl).toString();
+  }
+
+  throw new Error(`Too many redirects fetching ${url}`);
+}
+
+export async function extractViaHttp(
+  url: string,
+  signal?: AbortSignal,
+  options: HttpExtractOptions = {},
+): Promise<ExtractedContent> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
   const onAbort = () => controller.abort();
   signal?.addEventListener("abort", onAbort);
   try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Mozilla/5.0 AppleWebKit/537.36 Chrome/122 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.5",
-        "Accept-Language": "en-US,en;q=0.9",
-      },
-    });
+    const response = await fetchWithScopedHeaders(url, controller.signal, options);
     if (!response.ok) {
       const message = `HTTP ${response.status}: ${response.statusText}`;
       return { url, title: "", content: "", error: message, errorDetails: fetchFailedError(url, message) };

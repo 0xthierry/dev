@@ -1,7 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { getGoogleCookieHosts, isGoogleCookieName } from "./chrome-cookies";
+import { getGoogleCookieHosts, isGoogleCookieName, normalizeCookieHosts } from "./chrome-cookies";
 
 describe("chrome cookie helpers", () => {
+  test("normalizes cookie hosts", () => {
+    // Arrange
+    const hosts = [" Medium.com ", ".medium.com", "", "Sub.Medium.com"];
+
+    // Act
+    const result = normalizeCookieHosts(hosts);
+
+    // Assert
+    expect(result).toEqual(["medium.com", "sub.medium.com"]);
+  });
+
   test("includes Gemini, Google account, and bare Google hosts", () => {
     // Arrange
     const expectedHosts = ["gemini.google.com", "accounts.google.com", "www.google.com", "google.com"];

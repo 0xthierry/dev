@@ -69,8 +69,13 @@ Example:
 
 ```json
 {
+  "$schema": "./agent/extensions/web-access/web-search.schema.json",
   "exaApiKeyEnv": "EXA_API_KEY",
   "braveProfile": "Default",
+  "medium": {
+    "enabled": true,
+    "profile": "Default"
+  },
   "youtube": {
     "enabled": true,
     "preferredModel": "gemini-3-flash-preview"
@@ -89,8 +94,11 @@ Example:
 | --- | --- | --- |
 | `exaApiKeyEnv` | `EXA_API_KEY` | Name of the environment variable that contains the Exa API key. |
 | `exaApiKey` | unset | Literal Exa API key. Prefer `exaApiKeyEnv` so secrets stay out of files. |
-| `braveProfile` | `Default` | Browser profile name used when reading Google/Gemini cookies. Takes precedence over `chromeProfile`. |
-| `chromeProfile` | `Default` | Browser profile name used when `braveProfile` is not set. |
+| `$schema` | unset | Optional editor schema reference. From `~/.pi/web-search.json`, use `./agent/extensions/web-access/web-search.schema.json`. |
+| `braveProfile` | `Default` | Browser profile name used when reading browser cookies. Takes precedence over `chromeProfile` when a feature-specific profile is not set. |
+| `chromeProfile` | `Default` | Browser profile name used when `braveProfile` and feature-specific profiles are not set. |
+| `medium.enabled` | `false` | Enables local browser-cookie backed HTTP fetches for `medium.com` and `*.medium.com` URLs. |
+| `medium.profile` | unset | Browser profile to read Medium cookies from. Falls back to `braveProfile`, then `chromeProfile`, then the browser default profile. |
 | `youtube.enabled` | `true` | Enables Gemini-backed YouTube transcript/content extraction. Frame extraction still depends on the request and local tools. |
 | `youtube.preferredModel` | `gemini-3-flash-preview` | Gemini Web model for YouTube content extraction. Supported values are `gemini-3-flash-preview`, `gemini-3-pro`, `gemini-2.5-flash`, and `gemini-2.5-pro`. |
 | `githubClone.enabled` | `true` | Enables GitHub repository cloning for GitHub URLs. |
@@ -109,6 +117,7 @@ Different features need different external services or local tools:
 | Primary web search and Exa content fetch | `EXA_API_KEY` or `exaApiKeyEnv`/`exaApiKey` in `~/.pi/web-search.json`. |
 | Search/fetch fallback | `codex` CLI installed and authenticated/configured. The extension runs `codex exec --sandbox read-only --ephemeral`. |
 | Direct page fetch | Network access plus repository npm dependencies (`@mozilla/readability`, `linkedom`, `turndown`). |
+| Medium authenticated fetch | `medium.enabled: true` and a Brave/Chromium/Chrome profile signed into Medium. Cookies are only sent to `medium.com` or `*.medium.com`. |
 | Jina fallback | Network access to `https://r.jina.ai/`. |
 | Gemini Web fallback and YouTube transcript extraction | A Brave, Chromium, or Chrome profile signed into `https://gemini.google.com`, with readable Google cookies. |
 | Browser cookie decryption on macOS | The `security` command and the browser's Keychain entry. |
@@ -118,6 +127,12 @@ Different features need different external services or local tools:
 | YouTube thumbnails | Network access to YouTube thumbnail URLs. |
 
 Do not commit API keys or browser-cookie material. Prefer environment variables for secrets.
+
+## Medium authenticated fetches
+
+When `medium.enabled` is `true`, `fetch_content` tries a local authenticated HTTP request before public/external content providers for Medium URLs. The extension reads cookies from the configured local browser profile and attaches them only to `medium.com` or `*.medium.com` requests. Cookie values are not logged, stored in tool details, appended to Pi session entries, or sent to Exa, Jina, Gemini, or Codex.
+
+If no Medium cookies are found, or the authenticated response is still incomplete, normal fallback providers continue to run.
 
 ## How search works
 
@@ -154,11 +169,12 @@ For normal content requests, extractors run in this order:
 
 1. GitHub repository/file/tree extraction.
 2. YouTube transcript/content extraction through Gemini Web.
-3. Exa Contents API.
-4. Direct HTTP fetch with Readability and markdown conversion.
-5. Jina Reader fallback.
-6. Gemini Web page extraction.
-7. Codex CLI fallback.
+3. Authenticated HTTP for configured site-specific browser-cookie providers such as Medium.
+4. Exa Contents API.
+5. Direct HTTP fetch with Readability and markdown conversion.
+6. Jina Reader fallback.
+7. Gemini Web page extraction.
+8. Codex CLI fallback.
 
 For YouTube frame requests, the extension uses `yt-dlp` to get a stream URL and `ffmpeg` to extract JPEG frames.
 
@@ -247,3 +263,10 @@ bun run test:pi-extensions:e2e web-access
 ```
 
 The E2E command includes live contract specs for provider boundaries. The current specs may require network access, `EXA_API_KEY`, Codex CLI auth, Gemini browser cookies, and `gh`/`git`. Manual frame-extraction validation also requires `yt-dlp` and `ffmpeg`.
+
+Medium cookie validation is gated so it does not read browser cookies unless explicitly enabled:
+
+```bash
+PI_WEB_ACCESS_MEDIUM_COOKIE_SPEC=1 bun test configs/agents/pi/extensions/web-access/lib/providers/medium-cookies.spec.ts
+PI_WEB_ACCESS_MEDIUM_COOKIE_SPEC=1 PI_WEB_ACCESS_MEDIUM_TEST_URL="https://medium.com/..." bun test configs/agents/pi/extensions/web-access/lib/providers/medium-cookies.spec.ts
+```

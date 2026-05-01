@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pi web-access extension configuration",
+  "description": "Configuration for configs/agents/pi/extensions/web-access, normally stored at ~/.pi/web-search.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional editor schema reference. From ~/.pi/web-search.json, use ./agent/extensions/web-access/web-search.schema.json."
+    },
+    "exaApiKeyEnv": {
+      "type": "string",
+      "default": "EXA_API_KEY",
+      "description": "Environment variable name that contains the Exa API key. Prefer this over exaApiKey so secrets stay out of files."
+    },
+    "exaApiKey": {
+      "type": "string",
+      "description": "Literal Exa API key. Prefer exaApiKeyEnv for normal use."
+    },
+    "braveProfile": {
+      "type": "string",
+      "default": "Default",
+      "description": "Brave browser profile name used for browser-cookie based features when a feature-specific profile is not set."
+    },
+    "chromeProfile": {
+      "type": "string",
+      "default": "Default",
+      "description": "Chromium/Chrome profile name used for browser-cookie based features when braveProfile and feature-specific profiles are not set."
+    },
+    "provider": {
+      "type": "string",
+      "deprecated": true,
+      "description": "Deprecated/unused by the current extension."
+    },
+    "searchModel": {
+      "type": "string",
+      "deprecated": true,
+      "description": "Deprecated/unused by the current extension."
+    },
+    "medium": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Medium-specific authenticated fetch support using cookies from a local browser profile. Cookies are only sent to medium.com or *.medium.com.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable local browser-cookie backed HTTP fetches for Medium URLs before public/external fetch providers are tried."
+        },
+        "profile": {
+          "type": "string",
+          "description": "Browser profile to read Medium cookies from. Falls back to braveProfile, then chromeProfile, then the browser default profile."
+        }
+      }
+    },
+    "youtube": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "YouTube transcript/content extraction settings.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Gemini Web backed YouTube transcript/content extraction."
+        },
+        "preferredModel": {
+          "type": "string",
+          "default": "gemini-3-flash-preview",
+          "enum": ["gemini-3-flash-preview", "gemini-3-pro", "gemini-2.5-flash", "gemini-2.5-pro"],
+          "description": "Gemini Web model used for YouTube content extraction unless the tool call supplies a model override."
+        }
+      }
+    },
+    "githubClone": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "GitHub repository clone settings for GitHub URL fetches.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable GitHub repository cloning for supported GitHub URLs."
+        },
+        "maxRepoSizeMB": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 350,
+          "description": "Accepted by the config normalizer, but the current clone implementation does not enforce a size limit."
+        },
+        "cloneTimeoutSeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 30,
+          "description": "Timeout for gh/git clone commands."
+        },
+        "clonePath": {
+          "type": "string",
+          "default": "/tmp/pi-github-repos",
+          "description": "Parent directory used for temporary GitHub clones."
+        }
+      }
+    }
+  }
+}

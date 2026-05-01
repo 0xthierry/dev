@@ -51,4 +51,49 @@ describe("extractViaHttp", () => {
       provider: "http",
     });
   });
+
+  test("sends scoped extra headers to the initial allowed URL", async () => {
+    // Arrange
+    const fetchMock = mock(
+      async (_url: string | URL | Request, _init?: RequestInit) =>
+        new Response("# Private\n\nBody", { headers: { "content-type": "text/plain" } }),
+    );
+    globalThis.fetch = fetchMock as never;
+
+    // Act
+    const result = await extractViaHttp("https://medium.com/p/private", undefined, {
+      headers: { Cookie: "sid=secret" },
+      isHeaderAllowedForUrl: (url) => url.hostname === "medium.com",
+    });
+
+    // Assert
+    expect(result.error).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect((fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>).Cookie).toBe("sid=secret");
+  });
+
+  test("drops scoped extra headers when following redirects to disallowed hosts", async () => {
+    // Arrange
+    const responses = [
+      new Response(null, { status: 302, headers: { location: "https://example.com/final" } }),
+      new Response("# Public\n\nBody", { headers: { "content-type": "text/plain" } }),
+    ];
+    const fetchMock = mock(
+      async (_url: string | URL | Request, _init?: RequestInit) =>
+        responses.shift() ?? new Response("unexpected", { status: 500 }),
+    );
+    globalThis.fetch = fetchMock as never;
+
+    // Act
+    const result = await extractViaHttp("https://medium.com/p/private", undefined, {
+      headers: { Cookie: "sid=secret" },
+      isHeaderAllowedForUrl: (url) => url.hostname === "medium.com",
+    });
+
+    // Assert
+    expect(result.error).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>).Cookie).toBe("sid=secret");
+    expect((fetchMock.mock.calls[1]?.[1]?.headers as Record<string, string>).Cookie).toBeUndefined();
+  });
 });

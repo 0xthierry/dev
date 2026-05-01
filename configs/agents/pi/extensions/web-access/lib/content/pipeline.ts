@@ -5,6 +5,7 @@ import { extractGitHub } from "../providers/github/extract";
 import { extractYouTube, isYouTubeEnabled } from "../providers/youtube/transcript";
 import { abortedError, authRequiredError, fetchFailedError, isAbortError } from "../shared/errors";
 import type { ExtractedContent, FetchOptions } from "../types";
+import { extractViaAuthenticatedHttp } from "./authenticated-http";
 import { extractWithGeminiWeb } from "./gemini";
 import { extractViaHttp } from "./http";
 import { extractWithJinaReader } from "./jina";
@@ -56,6 +57,7 @@ export function createDefaultContentExtractors(): ContentExtractor[] {
   return [
     githubExtractor,
     youtubeTranscriptExtractor,
+    authenticatedHttpExtractor,
     exaContentsExtractor,
     httpExtractor,
     jinaReaderExtractor,
@@ -98,6 +100,15 @@ const youtubeTranscriptExtractor: ContentExtractor = {
         errorDetails: authRequiredError(target.url, message),
       },
     };
+  },
+};
+
+const authenticatedHttpExtractor: ContentExtractor = {
+  name: "authenticated-http",
+  supports: (target) => target.requestKind === "content",
+  async extract(target, signal) {
+    const result = await extractViaAuthenticatedHttp(target, signal);
+    return result ? httpOutcome(result) : { status: "miss" };
   },
 };
 

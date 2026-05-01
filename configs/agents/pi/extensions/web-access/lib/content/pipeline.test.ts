@@ -1,8 +1,25 @@
 import { describe, expect, test } from "bun:test";
 import { fetchFailedError, unsupportedContentTypeError } from "../shared/errors";
-import { type ContentExtractor, extractContent } from "./pipeline";
+import { type ContentExtractor, createDefaultContentExtractors, extractContent } from "./pipeline";
 
 describe("content pipeline", () => {
+  test("runs authenticated HTTP before public and external content providers", () => {
+    // Arrange / Act
+    const names = createDefaultContentExtractors().map((extractor) => extractor.name);
+
+    // Assert
+    expect(names).toEqual([
+      "github",
+      "youtube-transcript",
+      "authenticated-http",
+      "exa-contents",
+      "http",
+      "jina-reader",
+      "gemini-web",
+      "codex",
+    ]);
+  });
+
   test("continues from non-terminal extractor failures to later successes", async () => {
     // Arrange
     const failureThenSuccess: ContentExtractor[] = [

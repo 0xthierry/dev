@@ -6,6 +6,13 @@ import { join } from "node:path";
 
 export type CookieMap = Record<string, string>;
 
+export interface BrowserCookieOptions {
+  hosts: string[];
+  profile?: string;
+  cookieNames?: string[];
+  requiredCookies?: string[];
+}
+
 interface SqliteDatabase {
   prepare(sql: string): { all(...params: unknown[]): Array<Record<string, unknown>> };
   close(): void;
@@ -125,16 +132,31 @@ async function readMetaVersion(dbPath: string): Promise<number> {
   }
 }
 
+export function normalizeCookieHosts(hosts: string[]): string[] {
+  const normalized = new Set<string>();
+  for (const host of hosts) {
+    const trimmed = host.trim().toLowerCase().replace(/^\.+/, "");
+    if (trimmed) normalized.add(trimmed);
+  }
+  return [...normalized];
+}
+
+function cookieHostVariants(hosts: string[]): string[] {
+  const normalized = normalizeCookieHosts(hosts);
+  return [...normalized, ...normalized.map((host) => `.${host}`)];
+}
+
 async function queryCookieRows(dbPath: string, hosts: string[]): Promise<Array<Record<string, unknown>> | null> {
+  const hostVariants = cookieHostVariants(hosts);
+  if (hostVariants.length === 0) return [];
+
   const db = await openReadonlyDatabase(dbPath);
   if (!db) return null;
   try {
-    const placeholders = hosts.map(() => "?").join(",");
+    const placeholders = hostVariants.map(() => "?").join(",");
     return db
-      .prepare(
-        `SELECT host_key, name, value, encrypted_value FROM cookies WHERE host_key IN (${placeholders}) OR host_key IN (${placeholders})`,
-      )
-      .all(...hosts, ...hosts.map((host) => `.${host}`)) as Array<Record<string, unknown>>;
+      .prepare(`SELECT host_key, name, value, encrypted_value FROM cookies WHERE host_key IN (${placeholders})`)
+      .all(...hostVariants) as Array<Record<string, unknown>>;
   } finally {
     db.close();
   }
@@ -144,13 +166,19 @@ function copySidecar(source: string, target: string, suffix: string): void {
   if (existsSync(source + suffix)) copyFileSync(source + suffix, target + suffix);
 }
 
-export async function getGoogleCookies(
-  options: { profile?: string; requiredCookies?: string[] } = {},
+function isAllowedCookieName(name: string, cookieNames: string[] | undefined): boolean {
+  if (!cookieNames) return true;
+  return cookieNames.includes(name);
+}
+
+export async function getBrowserCookies(
+  options: BrowserCookieOptions,
 ): Promise<{ cookies: CookieMap; browser: string } | null> {
   const currentPlatform = platform();
   const browsers = currentPlatform === "darwin" ? MACOS_BROWSERS : currentPlatform === "linux" ? LINUX_BROWSERS : [];
   const profile = options.profile ?? DEFAULT_BROWSER_PROFILE;
-  const hosts = getGoogleCookieHosts();
+  const hosts = normalizeCookieHosts(options.hosts);
+  if (hosts.length === 0) return null;
 
   for (const browser of browsers) {
     const cookiesPath = join(homedir(), browser.baseDir, profile, "Cookies");
@@ -173,13 +201,14 @@ export async function getGoogleCookies(
       const cookies: CookieMap = {};
       for (const row of rows) {
         const name = row.name;
-        if (typeof name !== "string" || !isGoogleCookieName(name) || cookies[name]) continue;
+        if (typeof name !== "string" || !isAllowedCookieName(name, options.cookieNames) || cookies[name]) continue;
         let value = typeof row.value === "string" && row.value.length > 0 ? row.value : null;
         if (!value && row.encrypted_value instanceof Uint8Array) {
           value = decryptCookieValue(row.encrypted_value, key, metaVersion >= 24);
         }
         if (value) cookies[name] = value;
       }
+      if (Object.keys(cookies).length === 0) continue;
       if (options.requiredCookies?.length && !options.requiredCookies.every((name) => Boolean(cookies[name]))) continue;
       return { cookies, browser: browser.name };
     } finally {
@@ -188,6 +217,17 @@ export async function getGoogleCookies(
   }
 
   return null;
+}
+
+export function getGoogleCookies(
+  options: { profile?: string; requiredCookies?: string[] } = {},
+): Promise<{ cookies: CookieMap; browser: string } | null> {
+  return getBrowserCookies({
+    hosts: getGoogleCookieHosts(),
+    profile: options.profile,
+    cookieNames: [...COOKIE_NAMES],
+    requiredCookies: options.requiredCookies,
+  });
 }
 
 function decryptCookieValue(encrypted: Uint8Array, key: Buffer, stripHash: boolean): string | null {
