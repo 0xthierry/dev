@@ -1,0 +1,249 @@
+# Web Access
+
+Pi extension that gives the agent web research and content-reading tools.
+
+## What it registers
+
+This extension registers three LLM-callable tools:
+
+| Tool | Purpose |
+| --- | --- |
+| `web_search` | Search the web for current or specialized information and return citation-friendly source URLs. |
+| `fetch_content` | Fetch pages, GitHub repositories/files, and YouTube content into readable markdown or image frames. |
+| `get_search_content` | Retrieve stored results from an earlier `web_search` or `fetch_content` call. |
+
+It does not register slash commands, keyboard shortcuts, flags, or custom UI.
+
+## Installation and loading
+
+This repository's agent installer symlinks `configs/agents/pi/extensions` to `~/.pi/agent/extensions`, and Pi auto-discovers directory extensions with an `index.ts` file.
+
+For an ad-hoc run from the repository root:
+
+```bash
+pi -e configs/agents/pi/extensions/web-access
+```
+
+After changing the extension in an interactive Pi session, use `/reload` to reload auto-discovered extensions.
+
+## Quick usage examples
+
+```ts
+web_search({ query: "Pi coding agent extension API", numResults: 5 })
+
+web_search({
+  queries: ["current Node.js LTS", "Node.js release schedule"],
+  recencyFilter: "month",
+  domainFilter: ["nodejs.org", "-medium.com"],
+})
+
+fetch_content({ url: "https://example.com/article" })
+
+fetch_content({
+  url: "https://github.com/owner/repo/tree/main/docs",
+  forceClone: true,
+})
+
+fetch_content({
+  url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  timestamp: "0:30-1:00",
+  frames: 6,
+})
+
+get_search_content({ responseId: "<responseId>", urlIndex: 0 })
+```
+
+The model normally calls these tools itself. The examples above show the parameter shapes.
+
+## Configuration file
+
+Configuration is optional and lives at:
+
+```text
+~/.pi/web-search.json
+```
+
+A missing file is treated as an empty config.
+
+Example:
+
+```json
+{
+  "exaApiKeyEnv": "EXA_API_KEY",
+  "braveProfile": "Default",
+  "youtube": {
+    "enabled": true,
+    "preferredModel": "gemini-3-flash-preview"
+  },
+  "githubClone": {
+    "enabled": true,
+    "cloneTimeoutSeconds": 30,
+    "clonePath": "/tmp/pi-github-repos"
+  }
+}
+```
+
+### Config fields
+
+| Field | Default | Used for |
+| --- | --- | --- |
+| `exaApiKeyEnv` | `EXA_API_KEY` | Name of the environment variable that contains the Exa API key. |
+| `exaApiKey` | unset | Literal Exa API key. Prefer `exaApiKeyEnv` so secrets stay out of files. |
+| `braveProfile` | `Default` | Browser profile name used when reading Google/Gemini cookies. Takes precedence over `chromeProfile`. |
+| `chromeProfile` | `Default` | Browser profile name used when `braveProfile` is not set. |
+| `youtube.enabled` | `true` | Enables Gemini-backed YouTube transcript/content extraction. Frame extraction still depends on the request and local tools. |
+| `youtube.preferredModel` | `gemini-3-flash-preview` | Gemini Web model for YouTube content extraction. Supported values are `gemini-3-flash-preview`, `gemini-3-pro`, `gemini-2.5-flash`, and `gemini-2.5-pro`. |
+| `githubClone.enabled` | `true` | Enables GitHub repository cloning for GitHub URLs. |
+| `githubClone.cloneTimeoutSeconds` | `30` | Clone timeout. |
+| `githubClone.clonePath` | `/tmp/pi-github-repos` | Parent directory for temporary GitHub clones. |
+| `githubClone.maxRepoSizeMB` | `350` | Accepted by the config normalizer, but the current clone implementation does not enforce a size limit. |
+
+`provider` and `searchModel` may appear in older config shapes, but the current implementation does not read them.
+
+## External requirements
+
+Different features need different external services or local tools:
+
+| Feature | Requirement |
+| --- | --- |
+| Primary web search and Exa content fetch | `EXA_API_KEY` or `exaApiKeyEnv`/`exaApiKey` in `~/.pi/web-search.json`. |
+| Search/fetch fallback | `codex` CLI installed and authenticated/configured. The extension runs `codex exec --sandbox read-only --ephemeral`. |
+| Direct page fetch | Network access plus repository npm dependencies (`@mozilla/readability`, `linkedom`, `turndown`). |
+| Jina fallback | Network access to `https://r.jina.ai/`. |
+| Gemini Web fallback and YouTube transcript extraction | A Brave, Chromium, or Chrome profile signed into `https://gemini.google.com`, with readable Google cookies. |
+| Browser cookie decryption on macOS | The `security` command and the browser's Keychain entry. |
+| Browser cookie decryption on Linux | Browser cookie DB access; `secret-tool` is used when available, otherwise Chromium's default local password fallback is tried. |
+| GitHub URLs | `gh` CLI is preferred; `git` is used as fallback. Authenticate `gh` if private repositories are needed. |
+| YouTube frame extraction | `yt-dlp` and `ffmpeg` installed and on `PATH`. |
+| YouTube thumbnails | Network access to YouTube thumbnail URLs. |
+
+Do not commit API keys or browser-cookie material. Prefer environment variables for secrets.
+
+## How search works
+
+`web_search` normalizes `query` or `queries` into a list and searches each query sequentially.
+
+Provider order:
+
+1. Exa, when an API key is configured.
+2. Codex CLI fallback.
+
+Supported parameters:
+
+- `query`: one focused query.
+- `queries`: multiple query strings for broader research.
+- `numResults`: clamped by providers to 1-20 where applicable.
+- `includeContent`: asks Exa to include page text with search results when Exa is used.
+- `recencyFilter`: `day`, `week`, `month`, or `year`.
+- `domainFilter`: include domains like `example.com`; exclude domains with a leading `-`, like `-spam.example`.
+
+Search output is formatted as a concise answer plus a `Sources` list. Each successful call stores a search result under a generated `searchId`. If `includeContent` returns inline page content, that content is stored as a separate fetch result under a generated `fetchId`.
+
+## How fetching works
+
+`fetch_content` accepts either `url` or `urls`. Batch fetches run with a concurrency limit of 3.
+
+Before fetching, the extension validates the target:
+
+- invalid URLs are rejected;
+- PDFs are unsupported;
+- local video files are unsupported;
+- `timestamp`/`frames` are only valid for YouTube URLs.
+
+For normal content requests, extractors run in this order:
+
+1. GitHub repository/file/tree extraction.
+2. YouTube transcript/content extraction through Gemini Web.
+3. Exa Contents API.
+4. Direct HTTP fetch with Readability and markdown conversion.
+5. Jina Reader fallback.
+6. Gemini Web page extraction.
+7. Codex CLI fallback.
+
+For YouTube frame requests, the extension uses `yt-dlp` to get a stream URL and `ffmpeg` to extract JPEG frames.
+
+## GitHub behavior
+
+GitHub URLs are cloned into `githubClone.clonePath` and rendered as markdown guidance:
+
+- repository root: tree summary, README excerpt when present, and the local clone path;
+- `blob` URL: file content when the file is text-like;
+- `tree` URL: directory listing for that path.
+
+Large/noisy output is limited:
+
+- tree listings stop at 200 entries;
+- common generated/vendor directories are skipped in recursive root trees;
+- inline file content is capped at 100,000 characters;
+- README excerpts are capped at 8 KiB.
+
+The result tells the model to use Pi's `read` and `bash` tools at the cloned path for deeper inspection. Clone cache entries are cleared on Pi session shutdown.
+
+## YouTube behavior
+
+For a plain YouTube URL, `fetch_content` asks Gemini Web to extract video title, channel, duration, summary, transcript with timestamps, and visual descriptions. A thumbnail is included when available.
+
+For a timestamp or frame request:
+
+- `timestamp` supports `SS`, `MM:SS`, `H:MM:SS`, or `start-end` ranges.
+- `frames` must be between 1 and 12.
+- Range requests default to 6 frames when `frames` is omitted.
+- Frame intervals are at least 5 seconds apart.
+
+Examples:
+
+```ts
+fetch_content({ url: "https://youtu.be/dQw4w9WgXcQ", timestamp: "1:23" })
+fetch_content({ url: "https://youtu.be/dQw4w9WgXcQ", timestamp: "1:00-2:00", frames: 8 })
+fetch_content({ url: "https://youtu.be/dQw4w9WgXcQ", frames: 4 })
+```
+
+## Stored results and retrieval
+
+`web_search` and `fetch_content` store full structured results in memory and append a custom Pi session entry with custom type `web-access-results`.
+
+`get_search_content` accepts a stored result ID as `responseId`. That ID may be labeled `responseId`, `searchId`, or `fetchId` in the earlier tool result details.
+
+It can retrieve:
+
+- a stored search query by `responseId` and optional `queryIndex`;
+- fetched content by `responseId` and optional `urlIndex`;
+- fetched content by exact `url`.
+
+Storage behavior:
+
+- Stored result IDs are generated per tool call and recorded in tool result details. Batch fetches and truncated inline responses also include retrieval hints in the returned text.
+- Results are restored from the current session branch on `session_start` and `session_tree`.
+- Restored results expire after 1 hour.
+- In-memory stored results are cleared on `session_shutdown`.
+- Images from thumbnails/frames are stripped before session persistence; they are returned only in the immediate `fetch_content` response.
+
+Inline text returned to the model is capped at 30,000 characters. When output is truncated, the tool response includes a hint to call `get_search_content` with the generated ID.
+
+## Error behavior
+
+Errors are returned as structured text with:
+
+- what happened;
+- what to do next;
+- a machine-readable error object in tool details.
+
+Common non-retriable errors include missing query/URL, invalid URL, unsupported PDF, unsupported local video, and timestamp requests for non-YouTube URLs. Network, provider, authentication, clone, and extraction failures are generally marked retriable.
+
+## Development and validation
+
+Default no-cost tests:
+
+```bash
+bun run test:pi-extensions web-access
+bun run typecheck:pi-extensions
+bun run lint:pi-extensions
+```
+
+E2E/live specs:
+
+```bash
+bun run test:pi-extensions:e2e web-access
+```
+
+The E2E command includes live contract specs for provider boundaries. The current specs may require network access, `EXA_API_KEY`, Codex CLI auth, Gemini browser cookies, and `gh`/`git`. Manual frame-extraction validation also requires `yt-dlp` and `ffmpeg`.
