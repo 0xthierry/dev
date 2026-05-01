@@ -216,6 +216,8 @@ function createHarness(child: ChildProcessWithoutNullStreams, startupTimeoutMs: 
       }
       pendingEventWaiters.clear();
     });
+
+    queueMicrotask(() => finishStartup(harness));
   });
 
   return startup;

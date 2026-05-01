@@ -82,6 +82,8 @@ test("registers the command", async () => {
 
 Prefer behavioral integration tests over implementation-detail tests. For extension registration, use the shared fake Pi harness from `_shared/testing/fake-pi.ts` and exercise registered commands, tools, and event handlers.
 
+Do not register user-facing commands, tools, shortcuts, flags, messages, or UI solely for testing. Anything registered by an extension is available to the user after installation. If testability needs a seam, inject dependencies through `lib/register.ts` or test pure `lib/*.ts` functions instead.
+
 ## Test commands
 
 From the repository root:
@@ -116,6 +118,6 @@ Prefer Pi RPC mode for E2E tests because it is observable and scriptable:
 pi --mode rpc --no-session -e configs/agents/pi/extensions/my-extension
 ```
 
-Use `_shared/testing/pi-rpc-harness.ts` for RPC-based E2E tests. Cheap E2E smoke tests can assert extension loading through RPC commands such as `get_commands`. Paid E2E tests can send prompts and assert streamed events such as `tool_execution_start`, `tool_execution_end`, and `agent_end`.
+Use `_shared/testing/pi-rpc-harness.ts` for RPC-based E2E tests. E2E specs must exercise the extension's actual user-visible behavior, not only prove that Pi starts or that a command is registered. Prefer no-cost real-agent E2E coverage with `_shared/testing/faux-provider-extension.ts` when model behavior can be deterministic. The shared faux provider registers a local in-process model for tests; configure its response per spec with `PI_EXTENSION_E2E_FAUX_RESPONSE_TEXT` instead of hardcoding extension-specific behavior in the shared helper. Paid E2E tests can send prompts to configured real models and assert streamed events such as `tool_execution_start`, `tool_execution_end`, and `agent_end`.
 
-Every complex extension should expose a deterministic command or health-check behavior when practical, so it can be smoke-tested in real Pi without requiring a model call.
+Only expose deterministic commands or health-check behavior when they are genuinely useful to the user, not solely to make tests easier.
