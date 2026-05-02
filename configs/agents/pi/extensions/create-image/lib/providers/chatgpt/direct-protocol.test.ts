@@ -29,6 +29,28 @@ describe("extractChatGptBuildInfo", () => {
       scriptUrls: ["https://chatgpt.com/cdn/assets/app.js", "https://chatgpt.com/cdn/assets/chunk.js"],
     });
   });
+
+  test("reads build metadata with spacing and single-quoted attributes", () => {
+    // Arrange
+    const html = "<html data-build = 'prod-build' data-seq = '123'></html>";
+
+    // Act
+    const result = extractChatGptBuildInfo(html);
+
+    // Assert
+    expect(result).toMatchObject({ clientVersion: "prod-build", buildNumber: "123" });
+  });
+
+  test("reads build metadata from serialized bootstrap data", () => {
+    // Arrange
+    const html = '<html><script>self.__next_f.push(["data-build":"prod-build","data-seq":"123"])</script></html>';
+
+    // Act
+    const result = extractChatGptBuildInfo(html);
+
+    // Assert
+    expect(result).toMatchObject({ clientVersion: "prod-build", buildNumber: "123" });
+  });
 });
 
 describe("ChatGPT Sentinel helpers", () => {
@@ -147,6 +169,17 @@ describe("parseChatGptConversationStream", () => {
 
     // Assert
     expect(result).toEqual({ conversationId: "conversation-id", text: "hello", sawImageSignal: true });
+  });
+
+  test("recovers conversation id from a malformed stream prefix", () => {
+    // Arrange
+    const raw = 'garbage prefix data: {"v":{"conversation_id":"conversation-id"';
+
+    // Act
+    const result = parseChatGptConversationStream(raw);
+
+    // Assert
+    expect(result).toMatchObject({ conversationId: "conversation-id" });
   });
 });
 

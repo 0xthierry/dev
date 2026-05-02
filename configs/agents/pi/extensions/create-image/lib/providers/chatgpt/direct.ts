@@ -32,6 +32,9 @@ const PROVIDER_ID = "chatgpt-web";
 const PROVIDER_LABEL = "ChatGPT Web";
 const DEFAULT_TIMEOUT_MS = 240_000;
 const POLL_INTERVAL_MS = 3_000;
+const CHATGPT_DIRECT_RETRY_ATTEMPTS = 3;
+const CHATGPT_DIRECT_RETRY_BACKOFF_MS = [500, 1_500];
+const CHATGPT_RETRYABLE_HTTP_STATUS = new Set([429, 502, 503, 504]);
 const CHATGPT_COOKIE_HOSTS = ["chatgpt.com", "chat.openai.com", "auth.openai.com", "openai.com"];
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<ChatGptFetchResponse>;
@@ -68,6 +71,19 @@ interface FinalizedRequirementsContext {
 interface DownloadedChatGptImage {
   bytes: Uint8Array;
   contentType: string | null;
+}
+
+interface ChatGptTextResponseSnapshot {
+  status: number;
+  contentType: string | null;
+  body: string;
+}
+
+interface ChatGptFetchOptions {
+  label: string;
+  signal?: AbortSignal;
+  timeoutMs: number;
+  fetchImage?: boolean;
 }
 
 export function createChatGptDirectProvider(
@@ -150,15 +166,14 @@ async function createAuthenticatedContext(
   signal?: AbortSignal,
 ): Promise<AuthenticatedContext> {
   const cookieHeader = buildChatGptCookieHeader(cookies);
-  const home = await fetchText(transport, `${CHATGPT_BASE_URL}/`, {
-    headers: { cookie: cookieHeader, "user-agent": CHATGPT_USER_AGENT, referer: `${CHATGPT_BASE_URL}/` },
-    signal: timeoutSignal(signal, 60_000),
-  });
-  const build = extractChatGptBuildInfo(home);
-  const session = await fetchJson<ChatGptSession>(transport, CHATGPT_AUTH_SESSION_URL, {
-    headers: { cookie: cookieHeader, "user-agent": CHATGPT_USER_AGENT, referer: `${CHATGPT_BASE_URL}/` },
-    signal: timeoutSignal(signal, 60_000),
-  });
+  const homeHeaders = { cookie: cookieHeader, "user-agent": CHATGPT_USER_AGENT, referer: `${CHATGPT_BASE_URL}/` };
+  const build = await fetchChatGptBuildInfo(transport, `${CHATGPT_BASE_URL}/`, { headers: homeHeaders }, signal);
+  const session = await fetchJson<ChatGptSession>(
+    transport,
+    CHATGPT_AUTH_SESSION_URL,
+    { headers: homeHeaders },
+    { label: "auth session", signal, timeoutMs: 60_000 },
+  );
   if (!session.accessToken) throw new Error("ChatGPT auth session did not return an access token.");
 
   const commonHeaders = buildChatGptCommonHeaders({
@@ -196,7 +211,7 @@ async function fetchFinalizedRequirements(
       ...buildChatGptTargetHeaders("/backend-api/sentinel/chat-requirements/prepare"),
     },
     { p },
-    signal,
+    { label: "chat requirements prepare", signal },
   );
   const proofToken = generateChatGptProofToken(prepared.proofofwork, proofOptions);
 
@@ -208,7 +223,7 @@ async function fetchFinalizedRequirements(
       ...buildChatGptTargetHeaders("/backend-api/sentinel/chat-requirements/finalize"),
     },
     buildChatGptFinalizeBody({ prepareToken: prepared.prepare_token, proofToken }),
-    signal,
+    { label: "chat requirements finalize", signal },
   );
   if (!finalized.token) throw new Error("ChatGPT Sentinel did not return a chat requirements token.");
   return { token: finalized.token, proofToken };
@@ -243,9 +258,17 @@ async function sendConversationRequest(
     signal: timeoutSignal(signal, transport.timeoutMs),
   });
   const rawText = await response.text();
-  if (!response.ok)
-    throw new Error(`ChatGPT conversation request failed with HTTP ${response.status}: ${rawText.slice(0, 300)}`);
-  return parseChatGptConversationStream(rawText);
+  const stream = parseChatGptConversationStream(rawText);
+  if (!response.ok && !stream.conversationId) {
+    throw new Error(
+      `ChatGPT conversation request failed: ${formatResponseDiagnostics(CHATGPT_CONVERSATION_URL, {
+        status: response.status,
+        contentType: response.headers.get("content-type"),
+        body: rawText,
+      })}.`,
+    );
+  }
+  return stream;
 }
 
 async function waitForGeneratedAssets(
@@ -267,8 +290,8 @@ async function waitForGeneratedAssets(
             "/backend-api/conversation/{conversation_id}",
           ),
         },
-        signal: timeoutSignal(signal, 60_000),
       },
+      { label: "conversation poll", signal, timeoutMs: 60_000 },
     );
     const assets = extractChatGptGeneratedAssets(conversation);
     if (assets.length > 0) return assets;
@@ -293,29 +316,58 @@ async function downloadGeneratedImage(
         ...context.commonHeaders,
         ...buildChatGptTargetHeaders("/backend-api/files/download/{file_id}"),
       },
-      signal: timeoutSignal(signal, 60_000),
     },
+    { label: "generated image download metadata", signal, timeoutMs: 60_000 },
   );
   if (!download.download_url) throw new Error("ChatGPT generated image download endpoint did not return download_url.");
 
-  const response = await transport.fetchImage(download.download_url, {
-    headers: { cookie: context.cookieHeader, "user-agent": CHATGPT_USER_AGENT, referer: `${CHATGPT_BASE_URL}/` },
-    signal: timeoutSignal(signal, 90_000),
+  const response = await fetchResponseBytesWithRetry(
+    transport,
+    download.download_url,
+    { headers: { cookie: context.cookieHeader, "user-agent": CHATGPT_USER_AGENT, referer: `${CHATGPT_BASE_URL}/` } },
+    { label: "generated image bytes", signal, timeoutMs: 90_000, fetchImage: true },
+  );
+  return { bytes: response.bytes, contentType: response.contentType };
+}
+
+async function fetchChatGptBuildInfo(
+  transport: ChatGptDirectTransport,
+  url: string,
+  init: RequestInit,
+  signal?: AbortSignal,
+): Promise<ChatGptBuildInfo> {
+  return retryChatGptDirect(transport, signal, async () => {
+    const snapshot = await fetchTextOnce(transport, url, init, { label: "home HTML", signal, timeoutMs: 60_000 });
+    try {
+      return extractChatGptBuildInfo(snapshot.body);
+    } catch (error) {
+      throw new ChatGptDirectResponseError(
+        `ChatGPT home HTML did not include build metadata: ${formatResponseDiagnostics(url, snapshot, {
+          includeHtmlMetadata: true,
+        })}. Parse error: ${formatErrorMessage(error)}.`,
+        true,
+      );
+    }
   });
-  if (!response.ok) throw new Error(`ChatGPT generated image bytes download failed with HTTP ${response.status}.`);
-  return { bytes: await readResponseBytes(response), contentType: response.headers.get("content-type") };
 }
 
-async function fetchText(transport: ChatGptDirectTransport, url: string, init: RequestInit): Promise<string> {
-  const response = await transport.fetch(url, init);
-  const text = await response.text();
-  if (!response.ok) throw new Error(`${url} failed with HTTP ${response.status}: ${text.slice(0, 300)}`);
-  return text;
-}
-
-async function fetchJson<T>(transport: ChatGptDirectTransport, url: string, init: RequestInit): Promise<T> {
-  const text = await fetchText(transport, url, init);
-  return JSON.parse(text) as T;
+async function fetchJson<T>(
+  transport: ChatGptDirectTransport,
+  url: string,
+  init: RequestInit,
+  options: ChatGptFetchOptions,
+): Promise<T> {
+  return retryChatGptDirect(transport, options.signal, async () => {
+    const snapshot = await fetchTextOnce(transport, url, init, options);
+    try {
+      return JSON.parse(snapshot.body) as T;
+    } catch (error) {
+      throw new ChatGptDirectResponseError(
+        `ChatGPT ${options.label} returned invalid JSON: ${formatResponseDiagnostics(url, snapshot)}. Parse error: ${formatErrorMessage(error)}.`,
+        true,
+      );
+    }
+  });
 }
 
 async function postJson<T>(
@@ -323,14 +375,145 @@ async function postJson<T>(
   url: string,
   headers: Record<string, string>,
   body: unknown,
-  signal?: AbortSignal,
+  options: { label: string; signal?: AbortSignal },
 ): Promise<T> {
-  return fetchJson<T>(transport, url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-    signal: timeoutSignal(signal, 60_000),
+  return fetchJson<T>(
+    transport,
+    url,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    },
+    { label: options.label, signal: options.signal, timeoutMs: 60_000 },
+  );
+}
+
+async function fetchTextOnce(
+  transport: ChatGptDirectTransport,
+  url: string,
+  init: RequestInit,
+  options: ChatGptFetchOptions,
+): Promise<ChatGptTextResponseSnapshot> {
+  const response = await fetchWithAttemptSignal(transport, url, init, options);
+  const body = await response.text();
+  const snapshot = { status: response.status, contentType: response.headers.get("content-type"), body };
+  if (!response.ok) {
+    throw new ChatGptDirectResponseError(
+      `ChatGPT ${options.label} failed: ${formatResponseDiagnostics(url, snapshot)}.`,
+      CHATGPT_RETRYABLE_HTTP_STATUS.has(response.status),
+    );
+  }
+  return snapshot;
+}
+
+async function fetchResponseBytesWithRetry(
+  transport: ChatGptDirectTransport,
+  url: string,
+  init: RequestInit,
+  options: ChatGptFetchOptions,
+): Promise<{ bytes: Uint8Array; contentType: string | null }> {
+  return retryChatGptDirect(transport, options.signal, async () => {
+    const response = await fetchWithAttemptSignal(transport, url, init, options);
+    if (!response.ok) {
+      const body = await response.text();
+      throw new ChatGptDirectResponseError(
+        `ChatGPT ${options.label} failed: ${formatResponseDiagnostics(url, {
+          status: response.status,
+          contentType: response.headers.get("content-type"),
+          body,
+        })}.`,
+        CHATGPT_RETRYABLE_HTTP_STATUS.has(response.status),
+      );
+    }
+    return { bytes: await readResponseBytes(response), contentType: response.headers.get("content-type") };
   });
+}
+
+function fetchWithAttemptSignal(
+  transport: ChatGptDirectTransport,
+  url: string,
+  init: RequestInit,
+  options: ChatGptFetchOptions,
+): Promise<ChatGptFetchResponse> {
+  const fetcher = options.fetchImage ? transport.fetchImage : transport.fetch;
+  return fetcher(url, { ...init, signal: timeoutSignal(options.signal, options.timeoutMs) });
+}
+
+async function retryChatGptDirect<T>(
+  transport: ChatGptDirectTransport,
+  signal: AbortSignal | undefined,
+  run: () => Promise<T>,
+): Promise<T> {
+  for (let attempt = 1; attempt <= CHATGPT_DIRECT_RETRY_ATTEMPTS; attempt++) {
+    try {
+      return await run();
+    } catch (error) {
+      if (attempt >= CHATGPT_DIRECT_RETRY_ATTEMPTS || !shouldRetryChatGptDirectError(error, signal)) throw error;
+      await transport.sleep(CHATGPT_DIRECT_RETRY_BACKOFF_MS[attempt - 1] ?? 0, signal);
+    }
+  }
+
+  throw new Error("ChatGPT direct retry loop exited unexpectedly.");
+}
+
+function shouldRetryChatGptDirectError(error: unknown, signal: AbortSignal | undefined): boolean {
+  if (signal?.aborted) return false;
+  if (error instanceof ChatGptDirectResponseError) return error.retryable;
+  return true;
+}
+
+class ChatGptDirectResponseError extends Error {
+  constructor(
+    message: string,
+    readonly retryable: boolean,
+  ) {
+    super(message);
+    this.name = "ChatGptDirectResponseError";
+  }
+}
+
+function formatResponseDiagnostics(
+  url: string,
+  snapshot: ChatGptTextResponseSnapshot,
+  options: { includeHtmlMetadata?: boolean } = {},
+): string {
+  const diagnostics = [
+    `path ${safeUrlPath(url)}`,
+    `HTTP ${snapshot.status}`,
+    `content-type ${snapshot.contentType ?? "unknown"}`,
+    `body length ${snapshot.body.length}`,
+    `snippet ${JSON.stringify(redactDiagnosticSnippet(snapshot.body))}`,
+  ];
+  if (options.includeHtmlMetadata) {
+    const lowerBody = snapshot.body.toLowerCase();
+    diagnostics.push(`contains <html: ${lowerBody.includes("<html") ? "yes" : "no"}`);
+    diagnostics.push(`contains data-build: ${/\bdata-build\b/i.test(snapshot.body) ? "yes" : "no"}`);
+  }
+  return diagnostics.join(", ");
+}
+
+function redactDiagnosticSnippet(body: string): string {
+  return body
+    .slice(0, 1_000)
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, "[redacted-jwt]")
+    .replace(/\b[A-Za-z0-9_+/=-]{64,}\b/g, "[redacted-token]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
+}
+
+function safeUrlPath(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return "[unparseable-url]";
+  }
+}
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function readResponseBytes(response: ChatGptFetchResponse): Promise<Uint8Array> {

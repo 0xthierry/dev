@@ -382,8 +382,13 @@ function extractChatGptScriptUrls(html: string): string[] {
 }
 
 function matchHtmlAttribute(html: string, attribute: string): string | undefined {
-  const match = html.match(new RegExp(`${attribute}="([^"]+)"`));
-  return match?.[1];
+  const escapedAttribute = attribute.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const attributePattern = `\\b${escapedAttribute}\\s*=\\s*(?:"([^"]+)"|'([^']+)'|([^\\s"'=<>\\x60]+))`;
+  const attributeMatch = html.match(new RegExp(attributePattern));
+  if (attributeMatch) return attributeMatch[1] ?? attributeMatch[2] ?? attributeMatch[3];
+
+  const serializedPattern = `["']${escapedAttribute}["']\\s*[:=]\\s*["']([^"']+)["']`;
+  return html.match(new RegExp(serializedPattern))?.[1];
 }
 
 function buildProofFailureToken(error?: unknown): string {
