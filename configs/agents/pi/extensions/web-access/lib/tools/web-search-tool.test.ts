@@ -70,7 +70,7 @@ describe("registerWebSearchTool", () => {
     expect(fakeRuntime.search).not.toHaveBeenCalled();
   });
 
-  test("runs multiple queries with a concurrency limit of 3", async () => {
+  test("runs multiple queries with a concurrency limit of 10", async () => {
     // Arrange
     const fake = createFakePi();
     const releases: Array<() => void> = [];
@@ -95,24 +95,25 @@ describe("registerWebSearchTool", () => {
     registerWebSearchTool(fake.pi, fakeRuntime);
 
     // Act
-    const pendingResult = fake.runTool("web_search", { queries: ["a", "b", "c", "d", "e"] }) as Promise<ToolResult>;
-    await waitFor(() => started.length === 3);
+    const queries = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"];
+    const pendingResult = fake.runTool("web_search", { queries }) as Promise<ToolResult>;
+    await waitFor(() => started.length === 10);
 
     // Assert
-    expect(started).toEqual(["a", "b", "c"]);
-    expect(fakeRuntime.search).toHaveBeenCalledTimes(3);
+    expect(started).toEqual(["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]);
+    expect(fakeRuntime.search).toHaveBeenCalledTimes(10);
 
     // Act
     for (const release of releases.splice(0)) release();
-    await waitFor(() => started.length === 5);
+    await waitFor(() => started.length === 12);
     for (const release of releases.splice(0)) release();
     const result = await pendingResult;
 
     // Assert
-    expect(maxActive).toBe(3);
-    expect(fakeRuntime.search).toHaveBeenCalledTimes(5);
-    expect(result.details.queries).toEqual(["a", "b", "c", "d", "e"]);
+    expect(maxActive).toBe(10);
+    expect(fakeRuntime.search).toHaveBeenCalledTimes(12);
+    expect(result.details.queries).toEqual(queries);
     const output = result.content[0]?.text ?? "";
-    expect(output.indexOf('## Query: "a"')).toBeLessThan(output.indexOf('## Query: "e"'));
+    expect(output.indexOf('## Query: "a"')).toBeLessThan(output.indexOf('## Query: "l"'));
   });
 });

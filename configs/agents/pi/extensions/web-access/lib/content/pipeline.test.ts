@@ -13,6 +13,7 @@ describe("content pipeline", () => {
       "youtube-transcript",
       "authenticated-http",
       "exa-contents",
+      "tavily-extract",
       "http",
       "jina-reader",
       "gemini-web",

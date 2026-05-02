@@ -94,6 +94,8 @@ Example:
 {
   "$schema": "./agent/extensions/web-access/web-search.schema.json",
   "exaApiKeyEnv": "EXA_API_KEY",
+  "braveApiKeyEnv": "BRAVE_API_KEY",
+  "tavilyApiKeyEnv": "TAVILY_API_KEY",
   "braveProfile": "Default",
   "medium": {
     "enabled": true,
@@ -117,6 +119,10 @@ Example:
 | --- | --- | --- |
 | `exaApiKeyEnv` | `EXA_API_KEY` | Name of the environment variable that contains the Exa API key. |
 | `exaApiKey` | unset | Literal Exa API key. Prefer `exaApiKeyEnv` so secrets stay out of files. |
+| `braveApiKeyEnv` | `BRAVE_API_KEY` | Name of the environment variable that contains the Brave Search API key. |
+| `braveApiKey` | unset | Literal Brave Search API key. Prefer `braveApiKeyEnv` so secrets stay out of files. |
+| `tavilyApiKeyEnv` | `TAVILY_API_KEY` | Name of the environment variable that contains the Tavily API key. |
+| `tavilyApiKey` | unset | Literal Tavily API key. Prefer `tavilyApiKeyEnv` so secrets stay out of files. |
 | `$schema` | unset | Optional editor schema reference. From `~/.pi/web-search.json`, use `./agent/extensions/web-access/web-search.schema.json`. |
 | `braveProfile` | `Default` | Browser profile name used when reading browser cookies. Takes precedence over `chromeProfile` when a feature-specific profile is not set. |
 | `chromeProfile` | `Default` | Browser profile name used when `braveProfile` and feature-specific profiles are not set. |
@@ -138,6 +144,8 @@ Different features need different external services or local tools:
 | Feature | Requirement |
 | --- | --- |
 | Primary web search and Exa content fetch | `EXA_API_KEY` or `exaApiKeyEnv`/`exaApiKey` in `~/.pi/web-search.json`. |
+| Brave web search fallback | `BRAVE_API_KEY` or `braveApiKeyEnv`/`braveApiKey` in `~/.pi/web-search.json`. Uses Brave LLM Context because it returned much more LLM-ready grounding content than the normal Web Search snippet endpoint in live validation. |
+| Tavily search and extract fallback | `TAVILY_API_KEY` or `tavilyApiKeyEnv`/`tavilyApiKey` in `~/.pi/web-search.json`. |
 | Search/fetch fallback | `codex` CLI installed and authenticated/configured. The extension runs `codex exec --sandbox read-only --ephemeral`. |
 | Direct page fetch | Network access plus repository npm dependencies (`@mozilla/readability`, `linkedom`, `turndown`). |
 | Medium authenticated fetch | `medium.enabled: true` and a Brave/Chromium/Chrome profile signed into Medium. Cookies are only sent to `medium.com` or `*.medium.com`. |
@@ -153,25 +161,29 @@ Do not commit API keys or browser-cookie material. Prefer environment variables 
 
 ## Medium authenticated fetches
 
-When `medium.enabled` is `true`, `fetch_content` tries a local authenticated HTTP request before public/external content providers for Medium URLs. The extension reads cookies from the configured local browser profile and attaches them only to `medium.com` or `*.medium.com` requests. Cookie values are not logged, stored in tool details, appended to Pi session entries, or sent to Exa, Jina, Gemini, or Codex.
+When `medium.enabled` is `true`, `fetch_content` tries a local authenticated HTTP request before public/external content providers for Medium URLs. The extension reads cookies from the configured local browser profile and attaches them only to `medium.com` or `*.medium.com` requests. Cookie values are not logged, stored in tool details, appended to Pi session entries, or sent to Exa, Brave, Tavily, Jina, Gemini, or Codex.
 
 If no Medium cookies are found, or the authenticated response is still incomplete, normal fallback providers continue to run.
 
 ## How search works
 
-`web_search` normalizes `query` or `queries` into a list and searches queries with a shared concurrency limit of 3.
+`web_search` normalizes `query` or `queries` into a list and searches queries with a shared concurrency limit of 10.
 
 Provider order:
 
 1. Exa, when an API key is configured. Rate-limit responses are retried once when Exa provides a short retry delay.
-2. Codex CLI fallback.
+2. Brave LLM Context, when a Brave Search API key is configured.
+3. Tavily Search, when a Tavily API key is configured.
+4. Codex CLI fallback.
+
+The provider chain falls through when a provider is unavailable, fails, is rate-limited, or returns no source URLs.
 
 Supported parameters:
 
 - `query`: one focused query.
 - `queries`: multiple query strings for broader research.
 - `numResults`: clamped by providers to 1-20 where applicable.
-- `includeContent`: asks Exa to include page text with search results when Exa is used.
+- `includeContent`: asks capable search providers to store available page text with search results for later retrieval.
 - `recencyFilter`: `day`, `week`, `month`, or `year`.
 - `domainFilter`: include domains like `example.com`; exclude domains with a leading `-`, like `-spam.example`.
 
@@ -179,7 +191,7 @@ Search output is formatted as a concise answer plus a `Sources` list. Provider r
 
 ## How fetching works
 
-`fetch_content` accepts either `url` or `urls`. Batch fetches run with a concurrency limit of 3.
+`fetch_content` accepts either `url` or `urls`. Batch fetches run with a concurrency limit of 10.
 
 Before fetching, the extension validates the target:
 
@@ -194,10 +206,11 @@ For normal content requests, extractors run in this order:
 2. YouTube transcript/content extraction through Gemini Web.
 3. Authenticated HTTP for configured site-specific browser-cookie providers such as Medium.
 4. Exa Contents API.
-5. Direct HTTP fetch with Readability and markdown conversion.
-6. Jina Reader fallback.
-7. Gemini Web page extraction.
-8. Codex CLI fallback.
+5. Tavily Extract API.
+6. Direct HTTP fetch with Readability and markdown conversion.
+7. Jina Reader fallback.
+8. Gemini Web page extraction.
+9. Codex CLI fallback.
 
 For YouTube frame requests, the extension uses `yt-dlp` to get a stream URL and `ffmpeg` to extract JPEG frames.
 

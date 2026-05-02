@@ -8,6 +8,10 @@ export interface WebSearchConfig {
   $schema?: unknown;
   exaApiKey?: unknown;
   exaApiKeyEnv?: unknown;
+  braveApiKey?: unknown;
+  braveApiKeyEnv?: unknown;
+  tavilyApiKey?: unknown;
+  tavilyApiKeyEnv?: unknown;
   provider?: unknown;
   chromeProfile?: unknown;
   braveProfile?: unknown;

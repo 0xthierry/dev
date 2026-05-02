@@ -8,8 +8,17 @@ export interface SearchResult {
   source?: string;
 }
 
-export type SearchProviderName = "exa" | "codex";
-export type ContentProviderName = "exa" | "http" | "jina" | "gemini-web" | "codex" | "github" | "youtube";
+export type SearchProviderName = "exa" | "brave" | "tavily" | "codex";
+export type ContentProviderName =
+  | "exa"
+  | "brave"
+  | "tavily"
+  | "http"
+  | "jina"
+  | "gemini-web"
+  | "codex"
+  | "github"
+  | "youtube";
 
 export interface SearchResponse {
   answer: string;

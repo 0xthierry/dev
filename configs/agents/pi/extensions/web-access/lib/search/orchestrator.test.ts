@@ -1,11 +1,17 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import type { SearchResponse } from "../types";
-import { type SearchProvider, searchWithProviderChain } from "./orchestrator";
+import { defaultSearchProviders, type SearchProvider, searchWithProviderChain } from "./orchestrator";
 
 const exaResponse: SearchResponse = {
   answer: "exa answer",
   provider: "exa",
   results: [{ title: "Exa", url: "https://exa.test", snippet: "" }],
+};
+
+const braveResponse: SearchResponse = {
+  answer: "brave answer",
+  provider: "brave",
+  results: [{ title: "Brave", url: "https://brave.test", snippet: "" }],
 };
 
 const codexResponse: SearchResponse = {
@@ -27,6 +33,16 @@ afterEach(() => {
   mock.clearAllMocks();
 });
 
+describe("defaultSearchProviders", () => {
+  test("uses the configured provider priority order", () => {
+    // Arrange / Act
+    const names = defaultSearchProviders().map((provider) => provider.name);
+
+    // Assert
+    expect(names).toEqual(["Exa", "Brave", "Tavily", "Codex"]);
+  });
+});
+
 describe("searchWithProviderChain", () => {
   test("uses Exa first when configured", async () => {
     // Arrange
@@ -43,44 +59,54 @@ describe("searchWithProviderChain", () => {
     expect(codex.search).not.toHaveBeenCalled();
   });
 
-  test("falls back to Codex when Exa is not configured", async () => {
+  test("falls back to the next configured provider when Exa is not configured", async () => {
     // Arrange
     const exa = provider("Exa", exaResponse, false);
+    const brave = provider("Brave", braveResponse);
     const codex = provider("Codex", codexResponse);
 
     // Act
-    const result = await searchWithProviderChain("query", {}, [exa, codex]);
+    const result = await searchWithProviderChain("query", {}, [exa, brave, codex]);
 
     // Assert
-    expect(result).toBe(codexResponse);
+    expect(result).toBe(braveResponse);
     expect(exa.search).not.toHaveBeenCalled();
-    expect(codex.search).toHaveBeenCalledWith("query", {});
+    expect(brave.search).toHaveBeenCalledWith("query", {});
+    expect(codex.search).not.toHaveBeenCalled();
   });
 
-  test("falls back to Codex when Exa fails", async () => {
+  test("falls back to later providers when earlier providers fail or are rate limited", async () => {
     // Arrange
     const exa = provider("Exa", exaResponse);
-    exa.search = mock(async () => Promise.reject(new Error("exa unavailable")));
+    exa.search = mock(async () => Promise.reject(new Error("Exa API rate limit exceeded (429)")));
+    const brave = provider("Brave", braveResponse);
+    brave.search = mock(async () => Promise.reject(new Error("Brave Search API rate limit exceeded (429)")));
+    const tavilyResponse: SearchResponse = { ...codexResponse, provider: "tavily" };
+    const tavily = provider("Tavily", tavilyResponse);
     const codex = provider("Codex", codexResponse);
 
     // Act
-    const result = await searchWithProviderChain("query", {}, [exa, codex]);
+    const result = await searchWithProviderChain("query", {}, [exa, brave, tavily, codex]);
 
     // Assert
-    expect(result).toBe(codexResponse);
+    expect(result).toBe(tavilyResponse);
+    expect(tavily.search).toHaveBeenCalledWith("query", {});
+    expect(codex.search).not.toHaveBeenCalled();
   });
 
   test("falls back when a provider returns no source URLs", async () => {
     // Arrange
     const emptyExa = provider("Exa", { answer: "", provider: "exa", results: [] });
+    const brave = provider("Brave", braveResponse);
     const codex = provider("Codex", codexResponse);
 
     // Act
-    const result = await searchWithProviderChain("query", {}, [emptyExa, codex]);
+    const result = await searchWithProviderChain("query", {}, [emptyExa, brave, codex]);
 
     // Assert
-    expect(result).toBe(codexResponse);
-    expect(codex.search).toHaveBeenCalledWith("query", {});
+    expect(result).toBe(braveResponse);
+    expect(brave.search).toHaveBeenCalledWith("query", {});
+    expect(codex.search).not.toHaveBeenCalled();
   });
 
   test("throws an aggregated error when all providers return no source URLs", async () => {
@@ -95,22 +121,26 @@ describe("searchWithProviderChain", () => {
   });
 
   test("throws aggregated provider errors", async () => {
-    await expect(
-      searchWithProviderChain("query", {}, [
-        { ...provider("Exa", exaResponse), search: mock(async () => Promise.reject(new Error("exa unavailable"))) },
-        {
-          ...provider("Codex", codexResponse),
-          search: mock(async () => Promise.reject(new Error("codex unavailable"))),
-        },
-      ]),
-    ).rejects.toThrow("Web search failed");
+    // Arrange
+    const providers = [
+      { ...provider("Exa", exaResponse), search: mock(async () => Promise.reject(new Error("exa unavailable"))) },
+      {
+        ...provider("Codex", codexResponse),
+        search: mock(async () => Promise.reject(new Error("codex unavailable"))),
+      },
+    ];
+
+    // Act / Assert
+    await expect(searchWithProviderChain("query", {}, providers)).rejects.toThrow("Web search failed");
   });
 
   test("does not swallow abort errors", async () => {
-    await expect(
-      searchWithProviderChain("query", {}, [
-        { ...provider("Exa", exaResponse), search: mock(async () => Promise.reject(new Error("Aborted"))) },
-      ]),
-    ).rejects.toThrow("Aborted");
+    // Arrange
+    const providers = [
+      { ...provider("Exa", exaResponse), search: mock(async () => Promise.reject(new Error("Aborted"))) },
+    ];
+
+    // Act / Assert
+    await expect(searchWithProviderChain("query", {}, providers)).rejects.toThrow("Aborted");
   });
 });

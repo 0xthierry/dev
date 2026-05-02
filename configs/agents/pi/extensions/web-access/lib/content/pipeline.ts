@@ -2,6 +2,7 @@ import pLimit from "p-limit";
 import { fetchWithCodex } from "../providers/codex";
 import { fetchWithExaContents } from "../providers/exa";
 import { extractGitHub } from "../providers/github/extract";
+import { fetchWithTavilyExtract } from "../providers/tavily";
 import { extractYouTube, isYouTubeEnabled } from "../providers/youtube/transcript";
 import { abortedError, authRequiredError, fetchFailedError, isAbortError } from "../shared/errors";
 import type { ExtractedContent, FetchOptions } from "../types";
@@ -12,7 +13,7 @@ import { extractWithJinaReader } from "./jina";
 import { classifyFetchTarget, type FetchTarget } from "./target";
 import { extractYouTubeFrameRequest } from "./youtube-frames";
 
-const CONCURRENT_LIMIT = 3;
+const CONCURRENT_LIMIT = 10;
 const fetchLimit = pLimit(CONCURRENT_LIMIT);
 
 type ExtractionOutcome =
@@ -59,6 +60,7 @@ export function createDefaultContentExtractors(): ContentExtractor[] {
     youtubeTranscriptExtractor,
     authenticatedHttpExtractor,
     exaContentsExtractor,
+    tavilyExtractExtractor,
     httpExtractor,
     jinaReaderExtractor,
     geminiWebExtractor,
@@ -118,6 +120,19 @@ const exaContentsExtractor: ContentExtractor = {
   async extract(target, signal) {
     try {
       return outcomeForResult(await fetchWithExaContents(target.url, signal));
+    } catch (err) {
+      if (isAbortError(err)) return { status: "terminal", result: abortedResult(target.url) };
+      return { status: "miss" };
+    }
+  },
+};
+
+const tavilyExtractExtractor: ContentExtractor = {
+  name: "tavily-extract",
+  supports: (target) => target.requestKind === "content",
+  async extract(target, signal) {
+    try {
+      return outcomeForResult(await fetchWithTavilyExtract(target.url, target.options.prompt, signal));
     } catch (err) {
       if (isAbortError(err)) return { status: "terminal", result: abortedResult(target.url) };
       return { status: "miss" };

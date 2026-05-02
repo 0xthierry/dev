@@ -1,5 +1,7 @@
+import { isBraveConfigured, searchWithBrave } from "../providers/brave";
 import { searchWithCodex } from "../providers/codex";
 import { isExaConfigured, searchWithExa } from "../providers/exa";
+import { isTavilyConfigured, searchWithTavily } from "../providers/tavily";
 import { isAbortError } from "../shared/errors";
 import type { SearchOptions, SearchResponse } from "../types";
 
@@ -17,6 +19,18 @@ export function defaultSearchProviders(): SearchProvider[] {
       unavailableMessage: "Exa: API key not configured",
       isAvailable: isExaConfigured,
       search: searchWithExa,
+    },
+    {
+      name: "Brave",
+      unavailableMessage: "Brave: API key not configured",
+      isAvailable: isBraveConfigured,
+      search: searchWithBrave,
+    },
+    {
+      name: "Tavily",
+      unavailableMessage: "Tavily: API key not configured",
+      isAvailable: isTavilyConfigured,
+      search: searchWithTavily,
     },
     {
       name: "Codex",

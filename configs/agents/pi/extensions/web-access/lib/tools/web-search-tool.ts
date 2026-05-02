@@ -11,7 +11,7 @@ import { storeAndPublish } from "./result-publisher";
 import type { WebAccessRuntime } from "./runtime";
 
 const DEFAULT_QUERY_PROVIDER_LABEL = "unknown";
-const CONCURRENT_SEARCH_LIMIT = 3;
+const CONCURRENT_SEARCH_LIMIT = 10;
 const searchLimit = pLimit(CONCURRENT_SEARCH_LIMIT);
 
 export function registerWebSearchTool(pi: ExtensionAPI, runtime: WebAccessRuntime): void {

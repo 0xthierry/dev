@@ -18,6 +18,24 @@
       "type": "string",
       "description": "Literal Exa API key. Prefer exaApiKeyEnv for normal use."
     },
+    "braveApiKeyEnv": {
+      "type": "string",
+      "default": "BRAVE_API_KEY",
+      "description": "Environment variable name that contains the Brave Search API key. Prefer this over braveApiKey so secrets stay out of files."
+    },
+    "braveApiKey": {
+      "type": "string",
+      "description": "Literal Brave Search API key. Prefer braveApiKeyEnv for normal use."
+    },
+    "tavilyApiKeyEnv": {
+      "type": "string",
+      "default": "TAVILY_API_KEY",
+      "description": "Environment variable name that contains the Tavily API key. Prefer this over tavilyApiKey so secrets stay out of files."
+    },
+    "tavilyApiKey": {
+      "type": "string",
+      "description": "Literal Tavily API key. Prefer tavilyApiKeyEnv for normal use."
+    },
     "braveProfile": {
       "type": "string",
       "default": "Default",
