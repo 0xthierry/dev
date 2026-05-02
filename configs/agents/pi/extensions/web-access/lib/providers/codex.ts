@@ -1,4 +1,5 @@
-import { execFileText } from "../shared/process";
+import { readExecError, execFileText as runExecFileText, trimErrorText } from "../shared/process";
+import { isRateLimitText, rateLimitRetryDelayMs, waitForRateLimit } from "../shared/rate-limit";
 import { extractMarkdownUrls } from "../shared/text";
 import type { ExtractedContent, SearchOptions, SearchResponse } from "../types";
 
@@ -6,6 +7,20 @@ export interface CodexOptions {
   timeoutMs?: number;
   cwd?: string;
 }
+
+export interface CodexRunner {
+  execFileText: typeof runExecFileText;
+  waitForRateLimit: typeof waitForRateLimit;
+}
+
+const CODEX_MAX_ATTEMPTS = 2;
+const CODEX_DEFAULT_RATE_LIMIT_DELAY_MS = 5_000;
+const CODEX_MAX_RATE_LIMIT_DELAY_MS = 30_000;
+
+const defaultCodexRunner: CodexRunner = {
+  execFileText: runExecFileText,
+  waitForRateLimit,
+};
 
 function domainInstructions(domainFilter: string[] | undefined): string {
   if (!domainFilter?.length) return "";
@@ -38,12 +53,60 @@ export function codexArgs(prompt: string, cwd: string): string[] {
   ];
 }
 
-async function runCodex(prompt: string, options: CodexOptions & { signal?: AbortSignal } = {}): Promise<string> {
-  const { stdout } = await execFileText("codex", codexArgs(prompt, options.cwd ?? process.cwd()), {
-    timeout: options.timeoutMs ?? 120_000,
-    signal: options.signal,
+function codexErrorText(err: unknown): string {
+  const { message, stderr } = readExecError(err);
+  return [stderr, message].filter(Boolean).join("\n");
+}
+
+export function codexRateLimitDelayMs(err: unknown): number | undefined {
+  const text = codexErrorText(err);
+  if (!isRateLimitText(text)) return undefined;
+  return rateLimitRetryDelayMs({
+    text,
+    defaultDelayMs: CODEX_DEFAULT_RATE_LIMIT_DELAY_MS,
+    maxDelayMs: CODEX_MAX_RATE_LIMIT_DELAY_MS,
   });
-  return stdout.trim();
+}
+
+function codexRateLimitError(err: unknown): Error {
+  const text = codexErrorText(err);
+  const reportedDelayMs = rateLimitRetryDelayMs({
+    text,
+    defaultDelayMs: CODEX_DEFAULT_RATE_LIMIT_DELAY_MS,
+    maxDelayMs: Number.POSITIVE_INFINITY,
+  });
+  const retryHint = reportedDelayMs === undefined ? "" : ` Retry after ${Math.ceil(reportedDelayMs / 1000)} second(s).`;
+  const response = trimErrorText(text);
+  return new Error(`Codex CLI rate limit exceeded.${retryHint}${response ? ` Response: ${response}` : ""}`);
+}
+
+export async function runCodex(
+  prompt: string,
+  options: CodexOptions & { signal?: AbortSignal } = {},
+  runner: CodexRunner = defaultCodexRunner,
+): Promise<string> {
+  for (let attempt = 1; attempt <= CODEX_MAX_ATTEMPTS; attempt++) {
+    try {
+      const { stdout } = await runner.execFileText("codex", codexArgs(prompt, options.cwd ?? process.cwd()), {
+        timeout: options.timeoutMs ?? 120_000,
+        signal: options.signal,
+      });
+      return stdout.trim();
+    } catch (err) {
+      const retryDelayMs = codexRateLimitDelayMs(err);
+      if (retryDelayMs === undefined) {
+        if (isRateLimitText(codexErrorText(err))) throw codexRateLimitError(err);
+        throw err;
+      }
+      if (attempt < CODEX_MAX_ATTEMPTS) {
+        await runner.waitForRateLimit(retryDelayMs, options.signal);
+        continue;
+      }
+      throw codexRateLimitError(err);
+    }
+  }
+
+  throw new Error("Codex CLI request failed after retrying rate-limited responses.");
 }
 
 export function buildCodexSearchPrompt(query: string, options: SearchOptions = {}): string {

@@ -87,19 +87,47 @@ describe("searchWithTavily", () => {
     });
   });
 
+  test("retries Tavily rate limits when retry guidance is short", async () => {
+    // Arrange
+    process.env.TAVILY_API_KEY = "test-key";
+    const responses = [
+      new Response(JSON.stringify({ detail: { error: "Please reduce rate of requests." } }), {
+        status: 429,
+        headers: { "retry-after": "0" },
+      }),
+      new Response(JSON.stringify({ answer: "ok", results: [{ url: "https://example.com", content: "ok" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    ];
+    const fetchMock = mock(async () => responses.shift() ?? new Response("unexpected", { status: 500 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    // Act
+    const result = await searchWithTavily("docs", { numResults: 1 });
+
+    // Assert
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.results[0]?.url).toBe("https://example.com");
+  });
+
   test("reports Tavily rate limits", async () => {
     // Arrange
     process.env.TAVILY_API_KEY = "test-key";
     const fetchMock = mock(
       async (_url: string | URL | Request, _init?: RequestInit) =>
-        new Response(JSON.stringify({ detail: { error: "Please reduce rate of requests." } }), { status: 429 }),
+        new Response(JSON.stringify({ detail: { error: "Please reduce rate of requests." } }), {
+          status: 429,
+          headers: { "retry-after": "30" },
+        }),
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     // Act / Assert
     await expect(searchWithTavily("docs", { numResults: 1 })).rejects.toThrow(
-      "Tavily API rate limit exceeded (429). Response: Please reduce rate of requests.",
+      "Tavily API rate limit exceeded (429). Retry after 30 second(s). Response: Please reduce rate of requests.",
     );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

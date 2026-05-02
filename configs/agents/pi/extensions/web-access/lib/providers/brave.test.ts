@@ -102,6 +102,30 @@ describe("searchWithBrave", () => {
     });
   });
 
+  test("retries Brave rate limits when retry guidance is short", async () => {
+    // Arrange
+    process.env.BRAVE_API_KEY = "test-key";
+    const responses = [
+      new Response(JSON.stringify({ error: { detail: "Too many requests" } }), {
+        status: 429,
+        headers: { "retry-after": "0" },
+      }),
+      new Response(JSON.stringify({ grounding: { generic: [{ url: "https://example.com", snippets: ["ok"] }] } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    ];
+    const fetchMock = mock(async () => responses.shift() ?? new Response("unexpected", { status: 500 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    // Act
+    const result = await searchWithBrave("docs", { numResults: 1 });
+
+    // Assert
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.results[0]?.url).toBe("https://example.com");
+  });
+
   test("reports Brave rate limits with retry guidance when provided", async () => {
     // Arrange
     process.env.BRAVE_API_KEY = "test-key";
@@ -109,14 +133,15 @@ describe("searchWithBrave", () => {
       async (_url: string | URL | Request, _init?: RequestInit) =>
         new Response(JSON.stringify({ error: { detail: "Too many requests" } }), {
           status: 429,
-          headers: { "retry-after": "1" },
+          headers: { "retry-after": "30" },
         }),
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     // Act / Assert
     await expect(searchWithBrave("docs", { numResults: 1 })).rejects.toThrow(
-      "Brave Search API rate limit exceeded (429). Retry after 1 second(s). Response: Too many requests",
+      "Brave Search API rate limit exceeded (429). Retry after 30 second(s). Response: Too many requests",
     );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,5 +1,16 @@
-import { describe, expect, test } from "bun:test";
-import { buildCodexFetchPrompt, buildCodexSearchPrompt, codexArgs } from "./codex";
+import { afterEach, describe, expect, mock, test } from "bun:test";
+import {
+  buildCodexFetchPrompt,
+  buildCodexSearchPrompt,
+  type CodexRunner,
+  codexArgs,
+  codexRateLimitDelayMs,
+  runCodex,
+} from "./codex";
+
+afterEach(() => {
+  mock.clearAllMocks();
+});
 
 describe("Codex fallback prompt builders", () => {
   test("builds search prompts with recency and domain filters", () => {
@@ -56,5 +67,38 @@ describe("Codex fallback prompt builders", () => {
       "/tmp/work",
       "Prompt",
     ]);
+  });
+});
+
+describe("Codex rate-limit handling", () => {
+  test("parses retry delays from Codex CLI rate-limit errors", () => {
+    // Arrange
+    const err = Object.assign(new Error("429 Too Many Requests. Retry after 3 seconds."), { stderr: "" });
+
+    // Act
+    const delay = codexRateLimitDelayMs(err);
+
+    // Assert
+    expect(delay).toBe(3_000);
+  });
+
+  test("retries Codex CLI once for short rate limits", async () => {
+    // Arrange
+    const outcomes: Array<Promise<{ stdout: string; stderr: string }>> = [
+      Promise.reject(Object.assign(new Error("Too many requests. Retry after 0 seconds."), { stderr: "" })),
+      Promise.resolve({ stdout: "# Answer\n\nSource: https://example.com", stderr: "" }),
+    ];
+    const runner: CodexRunner = {
+      execFileText: mock(async () => outcomes.shift() ?? Promise.reject(new Error("unexpected call"))),
+      waitForRateLimit: mock(async () => undefined),
+    };
+
+    // Act
+    const output = await runCodex("Prompt", { cwd: "/tmp/work" }, runner);
+
+    // Assert
+    expect(output).toContain("# Answer");
+    expect(runner.execFileText).toHaveBeenCalledTimes(2);
+    expect(runner.waitForRateLimit).toHaveBeenCalledWith(0, undefined);
   });
 });

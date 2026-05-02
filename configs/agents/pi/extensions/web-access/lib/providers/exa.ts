@@ -1,4 +1,5 @@
 import { getConfiguredEnvValue, loadConfig, normalizedString } from "../config";
+import { rateLimitRetryDelayMs, waitForRateLimit } from "../shared/rate-limit";
 import type { ExtractedContent, SearchOptions, SearchResponse } from "../types";
 
 const EXA_SEARCH_URL = "https://api.exa.ai/search";
@@ -122,32 +123,6 @@ function requestSignal(signal?: AbortSignal): AbortSignal {
   return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
-function retryAfterMs(headers: Headers): number | undefined {
-  const value = headers.get("retry-after")?.trim();
-  if (!value) return undefined;
-
-  const seconds = Number(value);
-  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
-
-  const dateMs = Date.parse(value);
-  if (Number.isNaN(dateMs)) return undefined;
-  return Math.max(0, dateMs - Date.now());
-}
-
-function wait(ms: number, signal?: AbortSignal): Promise<void> {
-  if (ms <= 0) return Promise.resolve();
-  if (signal?.aborted) return Promise.reject(new Error("Aborted"));
-
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(resolve, ms);
-    const abort = () => {
-      clearTimeout(timeout);
-      reject(new Error("Aborted"));
-    };
-    signal?.addEventListener("abort", abort, { once: true });
-  });
-}
-
 function exaApiErrorMessage(status: number, errorText: string, retryDelayMs?: number): string {
   const body = errorText.slice(0, 300);
   if (status !== 429) return `Exa API error ${status}: ${body}`;
@@ -176,15 +151,27 @@ async function postExaJson<T>(
     if (response.ok) return (await response.json()) as T;
 
     const errorText = await response.text();
-    const retryDelayMs = retryAfterMs(response.headers) ?? EXA_DEFAULT_RATE_LIMIT_DELAY_MS;
-    const canRetryRateLimit =
-      response.status === 429 && attempt < EXA_MAX_ATTEMPTS && retryDelayMs <= EXA_MAX_RATE_LIMIT_DELAY_MS;
-    if (canRetryRateLimit) {
-      await wait(retryDelayMs, signal);
+    const retryDelayMs = rateLimitRetryDelayMs({
+      headers: response.headers,
+      text: errorText,
+      defaultDelayMs: EXA_DEFAULT_RATE_LIMIT_DELAY_MS,
+      maxDelayMs: EXA_MAX_RATE_LIMIT_DELAY_MS,
+    });
+    if (response.status === 429 && attempt < EXA_MAX_ATTEMPTS && retryDelayMs !== undefined) {
+      await waitForRateLimit(retryDelayMs, signal);
       continue;
     }
 
-    throw new Error(exaApiErrorMessage(response.status, errorText, retryDelayMs));
+    const reportedRetryDelayMs =
+      response.status === 429
+        ? rateLimitRetryDelayMs({
+            headers: response.headers,
+            text: errorText,
+            defaultDelayMs: EXA_DEFAULT_RATE_LIMIT_DELAY_MS,
+            maxDelayMs: Number.POSITIVE_INFINITY,
+          })
+        : retryDelayMs;
+    throw new Error(exaApiErrorMessage(response.status, errorText, reportedRetryDelayMs));
   }
 
   throw new Error("Exa API request failed after retrying rate-limited responses.");

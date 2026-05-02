@@ -1,10 +1,14 @@
 import { getConfiguredEnvValue, loadConfig, normalizedString } from "../config";
+import { rateLimitRetryDelayMs, waitForRateLimit } from "../shared/rate-limit";
 import { extractHeadingTitle } from "../shared/text";
 import type { ExtractedContent, SearchOptions, SearchResponse } from "../types";
 
 const TAVILY_SEARCH_URL = "https://api.tavily.com/search";
 const TAVILY_EXTRACT_URL = "https://api.tavily.com/extract";
 const REQUEST_TIMEOUT_MS = 60_000;
+const TAVILY_MAX_ATTEMPTS = 2;
+const TAVILY_DEFAULT_RATE_LIMIT_DELAY_MS = 1_000;
+const TAVILY_MAX_RATE_LIMIT_DELAY_MS = 10_000;
 const SEARCH_SNIPPET_MAX_CHARS = 1_500;
 const DEFAULT_TITLE = "Tavily source";
 
@@ -77,18 +81,20 @@ function responseErrorDetail(value: unknown): string {
   return "";
 }
 
-async function tavilyErrorMessage(response: Response): Promise<string> {
-  const raw = await response.text();
+function tavilyErrorMessage(status: number, raw: string, retryDelayMs?: number): string {
   let detail = raw.slice(0, 300);
   try {
     detail = responseErrorDetail(JSON.parse(raw) as unknown) || detail;
   } catch {}
 
-  if (response.status === 429) return `Tavily API rate limit exceeded (429).${detail ? ` Response: ${detail}` : ""}`;
-  if (response.status === 432 || response.status === 433) {
-    return `Tavily API usage limit exceeded (${response.status}).${detail ? ` Response: ${detail}` : ""}`;
+  if (status === 429) {
+    const retryHint = retryDelayMs === undefined ? "" : ` Retry after ${Math.ceil(retryDelayMs / 1000)} second(s).`;
+    return `Tavily API rate limit exceeded (429).${retryHint}${detail ? ` Response: ${detail}` : ""}`;
   }
-  return `Tavily API error ${response.status}: ${detail}`;
+  if (status === 432 || status === 433) {
+    return `Tavily API usage limit exceeded (${status}).${detail ? ` Response: ${detail}` : ""}`;
+  }
+  return `Tavily API error ${status}: ${detail}`;
 }
 
 async function postTavilyJson<T>(url: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
@@ -99,17 +105,43 @@ async function postTavilyJson<T>(url: string, body: Record<string, unknown>, sig
     );
   }
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-    signal: requestSignal(signal),
-  });
-  if (!response.ok) throw new Error(await tavilyErrorMessage(response));
-  return (await response.json()) as T;
+  for (let attempt = 1; attempt <= TAVILY_MAX_ATTEMPTS; attempt++) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: requestSignal(signal),
+    });
+    if (response.ok) return (await response.json()) as T;
+
+    const errorText = await response.text();
+    const retryDelayMs = rateLimitRetryDelayMs({
+      headers: response.headers,
+      text: errorText,
+      defaultDelayMs: TAVILY_DEFAULT_RATE_LIMIT_DELAY_MS,
+      maxDelayMs: TAVILY_MAX_RATE_LIMIT_DELAY_MS,
+    });
+    if (response.status === 429 && attempt < TAVILY_MAX_ATTEMPTS && retryDelayMs !== undefined) {
+      await waitForRateLimit(retryDelayMs, signal);
+      continue;
+    }
+
+    const reportedRetryDelayMs =
+      response.status === 429
+        ? rateLimitRetryDelayMs({
+            headers: response.headers,
+            text: errorText,
+            defaultDelayMs: TAVILY_DEFAULT_RATE_LIMIT_DELAY_MS,
+            maxDelayMs: Number.POSITIVE_INFINITY,
+          })
+        : retryDelayMs;
+    throw new Error(tavilyErrorMessage(response.status, errorText, reportedRetryDelayMs));
+  }
+
+  throw new Error("Tavily API request failed after retrying rate-limited responses.");
 }
 
 function compactSnippet(value: unknown): string {

@@ -176,7 +176,7 @@ Provider order:
 3. Tavily Search, when a Tavily API key is configured.
 4. Codex CLI fallback.
 
-The provider chain falls through when a provider is unavailable, fails, is rate-limited, or returns no source URLs.
+The provider chain falls through when a provider is unavailable, fails after retryable rate-limit handling, or returns no source URLs. Exa, Brave, Tavily, and Codex all retry short rate-limit delays before falling through; long delays are reported with retry guidance instead of blocking for an unsafe amount of time.
 
 Supported parameters:
 

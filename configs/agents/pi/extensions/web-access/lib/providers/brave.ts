@@ -1,4 +1,5 @@
 import { getConfiguredEnvValue, loadConfig, normalizedString } from "../config";
+import { rateLimitRetryDelayMs, waitForRateLimit } from "../shared/rate-limit";
 import type { ExtractedContent, SearchOptions, SearchResponse, SearchResult } from "../types";
 
 const BRAVE_LLM_CONTEXT_URL = "https://api.search.brave.com/res/v1/llm/context";
@@ -6,6 +7,9 @@ const DEFAULT_RESULT_TITLE = "Brave source";
 const DEFAULT_HOSTNAME = "";
 const SEARCH_SNIPPET_MAX_CHARS = 1_500;
 const REQUEST_TIMEOUT_MS = 30_000;
+const BRAVE_MAX_ATTEMPTS = 2;
+const BRAVE_DEFAULT_RATE_LIMIT_DELAY_MS = 1_000;
+const BRAVE_MAX_RATE_LIMIT_DELAY_MS = 10_000;
 
 interface BraveContextItem {
   url?: unknown;
@@ -97,20 +101,18 @@ function responseErrorDetail(value: unknown): string {
   return "";
 }
 
-async function braveErrorMessage(response: Response): Promise<string> {
-  const raw = await response.text();
+function braveErrorMessage(status: number, raw: string, retryDelayMs?: number): string {
   let detail = raw.slice(0, 300);
   try {
     detail = responseErrorDetail(JSON.parse(raw) as unknown) || detail;
   } catch {}
 
-  if (response.status === 429) {
-    const retryAfter = response.headers.get("retry-after")?.trim();
-    const retryHint = retryAfter ? ` Retry after ${retryAfter} second(s).` : "";
+  if (status === 429) {
+    const retryHint = retryDelayMs === undefined ? "" : ` Retry after ${Math.ceil(retryDelayMs / 1000)} second(s).`;
     return `Brave Search API rate limit exceeded (429).${retryHint}${detail ? ` Response: ${detail}` : ""}`;
   }
 
-  return `Brave Search API error ${response.status}: ${detail}`;
+  return `Brave Search API error ${status}: ${detail}`;
 }
 
 function asContextItems(value: unknown): BraveContextItem[] {
@@ -201,6 +203,53 @@ function mapContextResponse(data: BraveLlmContextResponse, includeContent: boole
   };
 }
 
+async function postBraveContext(
+  apiKey: string,
+  body: Record<string, unknown>,
+  signal?: AbortSignal,
+): Promise<BraveLlmContextResponse> {
+  for (let attempt = 1; attempt <= BRAVE_MAX_ATTEMPTS; attempt++) {
+    const response = await fetch(BRAVE_LLM_CONTEXT_URL, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Accept-Encoding": "gzip",
+        "Content-Type": "application/json",
+        "X-Subscription-Token": apiKey,
+      },
+      body: JSON.stringify(body),
+      signal: requestSignal(signal),
+    });
+
+    if (response.ok) return (await response.json()) as BraveLlmContextResponse;
+
+    const errorText = await response.text();
+    const retryDelayMs = rateLimitRetryDelayMs({
+      headers: response.headers,
+      text: errorText,
+      defaultDelayMs: BRAVE_DEFAULT_RATE_LIMIT_DELAY_MS,
+      maxDelayMs: BRAVE_MAX_RATE_LIMIT_DELAY_MS,
+    });
+    if (response.status === 429 && attempt < BRAVE_MAX_ATTEMPTS && retryDelayMs !== undefined) {
+      await waitForRateLimit(retryDelayMs, signal);
+      continue;
+    }
+
+    const reportedRetryDelayMs =
+      response.status === 429
+        ? rateLimitRetryDelayMs({
+            headers: response.headers,
+            text: errorText,
+            defaultDelayMs: BRAVE_DEFAULT_RATE_LIMIT_DELAY_MS,
+            maxDelayMs: Number.POSITIVE_INFINITY,
+          })
+        : retryDelayMs;
+    throw new Error(braveErrorMessage(response.status, errorText, reportedRetryDelayMs));
+  }
+
+  throw new Error("Brave Search API request failed after retrying rate-limited responses.");
+}
+
 export async function searchWithBrave(query: string, options: SearchOptions = {}): Promise<SearchResponse> {
   const apiKey = getBraveApiKey();
   if (!apiKey) {
@@ -211,15 +260,9 @@ export async function searchWithBrave(query: string, options: SearchOptions = {}
 
   const numResults = clampResultCount(options.numResults);
   const freshness = mapBraveFreshness(options.recencyFilter);
-  const response = await fetch(BRAVE_LLM_CONTEXT_URL, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Accept-Encoding": "gzip",
-      "Content-Type": "application/json",
-      "X-Subscription-Token": apiKey,
-    },
-    body: JSON.stringify({
+  const data = await postBraveContext(
+    apiKey,
+    {
       q: buildBraveQuery(query, options.domainFilter),
       count: numResults,
       maximum_number_of_urls: numResults,
@@ -228,10 +271,9 @@ export async function searchWithBrave(query: string, options: SearchOptions = {}
       maximum_number_of_tokens_per_url: 4_096,
       context_threshold_mode: "balanced",
       ...(freshness ? { freshness } : {}),
-    }),
-    signal: requestSignal(options.signal),
-  });
+    },
+    options.signal,
+  );
 
-  if (!response.ok) throw new Error(await braveErrorMessage(response));
-  return mapContextResponse((await response.json()) as BraveLlmContextResponse, Boolean(options.includeContent));
+  return mapContextResponse(data, Boolean(options.includeContent));
 }
