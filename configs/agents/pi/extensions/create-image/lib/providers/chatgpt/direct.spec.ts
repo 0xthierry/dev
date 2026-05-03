@@ -1,15 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { createChatGptDirectProvider } from "./direct";
 
-const ENABLE_LIVE_SPEC = process.env.PI_CREATE_IMAGE_CHATGPT_LIVE_SPEC === "1";
-
 describe("create-image ChatGPT direct Web live contract", () => {
   test("generates downloadable image bytes through direct ChatGPT Web HTTP", async () => {
     // Arrange
-    if (!ENABLE_LIVE_SPEC) {
-      console.warn("Skipping ChatGPT direct Web live contract. Set PI_CREATE_IMAGE_CHATGPT_LIVE_SPEC=1 to enable.");
-      return;
-    }
     const provider = createChatGptDirectProvider();
 
     // Act

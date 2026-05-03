@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { type PiRpcHarness, startPiRpcHarness } from "../_shared/testing/pi-rpc-harness";
 
 const extensionPath = "configs/agents/pi/extensions/create-image";
-const ENABLE_LIVE_SPEC = process.env.PI_CREATE_IMAGE_LIVE_SPEC === "1";
 
 type JsonObject = Record<string, unknown>;
 
@@ -40,10 +39,6 @@ describe("create-image extension E2E", () => {
 
   test("generates and saves an image through the command when live Gemini Web access is enabled", async () => {
     // Arrange
-    if (!ENABLE_LIVE_SPEC) {
-      console.warn("Skipping create-image command live E2E. Set PI_CREATE_IMAGE_LIVE_SPEC=1 to enable.");
-      return;
-    }
     tempDir = await mkdtemp(join(tmpdir(), "pi-create-image-e2e-"));
     harness = await startCreateImageHarness();
 

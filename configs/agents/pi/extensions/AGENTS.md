@@ -134,6 +134,8 @@ Run lint and typecheck after changing extension code. `lint:pi-extensions` uses 
 
 ## E2E guidance
 
+Do not hide live `.spec.ts` coverage behind opt-in gates such as `*_LIVE_SPEC=1`, `*_COOKIE_SPEC=1`, or early-return skips. Specs are the extension's real-service validation entrypoints and should run when the E2E command selects them. If a live spec requires credentials, browser cookies, local provider setup, or a target URL, read those from the normal environment/config and fail clearly when unavailable rather than passing as skipped. Use default public targets when practical, and reserve env vars for required credentials, provider configuration, or overriding a target, not for enabling the test itself.
+
 Prefer Pi RPC mode for E2E tests because it is observable and scriptable:
 
 ```bash

@@ -1,15 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { createGeminiNanoBananaProvider } from "./nano-banana";
 
-const ENABLE_LIVE_SPEC = process.env.PI_CREATE_IMAGE_LIVE_SPEC === "1";
-
 describe("create-image Nano Banana live contract", () => {
   test("generates downloadable image bytes through Gemini Web cookies", async () => {
     // Arrange
-    if (!ENABLE_LIVE_SPEC) {
-      console.warn("Skipping Nano Banana live contract. Set PI_CREATE_IMAGE_LIVE_SPEC=1 to enable.");
-      return;
-    }
     const provider = createGeminiNanoBananaProvider();
 
     // Act
