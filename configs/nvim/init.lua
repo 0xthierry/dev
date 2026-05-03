@@ -870,6 +870,8 @@ require('lazy').setup({
       -- or leave it empty to use the default settings
       gitbrowse = { enabled = true },
       lazygit = { enabled = true },
+      -- Image/file previews and inline document images. Requires a Kitty graphics-capable terminal (not Zellij).
+      image = { enabled = true },
     },
     keys = {
       -- Other

@@ -28,6 +28,7 @@ COMMON_PACMAN_PACKAGES=(
   shellcheck
   gitleaks
   graphviz
+  imagemagick
   tree-sitter-cli
   tokei
   hyperfine
@@ -91,6 +92,7 @@ COMMON_BREW_FORMULAE=(
   shellcheck
   gitleaks
   graphviz
+  imagemagick
   tokei
   hyperfine
   entr
