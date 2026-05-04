@@ -32,7 +32,7 @@ type RequestLike = {
   method?: string
   status?: number
   url?: string
-  postData?: string
+  postData?: unknown
 }
 
 type Details = {
@@ -88,6 +88,7 @@ if (!args.manifest || !args.urls) {
 }
 
 const manifest = readJson<Manifest>(args.manifest)
+validateManifest(manifest)
 const uploadedUrls = normalizeUrls(readJson(args.urls))
 const sectionTitle = args.section ?? 'UI QA Evidence'
 const section = renderSection(manifest, uploadedUrls, sectionTitle)
@@ -142,6 +143,18 @@ function readJson<T = unknown>(file: string): T {
   return JSON.parse(fs.readFileSync(file, 'utf8')) as T
 }
 
+function validateManifest(manifest: Manifest) {
+  if (!Array.isArray(manifest.entries)) {
+    console.error('Invalid manifest: entries must be an array')
+    process.exit(1)
+  }
+
+  if (manifest.entries.length === 0) {
+    console.error('Invalid manifest: no QA cases found')
+    process.exit(1)
+  }
+}
+
 function writeFile(file: string, content: string) {
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(file, `${content}\n`)
@@ -173,8 +186,10 @@ function normalizeUrls(raw: unknown) {
 }
 
 function collectUrls(value: UrlValue | undefined): string[] {
-  if (typeof value === 'string')
-    return [value]
+  if (typeof value === 'string') {
+    const normalized = normalizeUploadedUrl(value)
+    return normalized ? [normalized] : []
+  }
 
   if (Array.isArray(value))
     return value.flatMap(collectUrls)
@@ -194,6 +209,32 @@ function collectUrls(value: UrlValue | undefined): string[] {
   return []
 }
 
+function normalizeUploadedUrl(value: string) {
+  const raw = value.trim()
+  if (!raw)
+    return null
+
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  }
+  catch {
+    throw new Error(`Invalid uploaded evidence URL: ${raw}`)
+  }
+
+  if (
+    parsed.protocol !== 'https:'
+    || parsed.hostname !== 'github.com'
+    || parsed.search
+    || parsed.hash
+    || !/^\/user-attachments\/assets\/[A-Za-z0-9_-]+$/.test(parsed.pathname)
+  ) {
+    throw new Error(`Invalid uploaded evidence URL: ${raw}`)
+  }
+
+  return parsed.href
+}
+
 function renderSection(manifest: Manifest, uploadedUrls: Map<string, string[]>, sectionTitle: string) {
   const rows = manifest.entries.map((entry) => {
     const result = entry.pass === true ? 'Pass' : entry.pass === false ? 'Fail' : 'Unknown'
@@ -201,15 +242,16 @@ function renderSection(manifest: Manifest, uploadedUrls: Map<string, string[]>, 
     const evidence = urls.length > 0
       ? urls.map((url, index) => `[evidence ${index + 1}](${url})`).join('<br>')
       : 'Missing uploaded URL'
-    const expected = summarizeExpectation(entry)
+    const finding = summarizeFinding(entry)
 
-    return `| ${escapeCell(entry.case)} | ${result} | ${escapeCell(expected)} | ${evidence} |`
+    return `| ${escapeCell(entry.case)} | ${result} | ${escapeCell(finding)} | ${evidence} |`
   })
 
+  const counts = countResults(manifest.entries)
   const summary = [
-    `${manifest.passed ?? 0} passed`,
-    `${manifest.failed ?? 0} failed`,
-    `${manifest.unknown ?? 0} unknown`,
+    `${counts.passed} passed`,
+    `${counts.failed} failed`,
+    `${counts.unknown} unknown`,
   ].join(', ')
 
   return [
@@ -217,20 +259,58 @@ function renderSection(manifest: Manifest, uploadedUrls: Map<string, string[]>, 
     '',
     `QA manifest summary: ${summary}.`,
     '',
-    '| Case | Result | Behavior Proven | Evidence |',
+    '| Case | Result | QA Finding | Evidence |',
     '| --- | --- | --- | --- |',
     ...rows,
   ].join('\n')
 }
 
-function summarizeExpectation(entry: ManifestEntry) {
+function countResults(entries: ManifestEntry[]) {
+  return {
+    passed: entries.filter(entry => entry.pass === true).length,
+    failed: entries.filter(entry => entry.pass === false).length,
+    unknown: entries.filter(entry => entry.pass === undefined).length,
+  }
+}
+
+function summarizeFinding(entry: ManifestEntry) {
+  if (entry.pass === true)
+    return summarizeProvenBehavior(entry)
+
+  if (entry.pass === undefined && entry.proof)
+    return `Not proven: ${entry.proof}`
+
+  const details = entry.details ?? {}
+  const expected = summarizeExpected(details)
+  const observed = summarizeObserved(details)
+
+  if (entry.pass === false) {
+    if (expected === 'not recorded' && observed === 'not recorded' && entry.proof)
+      return `Failed: ${entry.proof}`
+    return `Expected: ${expected}; Observed: ${observed}`
+  }
+
+  return `Not proven: expected ${expected}; observed ${observed}`
+}
+
+function summarizeProvenBehavior(entry: ManifestEntry) {
   if (entry.proof)
     return entry.proof
 
   const details = entry.details ?? {}
+  const expected = summarizeExpected(details)
+  if (expected !== 'not recorded')
+    return expected
+
+  const observed = summarizeObserved(details)
+  if (observed !== 'not recorded')
+    return observed
+
+  return summarizeDerivedBehavior(details)
+}
+
+function summarizeExpected(details: Details) {
   const expected = details.expected
-  const observed = details.observed
-  const action = details.action
 
   if (typeof expected === 'string')
     return expected
@@ -238,8 +318,23 @@ function summarizeExpectation(entry: ManifestEntry) {
   if (expected && typeof expected === 'object')
     return Object.entries(expected).map(([key, value]) => `${key}: ${stringifyShort(value)}`).join('; ')
 
+  return 'not recorded'
+}
+
+function summarizeObserved(details: Details) {
+  const observed = details.observed
+
   if (typeof observed === 'string')
     return observed
+
+  if (observed && typeof observed === 'object')
+    return Object.entries(observed).map(([key, value]) => `${key}: ${stringifyShort(value)}`).join('; ')
+
+  return 'not recorded'
+}
+
+function summarizeDerivedBehavior(details: Details) {
+  const action = details.action
 
   if (details.workflowPost || details.workflowOk) {
     const method = details.workflowPost?.method ?? 'POST'
@@ -336,16 +431,22 @@ function updatePrBody(pr: string, repo: string | undefined, section: string, sec
 }
 
 function replaceSection(body: string, section: string, sectionTitle: string) {
-  const header = `## ${sectionTitle}`
-  const start = body.indexOf(header)
+  const headingPattern = new RegExp(`^## ${escapeRegExp(sectionTitle)}\\s*$`, 'm')
+  const match = headingPattern.exec(body)
 
-  if (start === -1)
+  if (!match || match.index === undefined)
     return body.trimEnd() ? `${body.trimEnd()}\n\n${section}\n` : `${section}\n`
 
-  const next = body.slice(start + header.length).search(/\n##\s+/)
+  const start = match.index
+  const afterHeading = start + match[0].length
+  const next = body.slice(afterHeading).search(/\n##\s+/)
   if (next === -1)
     return `${body.slice(0, start).trimEnd()}\n\n${section}\n`
 
-  const end = start + header.length + next
+  const end = afterHeading + next
   return `${body.slice(0, start).trimEnd()}\n\n${section}\n\n${body.slice(end).trimStart()}`
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }

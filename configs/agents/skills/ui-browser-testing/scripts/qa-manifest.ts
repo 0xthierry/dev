@@ -5,6 +5,8 @@ import path from 'node:path'
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
 type SummaryValue = undefined | null | boolean | number | string | SummaryValue[] | { [key: string]: SummaryValue }
 
+const SENSITIVE_KEY_PATTERN = /pass(word)?|token|secret|authorization|cookie|api[-_]?key|credential|private[-_]?key|session|bearer/i
+
 type RequestLike = {
   type?: string
   method?: string
@@ -24,6 +26,8 @@ type AssertionData = {
   case?: string
   name?: string
   pass?: boolean
+  proof?: string
+  media?: unknown
   network?: RequestLike[]
   before?: StateLike
   after?: StateLike
@@ -40,7 +44,7 @@ type AssertionData = {
   expected?: JsonValue
   observed?: JsonValue
   cleanup?: JsonValue
-  [key: string]: JsonValue | RequestLike | RequestLike[] | StateLike | undefined
+  [key: string]: unknown
 }
 
 function usage() {
@@ -71,23 +75,24 @@ const files = fs.readdirSync(assertionsDir)
   .filter(file => !file.includes('summary'))
   .sort()
 
+if (files.length === 0) {
+  console.error(`No assertion JSON files found in ${assertionsDir}`)
+  process.exit(1)
+}
+
 const entries = files.map((file) => {
   const fullPath = path.join(assertionsDir, file)
   const data = JSON.parse(fs.readFileSync(fullPath, 'utf8')) as AssertionData
   const caseName = data.case ?? data.name ?? path.basename(file, '.json')
   const pass = typeof data.pass === 'boolean' ? data.pass : inferPass(data)
-  const videoPath = path.join(artifactDir, 'videos', `${caseName}.webm`)
 
   const entry = {
     case: caseName,
     pass,
     assertion: fullPath,
-    media: {
-      video: fs.existsSync(videoPath) ? videoPath : undefined,
-      screenshots: collectScreenshots(artifactDir, caseName),
-    },
+    media: buildMedia(data, artifactDir, caseName),
     network: extractNetwork(data),
-    proof: inferProof(data),
+    proof: typeof data.proof === 'string' ? data.proof : inferProof(data),
     details: compactDetails(data),
   }
 
@@ -117,18 +122,80 @@ else {
 function extractNetwork(data: AssertionData) {
   const network = data.network ?? []
   return network
-    .filter((event): event is RequestLike & { url: string } => Boolean(event?.url && (
-      event.url.includes('/api/')
-      || event.url.includes('/workflow')
-      || event.url.includes('/prompt-version')
-      || event.url.includes('/graphql')
-    )))
-    .map(event => ({
-      type: event.type,
-      method: event.method,
-      status: event.status,
-      url: event.url,
-    }))
+    .filter((event): event is RequestLike & { url: string } => Boolean(event?.url))
+    .map(summarizeRequest)
+}
+
+function summarizeRequest(event: RequestLike & { url: string }) {
+  return {
+    type: event.type,
+    method: event.method,
+    status: event.status,
+    url: event.url,
+    ...(typeof event.postData === 'string' ? { postData: summarizePostData(event.postData) } : {}),
+  }
+}
+
+function summarizePostData(postData: string) {
+  const parsed = tryParseJson(postData)
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    return {
+      redacted: true,
+      hasPostData: true,
+      jsonKeys: Object.keys(parsed).slice(0, 25).map(redactSensitiveKeyName),
+    }
+  }
+
+  return {
+    redacted: true,
+    hasPostData: postData.length > 0,
+    bytes: postData.length,
+  }
+}
+
+function tryParseJson(value: string): unknown {
+  try {
+    return JSON.parse(value)
+  }
+  catch {
+    return undefined
+  }
+}
+
+function buildMedia(data: AssertionData, artifactDir: string, caseName: string) {
+  const media = toSummaryRecord(summarize(data.media))
+  const videoPath = path.join(artifactDir, 'videos', `${caseName}.webm`)
+  if (fs.existsSync(videoPath) && typeof media.video !== 'string')
+    media.video = videoPath
+
+  media.screenshots = uniqueStrings([
+    ...stringsFrom(media.screenshot),
+    ...stringsFrom(media.screenshots),
+    ...collectScreenshots(artifactDir, caseName),
+  ])
+
+  return media
+}
+
+function toSummaryRecord(value: SummaryValue): Record<string, SummaryValue> {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return {}
+
+  return { ...value }
+}
+
+function stringsFrom(value: SummaryValue): string[] {
+  if (typeof value === 'string')
+    return [value]
+
+  if (Array.isArray(value))
+    return value.filter((item): item is string => typeof item === 'string')
+
+  return []
+}
+
+function uniqueStrings(values: string[]) {
+  return [...new Set(values)]
 }
 
 function collectScreenshots(artifactDir: string, caseName: string) {
@@ -150,10 +217,11 @@ function collectScreenshotsFromDir(dir: string, caseName: string) {
 
 function inferPass(data: AssertionData) {
   if (data.pending && data.afterClick && data.recovered) {
+    const startedEnabled = data.before?.runDisabled === false
     const hasHeldRequest = Array.isArray(data.pending.held) && data.pending.held.length > 0
     const blockedRun = Array.isArray(data.afterClick.workflowRequests) && data.afterClick.workflowRequests.length === 0
     const recovered = data.recovered.runDisabled === false
-    if (hasHeldRequest && data.pending.runDisabled === true && blockedRun && recovered)
+    if (startedEnabled && hasHeldRequest && data.pending.runDisabled === true && blockedRun && recovered)
       return true
   }
 
@@ -235,42 +303,30 @@ function routeOnly(value: string) {
 }
 
 function compactDetails(data: AssertionData) {
-  const keys = [
-    'surface',
-    'route',
-    'precondition',
-    'action',
-    'expected',
-    'observed',
-    'before',
-    'after',
-    'pending',
-    'guarded',
-    'afterClick',
-    'recovered',
-    'workflowPost',
-    'workflowOk',
-    'cleanup',
-  ]
+  const excludedKeys = new Set(['case', 'name', 'pass', 'proof', 'media', 'network'])
 
   return Object.fromEntries(
-    keys
-      .filter(key => data[key] !== undefined)
-      .map(key => [key, summarize(data[key])]),
+    Object.entries(data)
+      .filter(([key, value]) => !excludedKeys.has(key) && value !== undefined)
+      .map(([key, value]) => [key, SENSITIVE_KEY_PATTERN.test(key) ? '[REDACTED]' : summarize(value)]),
   )
 }
 
-function summarize(value: JsonValue | RequestLike | RequestLike[] | StateLike | undefined): SummaryValue {
+function summarize(value: unknown): SummaryValue {
   if (value === null || typeof value !== 'object')
-    return value
+    return typeof value === 'string' ? summarizeString(value) : value as SummaryValue
 
   if (Array.isArray(value))
     return value.slice(0, 10).map(summarize)
 
   const summary: Record<string, SummaryValue> = {}
   for (const [key, item] of Object.entries(value)) {
-    if (typeof item === 'string')
-      summary[key] = item.length > 500 ? `${item.slice(0, 500)}...` : item
+    if (key === 'postData' && typeof item === 'string')
+      summary[key] = summarizePostData(item)
+    else if (SENSITIVE_KEY_PATTERN.test(key))
+      summary[key] = '[REDACTED]'
+    else if (typeof item === 'string')
+      summary[key] = summarizeString(item)
     else if (Array.isArray(item))
       summary[key] = item.slice(0, 10).map(summarize)
     else if (item && typeof item === 'object')
@@ -279,4 +335,12 @@ function summarize(value: JsonValue | RequestLike | RequestLike[] | StateLike | 
       summary[key] = item
   }
   return summary
+}
+
+function summarizeString(value: string) {
+  return value.length > 500 ? `${value.slice(0, 500)}...` : value
+}
+
+function redactSensitiveKeyName(key: string) {
+  return SENSITIVE_KEY_PATTERN.test(key) ? '[REDACTED_KEY]' : key
 }
