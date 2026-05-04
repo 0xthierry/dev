@@ -2,6 +2,8 @@
 
 Use this reference when a UI test needs human proof: screenshots, crops, recordings, or visual review.
 
+Human media is evidence only when it is tied to a case and an observed result. For QA or PR validation, a screenshot/video should be part of an evidence packet, not a standalone claim.
+
 ## Evidence Ladder
 
 Prefer the strongest evidence that fits the claim:
@@ -12,6 +14,14 @@ Prefer the strongest evidence that fits the claim:
 4. **Full-page screenshot:** useful context, but weak if the relevant state is small.
 
 Use more than one layer when reviewers need trust and context: assertion plus focused screenshot is usually enough.
+
+For branch or PR QA, every case should have either:
+
+- A machine-readable assertion artifact that names the case, action, expected result, observed result, and pass/fail state.
+- A screenshot or video that visibly shows the same named case.
+- Network or side-effect evidence when the claim depends on a request being sent, blocked, retried, or absent.
+
+Do not upload a video as "proof the feature works" without the case matrix or assertion data that says which permutations it covers.
 
 ## Screenshot Workflow
 
@@ -90,12 +100,54 @@ agent-browser record stop
 
 Keep recordings short. Start as close to the relevant interaction as possible and stop immediately after the result is visible.
 
+For QA permutations, record one short clip per meaningful case when possible. A single long video is harder to review and often hides whether blocked states, recovery, or alternate routes were actually tested.
+
+Name recordings by case:
+
+```text
+v3-stable-run-baseline.webm
+v3-create-draft-pending-guard.webm
+v3-update-draft-pending-guard.webm
+legacy-v2-creating-draft-state-guard.webm
+```
+
+After recording, pair each file with its assertion JSON or manifest entry. If a case is a guard, disabled state, debounce, or permission check, the video must be accompanied by a network assertion showing the forbidden request or mutation did not occur.
+
+## Evidence Packet
+
+For multi-case validation, use a stable artifact layout:
+
+```text
+/tmp/ui-browser-testing/<task>/
+  assertions/
+    <case>.json
+  videos/
+    <case>.webm
+  screenshots/
+    <case>-after.png
+  manifest.json
+```
+
+Generate the manifest from assertion files:
+
+```bash
+bun scripts/qa-manifest.ts /tmp/ui-browser-testing/<task> /tmp/ui-browser-testing/<task>/manifest.json
+```
+
+Before handing off or uploading, verify:
+
+- Manifest case count matches the QA matrix.
+- Every passing case has an assertion and either visual evidence or a reason visual proof is unnecessary.
+- Every blocked-action case includes absence-of-request or absence-of-mutation evidence.
+- Every uploaded media URL maps to a specific case.
+
 ## Reviewing Existing Media
 
 When asked whether a screenshot/video proves a fix:
 
 - Open or render it.
 - Check whether the target state is visible.
+- Check whether it maps to a named QA case and expected result.
 - Check whether the media loaded successfully in the target system.
 - Reject ambiguous proof and create a focused replacement.
 

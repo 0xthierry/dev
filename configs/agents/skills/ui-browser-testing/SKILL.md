@@ -8,9 +8,11 @@ disable_model_invocation: true
 
 ## Overview
 
-This skill is for systematic UI verification in a real browser. Use `agent-browser` for browser control, but treat this skill as the testing process: define the claim, drive the UI like a user, assert the result, capture clear evidence, and clean up any state you changed.
+This skill is for systematic UI verification in a real browser. Use `agent-browser` for browser control, but treat this skill as the testing process: understand the product behavior, derive the cases that matter, drive the UI like a user, assert the result, capture clear evidence, and clean up any state you changed.
 
 The core rule is: do not stop at "I clicked through it." A UI test is complete only when the expected behavior has been observed with a focused assertion or unmistakable visual evidence.
+
+When validating a branch, PR, feature, or regression fix, act like QA rather than a demo recorder. Start from the change and its product impact, build a case matrix, include positive, negative, race, and recovery paths, and only then open the browser.
 
 ## Mandatory Browser
 
@@ -51,15 +53,43 @@ Load these only when needed:
 
 | Resource | When To Load | Purpose |
 | --- | --- | --- |
+| `references/branch-pr-qa.md` | When validating a branch, PR, product change, "all permutations", or release evidence | QA matrix workflow, permutation rules, evidence manifest |
 | `references/evidence-and-screenshots.md` | When producing, reviewing, cropping, or selecting UI screenshots/videos | Evidence quality rubric and screenshot/video workflow |
 | `references/github-pr-attachments.md` | When attaching screenshots/videos to GitHub PRs/issues without committing media | Browser upload flow, URL extraction, cleanup, and render verification |
 | `scripts/crop-screenshot.sh` | When a screenshot needs a focused crop | Deterministic ImageMagick/ffmpeg crop helper with fallback |
+| `scripts/qa-manifest.ts` | When summarizing multi-case assertion artifacts | Builds a compact QA manifest from assertion JSON files with Bun |
+| `scripts/github-qa-evidence.ts` | When updating a PR body with uploaded QA evidence URLs | Renders/replaces a GitHub PR QA evidence section from a manifest with Bun |
 
 ## Process
 
-### 1. Define The Claim
+### 1. Start With QA Scope
 
-Before opening the browser, state the behavior under test in one sentence:
+If the user asks to test a branch, PR, feature, fix, or "all permutations", do not begin with a single claim. First inspect the product change and produce a QA matrix.
+
+Use code inspection, diff inspection, issue/PR text, tests, or runtime behavior to answer:
+
+- What user workflows changed?
+- What states, async operations, permissions, feature flags, errors, and legacy surfaces are affected?
+- What must still work?
+- What must now be blocked or prevented?
+- What should recover after the state clears?
+- What side effects or network requests prove success or failure?
+
+Before browser execution, state the cases you will validate. For each case include:
+
+- Route/surface.
+- Precondition or fixture.
+- User action.
+- Expected UI result.
+- Expected network/side effect, including requests that must not happen.
+- Evidence to collect.
+- Cleanup or data mutation risk.
+
+For detailed branch/PR QA rules, load `references/branch-pr-qa.md`.
+
+### 2. Define The Claim
+
+For each QA case or single requested check, state the behavior under test in one sentence:
 
 ```text
 Claim: When X is in state Y and the user does Z, the UI shows/result changes to W.
@@ -76,18 +106,20 @@ Identify:
 
 If the user gives an already-open tab, start with `agent-browser get url` and work in that session unless it is stuck.
 
-### 2. Choose Evidence Before Interacting
+### 3. Choose Evidence Before Interacting
 
 Pick the evidence type that proves the claim:
 
 - **DOM/accessibility assertion:** best for checked state, text, enabled/disabled state, selected tab, URL, count, aria state.
 - **Screenshot:** best for visual layout, popovers, styling, canvas, or proof for humans.
 - **Video:** best for animation, multi-step interaction, hover/dropdown timing, or PR walkthroughs.
-- **Network/console/errors:** useful when UI behavior depends on requests or client exceptions.
+- **Network/console/errors:** required when UI behavior depends on requests, prevented requests, client exceptions, or async side effects.
 
 Prefer a machine-readable assertion before taking screenshots. A screenshot without a clear visible proof is weak evidence.
 
-### 3. Start Stable
+For blockers, disabled states, debounces, guards, race fixes, and permission checks, visual proof alone is not enough. Also assert the forbidden request or side effect did not happen.
+
+### 4. Start Stable
 
 Use the least disruptive browser setup that matches the user request:
 
@@ -102,7 +134,7 @@ If deep-linking opens a broken or partial app state, navigate through the normal
 
 If auth is required and the user already has a browser tab open, prefer the existing session over creating a new profile or state file.
 
-### 4. Discover Controls
+### 5. Discover Controls
 
 Use `snapshot -i` first. Re-run it after navigation, opening a modal/popover, or major DOM updates because refs become stale.
 
@@ -116,7 +148,7 @@ agent-browser get text body
 
 When snapshots time out on heavy apps, stop retrying the same command. Switch to screenshots, targeted `get` commands, or narrow `eval` checks.
 
-### 5. Interact Like A User
+### 6. Interact Like A User
 
 Prefer accessible refs:
 
@@ -142,7 +174,7 @@ agent-browser keyboard type "@"
 agent-browser press Enter
 ```
 
-### 6. Assert The Result
+### 7. Assert The Result
 
 Assert the smallest stable fact that proves the claim. Examples:
 
@@ -160,6 +192,7 @@ For a passing UI check, record:
 - The exact state/action tested.
 - The observed result.
 - The command or screenshot that proves it.
+- The expected network request, response, or absence of request when relevant.
 
 For a failing UI check, record:
 
@@ -168,7 +201,15 @@ For a failing UI check, record:
 - Whether the failure is reproducible after reload or retry.
 - Any console errors or failed requests that appeared.
 
-### 7. Capture Human Evidence
+For PR or multi-case QA, write a small assertion artifact or manifest under `/tmp/ui-browser-testing/<task>/` or the ignored project artifact directory. Include case name, route, action, expected result, observed result, network evidence, media path, and cleanup status.
+
+If assertion JSON files exist under `<artifact-dir>/assertions`, generate a summary manifest:
+
+```bash
+bun scripts/qa-manifest.ts <artifact-dir> <artifact-dir>/manifest.json
+```
+
+### 8. Capture Human Evidence
 
 For detailed screenshot/video guidance, load `references/evidence-and-screenshots.md`.
 
@@ -196,7 +237,7 @@ scripts/crop-screenshot.sh full.png crop.png <width> <height> <x> <y>
 
 Do not commit screenshots, videos, traces, HARs, downloaded files, or temporary state unless the user explicitly asked for committed artifacts.
 
-### 8. PR Or Issue Attachments
+### 9. PR Or Issue Attachments
 
 For GitHub-specific attachment details, load `references/github-pr-attachments.md`.
 
@@ -204,9 +245,16 @@ When the user wants media in GitHub/GitLab/Linear/etc. but not committed:
 
 1. Upload through the browser attachment flow.
 2. Extract the hosted attachment URL.
-3. Clear any draft comment used for upload unless the user wanted a comment.
-4. Update the PR/issue description with the hosted URL.
-5. Reload the page and verify the media renders.
+3. Map each uploaded URL to the QA case it proves.
+4. Clear any draft comment used for upload unless the user wanted a comment.
+5. Update the PR/issue description with the hosted URL and case result.
+6. Reload the page and verify the media renders.
+
+For GitHub PRs, prefer generating the section from the manifest and uploaded URL map:
+
+```bash
+bun scripts/github-qa-evidence.ts --manifest <artifact-dir>/manifest.json --urls <artifact-dir>/uploaded-urls.json --pr <number> --repo <owner>/<repo>
+```
 
 For GitHub image proof, verify rendered dimensions:
 
@@ -214,7 +262,7 @@ For GitHub image proof, verify rendered dimensions:
 agent-browser eval '([...document.images].map(img => ({ src: img.src, complete: img.complete, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, alt: img.alt })))'
 ```
 
-### 9. Clean Up
+### 10. Clean Up
 
 If you changed app data to test:
 
