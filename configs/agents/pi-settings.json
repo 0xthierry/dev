@@ -1,8 +1,8 @@
 {
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.5",
-  "transport": "websocket-cached",
-  "defaultThinkingLevel": "high",
+  "transport": "sse",
+  "defaultThinkingLevel": "xhigh",
   "theme": "dark",
   "hideThinkingBlock": false,
   "quietStartup": false,
