@@ -1,7 +1,6 @@
 ---
 name: agent-browser
 description: "Use for browser automation: open sites, click/fill forms, log in, scrape pages, take screenshots, or test web apps."
-allowed-tools: Bash(npx agent-browser:*), Bash(agent-browser:*)
 ---
 
 # Browser Automation with agent-browser

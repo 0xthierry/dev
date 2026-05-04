@@ -9,7 +9,6 @@ description: >
     - Searching decompiled .NET source code
     - Assembly metadata inspection
     Prefer ilspy-cli over ghidra-cli for .NET binaries (ghidra produces poor output for .NET IL).
-allowed-tools: Bash(ilspy:*)
 disable_model_invocation: true
 ---
 

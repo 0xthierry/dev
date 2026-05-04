@@ -2,7 +2,6 @@
 name: ui-browser-testing
 description: "Use for browser-driven UI testing: reproduce frontend bugs, verify fixes, collect screenshots/videos, validate PR evidence, and debug browser-only behavior."
 disable_model_invocation: true
-allowed-tools: Bash(agent-browser:*), Bash(npx agent-browser:*), Bash(ps:*), Bash(pkill:*), Bash(kill:*), Bash(rg:*), Bash(mkdir:*), Bash(git:*), Bash(magick:*), Bash(convert:*), Bash(ffmpeg:*), Bash(file:*), Bash(ls:*), Bash(*/crop-screenshot.sh:*)
 ---
 
 # UI Browser Testing

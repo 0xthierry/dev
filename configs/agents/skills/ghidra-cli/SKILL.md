@@ -13,7 +13,6 @@ description: >
     - Type management (structs, enums, typedefs, struct fields)
     - Function signature editing (return type, calling convention, full signature)
     - Variable retyping in decompiled functions
-allowed-tools: Bash(ghidra:*)
 disable_model_invocation: true
 ---
 
