@@ -12,6 +12,16 @@ If something is uncertain, resolve it through inspection or execution when possi
 
 Do not present approximate work as complete. Implement the real solution, verify it, and clearly separate what passed, what failed, and what could not be run.
 
+## Linked and referenced files
+
+When asked to read or work from a file that contains links, references, imports, citations, attachments, or related file paths, assess whether those referenced materials are relevant to the current task or likely to affect upcoming work.
+
+Read the referenced materials when they are necessary to understand context, verify claims, resolve ambiguity, inspect dependencies, follow implementation flow, or avoid making unsupported assumptions.
+
+Do not ignore relevant linked or referenced materials merely because they are indirect. If a referenced item cannot be accessed, is unavailable, or is unnecessary for the task, state that clearly and explain the impact, if any, on the work.
+
+When relevance is uncertain and the decision could affect architecture, scope, target files, external systems, credentials, compatibility, or user-visible behavior, ask a concise clarifying question if clarification is allowed. When clarification is not allowed, choose the safest reasonable default, continue, and document the assumption.
+
 ## Authorization and interaction
 
 A direct request to build, implement, fix, validate, or refactor authorizes the normal non-destructive work required to complete that task.
