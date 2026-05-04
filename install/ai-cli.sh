@@ -72,19 +72,19 @@ install_ai_clis() {
   log_section "AI Coding CLIs"
 
   # Claude Code (Anthropic) — standalone binary, not npm
-  install_claude_code_binary "2.1.119"
+  install_claude_code_binary "2.1.126"
 
   # Codex (OpenAI)
-  install_npm_global_cli "Codex CLI" "@openai/codex" "0.125.0"
+  install_npm_global_cli "Codex CLI" "@openai/codex" "0.128.0"
 
   # Gemini CLI (Google)
-  install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.39.1"
+  install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.40.1"
 
   # Pi Coding Agent (badlogic) — minimal terminal coding harness
-  install_npm_global_cli "Pi Coding Agent" "@mariozechner/pi-coding-agent" "0.71.1"
+  install_npm_global_cli "Pi Coding Agent" "@mariozechner/pi-coding-agent" "0.72.1"
 
   # Agent Slack (Stably) — standalone binary
-  install_agent_slack_binary "0.8.5"
+  install_agent_slack_binary "0.9.1"
 
   # Agent Browser — npm package (crates.io lags behind)
   install_agent_browser_binary "0.26.0"
@@ -93,7 +93,7 @@ install_ai_clis() {
   install_npm_global_cli "Linear CLI" "@schpet/linear-cli" "2.0.0"
 
   # Notion CLI (makenotion) — `ntn` binary, pairs with notion-cli skill
-  install_notion_cli_binary "v0.10.3"
+  install_notion_cli_binary "v0.12.0"
 }
 
 # Run if executed directly
