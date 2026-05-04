@@ -41,6 +41,7 @@ Or install one extension at a time from a local checkout:
 pi install ./configs/agents/pi/extensions/desktop-notification
 pi install ./configs/agents/pi/extensions/web-access
 pi install ./configs/agents/pi/extensions/create-image
+pi install ./configs/agents/pi/extensions/comment
 ```
 
 The GitHub/repository-root package installs all extensions declared in the root `package.json`. To install only one extension, clone the repo and use one of the local per-extension install commands above, or install the bundle and use `pi config` to disable resources you do not want.
@@ -52,6 +53,7 @@ For day-to-day use on Thierry's machines, `configs/agents/install.sh` symlinks t
 - [`desktop-notification`](./desktop-notification/README.md) — sends an OSC 777 desktop notification when an agent turn finishes.
 - [`web-access`](./web-access/README.md) — registers web search, content fetch, and stored-content retrieval tools.
 - [`create-image`](./create-image/README.md) — registers `/create-image` for prompt-to-image generation.
+- [`comment`](./comment/README.md) — registers `/comment` to edit a quoted copy of the last assistant response in `$EDITOR`.
 
 ## Dependencies
 

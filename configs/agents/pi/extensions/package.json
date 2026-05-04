@@ -4,7 +4,7 @@
   "type": "module",
   "keywords": ["pi-package"],
   "pi": {
-    "extensions": ["./desktop-notification", "./web-access", "./create-image"]
+    "extensions": ["./desktop-notification", "./web-access", "./create-image", "./comment"]
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",

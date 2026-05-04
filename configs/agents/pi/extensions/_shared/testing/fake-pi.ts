@@ -81,6 +81,12 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
     getContextUsage: () => undefined,
     compact: () => undefined,
     getSystemPrompt: () => "",
+    waitForIdle: async () => undefined,
+    newSession: async () => ({ cancelled: false }),
+    fork: async () => ({ cancelled: false }),
+    navigateTree: async () => ({ cancelled: false }),
+    switchSession: async () => ({ cancelled: false }),
+    reload: async () => undefined,
     ...options.ctx,
     ...overrides,
   });

@@ -27,6 +27,32 @@ describe("createFakePi", () => {
     expect(fakePi.commands.get("demo")?.description).toBe("Demo command");
   });
 
+  test("runs registered commands with a fake command context", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const pi = fakePi.pi as unknown as {
+      registerCommand: (
+        name: string,
+        command: { description: string; handler: (_args: string, ctx: unknown) => unknown },
+      ) => void;
+    };
+    const handler = mock(async (_args: string, ctx: unknown) => {
+      const typedCtx = ctx as { waitForIdle: () => Promise<void>; reload: () => Promise<void> };
+      await typedCtx.waitForIdle();
+      await typedCtx.reload();
+    });
+    pi.registerCommand("demo", {
+      description: "Demo command",
+      handler,
+    });
+
+    // Act
+    await fakePi.runCommand("demo");
+
+    // Assert
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   test("runs registered tools with a fake context", async () => {
     // Arrange
     const fakePi = createFakePi({ cwd: "/tmp/project" });

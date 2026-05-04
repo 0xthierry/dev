@@ -9,7 +9,8 @@
     "extensions": [
       "./configs/agents/pi/extensions/desktop-notification",
       "./configs/agents/pi/extensions/web-access",
-      "./configs/agents/pi/extensions/create-image"
+      "./configs/agents/pi/extensions/create-image",
+      "./configs/agents/pi/extensions/comment"
     ]
   },
   "scripts": {
