@@ -156,6 +156,14 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
       for (const name of names) activeTools.add(name);
     },
 
+    getThinkingLevel() {
+      return "medium";
+    },
+
+    setThinkingLevel() {
+      return undefined;
+    },
+
     async exec(command: string, args: string[] = [], execOptions: Record<string, unknown> = {}) {
       if (options.exec) return options.exec(command, args, execOptions);
       return { stdout: "", stderr: "", code: 0, killed: false };

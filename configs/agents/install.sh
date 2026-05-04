@@ -19,7 +19,6 @@ SOURCE_CLAUDE_SETTINGS="$SCRIPT_DIR/claude-settings.json"
 SOURCE_PI_SETTINGS="$SCRIPT_DIR/pi-settings.json"
 SOURCE_PI_DIR="$SCRIPT_DIR/pi"
 SOURCE_PI_WEB_SEARCH_CONFIG="$SOURCE_PI_DIR/web-search.json"
-SOURCE_PI_AGENTS_DIR="$SOURCE_PI_DIR/agents"
 SOURCE_PI_PROMPTS_DIR="$SOURCE_PI_DIR/prompts"
 SOURCE_PI_EXTENSIONS_DIR="$SOURCE_PI_DIR/extensions"
 SOURCE_PI_APPEND_SYSTEM="$SOURCE_PI_DIR/APPEND_SYSTEM.md"
@@ -720,7 +719,7 @@ install_pi_target() {
   copy_file_if_needed "$SOURCE_PI_SETTINGS" "$target_root/settings.json" "pi settings.json"
   copy_file_if_needed "$SOURCE_PI_WEB_SEARCH_CONFIG" "$HOME/.pi/web-search.json" "pi web-search.json"
   force_link_path "$SOURCE_PI_APPEND_SYSTEM" "$target_root/APPEND_SYSTEM.md" "pi APPEND_SYSTEM.md"
-  force_link_path "$SOURCE_PI_AGENTS_DIR" "$target_root/agents" "pi agents"
+  force_link_path "$SOURCE_AGENTS_DIR" "$target_root/agents" "pi agents"
   force_link_pi_skill_entries "$target_root"
   force_link_path "$SOURCE_PI_PROMPTS_DIR" "$target_root/prompts" "pi prompts"
   force_link_path "$SOURCE_PI_EXTENSIONS_DIR" "$target_root/extensions" "pi extensions"
@@ -794,11 +793,6 @@ main() {
 
   if [[ ! -f "$SOURCE_PI_WEB_SEARCH_CONFIG" ]]; then
     warn "Missing source Pi web-search config file: $SOURCE_PI_WEB_SEARCH_CONFIG"
-    exit 1
-  fi
-
-  if [[ ! -d "$SOURCE_PI_AGENTS_DIR" ]]; then
-    warn "Missing source Pi agents directory: $SOURCE_PI_AGENTS_DIR"
     exit 1
   fi
 
