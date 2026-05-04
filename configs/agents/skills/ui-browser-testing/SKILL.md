@@ -12,6 +12,26 @@ This skill is for systematic UI verification in a real browser. Use `agent-brows
 
 The core rule is: do not stop at "I clicked through it." A UI test is complete only when the expected behavior has been observed with a focused assertion or unmistakable visual evidence.
 
+## Mandatory Browser
+
+Always use Brave Browser for UI browser testing. Do not fall back to Chrome, Chromium, the bundled browser, or another provider unless the user explicitly overrides this requirement.
+
+Before starting or reconnecting a browser session, resolve and export the Brave executable:
+
+```bash
+BRAVE_BROWSER="$(command -v brave-browser || command -v brave || true)"
+if [ -z "$BRAVE_BROWSER" ] && [ -x "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" ]; then
+  BRAVE_BROWSER="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
+fi
+if [ -z "$BRAVE_BROWSER" ]; then
+  echo "Brave Browser executable not found" >&2
+  exit 1
+fi
+export AGENT_BROWSER_EXECUTABLE_PATH="$BRAVE_BROWSER"
+```
+
+If Brave is unavailable, stop and report that blocker. If the user gives an already-open tab, work in that session only after confirming it is a Brave session; otherwise start a Brave-backed session.
+
 ## When To Use
 
 Use this for:
