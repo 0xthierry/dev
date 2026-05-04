@@ -1,6 +1,8 @@
 {
   "$schema": "./agent/extensions/web-access/web-search.schema.json",
   "exaApiKeyEnv": "EXA_API_KEY",
+  "braveApiKeyEnv": "BRAVE_API_KEY",
+  "tavilyApiKeyEnv": "TAVILY_API_KEY",
   "medium": {
     "enabled": true
   },
