@@ -3,6 +3,7 @@ name: writing-skills
 description: "Use when creating, editing, reviewing, or testing coding-agent SKILL.md files, especially when reusable behavior should apply across repositories, tools, workflows, or agent sessions."
 effort: max
 disable_model_invocation: true
+disable-model-invocation: true
 ---
 
 # Writing Skills

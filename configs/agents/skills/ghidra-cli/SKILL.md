@@ -14,6 +14,7 @@ description: >
     - Function signature editing (return type, calling convention, full signature)
     - Variable retyping in decompiled functions
 disable_model_invocation: true
+disable-model-invocation: true
 ---
 
 # ghidra-cli Agent Reference

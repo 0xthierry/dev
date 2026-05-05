@@ -2,6 +2,7 @@
 name: handoff
 description: Use when context is running low, session ending, user mentions "handoff", "continue later", "save progress", or explicitly requests context transfer. Use when work is in progress and needs session continuation.
 disable_model_invocation: true
+disable-model-invocation: true
 ---
 
 # Handoff

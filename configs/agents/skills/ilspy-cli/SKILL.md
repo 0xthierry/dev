@@ -10,6 +10,7 @@ description: >
     - Assembly metadata inspection
     Prefer ilspy-cli over ghidra-cli for .NET binaries (ghidra produces poor output for .NET IL).
 disable_model_invocation: true
+disable-model-invocation: true
 ---
 
 # ilspy-cli Agent Reference

@@ -436,100 +436,11 @@ force_link_skill_entries() {
   done < <(find "$SOURCE_SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*' -print0)
 }
 
-skill_uses_underscore_model_invocation_key() {
-  local skill_md="$1"
-
-  awk '
-    BEGIN { in_fm = 0; seen_open = 0; found = 0 }
-    /^---[[:space:]]*$/ {
-      if (!seen_open) { in_fm = 1; seen_open = 1; next }
-      exit
-    }
-    in_fm && /^[[:space:]]*disable_model_invocation:/ { found = 1; exit }
-    END { exit found ? 0 : 1 }
-  ' "$skill_md"
-}
-
-rewrite_pi_skill_frontmatter() {
-  # Reads a SKILL.md from stdin and rewrites the non-standard Claude/Codex
-  # disable_model_invocation key to Pi's Agent Skills key.
-  awk '
-    BEGIN { in_fm = 0; seen_open = 0 }
-    /^---[[:space:]]*$/ {
-      if (!seen_open) { in_fm = 1; seen_open = 1; print; next }
-      in_fm = 0; print; next
-    }
-    in_fm && /^[[:space:]]*disable_model_invocation:/ { sub(/disable_model_invocation:/, "disable-model-invocation:") }
-    { print }
-  '
-}
-
-copy_pi_skill_file_rewritten() {
-  local source_path="$1"
-  local target_path="$2"
-  local label="$3"
-  local tmp_path=""
-
-  tmp_path="$(mktemp)"
-  rewrite_pi_skill_frontmatter < "$source_path" > "$tmp_path"
-
-  if [[ -f "$target_path" ]] && cmp -s "$tmp_path" "$target_path"; then
-    log "skip: $label already up to date"
-    rm -f "$tmp_path"
-    ((SKIPPED_COUNT += 1))
-    return 0
-  fi
-
-  if (( DRY_RUN )); then
-    log "[dry-run] copy (pi frontmatter rewritten): $label"
-    rm -f "$tmp_path"
-  else
-    rm -rf -- "$target_path"
-    mv "$tmp_path" "$target_path"
-    log "copied (pi frontmatter rewritten): $label"
-  fi
-  ((LINKED_COUNT += 1))
-}
-
-copy_pi_skill_dir_rewritten() {
-  local source_path="$1"
-  local target_path="$2"
-  local label="$3"
-  local tmp_parent=""
-  local tmp_path=""
-
-  if (( DRY_RUN )); then
-    log "[dry-run] copy (pi frontmatter rewritten): $label"
-    ((LINKED_COUNT += 1))
-    return 0
-  fi
-
-  tmp_parent="$(mktemp -d)"
-  tmp_path="$tmp_parent/$(basename "$target_path")"
-  mkdir -p "$tmp_path"
-  cp -a "$source_path"/. "$tmp_path"/
-  rewrite_pi_skill_frontmatter < "$source_path/SKILL.md" > "$tmp_path/SKILL.md"
-
-  if [[ -d "$target_path" && ! -L "$target_path" ]] && diff -qr "$tmp_path" "$target_path" >/dev/null; then
-    log "skip: $label already up to date"
-    rm -rf -- "$tmp_parent"
-    ((SKIPPED_COUNT += 1))
-    return 0
-  fi
-
-  rm -rf -- "$target_path"
-  mv "$tmp_path" "$target_path"
-  rmdir "$tmp_parent"
-  log "copied (pi frontmatter rewritten): $label"
-  ((LINKED_COUNT += 1))
-}
-
 force_link_pi_skill_entries() {
   local target_root="$1"
   local target_skills_dir="$target_root/skills"
   local source_path=""
   local target_path=""
-  local skill_md=""
   local name=""
 
   ensure_real_dir "$target_skills_dir" "pi skills"
@@ -537,21 +448,7 @@ force_link_pi_skill_entries() {
   while IFS= read -r -d '' source_path; do
     name="$(basename "$source_path")"
     target_path="$target_skills_dir/$name"
-
-    if [[ -d "$source_path" || -L "$source_path" ]]; then
-      skill_md="$source_path/SKILL.md"
-      if [[ -f "$skill_md" ]] && skill_uses_underscore_model_invocation_key "$skill_md"; then
-        copy_pi_skill_dir_rewritten "$source_path" "$target_path" "pi skill $name"
-      else
-        force_link_path_replacing_symlink "$source_path" "$target_path" "pi skill $name"
-      fi
-    elif [[ -f "$source_path" && "$source_path" == *.md ]]; then
-      if skill_uses_underscore_model_invocation_key "$source_path"; then
-        copy_pi_skill_file_rewritten "$source_path" "$target_path" "pi skill $name"
-      else
-        force_link_path_replacing_symlink "$source_path" "$target_path" "pi skill $name"
-      fi
-    fi
+    force_link_path_replacing_symlink "$source_path" "$target_path" "pi skill $name"
   done < <(find "$SOURCE_SKILLS_DIR" -mindepth 1 -maxdepth 1 \( -type f -o -type d -o -type l \) ! -name '.*' -print0)
 }
 

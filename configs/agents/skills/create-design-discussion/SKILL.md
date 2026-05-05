@@ -3,6 +3,7 @@ name: create-design-discussion
 description: "Use when turning completed codebase research and a change request into a design-discussion document with options, tradeoffs, recommendations, resolved decisions, and design preferences before outlining implementation."
 effort: max
 disable_model_invocation: true
+disable-model-invocation: true
 ---
 
 # Create Design Discussion

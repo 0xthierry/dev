@@ -3,6 +3,7 @@ name: understanding-mistakes
 description: Use when user says something went wrong, AI did Y instead of X, or wants to understand why a deviation happened. Manually invoked post-mortem analysis.
 effort: max
 disable_model_invocation: true
+disable-model-invocation: true
 ---
 
 # Understanding Mistakes

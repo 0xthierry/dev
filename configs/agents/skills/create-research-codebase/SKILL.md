@@ -3,6 +3,7 @@ name: create-research-codebase
 description: "Use when answering a research-questions document or user research query by producing objective, evidence-backed current-state codebase research."
 effort: high
 disable_model_invocation: true
+disable-model-invocation: true
 ---
 
 # Create Research Codebase

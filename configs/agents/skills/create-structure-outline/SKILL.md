@@ -3,6 +3,7 @@ name: create-structure-outline
 description: "Use when converting a design-discussion document and codebase research into a concise, vertical, testable structure outline before writing the detailed implementation plan."
 effort: max
 disable_model_invocation: true
+disable-model-invocation: true
 ---
 
 # Create Structure Outline

@@ -3,6 +3,7 @@ name: implement-plan
 description: "Use when implementing an ai_docs/tasks/* plan phase-by-phase with implementer/evaluator agents, sprint-contract validation, human checkpoints, and commits."
 effort: high
 disable_model_invocation: true
+disable-model-invocation: true
 ---
 
 # Implement Plan

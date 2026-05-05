@@ -3,6 +3,7 @@ name: create-plan
 description: "Use when converting a structure outline into a complete implementation plan and .sprint-contract.json for phased implementation/evaluation."
 effort: max
 disable_model_invocation: true
+disable-model-invocation: true
 ---
 
 # Create Plan

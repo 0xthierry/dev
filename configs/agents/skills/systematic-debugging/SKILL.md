@@ -3,6 +3,7 @@ name: systematic-debugging
 description: "Use for bugs, errors, crashes, test failures, regressions, or unexpected behavior; investigate before fixing."
 effort: max
 disable_model_invocation: true
+disable-model-invocation: true
 ---
 
 # Systematic Debugging

@@ -2,6 +2,7 @@
 name: create-research-questions
 description: "Use when turning a task, ticket, spec, or change request into a research-questions document for objective current-state codebase research."
 disable_model_invocation: true
+disable-model-invocation: true
 ---
 
 # Create Research Questions
