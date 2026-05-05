@@ -15,7 +15,7 @@ export function buildAgentPromptSection(agents: AgentDefinition[], agentsDir: st
     "Each child starts with fresh context by default, loads Pi context files and skills through normal Pi discovery, and returns only its final result.",
     "For independent work, pass multiple entries in Agent.tasks so they can run concurrently.",
     "Available subagents:",
-    ...agents.map((agent) => `- ${agent.name}: ${agent.description}`),
+    ...agents.sort((a, b) => a.name.localeCompare(b.name)).map((agent) => `- ${agent.name}: ${agent.description}`),
   ].join("\n");
 }
 
