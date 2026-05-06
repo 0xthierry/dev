@@ -14,7 +14,7 @@ Examples:
 
 - `agent-slack message get "<url>"`
 - `agent-slack message list "<url>"`
-- `agent-slack message send "<url>" "reply text"`
+- `agent-slack message send "<url>" "reply text\n_sent from pi_"`
 - `agent-slack message edit "<url>" "updated text"`
 - `agent-slack message delete "<url>"`
 - `agent-slack message react add "<url>" "eyes"`

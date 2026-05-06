@@ -7,6 +7,16 @@ description: "Use for Slack: read/search/send messages, inspect channels/threads
 
 `agent-slack` is a CLI binary on `$PATH`. Invoke directly (e.g. `agent-slack user list`).
 
+## REQUIRED: outbound message footer
+
+When sending or drafting any Slack message on Thierry's behalf, always append the footer on a new final line:
+
+```text
+_sent from pi_
+```
+
+For `agent-slack message send`, include the footer in the `<text>` argument. For `agent-slack message draft`, ensure the final editor content includes the footer before sending. This applies to channel posts, DMs, group DMs, thread replies, and messages with attachments.
+
 ## Installation
 
 If `agent-slack` is not found on `$PATH`, install it:
@@ -115,22 +125,28 @@ Opens a Slack-like rich-text editor in the browser for composing messages with f
 
 ```bash
 agent-slack message draft "general"
-agent-slack message draft "general" "initial text"
+agent-slack message draft "general" "initial text
+_sent from pi_"
 agent-slack message draft "https://workspace.slack.com/archives/C123/p1700000000000000"
 ```
+
+If using the browser editor without initial text, add the required `_sent from pi_` footer as the final line before sending.
 
 ## Send, edit, delete, or react
 
 ```bash
-agent-slack message send "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this."
-agent-slack message send "alerts-staging" "here's the report" --attach ./report.md
+agent-slack message send "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this.
+_sent from pi_"
+agent-slack message send "alerts-staging" "here's the report
+_sent from pi_" --attach ./report.md
 agent-slack message edit "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this today."
 agent-slack message delete "https://workspace.slack.com/archives/C123/p1700000000000000"
 
 agent-slack message send "general" "Here's the plan:
 - Step 1: do the thing
 - Step 2: verify it worked
-  - Sub-step: check logs"
+  - Sub-step: check logs
+_sent from pi_"
 agent-slack message react add "https://workspace.slack.com/archives/C123/p1700000000000000" "eyes"
 agent-slack message react remove "https://workspace.slack.com/archives/C123/p1700000000000000" "eyes"
 ```

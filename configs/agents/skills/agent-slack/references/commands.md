@@ -51,6 +51,7 @@ Run `agent-slack --help` (or `agent-slack <command> --help`) for the full option
   - Toggle between rich-text editing and raw mrkdwn source view.
   - After sending, shows a "View in Slack" permalink to the posted message.
   - If `<target>` is a Slack message URL, the draft will reply in that thread.
+  - When drafting on Thierry's behalf, ensure the final message body ends with a new line containing `_sent from pi_`.
   - Options:
     - `--workspace <url-or-unique-substring>` (needed for channel _names_ across multiple workspaces)
     - `--thread-ts <seconds>.<micros>` (optional, channel mode only)
@@ -58,6 +59,7 @@ Run `agent-slack --help` (or `agent-slack <command> --help`) for the full option
 - `agent-slack message send <target> <text>`
   - If `<target>` is a Slack message URL, replies in that message’s thread.
   - Otherwise posts to the channel/DM.
+  - When sending on Thierry's behalf, `<text>` must end with a new line containing `_sent from pi_`.
   - Bullet lists (`- `, `* `, `• `, `1. `, etc.) are automatically converted to Slack’s native rich text format, so recipients see real editable bullets instead of plain-text dashes.
   - Options:
     - `--workspace <url-or-unique-substring>` (needed for channel _names_ across multiple workspaces)
