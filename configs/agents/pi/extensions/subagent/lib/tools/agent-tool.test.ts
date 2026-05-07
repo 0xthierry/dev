@@ -88,6 +88,11 @@ describe("executeAgentTool", () => {
     expect(text).toContain("## reviewer");
     expect(result.details?.results).toHaveLength(2);
     expect(updates.length).toBeGreaterThan(0);
+    expect(updates[0].details?.results.map((agentResult) => agentResult.status)).toEqual(["queued", "queued"]);
+    const hasRunningUpdate = updates.some((update) =>
+      update.details?.results.some((agentResult) => agentResult.status === "running"),
+    );
+    expect(hasRunningUpdate).toBe(true);
   });
 
   test("keeps parallel agent failures isolated", async () => {
@@ -209,12 +214,14 @@ function resultFor(agentName: string, task: string): AgentRunResult {
     agent: agentName,
     task,
     context: "fresh",
+    status: "succeeded",
     ok: true,
     exitCode: 0,
     finalOutput: `${agentName} completed: ${task}`,
     outputTruncated: false,
     stderr: "",
     usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, totalTokens: 0, turns: 1 },
+    activity: [],
     stopReason: "stop",
   };
 }

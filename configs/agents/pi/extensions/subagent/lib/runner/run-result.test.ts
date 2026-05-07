@@ -22,13 +22,31 @@ describe("buildAgentRunResult", () => {
       agent: "reviewer",
       task: "Review diff",
       context: "fresh",
+      status: "succeeded",
       ok: true,
       exitCode: 0,
       finalOutput: "Agent completed.",
       model: "test-model",
+      thinking: undefined,
       stopReason: "stop",
     });
     expect(result.usage.input).toBe(10);
+    expect(result.activity).toEqual([]);
+  });
+
+  test("includes inherited thinking level", () => {
+    // Arrange
+    const state = createChildAgentEventState();
+    state.finalOutput = "Agent completed.";
+    state.model = "test-model";
+    state.stopReason = "stop";
+    const request = { ...runRequest("reviewer", "Review diff"), thinking: "xhigh" as const };
+
+    // Act
+    const result = buildAgentRunResult(request, state, 0, "");
+
+    // Assert
+    expect(result.thinking).toBe("xhigh");
   });
 
   test("prefers structured child errors over stderr", () => {
@@ -42,6 +60,7 @@ describe("buildAgentRunResult", () => {
     const result = buildAgentRunResult(request, state, 0, "stderr fallback");
 
     // Assert
+    expect(result.status).toBe("failed");
     expect(result.ok).toBe(false);
     expect(result.finalOutput).toBe("Provider failed.");
     expect(result.stderr).toBe("stderr fallback");
@@ -57,6 +76,7 @@ describe("buildAgentRunResult", () => {
     const result = buildAgentRunResult(request, state, 1, "spawn failed\n");
 
     // Assert
+    expect(result.status).toBe("failed");
     expect(result.ok).toBe(false);
     expect(result.finalOutput).toBe("spawn failed");
     expect(result.exitCode).toBe(1);
