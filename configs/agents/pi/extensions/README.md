@@ -43,6 +43,7 @@ pi install ./configs/agents/pi/extensions/web-access
 pi install ./configs/agents/pi/extensions/create-image
 pi install ./configs/agents/pi/extensions/comment
 pi install ./configs/agents/pi/extensions/subagent
+pi install ./configs/agents/pi/extensions/statusline
 ```
 
 The GitHub/repository-root package installs all extensions declared in the root `package.json`. To install only one extension, clone the repo and use one of the local per-extension install commands above, or install the bundle and use `pi config` to disable resources you do not want.
@@ -56,6 +57,7 @@ For day-to-day use on Thierry's machines, `configs/agents/install.sh` symlinks t
 - [`create-image`](./create-image/README.md) — registers `/create-image` for prompt-to-image generation.
 - [`comment`](./comment/README.md) — registers `/comment` to edit a quoted copy of the last assistant response in `$EDITOR`.
 - [`subagent`](./subagent/README.md) — registers a Claude-compatible `Agent` tool for foreground single and parallel child Pi subagents.
+- [`statusline`](./statusline/README.md) — appends clickable PR number, git change counts, and the Cloudflare BDR quote to Pi's existing footer.
 
 ## Dependencies
 
