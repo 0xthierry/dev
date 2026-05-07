@@ -9,6 +9,7 @@ GHIDRA_CLI_REPO_URL="https://github.com/akiselev/ghidra-cli.git"
 GHIDRA_CLI_VERSION="v0.1.10"
 GHIDRA_CLI_SOURCE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/ghidra-cli/source"
 GHIDRA_VERSION="12.0.4"
+GHIDRA_SETUP_VERSION="${GHIDRA_VERSION}_build"
 
 export PATH="$HOME/.cargo/bin:$PATH"
 
@@ -116,7 +117,7 @@ install_ilspy_binary() {
 install_ghidra_runtime() {
   if (( ${DRY_RUN:-0} )); then
     log_item "Installing Ghidra runtime $GHIDRA_VERSION"
-    run_cmd ghidra setup --version "$GHIDRA_VERSION"
+    run_cmd ghidra setup --version "$GHIDRA_SETUP_VERSION"
     return 0
   fi
 
@@ -136,7 +137,7 @@ install_ghidra_runtime() {
   fi
 
   log_item "Installing Ghidra runtime $GHIDRA_VERSION"
-  run_cmd ghidra setup --version "$GHIDRA_VERSION"
+  run_cmd ghidra setup --version "$GHIDRA_SETUP_VERSION"
 }
 
 install_ghidra_cli_tools() {

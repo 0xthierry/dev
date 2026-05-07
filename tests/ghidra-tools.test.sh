@@ -88,6 +88,8 @@ main() {
   TEST_TMP_DIR="$(mktemp -d)"
   trap cleanup EXIT
 
+  assert_success "uses GitHub build tag suffix for Ghidra setup" test "$GHIDRA_SETUP_VERSION" = "${GHIDRA_VERSION}_build"
+
   write_fake_command "$TEST_TMP_DIR" ghidra "ghidra 0.1.10"
   write_fake_command "$TEST_TMP_DIR" ilspy "ilspy 0.1.10"
 
