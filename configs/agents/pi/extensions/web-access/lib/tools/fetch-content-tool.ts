@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { fetchFailedError, noFetchUrlError } from "../shared/errors";
 import { trimText } from "../shared/text";
 import type { ExtractedContentFailure } from "../types";

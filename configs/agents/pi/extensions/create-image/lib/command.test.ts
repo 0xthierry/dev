@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { createFakePi } from "../../_shared/testing/fake-pi";
 import { formatCreateImageResult, handleCreateImageCommand } from "./command";
 import type { CreateImageRuntime } from "./runtime";

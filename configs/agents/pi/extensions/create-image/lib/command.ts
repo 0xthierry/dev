@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { CREATE_IMAGE_USAGE, parseCreateImageArgs } from "./arguments";
 import type { SavedImage } from "./files";
 import { listProviderIds, resolveImageProvider } from "./providers/registry";

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { AssistantMessage, StopReason, UserMessage } from "@mariozechner/pi-ai";
-import type { SessionEntry } from "@mariozechner/pi-coding-agent";
+import type { AssistantMessage, StopReason, UserMessage } from "@earendil-works/pi-ai";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { extractLastAssistantText } from "./messages";
 
 describe("extractLastAssistantText", () => {

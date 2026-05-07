@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import type { AutocompleteItem, AutocompleteProvider } from "@mariozechner/pi-tui";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { AutocompleteItem, AutocompleteProvider } from "@earendil-works/pi-tui";
 
 type Handler = (event: unknown, ctx: unknown) => unknown | Promise<unknown>;
 

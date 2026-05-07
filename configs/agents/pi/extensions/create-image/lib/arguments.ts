@@ -1,4 +1,4 @@
-import type { AutocompleteItem, AutocompleteProvider } from "@mariozechner/pi-tui";
+import type { AutocompleteItem, AutocompleteProvider } from "@earendil-works/pi-tui";
 import type { ImageGenerationProvider } from "./providers/types";
 
 export interface CreateImageCommandArgs {

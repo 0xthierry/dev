@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { AgentToolResult, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { AgentToolResult, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createFakePi } from "../../../_shared/testing/fake-pi";
 import type { AgentDefinition } from "../agents/types";
 import type { AgentRunResult } from "../runner/run-result";

@@ -1,7 +1,7 @@
 {
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.5",
-  "transport": "sse",
+  "transport": "auto",
   "defaultThinkingLevel": "xhigh",
   "theme": "dark",
   "hideThinkingBlock": false,

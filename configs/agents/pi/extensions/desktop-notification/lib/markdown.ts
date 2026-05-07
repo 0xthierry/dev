@@ -1,4 +1,4 @@
-import { Markdown, type MarkdownTheme } from "@mariozechner/pi-tui";
+import { Markdown, type MarkdownTheme } from "@earendil-works/pi-tui";
 
 const passthrough = (text: string) => text;
 const empty = () => "";

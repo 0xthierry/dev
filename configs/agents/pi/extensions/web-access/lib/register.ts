@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { clearCloneCache } from "./providers/github/clone";
 import { clearResults } from "./storage/result-store";
 import { restoreFromEntries } from "./storage/session-entries";

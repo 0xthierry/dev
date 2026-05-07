@@ -1,4 +1,4 @@
-import type { AgentToolResult } from "@mariozechner/pi-coding-agent";
+import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
 import { formatWebAccessError, type WebAccessError } from "../shared/errors";
 
 export function formatToolError(error: WebAccessError): string {

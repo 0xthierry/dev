@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { formatNotification } from "./format-notification";
 import { extractLastAssistantText } from "./messages";
 import { type DesktopNotifier, writeOsc777Notification } from "./notifier";

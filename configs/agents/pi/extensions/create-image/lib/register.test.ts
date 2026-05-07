@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { AutocompleteProvider } from "@mariozechner/pi-tui";
+import type { AutocompleteProvider } from "@earendil-works/pi-tui";
 import { createFakePi } from "../../_shared/testing/fake-pi";
 import { registerCreateImageCommand, registerCreateImageExtension } from "./register";
 import type { CreateImageRuntime } from "./runtime";

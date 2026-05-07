@@ -38,7 +38,7 @@ Rules:
 Preferred `index.ts` shape:
 
 ```ts
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerMyExtension } from "./lib/register";
 
 export default function (pi: ExtensionAPI) {
@@ -60,7 +60,7 @@ export default function (pi: ExtensionAPI) {
 - Respect abort signals for async work when `ctx.signal` or a tool `signal` is available.
 - Truncate large custom-tool output before returning it to the model.
 - Use `withFileMutationQueue()` for custom tools that mutate files.
-- Use `StringEnum` from `@mariozechner/pi-ai` for string enum tool parameters.
+- Use `StringEnum` from `@earendil-works/pi-ai` for string enum tool parameters.
 
 See [`taste.md`](./taste.md) for examples and refactor checklists.
 

@@ -91,7 +91,7 @@ Use folders by boundary, not by aesthetic preference. Add a folder when it creat
 `index.ts` is the only Pi-discovered entrypoint. It must only register the extension:
 
 ```ts
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerMyExtension } from "./lib/register";
 
 export default function (pi: ExtensionAPI) {

@@ -1,5 +1,5 @@
-import type { StopReason } from "@mariozechner/pi-ai";
-import type { SessionEntry } from "@mariozechner/pi-coding-agent";
+import type { StopReason } from "@earendil-works/pi-ai";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 export type LastAssistantTextResult =
   | { ok: true; text: string }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { AgentToolResult, Theme } from "@mariozechner/pi-coding-agent";
+import type { AgentToolResult, Theme } from "@earendil-works/pi-coding-agent";
 import type { AgentRunResult } from "../runner/run-result";
 import type { AgentToolDetails } from "./agent-tool";
 import { formatAgentToolCall, formatAgentToolResult } from "./render";

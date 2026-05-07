@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_MAX_BYTES } from "@mariozechner/pi-coding-agent";
+import { DEFAULT_MAX_BYTES } from "@earendil-works/pi-coding-agent";
 import { prepareAgentOutput, textFromContentParts } from "./output";
 
 describe("prepareAgentOutput", () => {

@@ -1,5 +1,5 @@
-import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@mariozechner/pi-ai";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export const FAUX_PROVIDER_NAME = "pi-extension-e2e-faux";
 export const FAUX_MODEL_ID = "pi-extension-e2e-faux-model";

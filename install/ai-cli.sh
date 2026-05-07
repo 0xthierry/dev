@@ -25,6 +25,65 @@ install_npm_global_cli() {
   run_cmd "${install_cmd[@]}"
 }
 
+npm_global_bin_points_to_package() {
+  local npm_bin="$1"
+  local bin_name="$2"
+  local package_name="$3"
+  local global_root=""
+  local prefix=""
+  local bin_path=""
+  local package_dir=""
+  local resolved_bin_path=""
+  local resolved_package_dir=""
+
+  global_root="$("$npm_bin" root -g 2>/dev/null || true)"
+  prefix="$("$npm_bin" prefix -g 2>/dev/null || true)"
+
+  if [[ -z "$global_root" || -z "$prefix" ]]; then
+    return 1
+  fi
+
+  bin_path="$prefix/bin/$bin_name"
+  package_dir="$global_root/$package_name"
+
+  if [[ ! -L "$bin_path" || ! -d "$package_dir" ]]; then
+    return 1
+  fi
+
+  resolved_bin_path="$(resolve_symlink_target "$bin_path")"
+  resolved_package_dir="$(canonicalize_path "$package_dir")"
+
+  [[ "$resolved_bin_path" == "$resolved_package_dir"/* ]]
+}
+
+install_pi_coding_agent_cli() {
+  local version="$1"
+  local package_name="@earendil-works/pi-coding-agent"
+  local legacy_package_name="@mariozechner/pi-coding-agent"
+  local npm_bin=""
+  local mise_bin=""
+  local force_reason=""
+  local -a install_cmd=()
+
+  if npm_bin="$(command -v npm 2>/dev/null)"; then
+    if npm_global_bin_points_to_package "$npm_bin" "pi" "$legacy_package_name"; then
+      # The package moved scopes but keeps the same `pi` bin; claim the bin without removing the legacy package.
+      install_cmd=("$npm_bin" install -g --force "${package_name}@${version}")
+      force_reason=" (claiming pi bin from legacy $legacy_package_name)"
+    else
+      install_cmd=("$npm_bin" install -g "${package_name}@${version}")
+    fi
+  elif mise_bin="$(resolve_mise_bin 2>/dev/null)"; then
+    install_cmd=("$mise_bin" exec node -- npm install -g "${package_name}@${version}")
+  else
+    printf 'error: npm is unavailable and mise is not installed; cannot install Pi Coding Agent\n' >&2
+    return 1
+  fi
+
+  log_item "Installing Pi Coding Agent @ $version$force_reason..."
+  run_cmd "${install_cmd[@]}"
+}
+
 install_claude_code_binary() {
   local version="$1"
   log_item "Installing Claude Code CLI @ $version..."
@@ -80,8 +139,8 @@ install_ai_clis() {
   # Gemini CLI (Google)
   install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.40.1"
 
-  # Pi Coding Agent (badlogic) — minimal terminal coding harness
-  install_npm_global_cli "Pi Coding Agent" "@mariozechner/pi-coding-agent" "0.73.0"
+  # Pi Coding Agent (Earendil Works) — minimal terminal coding harness
+  install_pi_coding_agent_cli "0.74.0"
 
   # Agent Slack (Stably) — standalone binary
   install_agent_slack_binary "0.9.1"

@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createCreateImageAutocompleteProvider, getCreateImageArgumentCompletions } from "./arguments";
 import { handleCreateImageCommand } from "./command";
 import { type CreateImageRuntime, createCreateImageRuntime } from "./runtime";
