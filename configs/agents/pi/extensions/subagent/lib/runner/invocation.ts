@@ -1,14 +1,13 @@
 import { delimiter, resolve } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { AgentDefinition } from "../agents/types";
+import type { PiThinkingLevel } from "../thinking";
 import type { AgentContextMode } from "../tools/schemas";
 
 export const CHILD_DEPTH_ENV = "PI_SUBAGENT_DEPTH";
 export const CHILD_NO_EXTENSIONS_ENV = "PI_SUBAGENT_CHILD_NO_EXTENSIONS";
 export const CHILD_EXTENSIONS_ENV = "PI_SUBAGENT_CHILD_EXTENSIONS";
 export const CHILD_UNSET_ENV = "PI_SUBAGENT_CHILD_UNSET_ENV";
-
-export type PiThinkingLevel = ReturnType<ExtensionAPI["getThinkingLevel"]>;
 
 export interface AgentRunRequest {
   agent: AgentDefinition;

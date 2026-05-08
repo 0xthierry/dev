@@ -1,6 +1,7 @@
 ---
 name: cr-codebase-context
 model: sonnet
+effort: medium
 description: "Code review lens: finds bugs requiring deep codebase knowledge — canonical type duplication, framework convention violations, behavioral contract shifts, pattern deviations. Read-only, returns structured findings."
 ---
 

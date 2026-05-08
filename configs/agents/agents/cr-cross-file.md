@@ -1,6 +1,7 @@
 ---
 name: cr-cross-file
 model: sonnet
+effort: medium
 description: "Code review lens: finds mismatches between consumers of shared contracts — renamed constants, type migrations, middleware scope, API semantic changes. Read-only, returns structured findings."
 ---
 

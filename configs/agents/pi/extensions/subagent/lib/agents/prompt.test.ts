@@ -5,7 +5,7 @@ import type { AgentDefinition } from "./types";
 describe("buildAgentPromptSection", () => {
   test("lists configured agents", () => {
     // Arrange
-    const agents = [agent("locator", "Finds files"), agent("reviewer", "Reviews code")];
+    const agents = [agent("locator", "Finds files", "medium"), agent("reviewer", "Reviews code")];
 
     // Act
     const section = buildAgentPromptSection(agents, "/agents");
@@ -15,6 +15,7 @@ describe("buildAgentPromptSection", () => {
     expect(section).toContain("- locator: Finds files");
     expect(section).toContain("- reviewer: Reviews code");
     expect(section).toContain("normal Pi discovery");
+    expect(section).not.toContain("effort");
   });
 
   test("explains the configured directory when no agents exist", () => {
@@ -44,13 +45,14 @@ describe("appendAgentPromptSection", () => {
   });
 });
 
-function agent(name: string, description: string): AgentDefinition {
+function agent(name: string, description: string, effort?: AgentDefinition["effort"]): AgentDefinition {
   return {
     name,
     description,
     systemPrompt: `${name} prompt`,
     filePath: `/agents/${name}.md`,
     source: "user",
-    frontmatter: { name, description },
+    frontmatter: { name, description, ...(effort ? { effort } : {}) },
+    ...(effort ? { effort } : {}),
   };
 }

@@ -31,7 +31,7 @@ export function buildAgentRunResult(
   stderr: string,
 ): AgentRunResult {
   const status = inferRunStatus(state, exitCode);
-  const rawOutput = state.errorMessage || state.finalOutput || stderr.trim() || fallbackOutput(status);
+  const rawOutput = state.finalOutput || state.errorMessage || stderr.trim() || fallbackOutput(status);
   const prepared = prepareAgentOutput(rawOutput);
   const ok = status === "succeeded";
 
@@ -57,6 +57,7 @@ export function buildAgentRunResult(
 
 function inferRunStatus(state: ChildAgentEventState, exitCode: number): AgentRunStatus {
   if (exitCode === -1) return "running";
+  if (state.finalOutput.trim()) return "succeeded";
   if (exitCode === 0 && state.stopReason !== "error" && state.stopReason !== "aborted" && !state.errorMessage) {
     return "succeeded";
   }

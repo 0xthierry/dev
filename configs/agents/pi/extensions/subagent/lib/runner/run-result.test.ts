@@ -49,7 +49,25 @@ describe("buildAgentRunResult", () => {
     expect(result.thinking).toBe("xhigh");
   });
 
-  test("prefers structured child errors over stderr", () => {
+  test("treats late child errors after assistant output as a successful result", () => {
+    // Arrange
+    const state = createChildAgentEventState();
+    state.finalOutput = "## Findings\nSecurity review completed.";
+    state.errorMessage = "WebSocket error";
+    state.stopReason = "error";
+    const request = runRequest("reviewer", "Review diff");
+
+    // Act
+    const result = buildAgentRunResult(request, state, 1, "Error: WebSocket error");
+
+    // Assert
+    expect(result.status).toBe("succeeded");
+    expect(result.ok).toBe(true);
+    expect(result.finalOutput).toBe("## Findings\nSecurity review completed.");
+    expect(result.errorMessage).toBe("WebSocket error");
+  });
+
+  test("prefers structured child errors over stderr when no assistant output exists", () => {
     // Arrange
     const state = createChildAgentEventState();
     state.errorMessage = "Provider failed.";

@@ -1,6 +1,7 @@
 ---
 name: cr-security
 model: sonnet
+effort: medium
 description: "Code review lens: finds security bypasses — SSRF, encoding tricks, fail-open defaults, secret leaks, replay attacks. Read-only, returns structured findings."
 ---
 

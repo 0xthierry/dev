@@ -2,6 +2,7 @@ import type { Dirent } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
+import { parsePiThinkingLevel } from "../thinking";
 import type { AgentDefinition, AgentDiscoveryResult } from "./types";
 
 export interface AgentDiscoveryOptions {
@@ -11,6 +12,7 @@ export interface AgentDiscoveryOptions {
 interface AgentFrontmatter extends Record<string, unknown> {
   name?: unknown;
   description?: unknown;
+  effort?: unknown;
 }
 
 export async function discoverUserAgents(options: AgentDiscoveryOptions = {}): Promise<AgentDiscoveryResult> {
@@ -69,6 +71,8 @@ async function readAgentFile(filePath: string): Promise<AgentDefinition | undefi
     if (typeof frontmatter.name !== "string" || !frontmatter.name.trim()) return undefined;
     if (typeof frontmatter.description !== "string" || !frontmatter.description.trim()) return undefined;
 
+    const effort = parsePiThinkingLevel(frontmatter.effort);
+
     return {
       name: frontmatter.name.trim(),
       description: frontmatter.description.trim(),
@@ -76,6 +80,7 @@ async function readAgentFile(filePath: string): Promise<AgentDefinition | undefi
       filePath,
       source: "user",
       frontmatter,
+      ...(effort ? { effort } : {}),
     };
   } catch {
     return undefined;

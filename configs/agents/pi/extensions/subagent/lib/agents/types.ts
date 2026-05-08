@@ -1,3 +1,5 @@
+import type { PiThinkingLevel } from "../thinking";
+
 export type AgentSource = "user";
 
 export interface AgentDefinition {
@@ -7,6 +9,7 @@ export interface AgentDefinition {
   filePath: string;
   source: AgentSource;
   frontmatter: Record<string, unknown>;
+  effort?: PiThinkingLevel;
 }
 
 export interface AgentDiscoveryResult {

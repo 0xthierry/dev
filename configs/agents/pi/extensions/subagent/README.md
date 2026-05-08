@@ -20,10 +20,13 @@ The extension uses `getAgentDir()/agents`, so `PI_CODING_AGENT_DIR` is respected
 ---
 name: codebase-locator
 description: Finds files relevant to a feature or task.
+effort: medium
 ---
 
 Agent system prompt goes here.
 ```
+
+Optional `effort` frontmatter sets the child Pi thinking level for that agent. Supported values are `off`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Agents without `effort` inherit the parent session's current thinking level.
 
 The child `pi` process loads Pi context files and skills through normal Pi discovery. The agent body is appended as the child system prompt.
 

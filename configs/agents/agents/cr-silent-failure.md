@@ -1,6 +1,7 @@
 ---
 name: cr-silent-failure
 model: sonnet
+effort: medium
 description: "Code review lens: finds code that fails silently — undefined env vars, swallowed errors, truthiness traps, behavior migrations. Read-only, returns structured findings."
 ---
 

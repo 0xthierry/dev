@@ -11,7 +11,15 @@ describe("discoverUserAgents", () => {
     await mkdir(join(dir, "nested"));
     await writeFile(
       join(dir, "reviewer.md"),
-      ["---", "name: reviewer", "description: Reviews code", "model: opus", "---", "Review carefully."].join("\n"),
+      [
+        "---",
+        "name: reviewer",
+        "description: Reviews code",
+        "model: opus",
+        "effort: medium",
+        "---",
+        "Review carefully.",
+      ].join("\n"),
       "utf8",
     );
     await writeFile(
@@ -32,6 +40,7 @@ describe("discoverUserAgents", () => {
       expect(result.agents[0]).toMatchObject({ description: "Finds files", source: "user" });
       expect(result.agents[1].systemPrompt).toBe("Review carefully.");
       expect(result.agents[1].frontmatter.model).toBe("opus");
+      expect(result.agents[1].effort).toBe("medium");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

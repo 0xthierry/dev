@@ -60,6 +60,31 @@ describe("executeAgentTool", () => {
     );
   });
 
+  test("uses agent frontmatter effort for the child thinking level", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const reviewer = agent("reviewer", "high");
+    const runtime = fakeRuntime([reviewer]);
+
+    // Act
+    const result = await executeAgentTool(
+      fakePi.pi,
+      runtime,
+      { subagent_type: "reviewer", prompt: "Review this diff" },
+      undefined,
+      undefined,
+      fakePi.createContext() as unknown as ExtensionContext,
+    );
+
+    // Assert
+    expect(runtime.runAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: reviewer, thinking: "high" }),
+      undefined,
+      expect.any(Function),
+    );
+    expect(result.details?.results[0].thinking).toBe("high");
+  });
+
   test("runs parallel tasks and reports aggregate output", async () => {
     // Arrange
     const fakePi = createFakePi();
@@ -191,25 +216,26 @@ function fakeRuntime(agents: AgentDefinition[]): SubagentRuntime {
   return {
     discoverAgents: mock(async () => ({ agentsDir: "/agents", agents })),
     runAgent: mock(async (request, _signal, onProgress) => {
-      const result = resultFor(request.agent.name, request.task);
+      const result = resultFor(request.agent.name, request.task, request.thinking);
       onProgress?.(result);
       return result;
     }),
   };
 }
 
-function agent(name: string): AgentDefinition {
+function agent(name: string, effort?: AgentDefinition["effort"]): AgentDefinition {
   return {
     name,
     description: `${name} description`,
     systemPrompt: `${name} prompt`,
     filePath: `/agents/${name}.md`,
     source: "user",
-    frontmatter: { name, description: `${name} description` },
+    frontmatter: { name, description: `${name} description`, ...(effort ? { effort } : {}) },
+    ...(effort ? { effort } : {}),
   };
 }
 
-function resultFor(agentName: string, task: string): AgentRunResult {
+function resultFor(agentName: string, task: string, thinking?: AgentRunResult["thinking"]): AgentRunResult {
   return {
     agent: agentName,
     task,
@@ -223,5 +249,6 @@ function resultFor(agentName: string, task: string): AgentRunResult {
     usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, totalTokens: 0, turns: 1 },
     activity: [],
     stopReason: "stop",
+    thinking,
   };
 }

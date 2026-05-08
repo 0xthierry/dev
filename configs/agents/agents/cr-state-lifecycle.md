@@ -1,6 +1,7 @@
 ---
 name: cr-state-lifecycle
 model: sonnet
+effort: medium
 description: "Code review lens: finds state corruption, resource leaks, race conditions — stale cache, abort races, throttle behavior, lifecycle cleanup. Read-only, returns structured findings."
 ---
 

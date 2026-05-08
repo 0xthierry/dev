@@ -1,8 +1,9 @@
 import type { AgentToolResult, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { AgentDefinition } from "../agents/types";
-import { buildAgentRunRequest, type PiThinkingLevel } from "../runner/invocation";
+import { buildAgentRunRequest } from "../runner/invocation";
 import type { AgentRunResult } from "../runner/run-result";
-import { findAgent, type SubagentRuntime } from "../runtime";
+import type { SubagentRuntime } from "../runtime";
+import type { PiThinkingLevel } from "../thinking";
 import { type PlannedAgentTask, planAgentInvocation } from "./params";
 import { renderAgentToolCall, renderAgentToolResult } from "./render";
 import { type AgentParams, AgentParamsSchema } from "./schemas";
@@ -15,6 +16,11 @@ export interface AgentToolDetails {
 }
 
 const PARALLEL_CONCURRENCY = 4;
+
+interface ResolvedAgentTask extends PlannedAgentTask {
+  agentDefinition: AgentDefinition;
+  thinking: PiThinkingLevel;
+}
 
 export function registerAgentTool(pi: ExtensionAPI, runtime: SubagentRuntime): void {
   pi.registerTool({
@@ -59,18 +65,17 @@ export async function executeAgentTool(
   const planResult = planAgentInvocation(params);
   if (!planResult.ok) return errorResult(planResult.error, "single", discovery.agentsDir, []);
 
-  const missing = firstMissingAgent(discovery.agents, planResult.plan.tasks);
-  if (missing) {
+  const taskResult = resolveAgentTasks(discovery.agents, planResult.plan.tasks, readThinkingLevel(pi));
+  if (!taskResult.ok) {
     const available = discovery.agents.map((agent) => agent.name).join(", ") || "none";
     return errorResult(
-      `Unknown subagent: ${missing}. Available agents: ${available}.`,
+      `Unknown subagent: ${taskResult.missing}. Available agents: ${available}.`,
       planResult.plan.mode,
       discovery.agentsDir,
       [],
     );
   }
 
-  const thinking = readThinkingLevel(pi);
   const emitUpdate = (results: AgentRunResult[]) => {
     onUpdate?.({
       content: [{ type: "text", text: formatProgress(planResult.plan.mode, results) }],
@@ -84,28 +89,26 @@ export async function executeAgentTool(
   };
 
   const runTask = async (
-    task: PlannedAgentTask,
+    task: ResolvedAgentTask,
     onProgress?: (result: AgentRunResult) => void,
   ): Promise<AgentRunResult> => {
-    const agent = findAgent(discovery.agents, task.subagentType);
-    if (!agent) throw new Error(`Unknown subagent after validation: ${task.subagentType}`);
     const request = buildAgentRunRequest(
       ctx,
       {
-        agent,
+        agent: task.agentDefinition,
         task: task.prompt,
         description: task.description,
         context: task.context,
       },
-      thinking,
+      task.thinking,
     );
     return runtime.runAgent(request, signal, onProgress);
   };
 
   const results =
     planResult.plan.mode === "single"
-      ? await runSingleTask(planResult.plan.tasks[0], runTask, emitUpdate)
-      : await runParallelTasks(planResult.plan.tasks, PARALLEL_CONCURRENCY, runTask, emitUpdate);
+      ? await runSingleTask(taskResult.tasks[0], runTask, emitUpdate)
+      : await runParallelTasks(taskResult.tasks, PARALLEL_CONCURRENCY, runTask, emitUpdate);
 
   const ok = results.every((result) => result.ok);
   return {
@@ -114,15 +117,23 @@ export async function executeAgentTool(
   };
 }
 
-function firstMissingAgent(agents: AgentDefinition[], tasks: PlannedAgentTask): string | undefined;
-function firstMissingAgent(agents: AgentDefinition[], tasks: PlannedAgentTask[]): string | undefined;
-function firstMissingAgent(
+type ResolveAgentTasksResult = { ok: true; tasks: ResolvedAgentTask[] } | { ok: false; missing: string };
+
+function resolveAgentTasks(
   agents: AgentDefinition[],
-  tasks: PlannedAgentTask | PlannedAgentTask[],
-): string | undefined {
-  const names = new Set(agents.map((agent) => agent.name));
-  const taskList = Array.isArray(tasks) ? tasks : [tasks];
-  return taskList.find((task) => !names.has(task.subagentType))?.subagentType;
+  tasks: PlannedAgentTask[],
+  parentThinking: PiThinkingLevel,
+): ResolveAgentTasksResult {
+  const agentsByName = new Map(agents.map((agent) => [agent.name, agent]));
+  const resolved: ResolvedAgentTask[] = [];
+
+  for (const task of tasks) {
+    const agentDefinition = agentsByName.get(task.subagentType);
+    if (!agentDefinition) return { ok: false, missing: task.subagentType };
+    resolved.push({ ...task, agentDefinition, thinking: agentDefinition.effort ?? parentThinking });
+  }
+
+  return { ok: true, tasks: resolved };
 }
 
 function errorResult(
@@ -164,8 +175,8 @@ function formatProgress(mode: "single" | "parallel", results: AgentRunResult[]):
 }
 
 async function runSingleTask(
-  task: PlannedAgentTask,
-  runTask: (task: PlannedAgentTask, onProgress?: (result: AgentRunResult) => void) => Promise<AgentRunResult>,
+  task: ResolvedAgentTask,
+  runTask: (task: ResolvedAgentTask, onProgress?: (result: AgentRunResult) => void) => Promise<AgentRunResult>,
   emitUpdate: (results: AgentRunResult[]) => void,
 ): Promise<AgentRunResult[]> {
   emitUpdate([runningAgentRunResult(task)]);
@@ -175,8 +186,8 @@ async function runSingleTask(
 }
 
 async function runTaskSafely(
-  task: PlannedAgentTask,
-  runTask: (task: PlannedAgentTask) => Promise<AgentRunResult>,
+  task: ResolvedAgentTask,
+  runTask: (task: ResolvedAgentTask) => Promise<AgentRunResult>,
 ): Promise<AgentRunResult> {
   try {
     return await runTask(task);
@@ -186,9 +197,9 @@ async function runTaskSafely(
 }
 
 async function runParallelTasks(
-  tasks: PlannedAgentTask[],
+  tasks: ResolvedAgentTask[],
   concurrency: number,
-  runTask: (task: PlannedAgentTask, onProgress?: (result: AgentRunResult) => void) => Promise<AgentRunResult>,
+  runTask: (task: ResolvedAgentTask, onProgress?: (result: AgentRunResult) => void) => Promise<AgentRunResult>,
   emitUpdate: (results: AgentRunResult[]) => void,
 ): Promise<AgentRunResult[]> {
   const results = new Array<AgentRunResult>(tasks.length);
@@ -225,15 +236,15 @@ async function runParallelTasks(
   );
 }
 
-function queuedAgentRunResult(task: PlannedAgentTask): AgentRunResult {
+function queuedAgentRunResult(task: ResolvedAgentTask): AgentRunResult {
   return baseAgentRunResult(task, "queued", "(queued)");
 }
 
-function runningAgentRunResult(task: PlannedAgentTask): AgentRunResult {
+function runningAgentRunResult(task: ResolvedAgentTask): AgentRunResult {
   return baseAgentRunResult(task, "running", "(starting child Pi...)");
 }
 
-function failedAgentRunResult(task: PlannedAgentTask, error: unknown): AgentRunResult {
+function failedAgentRunResult(task: ResolvedAgentTask, error: unknown): AgentRunResult {
   const message = errorMessage(error);
   return {
     ...baseAgentRunResult(task, "failed", `Agent ${task.subagentType} failed: ${message}`),
@@ -245,7 +256,7 @@ function failedAgentRunResult(task: PlannedAgentTask, error: unknown): AgentRunR
 }
 
 function baseAgentRunResult(
-  task: PlannedAgentTask,
+  task: ResolvedAgentTask,
   status: AgentRunResult["status"],
   finalOutput: string,
 ): AgentRunResult {
@@ -262,6 +273,7 @@ function baseAgentRunResult(
     stderr: "",
     usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, totalTokens: 0, turns: 0 },
     activity: [],
+    thinking: task.thinking,
   };
 }
 
