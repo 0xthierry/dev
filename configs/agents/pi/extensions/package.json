@@ -10,6 +10,7 @@
       "./create-image",
       "./comment",
       "./subagent",
+      "./blueprint",
       "./statusline",
       "./nested-agents",
       "./project-rules"
