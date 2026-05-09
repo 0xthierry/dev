@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { formatActivationMessage, formatProjectRulesSystemPrompt, formatRulesCommand } from "./format";
+import {
+  formatActivationMessage,
+  formatProjectRulesSystemPrompt,
+  formatRuleActivationContext,
+  formatRulesCommand,
+} from "./format";
 import type { ProjectRule, RuleActivation } from "./types";
 
 function rule(overrides: Partial<ProjectRule>): ProjectRule {
@@ -19,25 +24,27 @@ function rule(overrides: Partial<ProjectRule>): ProjectRule {
 }
 
 describe("formatProjectRulesSystemPrompt", () => {
-  test("includes active rule bodies and inactive rule metadata", () => {
+  test("includes a stable catalog without activation status or rule bodies", () => {
     // Arrange
-    const active = rule({ key: "active", relativePath: ".pi/rules/testing.md", content: "Run tests." });
-    const inactive = rule({
-      key: "inactive",
+    const always = rule({ key: "testing", relativePath: ".pi/rules/testing.md", content: "Run tests." });
+    const pathRule = rule({
+      key: "api",
       relativePath: ".pi/rules/api.md",
       name: "api",
-      mode: "agent",
+      mode: "path",
+      patterns: ["src/api/**/*.ts"],
       description: "API conventions",
     });
 
     // Act
-    const prompt = formatProjectRulesSystemPrompt([active, inactive], new Set(["active"]));
+    const prompt = formatProjectRulesSystemPrompt([always, pathRule]);
 
     // Assert
-    expect(prompt).toContain("## Active Project Rules");
-    expect(prompt).toContain("Run tests.");
     expect(prompt).toContain("## Available Project Rules");
-    expect(prompt).toContain("@api");
+    expect(prompt).toContain("@api — .pi/rules/api.md; patterns: src/api/**/*.ts; description: API conventions");
+    expect(prompt).not.toContain("active");
+    expect(prompt).not.toContain("inactive");
+    expect(prompt).not.toContain("Run tests.");
   });
 });
 
@@ -54,6 +61,24 @@ describe("formatActivationMessage", () => {
 
     // Assert
     expect(message).toBe("Activated project rule(s):\n- .pi/rules/testing.md — always");
+  });
+});
+
+describe("formatRuleActivationContext", () => {
+  test("puts stable rule content before dynamic activation reasons", () => {
+    // Arrange
+    const activation: RuleActivation = {
+      rule: rule({ relativePath: ".pi/rules/testing.md", content: "Run tests." }),
+      reason: { kind: "path", path: "src/foo.test.ts", pattern: "src/**/*.ts" },
+    };
+
+    // Act
+    const message = formatRuleActivationContext([activation]);
+
+    // Assert
+    expect(message).toContain("## Active Project Rules");
+    expect(message.indexOf("Run tests.")).toBeLessThan(message.indexOf("Activation reason:"));
+    expect(message).toContain("Activation reason: matched src/foo.test.ts via src/**/*.ts");
   });
 });
 

@@ -59,7 +59,7 @@ For day-to-day use on Thierry's machines, `configs/agents/install.sh` symlinks t
 - [`comment`](./comment/README.md) — registers `/comment` to edit a quoted copy of the last assistant response in `$EDITOR`.
 - [`subagent`](./subagent/README.md) — registers a Claude-compatible `Agent` tool for foreground single and parallel child Pi subagents.
 - [`statusline`](./statusline/README.md) — appends clickable PR number, git change counts, and the Cloudflare BDR quote to Pi's existing footer.
-- [`project-rules`](./project-rules/README.md) — loads `.pi/rules`, `.agents/rules`, and `.claude/rules` with activation notices.
+- [`project-rules`](./project-rules/README.md) — loads `.pi/rules`, `.agents/rules`, and `.claude/rules` with cache-friendly activation.
 
 ## Dependencies
 

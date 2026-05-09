@@ -29,7 +29,7 @@ describe("project-rules extension E2E", () => {
     tempDir = undefined;
   });
 
-  test("announces activated rules through Pi RPC", async () => {
+  test("injects activated rule context through Pi RPC", async () => {
     // Arrange
     tempDir = await mkdtemp(join(tmpdir(), "pi-project-rules-e2e-"));
     await mkdir(join(tempDir, ".git"));
@@ -59,12 +59,13 @@ describe("project-rules extension E2E", () => {
 
     // Act
     const promptResponse = await harness.request({ type: "prompt", message: "Say done." });
-    const activationEvent = await harness.waitForEvent((event) => eventText(event).includes("Activated project rule"));
+    const ruleContextEvent = await harness.waitForEvent((event) => eventText(event).includes("Active Project Rules"));
     const agentEnd = await harness.waitForEvent((event) => event.type === "agent_end", 60_000);
 
     // Assert
     expect(promptResponse.success).toBe(true);
-    expect(eventText(activationEvent)).toContain(".pi/rules/testing.md");
+    expect(eventText(ruleContextEvent)).toContain(".pi/rules/testing.md");
+    expect(eventText(ruleContextEvent)).toContain("Run the relevant tests.");
     expect(eventText(agentEnd)).toContain(expectedResponseText);
     expect(harness.stderr()).toBe("");
   }, 90_000);

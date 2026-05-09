@@ -1,20 +1,20 @@
 import { describeActivationReason } from "./activation";
 import type { ProjectRule, RuleActivation } from "./types";
 
-export function formatProjectRulesSystemPrompt(rules: ProjectRule[], activeRuleKeys: Set<string>): string {
-  const activeRules = rules.filter((rule) => activeRuleKeys.has(rule.key));
-  const inactiveRules = rules.filter((rule) => !activeRuleKeys.has(rule.key) && rule.mode !== "always");
-  const sections: string[] = [];
+export function formatProjectRulesSystemPrompt(rules: ProjectRule[]): string {
+  if (rules.length === 0) return "";
 
-  if (activeRules.length > 0) {
-    sections.push(formatActiveRules(activeRules));
+  const lines = [
+    "## Available Project Rules",
+    "These project-root-relative rule files were discovered for this project. Rule bodies are added to context only when activated by an always rule, a matching path, a manual @rule mention, or reading the rule file.",
+  ];
+
+  for (const rule of rules) {
+    const metadata = formatCatalogMetadata(rule);
+    lines.push(`- @${rule.name} — ${rule.relativePath}${metadata}`);
   }
 
-  if (inactiveRules.length > 0) {
-    sections.push(formatAvailableRules(inactiveRules));
-  }
-
-  return sections.join("\n\n");
+  return lines.join("\n");
 }
 
 export function formatActivationMessage(activations: RuleActivation[]): string {
@@ -26,7 +26,23 @@ export function formatActivationMessage(activations: RuleActivation[]): string {
 }
 
 export function formatRuleActivationContext(activations: RuleActivation[]): string {
-  return `${formatActivationMessage(activations)}\n\n${formatActiveRules(activations.map((activation) => activation.rule))}`;
+  const lines = [
+    "## Active Project Rules",
+    "Follow these activated project rule bodies in addition to AGENTS.md, CLAUDE.md, and other loaded context files.",
+  ];
+
+  for (const activation of activations) {
+    lines.push(
+      "",
+      `### ${activation.rule.relativePath}`,
+      "",
+      activation.rule.content || "[Empty rule file]",
+      "",
+      `Activation reason: ${describeActivationReason(activation.reason)}`,
+    );
+  }
+
+  return lines.join("\n");
 }
 
 export function formatRulesCommand(rules: ProjectRule[], activeRuleKeys: Set<string>): string {
@@ -34,7 +50,7 @@ export function formatRulesCommand(rules: ProjectRule[], activeRuleKeys: Set<str
 
   const lines = ["Project rules:"];
   for (const rule of rules) {
-    const active = activeRuleKeys.has(rule.key) || rule.mode === "always" ? "active" : "inactive";
+    const active = activeRuleKeys.has(rule.key) ? "active" : "inactive";
     const description = rule.description ? ` — ${rule.description}` : "";
     const patterns = rule.patterns.length > 0 ? ` [${rule.patterns.join(", ")}]` : "";
     lines.push(`- ${rule.relativePath} (${rule.mode}, ${active})${patterns}${description}`);
@@ -45,35 +61,9 @@ export function formatRulesCommand(rules: ProjectRule[], activeRuleKeys: Set<str
   return lines.join("\n");
 }
 
-function formatActiveRules(rules: ProjectRule[]): string {
-  const lines = [
-    "## Active Project Rules",
-    "Follow these project rules in addition to AGENTS.md, CLAUDE.md, and other loaded context files.",
-  ];
-
-  for (const rule of rules) {
-    lines.push("", `### ${rule.relativePath}`, "", rule.content || "[Empty rule file]");
-  }
-
-  return lines.join("\n");
-}
-
-function formatAvailableRules(rules: ProjectRule[]): string {
-  const lines = [
-    "## Available Project Rules",
-    "These project rules were discovered but are not active yet. If one is relevant, read the rule file; Pi will mark it as activated when it is read or when a matching path is accessed.",
-  ];
-
-  for (const rule of rules) {
-    const hint = formatRuleHint(rule);
-    lines.push(`- @${rule.name} — ${rule.relativePath} (${rule.mode}${hint})`);
-  }
-
-  return lines.join("\n");
-}
-
-function formatRuleHint(rule: ProjectRule): string {
-  if (rule.patterns.length > 0) return `; patterns: ${rule.patterns.join(", ")}`;
-  if (rule.description) return `; ${rule.description}`;
-  return "";
+function formatCatalogMetadata(rule: ProjectRule): string {
+  const metadata: string[] = [];
+  if (rule.patterns.length > 0) metadata.push(`patterns: ${rule.patterns.join(", ")}`);
+  if (rule.description) metadata.push(`description: ${rule.description}`);
+  return metadata.length > 0 ? `; ${metadata.join("; ")}` : "";
 }

@@ -31,6 +31,7 @@ describe("discoverProjectRules", () => {
     const result = await discoverProjectRules(root);
 
     // Assert
+    expect(result.projectRoot).toBe(root);
     expect(result.diagnostics).toEqual([]);
     expect(result.rules.map((rule) => rule.relativePath)).toEqual([".pi/rules/testing.md", ".agents/rules/api.md"]);
     expect(result.rules.map((rule) => rule.mode)).toEqual(["always", "always"]);
@@ -53,6 +54,21 @@ describe("discoverProjectRules", () => {
     expect(result.rules[0]?.aliases.sort()).toEqual([".agents/rules/testing.md", ".claude/rules/testing.md"]);
   });
 
+  test("normalizes nested rule patterns to project-root-relative paths", async () => {
+    // Arrange
+    const root = await makeTempProject();
+    const child = join(root, "packages", "app");
+    await mkdir(join(child, ".pi", "rules"), { recursive: true });
+    await writeFile(join(child, ".pi", "rules", "app.md"), '---\npaths:\n  - "src/**/*.ts"\n---\nUse app conventions.');
+
+    // Act
+    const result = await discoverProjectRules(child);
+
+    // Assert
+    expect(result.rules[0]?.relativePath).toBe("packages/app/.pi/rules/app.md");
+    expect(result.rules[0]?.patterns).toEqual(["packages/app/src/**/*.ts"]);
+  });
+
   test("loads ancestor rules up to the git root", async () => {
     // Arrange
     const root = await makeTempProject();
@@ -67,6 +83,10 @@ describe("discoverProjectRules", () => {
 
     // Assert
     expect(findProjectRoot(child)).toBe(root);
-    expect(result.rules.map((rule) => rule.relativePath)).toEqual([`${root}/.pi/rules/root.md`, ".pi/rules/child.md"]);
+    expect(result.projectRoot).toBe(root);
+    expect(result.rules.map((rule) => rule.relativePath)).toEqual([
+      ".pi/rules/root.md",
+      "packages/app/.pi/rules/child.md",
+    ]);
   });
 });

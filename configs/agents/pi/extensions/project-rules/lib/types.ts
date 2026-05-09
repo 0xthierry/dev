@@ -37,6 +37,7 @@ export type RuleActivation = {
 };
 
 export type RuleDiscoveryResult = {
+  projectRoot: string;
   rules: ProjectRule[];
   diagnostics: string[];
 };

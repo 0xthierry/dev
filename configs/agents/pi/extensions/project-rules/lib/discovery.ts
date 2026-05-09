@@ -24,7 +24,7 @@ export async function discoverProjectRules(cwd: string): Promise<RuleDiscoveryRe
       const files = await findRuleFiles(directory, diagnostics);
       for (const file of files) {
         const key = await canonicalRuleKey(file);
-        const relativePath = displayPath(cwd, file);
+        const relativePath = displayPath(projectRoot, file);
         const existing = discovered.get(key);
         if (existing) {
           existing.aliases.push(relativePath);
@@ -33,7 +33,10 @@ export async function discoverProjectRules(cwd: string): Promise<RuleDiscoveryRe
 
         const parsed = parseRuleFile(await readFile(file, "utf8"));
         const mode = classifyRule(parsed.frontmatter);
-        const patterns = [...parsed.frontmatter.paths, ...parsed.frontmatter.globs];
+        const patterns = rootRelativePatterns(projectRoot, root, [
+          ...parsed.frontmatter.paths,
+          ...parsed.frontmatter.globs,
+        ]);
         discovered.set(key, {
           key,
           path: file,
@@ -51,7 +54,7 @@ export async function discoverProjectRules(cwd: string): Promise<RuleDiscoveryRe
     }
   }
 
-  return { rules: [...discovered.values()], diagnostics };
+  return { projectRoot, rules: [...discovered.values()], diagnostics };
 }
 
 export function findProjectRoot(cwd: string): string {
@@ -126,6 +129,18 @@ function ancestorDirs(root: string, cwd: string): string[] {
 
 function isRuleFile(path: string): boolean {
   return path.endsWith(".md") || path.endsWith(".mdc");
+}
+
+function rootRelativePatterns(projectRoot: string, ruleRoot: string, patterns: string[]): string[] {
+  const scope = displayPath(projectRoot, ruleRoot);
+  if (!scope || scope.startsWith("/")) return patterns;
+  return patterns.map((pattern) => rootRelativePattern(scope, pattern));
+}
+
+function rootRelativePattern(scope: string, pattern: string): string {
+  const normalized = pattern.replace(/\\/g, "/").replace(/^\.\//, "");
+  if (normalized.startsWith("/") || normalized.startsWith("../") || normalized.startsWith(`${scope}/`)) return pattern;
+  return `${scope}/${normalized}`;
 }
 
 async function canonicalRuleKey(path: string): Promise<string> {

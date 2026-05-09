@@ -1,4 +1,4 @@
-import { isAbsolute, resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { matchFirstGlob, normalizeRulePath } from "./glob";
 import type { ProjectRule, RuleActivation, RuleActivationReason } from "./types";
 
@@ -12,8 +12,9 @@ export function planPromptActivations(
   prompt: string,
   seenPaths: Iterable<string>,
   activeRuleKeys: Set<string>,
+  normalizePath: (path: string) => string = (path) => path,
 ): ActivationPlan {
-  const promptPaths = extractPromptPaths(prompt);
+  const promptPaths = extractPromptPaths(prompt).map(normalizePath);
   const manualTokens = extractManualRuleTokens(prompt);
   const candidatePaths = [...promptPaths, ...seenPaths];
   const active = rules.flatMap((rule) => activationForRule(rule, candidatePaths, manualTokens));
@@ -30,11 +31,14 @@ export function findRuleReadActivation(
   cwd: string,
   readPath: string,
   activeRuleKeys: Set<string>,
+  projectRoot = cwd,
 ): RuleActivation | undefined {
-  const normalizedReadPath = normalizeAbsoluteishPath(cwd, readPath);
+  const readPaths = projectRelativeCandidates(cwd, projectRoot, readPath);
   const activation = rules.find((rule) => {
-    const paths = [rule.path, ...rule.aliases.map((alias) => normalizeAbsoluteishPath(cwd, alias))];
-    return paths.some((path) => normalizeRulePath(path) === normalizedReadPath);
+    const paths = [rule.path, rule.relativePath, ...rule.aliases].flatMap((path) => [
+      ...projectRelativeCandidates(cwd, projectRoot, path),
+    ]);
+    return paths.some((path) => readPaths.has(path));
   });
   if (!activation || activeRuleKeys.has(activation.key)) return undefined;
   return { rule: activation, reason: { kind: "read", path: readPath } };
@@ -123,10 +127,18 @@ function normalizeRuleToken(value: string): string {
     .toLowerCase();
 }
 
-function normalizeAbsoluteishPath(cwd: string, path: string): string {
+function projectRelativeCandidates(cwd: string, projectRoot: string, path: string): Set<string> {
+  const candidates = new Set<string>();
   const normalized = normalizeRulePath(path);
+  if (normalized) candidates.add(normalized);
+
   const absolute = isAbsolute(path) ? path : resolve(cwd, normalized);
-  return normalizeRulePath(absolute);
+  const projectRelative = relative(projectRoot, absolute).split(sep).join("/");
+  if (projectRelative && !projectRelative.startsWith("..") && !isAbsolute(projectRelative)) {
+    candidates.add(normalizeRulePath(projectRelative));
+  }
+
+  return candidates;
 }
 
 export function describeActivationReason(reason: RuleActivationReason): string {

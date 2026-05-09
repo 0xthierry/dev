@@ -48,6 +48,7 @@ export type FakePi = {
   appendedEntries: Array<{ customType: string; data?: unknown }>;
   sentMessages: Array<{ message: unknown; options?: unknown }>;
   sentUserMessages: Array<{ content: unknown; options?: unknown }>;
+  uiNotifications: Array<{ message: string; type?: "info" | "warning" | "error" }>;
   autocompleteProviderFactories: Array<(current: AutocompleteProvider) => AutocompleteProvider>;
   emit: (eventName: string, event?: unknown, ctx?: Record<string, unknown>) => Promise<unknown[]>;
   runCommand: (name: string, args?: string, ctx?: Record<string, unknown>) => Promise<unknown>;
@@ -63,6 +64,7 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
   const appendedEntries: FakePi["appendedEntries"] = [];
   const sentMessages: FakePi["sentMessages"] = [];
   const sentUserMessages: FakePi["sentUserMessages"] = [];
+  const uiNotifications: FakePi["uiNotifications"] = [];
   const autocompleteProviderFactories: FakePi["autocompleteProviderFactories"] = [];
   const eventBus = new EventEmitter();
 
@@ -70,7 +72,7 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
     cwd: options.cwd ?? process.cwd(),
     hasUI: false,
     signal: undefined,
-    ui: createFakeUi(autocompleteProviderFactories),
+    ui: createFakeUi(autocompleteProviderFactories, uiNotifications),
     sessionManager: createFakeSessionManager(),
     modelRegistry: undefined,
     model: undefined,
@@ -181,6 +183,7 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
     appendedEntries,
     sentMessages,
     sentUserMessages,
+    uiNotifications,
     autocompleteProviderFactories,
 
     async emit(eventName, event = {}, ctx = {}) {
@@ -214,9 +217,14 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
   return fakePi;
 }
 
-function createFakeUi(autocompleteProviderFactories: FakePi["autocompleteProviderFactories"]) {
+function createFakeUi(
+  autocompleteProviderFactories: FakePi["autocompleteProviderFactories"],
+  uiNotifications: FakePi["uiNotifications"],
+) {
   return {
-    notify: () => undefined,
+    notify: (message: string, type?: "info" | "warning" | "error") => {
+      uiNotifications.push({ message, type });
+    },
     confirm: async () => false,
     select: async () => undefined,
     input: async () => undefined,
