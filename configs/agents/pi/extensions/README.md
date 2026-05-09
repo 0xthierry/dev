@@ -43,6 +43,7 @@ pi install ./configs/agents/pi/extensions/web-access
 pi install ./configs/agents/pi/extensions/create-image
 pi install ./configs/agents/pi/extensions/comment
 pi install ./configs/agents/pi/extensions/subagent
+pi install ./configs/agents/pi/extensions/blueprint
 pi install ./configs/agents/pi/extensions/statusline
 pi install ./configs/agents/pi/extensions/nested-agents
 pi install ./configs/agents/pi/extensions/project-rules
@@ -59,6 +60,7 @@ For day-to-day use on Thierry's machines, `configs/agents/install.sh` symlinks t
 - [`create-image`](./create-image/README.md) — registers `/create-image` for prompt-to-image generation.
 - [`comment`](./comment/README.md) — registers `/comment` to edit a quoted copy of the last assistant response in `$EDITOR`.
 - [`subagent`](./subagent/README.md) — registers a Claude-compatible `Agent` tool for foreground single and parallel child Pi subagents.
+- [`blueprint`](./blueprint/README.md) — registers `/blueprint` for deterministic graph workflows that can spawn isolated child Pi sessions.
 - [`statusline`](./statusline/README.md) — appends clickable PR number, git change counts, and the Cloudflare BDR quote to Pi's existing footer.
 - [`nested-agents`](./nested-agents/README.md) — dynamically loads nested `AGENTS.md` / `CLAUDE.md` files when the agent touches files under those directories.
 - [`project-rules`](./project-rules/README.md) — loads `.pi/rules`, `.agents/rules`, and `.claude/rules` with cache-friendly activation.
