@@ -46,6 +46,22 @@ export default function (pi: ExtensionAPI) {
 }
 ```
 
+## Bundle/package registration
+
+When adding a new extension directory, register it everywhere Pi can load this repository-owned bundle:
+
+- root `package.json` `pi.extensions` — used when installing the whole repo as a Pi package;
+- `configs/agents/pi/extensions/package.json` `pi.extensions` — used by the symlinked `~/.pi/agent/extensions` bundle on Thierry's machines;
+- `configs/agents/pi/extensions/README.md` install examples and extension list.
+
+After changing extension manifests, verify the installed/symlinked bundle actually exposes the resource. For commands, use Pi RPC `get_commands` or an equivalent E2E check and confirm the new command appears before claiming it is available.
+
+## Command UX
+
+Every user-facing `pi.registerCommand()` must include argument autocomplete when it accepts a constrained or discoverable first argument, such as blueprint names, preset names, rule names, modes, providers, or file-backed resources. Implement `getArgumentCompletions()` near the command registration and test it with the same fake runtime/discovery path the command uses.
+
+If a command intentionally has no useful completions because its arguments are free-form prose, document that in the command module or test. Do not leave command autocomplete unconsidered.
+
 ## Maintainability principles
 
 - Treat every extension as a small, testable package.
