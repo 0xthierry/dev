@@ -64,6 +64,24 @@ export default function (pi: ExtensionAPI) {
 
 See [`taste.md`](./taste.md) for examples and refactor checklists.
 
+## Context caching and prompt-prefix stability
+
+Treat prompt/context caching as a first-class extension design constraint. Claude and OpenAI/Codex cache exact prompt prefixes; small changes early in the rendered prompt can invalidate cache reuse for everything after them.
+
+Pi-specific rules:
+
+- Keep `before_agent_start` system-prompt additions stable. Do not put timestamps, random IDs, absolute machine paths, git status, current active/inactive state, or per-turn facts in the system prompt.
+- Prefer a small, deterministic system-prompt catalog for durable extension guidance. Put volatile context in later messages instead of rewriting earlier system text.
+- Make runtime context append-only when possible. If an extension activates or discovers new context mid-session, append one stable message rather than reshuffling previously injected sections.
+- Remember `pi.sendMessage()` custom messages participate in LLM context, even when they are also displayed in the UI. Use `ctx.ui.notify()` for UI-only notices and `pi.appendEntry()` for persisted extension state that should not enter model context.
+- `deliverAs: "steer"` is usually more cache-friendly than mutating the system prompt after a tool event because it appends context before the next model call. Keep the stable content first and dynamic activation reasons after it, or only in `details`.
+- Keep tool, command, shortcut, and message schemas/descriptions stable and deterministic. Do not register different user-facing resources per turn or reorder definitions based on runtime state.
+- Use stable, project-root-relative paths in LLM-visible text. Avoid cwd-relative paths when the same rule/context should cache across subdirectories, and avoid absolute host-specific paths unless required.
+- Do not duplicate large context in both a custom message and the next turn's system prompt. Track what has already been injected and rehydrate only when needed after reload/compaction.
+- If compaction may remove extension-provided context, reintroduce the minimum stable context needed after compaction rather than rewriting the whole system prompt.
+
+When reviewing an extension, ask: “Does this change preserve a long, identical prefix across adjacent turns and similar sessions?” If not, prefer a stable prefix plus appended suffix design.
+
 ## Tests
 
 Tests are colocated with the code they verify.
