@@ -1,5 +1,10 @@
 import { describe, expect, mock, test } from "bun:test";
-import { buildBlueprintCompletionItems, getBlueprintArgumentCompletions } from "./completions";
+import type { AutocompleteProvider } from "@earendil-works/pi-tui";
+import {
+  buildBlueprintCompletionItems,
+  createBlueprintAutocompleteProvider,
+  getBlueprintArgumentCompletions,
+} from "./completions";
 import type { BlueprintRuntime } from "./runtime";
 import type { LoadedBlueprint } from "./types";
 
@@ -17,6 +22,53 @@ describe("buildBlueprintCompletionItems", () => {
 
     // Assert
     expect(items.map((item) => item.value)).toEqual(["list", "project/shared", "solo", "user/shared", "user/solo"]);
+  });
+});
+
+describe("createBlueprintAutocompleteProvider", () => {
+  test("handles forced tab completion in blueprint command arguments", async () => {
+    // Arrange
+    const baseProvider: AutocompleteProvider = {
+      getSuggestions: mock(async () => null),
+      applyCompletion: (lines, cursorLine, cursorCol) => ({ lines, cursorLine, cursorCol }),
+    };
+    const runtime = fakeRuntime([loadedBlueprint("project", "implement")]);
+    const provider = createBlueprintAutocompleteProvider(baseProvider, runtime, "/repo");
+    const line = "/blueprint pro";
+
+    // Act
+    const suggestions = await provider.getSuggestions([line], 0, line.length, {
+      signal: new AbortController().signal,
+      force: true,
+    });
+
+    // Assert
+    expect(suggestions).toMatchObject({
+      prefix: "pro",
+      items: [expect.objectContaining({ value: "project/implement" })],
+    });
+    expect(baseProvider.getSuggestions).not.toHaveBeenCalled();
+  });
+
+  test("delegates autocomplete outside blueprint command arguments", async () => {
+    // Arrange
+    const baseProvider: AutocompleteProvider = {
+      getSuggestions: mock(async () => ({ prefix: "", items: [{ value: "/other", label: "/other" }] })),
+      applyCompletion: (lines, cursorLine, cursorCol) => ({ lines, cursorLine, cursorCol }),
+    };
+    const runtime = fakeRuntime([loadedBlueprint("project", "implement")]);
+    const provider = createBlueprintAutocompleteProvider(baseProvider, runtime, "/repo");
+    const line = "/other pro";
+
+    // Act
+    const suggestions = await provider.getSuggestions([line], 0, line.length, {
+      signal: new AbortController().signal,
+      force: true,
+    });
+
+    // Assert
+    expect(suggestions).toMatchObject({ prefix: "", items: [{ value: "/other", label: "/other" }] });
+    expect(runtime.discoverBlueprints).not.toHaveBeenCalled();
   });
 });
 

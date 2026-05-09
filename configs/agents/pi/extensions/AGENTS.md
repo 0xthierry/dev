@@ -60,6 +60,8 @@ After changing extension manifests, verify the installed/symlinked bundle actual
 
 Every user-facing `pi.registerCommand()` must include argument autocomplete when it accepts a constrained or discoverable first argument, such as blueprint names, preset names, rule names, modes, providers, or file-backed resources. Implement `getArgumentCompletions()` near the command registration and test it with the same fake runtime/discovery path the command uses.
 
+For richer command-argument completion, especially when suggestions depend on `ctx.cwd`, UI state, or forced Tab behavior, follow the `create-image` pattern too: register a `session_start` `ctx.ui.addAutocompleteProvider()` wrapper that recognizes `/command` (and suffixed `/command:1`) lines, returns `{ prefix, items }`, delegates to the previous provider outside the command, and has fake-Pi tests for the registered provider.
+
 If a command intentionally has no useful completions because its arguments are free-form prose, document that in the command module or test. Do not leave command autocomplete unconsidered.
 
 ## Maintainability principles

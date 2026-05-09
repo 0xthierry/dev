@@ -1,6 +1,33 @@
-import type { AutocompleteItem } from "@earendil-works/pi-tui";
+import type { AutocompleteItem, AutocompleteProvider } from "@earendil-works/pi-tui";
 import type { BlueprintRuntime } from "./runtime";
 import type { LoadedBlueprint } from "./types";
+
+export function createBlueprintAutocompleteProvider(
+  current: AutocompleteProvider,
+  runtime: BlueprintRuntime,
+  cwd: string,
+): AutocompleteProvider {
+  return {
+    async getSuggestions(lines, cursorLine, cursorCol, options) {
+      const argumentText = extractBlueprintArgumentText(lines[cursorLine] ?? "", cursorCol);
+      if (argumentText === null) return current.getSuggestions(lines, cursorLine, cursorCol, options);
+
+      const items = await getBlueprintArgumentCompletions(runtime, cwd, argumentText);
+      if (!items) return current.getSuggestions(lines, cursorLine, cursorCol, options);
+      return { items, prefix: argumentText };
+    },
+
+    applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+      return current.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
+    },
+
+    shouldTriggerFileCompletion(lines, cursorLine, cursorCol) {
+      const argumentText = extractBlueprintArgumentText(lines[cursorLine] ?? "", cursorCol);
+      if (argumentText !== null) return true;
+      return current.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? true;
+    },
+  };
+}
 
 export async function getBlueprintArgumentCompletions(
   runtime: BlueprintRuntime,
@@ -33,6 +60,12 @@ export function buildBlueprintCompletionItems(blueprints: LoadedBlueprint[]): Au
   }
 
   return items.sort((a, b) => a.value.localeCompare(b.value));
+}
+
+function extractBlueprintArgumentText(line: string, cursorCol: number): string | null {
+  const beforeCursor = line.slice(0, cursorCol);
+  const match = beforeCursor.match(/^\/blueprint(?::\d+)?(?:\s+(.*))$/);
+  return match ? (match[1] ?? "") : null;
 }
 
 function countBlueprintNames(blueprints: LoadedBlueprint[]): Map<string, number> {
