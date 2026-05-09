@@ -30,10 +30,11 @@ describe("buildGitHubContent", () => {
     const content = buildGitHubContent(repoPath, info);
 
     // Assert
-    expect(content).toContain(`Repository cloned to: ${repoPath}`);
+    expect(content.startsWith("## Structure")).toBe(true);
     expect(content).toContain("src/");
     expect(content).toContain("src/index.ts");
     expect(content).toContain("# Example Repo");
+    expect(content.indexOf("# Example Repo")).toBeLessThan(content.indexOf(`Repository cloned to: ${repoPath}`));
   });
 
   test("renders blob content for text files", () => {
@@ -53,8 +54,9 @@ describe("buildGitHubContent", () => {
     const content = buildGitHubContent(repoPath, info);
 
     // Assert
-    expect(content).toContain("## file.txt");
+    expect(content.startsWith("## file.txt")).toBe(true);
     expect(content).toContain("hello file");
+    expect(content.indexOf("hello file")).toBeLessThan(content.indexOf(`Repository cloned to: ${repoPath}`));
   });
 
   test("does not follow blob paths outside the repository", () => {

@@ -85,12 +85,19 @@ export function registerWebSearchTool(pi: ExtensionAPI, runtime: WebAccessRuntim
         })
         .join("\n\n");
 
-      const searchId = runtime.generateId();
+      const searchRequest = {
+        queries: queryList,
+        numResults: params.numResults,
+        includeContent: params.includeContent,
+        recencyFilter: normalizeRecencyFilter(params.recencyFilter),
+        domainFilter: params.domainFilter,
+      };
+      const searchId = runtime.generateId("search", searchRequest);
       storeAndPublish(pi, { id: searchId, type: "search", timestamp: runtime.now(), queries: queryResults });
 
       let fetchId: string | null = null;
       if (inlineContent.length > 0) {
-        fetchId = runtime.generateId();
+        fetchId = runtime.generateId("fetch", { source: "web_search", searchRequest });
         storeAndPublish(pi, { id: fetchId, type: "fetch", timestamp: runtime.now(), urls: inlineContent });
       }
 

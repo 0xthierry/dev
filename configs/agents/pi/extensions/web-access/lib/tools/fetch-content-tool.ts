@@ -32,6 +32,14 @@ export function registerFetchContentTool(pi: ExtensionAPI, runtime: WebAccessRun
         content: [{ type: "text", text: `Fetching ${urls.length} URL(s)...` }],
         details: { phase: "fetch", progress: 0 },
       });
+      const fetchRequest = {
+        urls,
+        forceClone: params.forceClone,
+        prompt: params.prompt,
+        timestamp: params.timestamp,
+        frames: params.frames,
+        model: params.model,
+      };
       const results = await runtime.fetchAllContent(urls, signal, {
         forceClone: params.forceClone,
         prompt: params.prompt,
@@ -39,7 +47,7 @@ export function registerFetchContentTool(pi: ExtensionAPI, runtime: WebAccessRun
         frames: params.frames,
         model: params.model,
       });
-      const responseId = runtime.generateId();
+      const responseId = runtime.generateId("fetch", fetchRequest);
       storeAndPublish(pi, { id: responseId, type: "fetch", timestamp: runtime.now(), urls: stripImages(results) });
 
       if (urls.length === 1) {

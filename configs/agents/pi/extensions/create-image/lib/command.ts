@@ -67,15 +67,19 @@ export async function handleCreateImageCommand(
     notify(ctx, `Created ${saved.length} image(s).`, "info");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    publishCreateImageMessage(pi, `Image generation failed.\n\n${message}`, { ok: false, error: message, prompt });
+    publishCreateImageMessage(pi, `Image generation failed with ${provider.label}. No image file was created.`, {
+      ok: false,
+      error: message,
+      prompt,
+    });
     notify(ctx, `Image generation failed: ${message}`, "error");
   }
 }
 
 export function formatCreateImageResult(result: ImageGenerationResult, saved: SavedImage[]): string {
-  const lines = [`Created ${saved.length} image(s) with ${result.providerLabel}.`, ""];
+  const lines = [`Created ${saved.length} image(s) with ${result.providerLabel}.`, "", "Image file(s):"];
   for (const image of saved) {
-    lines.push(`- ${image.displayPath} (${image.mimeType}, ${image.bytes} bytes)`);
+    lines.push(`- ${image.displayPath}`);
   }
   return lines.join("\n");
 }

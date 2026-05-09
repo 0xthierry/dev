@@ -50,6 +50,7 @@ describe("registerWebSearchTool", () => {
 
     // Assert
     expect(fakeRuntime.search).toHaveBeenCalledWith("docs", expect.objectContaining({ signal: undefined }));
+    expect(fakeRuntime.generateId).toHaveBeenCalledWith("search", expect.objectContaining({ queries: ["docs"] }));
     expect(result.content[0]?.text).toContain("Answer docs");
     expect(result.details).toMatchObject({ searchId: "search-id", successfulQueries: 1, totalResults: 1 });
     expect(fake.appendedEntries).toHaveLength(1);

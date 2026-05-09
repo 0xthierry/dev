@@ -39,6 +39,10 @@ describe("registerFetchContentTool", () => {
 
     // Assert
     expect(fakeRuntime.fetchAllContent).toHaveBeenCalledWith(["https://example.com"], undefined, expect.any(Object));
+    expect(fakeRuntime.generateId).toHaveBeenCalledWith(
+      "fetch",
+      expect.objectContaining({ urls: ["https://example.com"] }),
+    );
     expect(result.content.at(-1)?.text).toBe("Body");
     expect(result.details).toMatchObject({ responseId: "fetch-id", successful: 1 });
     expect(fake.appendedEntries).toHaveLength(1);

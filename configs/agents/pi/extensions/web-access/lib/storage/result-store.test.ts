@@ -8,6 +8,18 @@ afterEach(() => {
 });
 
 describe("web-access storage", () => {
+  test("generates deterministic IDs for stable request seeds", () => {
+    // Arrange / Act
+    const first = generateId("search", { query: "docs", filters: { b: 2, a: 1 } });
+    const second = generateId("search", { filters: { a: 1, b: 2 }, query: "docs" });
+    const different = generateId("fetch", { query: "docs", filters: { b: 2, a: 1 } });
+
+    // Assert
+    expect(first).toMatch(/^search-[a-f0-9]{12}$/);
+    expect(first).toBe(second);
+    expect(different).not.toBe(first);
+  });
+
   test("stores, retrieves, lists, and deletes results", () => {
     // Arrange
     const id = generateId();

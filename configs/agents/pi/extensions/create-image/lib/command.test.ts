@@ -89,6 +89,26 @@ describe("handleCreateImageCommand", () => {
     expect(provider?.generate).toHaveBeenCalledWith(expect.objectContaining({ prompt: "an orange robot" }));
   });
 
+  test("publishes concise model-visible failures", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const fakeRuntime = runtime();
+    const provider = fakeRuntime.providers[0];
+    if (!provider) throw new Error("missing provider");
+    provider.generate = mock(async () => {
+      throw new Error("volatile provider diagnostic with request ids");
+    });
+
+    // Act
+    await handleCreateImageCommand(fakePi.pi, fakeRuntime, "a tiny fox logo", context());
+
+    // Assert
+    expect(fakePi.sentMessages[0]?.message).toMatchObject({
+      content: "Image generation failed with Nano Banana. No image file was created.",
+      details: { error: "volatile provider diagnostic with request ids" },
+    });
+  });
+
   test("publishes usage for missing prompts in non-interactive contexts", async () => {
     // Arrange
     const fakePi = createFakePi();
@@ -116,6 +136,9 @@ describe("formatCreateImageResult", () => {
 
     // Assert
     expect(text).toContain("Created 1 image(s) with Nano Banana.");
-    expect(text).toContain("image.jpg (image/jpeg, 10 bytes)");
+    expect(text).toContain("Image file(s):");
+    expect(text).toContain("- image.jpg");
+    expect(text).not.toContain("10 bytes");
+    expect(text).not.toContain("image/jpeg");
   });
 });

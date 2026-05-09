@@ -82,7 +82,7 @@ function readReadme(localPath: string): string | null {
 }
 
 export function buildGitHubContent(localPath: string, info: GitHubUrlInfo): string {
-  const lines = [`Repository cloned to: ${localPath}`, ""];
+  const lines: string[] = [];
   if (info.type === "blob" && info.path) {
     const filePath = resolveWithinRepo(localPath, info.path);
     if (
@@ -98,6 +98,7 @@ export function buildGitHubContent(localPath: string, info: GitHubUrlInfo): stri
           ? `${content.slice(0, MAX_INLINE_FILE_CHARS)}\n\n[File truncated at 100K chars]`
           : content,
       );
+      appendLocalCheckout(lines, localPath);
       return lines.join("\n");
     }
   }
@@ -106,7 +107,7 @@ export function buildGitHubContent(localPath: string, info: GitHubUrlInfo): stri
     if (dirPath && existsSync(dirPath) && statSync(dirPath).isDirectory()) {
       lines.push(`## ${info.path}`);
       lines.push(readdirSync(dirPath).sort().slice(0, MAX_TREE_ENTRIES).join("\n"));
-      lines.push("\nUse read and bash tools at the cloned path to explore further.");
+      appendLocalCheckout(lines, localPath);
       return lines.join("\n");
     }
   }
@@ -114,6 +115,15 @@ export function buildGitHubContent(localPath: string, info: GitHubUrlInfo): stri
   lines.push(buildTree(localPath));
   const readme = readReadme(localPath);
   if (readme) lines.push("", "## README", readme);
-  lines.push("", "Use read and bash tools at the cloned path to explore further.");
+  appendLocalCheckout(lines, localPath);
   return lines.join("\n");
+}
+
+function appendLocalCheckout(lines: string[], localPath: string): void {
+  lines.push(
+    "",
+    "## Local checkout",
+    `Repository cloned to: ${localPath}`,
+    "Use read and bash tools at the cloned path to explore further.",
+  );
 }
