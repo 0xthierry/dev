@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { handleBlueprintCommand } from "./command";
+import { getBlueprintArgumentCompletions } from "./completions";
 import { shouldRegisterBlueprintInCurrentProcess } from "./runner/pi-invocation";
 import { type BlueprintRuntime, createBlueprintRuntime } from "./runtime";
 
@@ -11,6 +12,7 @@ export function registerBlueprintExtension(pi: ExtensionAPI): void {
 export function registerBlueprintCommand(pi: ExtensionAPI, runtime: BlueprintRuntime): void {
   pi.registerCommand("blueprint", {
     description: "Run a local blueprint graph with deterministic nodes and isolated child Pi sessions.",
+    getArgumentCompletions: (prefix) => getBlueprintArgumentCompletions(runtime, process.cwd(), prefix),
     handler: async (args, ctx) => handleBlueprintCommand(pi, runtime, args, ctx),
   });
 }

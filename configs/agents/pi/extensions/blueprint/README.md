@@ -26,7 +26,7 @@ Each blueprint can be either a top-level JSON file or a directory containing `bl
 /blueprint project/implement-with-checks fix failing extension tests
 ```
 
-With no arguments, `/blueprint` lists discovered blueprints. With a name and task, it executes the selected blueprint.
+With no arguments, `/blueprint` lists discovered blueprints. With a name and task, it executes the selected blueprint. The first argument autocompletes discovered blueprint IDs and unique short names.
 
 ## Blueprint format
 

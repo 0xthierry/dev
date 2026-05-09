@@ -34,7 +34,7 @@ describe("registerBlueprintExtension", () => {
 });
 
 describe("registerBlueprintCommand", () => {
-  test("registers the user-facing command", () => {
+  test("registers the user-facing command with argument completions", () => {
     // Arrange
     const fakePi = createFakePi();
     const runtime: BlueprintRuntime = {
@@ -48,6 +48,8 @@ describe("registerBlueprintCommand", () => {
     registerBlueprintCommand(fakePi.pi, runtime);
 
     // Assert
-    expect(fakePi.commands.get("blueprint")?.description).toContain("blueprint graph");
+    const command = fakePi.commands.get("blueprint");
+    expect(command?.description).toContain("blueprint graph");
+    expect(typeof command?.getArgumentCompletions).toBe("function");
   });
 });
