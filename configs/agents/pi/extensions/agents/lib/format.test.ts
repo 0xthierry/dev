@@ -1,0 +1,56 @@
+import { describe, expect, test } from "bun:test";
+import { formatAgentsContext, formatLoadedNotification } from "./format";
+import type { AgentsContextFile } from "./types";
+
+function contextFile(overrides: Partial<AgentsContextFile>): AgentsContextFile {
+  return {
+    key: overrides.path ?? "/repo/AGENTS.md",
+    path: overrides.path ?? "/repo/AGENTS.md",
+    relativePath: overrides.relativePath ?? "AGENTS.md",
+    filename: overrides.filename ?? "AGENTS.md",
+    content: overrides.content ?? "Follow repo rules.",
+  };
+}
+
+describe("formatAgentsContext", () => {
+  test("formats context files in order", () => {
+    // Arrange
+    const files = [
+      contextFile({ relativePath: "tests/AGENTS.md", content: "Use test helpers." }),
+      contextFile({ relativePath: "tests/unit/CLAUDE.md", filename: "CLAUDE.md", content: "Prefer unit fixtures." }),
+    ];
+
+    // Act
+    const result = formatAgentsContext(files);
+
+    // Assert
+    expect(result).toContain("# Nested AGENTS.md / CLAUDE.md Context");
+    expect(result.indexOf("## tests/AGENTS.md")).toBeLessThan(result.indexOf("## tests/unit/CLAUDE.md"));
+    expect(result).toContain("Use test helpers.");
+    expect(result).toContain("Prefer unit fixtures.");
+  });
+
+  test("labels empty context files", () => {
+    // Arrange
+    const files = [contextFile({ content: "" })];
+
+    // Act
+    const result = formatAgentsContext(files);
+
+    // Assert
+    expect(result).toContain("[Empty context file]");
+  });
+});
+
+describe("formatLoadedNotification", () => {
+  test("formats loaded context paths", () => {
+    // Arrange
+    const files = [contextFile({ relativePath: "tests/AGENTS.md" })];
+
+    // Act
+    const result = formatLoadedNotification(files);
+
+    // Assert
+    expect(result).toBe("Loaded nested agent context: tests/AGENTS.md");
+  });
+});
