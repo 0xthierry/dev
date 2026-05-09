@@ -12,7 +12,8 @@
       "./configs/agents/pi/extensions/create-image",
       "./configs/agents/pi/extensions/comment",
       "./configs/agents/pi/extensions/subagent",
-      "./configs/agents/pi/extensions/statusline"
+      "./configs/agents/pi/extensions/statusline",
+      "./configs/agents/pi/extensions/project-rules"
     ]
   },
   "scripts": {
