@@ -24,10 +24,11 @@ describe("formatAgentsContext", () => {
     const result = formatAgentsContext(files);
 
     // Assert
-    expect(result).toContain("# Nested AGENTS.md / CLAUDE.md Context");
-    expect(result.indexOf("## tests/AGENTS.md")).toBeLessThan(result.indexOf("## tests/unit/CLAUDE.md"));
+    expect(result).toContain("# Nested Agent Instructions");
+    expect(result.indexOf("## Scope: tests")).toBeLessThan(result.indexOf("## Scope: tests/unit"));
     expect(result).toContain("Use test helpers.");
     expect(result).toContain("Prefer unit fixtures.");
+    expect(result).not.toContain("CLAUDE.md");
   });
 
   test("labels empty context files", () => {

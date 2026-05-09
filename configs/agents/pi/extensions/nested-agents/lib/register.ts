@@ -9,7 +9,7 @@ import { type AgentsRuntime, createAgentsRuntime } from "./runtime";
 import { extractAgentsPathTargets } from "./targets";
 import type { AgentsContextFile, AgentsSession } from "./types";
 
-const MESSAGE_TYPE = "agents";
+const MESSAGE_TYPE = "nested-agents";
 
 export function registerAgentsExtension(pi: ExtensionAPI): void {
   registerAgentsHandlers(pi, createAgentsRuntime());

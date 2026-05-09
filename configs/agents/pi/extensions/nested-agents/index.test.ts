@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { createFakePi } from "../_shared/testing/fake-pi";
 import registerExtension from "./index";
 
-describe("agents extension entrypoint", () => {
-  test("registers agents context handlers", () => {
+describe("nested-agents extension entrypoint", () => {
+  test("registers nested agents context handlers", () => {
     // Arrange
     const fake = createFakePi();
 

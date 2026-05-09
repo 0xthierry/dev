@@ -9,7 +9,7 @@ import {
   normalizeInputPath,
 } from "./discovery";
 
-describe("agents context discovery", () => {
+describe("nested agents context discovery", () => {
   let tempDir: string | undefined;
 
   afterEach(async () => {
@@ -19,7 +19,7 @@ describe("agents context discovery", () => {
 
   test("discovers native cwd-chain files and target descendant files in parent-to-child order", async () => {
     // Arrange
-    tempDir = await mkdtemp(join(tmpdir(), "pi-agents-discovery-"));
+    tempDir = await mkdtemp(join(tmpdir(), "pi-nested-agents-discovery-"));
     await mkdir(join(tempDir, ".git"));
     await mkdir(join(tempDir, "tests", "unit"), { recursive: true });
     await writeFile(join(tempDir, "AGENTS.md"), "Root instructions.");
@@ -50,7 +50,7 @@ describe("agents context discovery", () => {
 
   test("uses AGENTS.md before CLAUDE.md when both exist in the same directory", async () => {
     // Arrange
-    tempDir = await mkdtemp(join(tmpdir(), "pi-agents-precedence-"));
+    tempDir = await mkdtemp(join(tmpdir(), "pi-nested-agents-precedence-"));
     await mkdir(join(tempDir, ".git"));
     await mkdir(join(tempDir, "pkg"), { recursive: true });
     await writeFile(join(tempDir, "pkg", "AGENTS.md"), "Agents wins.");
@@ -66,7 +66,7 @@ describe("agents context discovery", () => {
 
   test("deduplicates symlinked context files by real path", async () => {
     // Arrange
-    tempDir = await mkdtemp(join(tmpdir(), "pi-agents-symlink-"));
+    tempDir = await mkdtemp(join(tmpdir(), "pi-nested-agents-symlink-"));
     await mkdir(join(tempDir, ".git"));
     await mkdir(join(tempDir, "shared"), { recursive: true });
     await mkdir(join(tempDir, "pkg"), { recursive: true });
@@ -85,7 +85,7 @@ describe("agents context discovery", () => {
 
   test("does not discover context for paths outside the project root", async () => {
     // Arrange
-    tempDir = await mkdtemp(join(tmpdir(), "pi-agents-outside-"));
+    tempDir = await mkdtemp(join(tmpdir(), "pi-nested-agents-outside-"));
     await mkdir(join(tempDir, ".git"));
     await writeFile(join(tempDir, "AGENTS.md"), "Root instructions.");
     const session = await discoverAgentsSession(tempDir);
@@ -119,7 +119,7 @@ describe("findProjectRoot", () => {
 
   test("finds the nearest git root", async () => {
     // Arrange
-    tempDir = await mkdtemp(join(tmpdir(), "pi-agents-root-"));
+    tempDir = await mkdtemp(join(tmpdir(), "pi-nested-agents-root-"));
     await mkdir(join(tempDir, ".git"));
     await mkdir(join(tempDir, "packages", "web"), { recursive: true });
 

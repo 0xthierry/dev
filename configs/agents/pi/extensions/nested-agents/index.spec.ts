@@ -13,13 +13,13 @@ import { type PiRpcHarness, startPiRpcHarness } from "../_shared/testing/pi-rpc-
 
 const extensionPath = import.meta.dir;
 const fauxProviderExtensionPath = resolve(import.meta.dir, "../_shared/testing/faux-provider-extension.ts");
-const expectedResponseText = "agents e2e complete";
+const expectedResponseText = "nested-agents e2e complete";
 
 function eventText(event: Record<string, unknown>): string {
   return JSON.stringify(event);
 }
 
-describe("agents extension E2E", () => {
+describe("nested-agents extension E2E", () => {
   let harness: PiRpcHarness | undefined;
   let tempDir: string | undefined;
 
@@ -32,7 +32,7 @@ describe("agents extension E2E", () => {
 
   test("injects nested AGENTS.md context when a file in that subtree is read", async () => {
     // Arrange
-    tempDir = await mkdtemp(join(tmpdir(), "pi-agents-e2e-"));
+    tempDir = await mkdtemp(join(tmpdir(), "pi-nested-agents-e2e-"));
     await mkdir(join(tempDir, ".git"));
     await mkdir(join(tempDir, "tests"), { recursive: true });
     await writeFile(join(tempDir, "tests", "AGENTS.md"), "# Tests\n\nUse the test helpers.");
@@ -63,7 +63,7 @@ describe("agents extension E2E", () => {
     // Act
     const promptResponse = await harness.request({ type: "prompt", message: "Read the test file." });
     const agentsContextEvent = await harness.waitForEvent((event) =>
-      eventText(event).includes("Nested AGENTS.md / CLAUDE.md Context"),
+      eventText(event).includes("Nested Agent Instructions"),
     );
     const agentEnd = await harness.waitForEvent((event) => event.type === "agent_end", 60_000);
 

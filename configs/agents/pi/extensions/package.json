@@ -11,7 +11,7 @@
       "./comment",
       "./subagent",
       "./statusline",
-      "./agents",
+      "./nested-agents",
       "./project-rules"
     ]
   },
