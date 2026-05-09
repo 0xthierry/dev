@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { getConfiguredEnvValue, normalizedBoolean, normalizedPositiveNumber, normalizedString } from "./config";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  getConfiguredEnvValue,
+  loadConfigFromPath,
+  normalizedBoolean,
+  normalizedPositiveNumber,
+  normalizedString,
+} from "./config";
 
 const originalEnvValue = process.env.PI_WEB_ACCESS_CONFIG_TEST_VALUE;
 const originalDefaultEnvValue = process.env.PI_WEB_ACCESS_CONFIG_TEST_DEFAULT;
@@ -47,5 +56,37 @@ describe("config normalization", () => {
     // Assert
     expect(configured).toBe("configured");
     expect(fallback).toBe("fallback");
+  });
+
+  test("reloads externally edited config files", () => {
+    // Arrange
+    const dir = mkdtempSync(join(tmpdir(), "pi-web-config-test-"));
+    const configPath = join(dir, "web-search.json");
+
+    try {
+      writeFileSync(configPath, JSON.stringify({ medium: { enabled: false } }));
+      const initial = loadConfigFromPath(configPath);
+
+      // Act
+      writeFileSync(configPath, JSON.stringify({ medium: { enabled: true } }));
+      const updated = loadConfigFromPath(configPath);
+
+      // Assert
+      expect(initial.medium?.enabled).toBe(false);
+      expect(updated.medium?.enabled).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("treats a missing config file as an empty config", () => {
+    // Arrange
+    const configPath = join(tmpdir(), "pi-web-missing-config.json");
+
+    // Act
+    const result = loadConfigFromPath(configPath);
+
+    // Assert
+    expect(result).toEqual({});
   });
 });

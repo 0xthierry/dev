@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 export const CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
+export const CONFIG_DISPLAY_PATH = "~/.pi/web-search.json";
 
 export interface WebSearchConfig {
   $schema?: unknown;
@@ -26,27 +27,24 @@ export interface WebSearchConfig {
   };
 }
 
-let cachedConfig: WebSearchConfig | null = null;
-
 export function clearConfigCache(): void {
-  cachedConfig = null;
+  // loadConfig reads the file on every call so external config edits are picked up immediately.
+}
+
+export function loadConfigFromPath(path: string, displayPath = path): WebSearchConfig {
+  if (!existsSync(path)) return {};
+
+  const raw = readFileSync(path, "utf-8");
+  try {
+    return JSON.parse(raw) as WebSearchConfig;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to parse ${displayPath}: ${message}`);
+  }
 }
 
 export function loadConfig(): WebSearchConfig {
-  if (cachedConfig) return cachedConfig;
-  if (!existsSync(CONFIG_PATH)) {
-    cachedConfig = {};
-    return cachedConfig;
-  }
-
-  const raw = readFileSync(CONFIG_PATH, "utf-8");
-  try {
-    cachedConfig = JSON.parse(raw) as WebSearchConfig;
-    return cachedConfig;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
-  }
+  return loadConfigFromPath(CONFIG_PATH, CONFIG_DISPLAY_PATH);
 }
 
 export function saveConfig(updates: Partial<WebSearchConfig>): void {
@@ -57,7 +55,7 @@ export function saveConfig(updates: Partial<WebSearchConfig>): void {
       config = JSON.parse(raw) as Record<string, unknown>;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
+      throw new Error(`Failed to parse ${CONFIG_DISPLAY_PATH}: ${message}`);
     }
   }
 
@@ -65,7 +63,6 @@ export function saveConfig(updates: Partial<WebSearchConfig>): void {
   const dir = join(homedir(), ".pi");
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`);
-  cachedConfig = config as WebSearchConfig;
 }
 
 export function normalizedString(value: unknown): string | undefined {
