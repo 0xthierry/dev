@@ -18,6 +18,9 @@ export function registerAgentsExtension(pi: ExtensionAPI): void {
 
 export function registerAgentsHandlers(pi: ExtensionAPI, runtime: AgentsRuntime): void {
   let loadedCwd: string | undefined;
+  let loadingCwd: string | undefined;
+  let loadingToken: object | undefined;
+  let loading: Promise<void> | undefined;
   let session: AgentsSession | undefined;
   const nativeContextKeys = new Set<string>();
   const activeContextKeys = new Set<string>();
@@ -26,22 +29,58 @@ export function registerAgentsHandlers(pi: ExtensionAPI, runtime: AgentsRuntime)
   const activeContextOrder: string[] = [];
 
   async function ensureSession(cwd: string): Promise<AgentsSession> {
-    if (loadedCwd === cwd && session) return session;
+    while (true) {
+      if (loadedCwd === cwd && session && !loading) return session;
+      if (loadingCwd === cwd && loading) {
+        await loading;
+        continue;
+      }
+      if (loading) {
+        const inFlight = loading;
+        const inFlightCwd = loadingCwd;
+        try {
+          await inFlight;
+        } catch (error) {
+          if (inFlightCwd === cwd) throw error;
+        }
+        continue;
+      }
 
-    const nextSession = await runtime.createSession(cwd);
-    loadedCwd = cwd;
-    session = nextSession;
-    nativeContextKeys.clear();
-    activeContextKeys.clear();
-    deliveredContextKeys.clear();
-    activeContextFiles.clear();
-    activeContextOrder.length = 0;
+      const token = {};
+      loadedCwd = cwd;
+      loadingCwd = cwd;
+      loadingToken = token;
+      loading = Promise.resolve()
+        .then(() => runtime.createSession(cwd))
+        .then((nextSession) => {
+          if (loadingToken !== token || loadedCwd !== cwd) return;
+          session = nextSession;
+          nativeContextKeys.clear();
+          activeContextKeys.clear();
+          deliveredContextKeys.clear();
+          activeContextFiles.clear();
+          activeContextOrder.length = 0;
 
-    for (const file of nextSession.nativeFiles) {
-      nativeContextKeys.add(file.key);
+          for (const file of nextSession.nativeFiles) {
+            nativeContextKeys.add(file.key);
+          }
+        })
+        .catch((error) => {
+          if (loadingToken === token) {
+            loadedCwd = undefined;
+            session = undefined;
+            throw error;
+          }
+        })
+        .finally(() => {
+          if (loadingToken === token) {
+            loading = undefined;
+            loadingCwd = undefined;
+            loadingToken = undefined;
+          }
+        });
+      await loading;
     }
-
-    return nextSession;
   }
 
   function recordNewContextFiles(files: AgentsContextFile[]): AgentsContextFile[] {

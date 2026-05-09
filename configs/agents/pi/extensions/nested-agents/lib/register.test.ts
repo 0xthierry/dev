@@ -29,6 +29,22 @@ function runtimeWithDiscovery(session: AgentsSession, discovery: AgentsContextDi
   };
 }
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (error: unknown) => void } {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
+async function flushPromises(): Promise<void> {
+  for (let index = 0; index < 5; index += 1) {
+    await Promise.resolve();
+  }
+}
+
 afterEach(() => {
   mock.clearAllMocks();
 });
@@ -178,6 +194,51 @@ describe("registerAgentsHandlers", () => {
     const content = message.content ?? "";
     expect(message.details?.files).toEqual(["tests/AGENTS.md", "tests/unit/CLAUDE.md"]);
     expect(content.indexOf("Use test helpers.")).toBeLessThan(content.indexOf("Prefer unit fixtures."));
+  });
+
+  test("serializes overlapping session loads", async () => {
+    // Arrange
+    const fake = createFakePi({ cwd: "/repo" });
+    const firstLoad = deferred<AgentsSession>();
+    const secondLoad = deferred<AgentsSession>();
+    const createSession = mock((cwd: string) => (cwd === "/repo" ? firstLoad.promise : secondLoad.promise));
+    const runtime: AgentsRuntime = {
+      createSession,
+      discoverForTarget: mock(async () => ({ files: [], diagnostics: [] })),
+    };
+    registerAgentsHandlers(fake.pi, runtime);
+
+    // Act
+    const firstEmit = fake.emit("tool_call", {
+      type: "tool_call",
+      toolName: "read",
+      toolCallId: "read-1",
+      input: { path: "tests/a.ts" },
+    });
+    await flushPromises();
+    const secondEmit = fake.emit(
+      "tool_call",
+      { type: "tool_call", toolName: "read", toolCallId: "read-2", input: { path: "tests/b.ts" } },
+      { cwd: "/repo/subdir" },
+    );
+    await flushPromises();
+
+    // Assert
+    expect(createSession).toHaveBeenCalledTimes(1);
+
+    // Act
+    firstLoad.resolve(agentsSession({ projectRoot: "/repo" }));
+    await flushPromises();
+
+    // Assert
+    expect(createSession).toHaveBeenCalledTimes(2);
+
+    // Act
+    secondLoad.resolve(agentsSession({ projectRoot: "/repo" }));
+    await Promise.all([firstEmit, secondEmit]);
+
+    // Assert
+    expect(createSession.mock.calls.map((call) => call[0])).toEqual(["/repo", "/repo/subdir"]);
   });
 
   test("notifies UI about loaded context and discovery diagnostics", async () => {
