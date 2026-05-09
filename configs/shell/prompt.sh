@@ -1,43 +1,9 @@
-ZSH_THEME_TERM_TAB_TITLE_IDLE="%1~ - %15<..<%~%<<"
-ZSH_THEME_TERM_TITLE_IDLE="%1~ - %n@%m:%~"
+# Let Ghostty/apps own terminal titles instead of Oh My Zsh prompt hooks.
+DISABLE_AUTO_TITLE=true
 
-function omz_termsupport_preexec {
-  [[ "${DISABLE_AUTO_TITLE:-}" != true ]] || return 0
-
-  emulate -L zsh
-  setopt extended_glob
-
-  local -a cmdargs
-  local job_id=""
-  local jobspec=""
-  local CMD=""
-  local LINE=""
-  local FOLDER=""
-
-  cmdargs=("${(z)2}")
-  if [[ "${cmdargs[1]}" == fg ]]; then
-    jobspec="${cmdargs[2]#%}"
-    case "$jobspec" in
-      <->) job_id="${jobspec}" ;;
-      ""|%|+) job_id="${(k)jobstates[(r)*:+:*]}" ;;
-      -) job_id="${(k)jobstates[(r)*:-:*]}" ;;
-      [?]*) job_id="${(k)jobtexts[(r)*${(Q)jobspec}*]}" ;;
-      *) job_id="${(k)jobtexts[(r)${(Q)jobspec}*]}" ;;
-    esac
-    if [[ -n "${jobtexts[$job_id]}" ]]; then
-      1="${jobtexts[$job_id]}"
-      2="${jobtexts[$job_id]}"
-    fi
-  fi
-
-  CMD="${1[(wr)^(*=*|sudo|ssh|mosh|rake|-*)]:gs/%/%%}"
-  LINE="${2:gs/%/%%}"
-  FOLDER="${PWD##*/}"
-
-  if typeset -f title >/dev/null 2>&1; then
-    title "${FOLDER} - ${CMD}" "${FOLDER} - %100>...>${LINE}%<<"
-  fi
-}
+autoload -Uz add-zsh-hook
+add-zsh-hook -d precmd omz_termsupport_precmd 2>/dev/null || true
+add-zsh-hook -d preexec omz_termsupport_preexec 2>/dev/null || true
 
 spaceship_ip() {
   local ip=""
