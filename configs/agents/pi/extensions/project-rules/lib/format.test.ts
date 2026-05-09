@@ -24,13 +24,14 @@ function rule(overrides: Partial<ProjectRule>): ProjectRule {
 }
 
 describe("formatProjectRulesSystemPrompt", () => {
-  test("includes a stable catalog without activation status or rule bodies", () => {
+  test("includes a stable catalog and always rule bodies without activation status", () => {
     // Arrange
     const always = rule({ key: "testing", relativePath: ".pi/rules/testing.md", content: "Run tests." });
     const pathRule = rule({
       key: "api",
       relativePath: ".pi/rules/api.md",
       name: "api",
+      content: "Validate API input.",
       mode: "path",
       patterns: ["src/api/**/*.ts"],
       description: "API conventions",
@@ -42,9 +43,10 @@ describe("formatProjectRulesSystemPrompt", () => {
     // Assert
     expect(prompt).toContain("## Available Project Rules");
     expect(prompt).toContain("@api — .pi/rules/api.md; patterns: src/api/**/*.ts; description: API conventions");
-    expect(prompt).not.toContain("active");
+    expect(prompt).toContain("## Always Project Rules");
+    expect(prompt).toContain("### .pi/rules/testing.md\n\nRun tests.");
     expect(prompt).not.toContain("inactive");
-    expect(prompt).not.toContain("Run tests.");
+    expect(prompt).not.toContain("Validate API input.");
   });
 });
 

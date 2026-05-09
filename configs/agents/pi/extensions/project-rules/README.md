@@ -15,4 +15,4 @@ Rules are discovered recursively from the git root down to the current working d
 - Rules with `description:` and `alwaysApply: false` are listed as available; the agent can read them when relevant.
 - Rules with `alwaysApply: false` and no selector activate when mentioned as `@rule-name` or when the agent reads the rule file.
 
-Pi keeps a stable rule catalog in the system prompt, then injects activated rule bodies as append-only hidden `project-rules` context messages. Interactive sessions also show a UI notification whenever a rule first activates. Use `/rules` to show discovered rules, aliases, and activation status.
+Pi keeps a stable rule catalog in the system prompt. Plain Markdown / `alwaysApply: true` rule bodies are included there too so they sit before the user prompt for better provider prompt-cache reuse. Path, manual, and read-triggered rule bodies are injected later as append-only hidden `project-rules` context messages. Interactive sessions also show a UI notification whenever a rule first activates. Use `/rules` to show discovered rules, aliases, and activation status.

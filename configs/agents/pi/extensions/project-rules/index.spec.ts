@@ -7,6 +7,7 @@ import {
   FAUX_MODEL_ID,
   FAUX_PROVIDER_NAME,
   FAUX_RESPONSE_TEXT_ENV,
+  FAUX_TOOL_CALLS_ENV,
 } from "../_shared/testing/faux-provider-extension";
 import { type PiRpcHarness, startPiRpcHarness } from "../_shared/testing/pi-rpc-harness";
 
@@ -29,12 +30,17 @@ describe("project-rules extension E2E", () => {
     tempDir = undefined;
   });
 
-  test("injects activated rule context through Pi RPC", async () => {
+  test("injects path-activated rule context through Pi RPC", async () => {
     // Arrange
     tempDir = await mkdtemp(join(tmpdir(), "pi-project-rules-e2e-"));
     await mkdir(join(tempDir, ".git"));
     await mkdir(join(tempDir, ".pi", "rules"), { recursive: true });
-    await writeFile(join(tempDir, ".pi", "rules", "testing.md"), "# Testing\n\nRun the relevant tests.");
+    await mkdir(join(tempDir, "src", "api"), { recursive: true });
+    await writeFile(join(tempDir, "src", "api", "users.ts"), "export const users = [];\n");
+    await writeFile(
+      join(tempDir, ".pi", "rules", "testing.md"),
+      '---\npaths:\n  - "src/api/**/*.ts"\n---\n# Testing\n\nRun the relevant tests.',
+    );
 
     harness = await startPiRpcHarness({
       cwd: tempDir,
@@ -54,6 +60,7 @@ describe("project-rules extension E2E", () => {
       env: {
         [FAUX_API_KEY_ENV]: "test-key",
         [FAUX_RESPONSE_TEXT_ENV]: expectedResponseText,
+        [FAUX_TOOL_CALLS_ENV]: JSON.stringify([{ name: "read", arguments: { path: "src/api/users.ts" } }]),
       },
     });
 

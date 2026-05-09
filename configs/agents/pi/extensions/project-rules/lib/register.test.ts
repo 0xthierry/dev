@@ -46,7 +46,7 @@ describe("registerProjectRulesHandlers", () => {
     expect(fake.commands.has("rules")).toBe(true);
   });
 
-  test("keeps the system prompt catalog stable and injects active rule content as a message", async () => {
+  test("keeps always rule bodies in the stable system prompt instead of a prompt-suffix message", async () => {
     // Arrange
     const fake = createFakePi({ cwd: "/repo" });
     const runtime = runtimeWithRules([
@@ -58,15 +58,11 @@ describe("registerProjectRulesHandlers", () => {
     const [result] = await fake.emit("before_agent_start", { prompt: "hello", systemPrompt: "base" });
 
     // Assert
-    expect(result).toMatchObject({
-      systemPrompt: expect.stringContaining("## Available Project Rules"),
-      message: {
-        customType: "project-rules",
-        display: false,
-      },
-    });
-    expect(JSON.stringify(result)).toContain("Run tests.");
-    expect(String((result as { systemPrompt: string }).systemPrompt)).not.toContain("Run tests.");
+    const systemPrompt = String((result as { systemPrompt: string }).systemPrompt);
+    expect(systemPrompt).toContain("## Available Project Rules");
+    expect((result as { message?: unknown }).message).toBeUndefined();
+    expect(systemPrompt).toContain("## Always Project Rules");
+    expect(systemPrompt).toContain("Run tests.");
   });
 
   test("sends stable rule content before dynamic reason when a tool path activates a path rule", async () => {
@@ -176,21 +172,27 @@ describe("registerProjectRulesHandlers", () => {
     expect((result as { systemPrompt?: string }).systemPrompt).toContain("## Available Project Rules");
   });
 
-  test("re-injects active rules after compaction clears delivered rule context", async () => {
+  test("re-injects delivered path rules after compaction clears delivered rule context", async () => {
     // Arrange
     const fake = createFakePi({ cwd: "/repo" });
     const runtime = runtimeWithRules([
-      rule({ key: "testing", relativePath: ".pi/rules/testing.md", content: "Run tests." }),
+      rule({
+        key: "api",
+        relativePath: ".pi/rules/api.md",
+        content: "Validate API input.",
+        mode: "path",
+        patterns: ["src/api/**/*.ts"],
+      }),
     ]);
     registerProjectRulesHandlers(fake.pi, runtime);
 
     // Act
-    await fake.emit("before_agent_start", { prompt: "hello", systemPrompt: "base" });
+    await fake.emit("before_agent_start", { prompt: "Edit src/api/users.ts", systemPrompt: "base" });
     await fake.emit("session_compact");
     const [result] = await fake.emit("before_agent_start", { prompt: "continue", systemPrompt: "base" });
 
     // Assert
-    expect(JSON.stringify((result as { message?: unknown }).message)).toContain("Run tests.");
+    expect(JSON.stringify((result as { message?: unknown }).message)).toContain("Validate API input.");
   });
 
   test("recovers from a failed discovery on a later load", async () => {
@@ -213,7 +215,7 @@ describe("registerProjectRulesHandlers", () => {
     // Act / Assert
     await expect(fake.emit("session_start")).rejects.toThrow("discovery failed");
     const [result] = await fake.emit("before_agent_start", { prompt: "hello", systemPrompt: "base" });
-    expect(JSON.stringify((result as { message?: unknown }).message)).toContain("Run tests.");
+    expect(String((result as { systemPrompt?: string }).systemPrompt)).toContain("Run tests.");
   });
 
   test("marks a rule active when the read tool opens the rule file", async () => {

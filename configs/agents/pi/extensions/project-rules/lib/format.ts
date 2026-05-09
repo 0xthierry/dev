@@ -4,14 +4,37 @@ import type { ProjectRule, RuleActivation } from "./types";
 export function formatProjectRulesSystemPrompt(rules: ProjectRule[]): string {
   if (rules.length === 0) return "";
 
+  const sections = [formatRuleCatalog(rules)];
+  const alwaysRules = rules.filter((rule) => rule.mode === "always");
+  if (alwaysRules.length > 0) {
+    sections.push(formatAlwaysRules(alwaysRules));
+  }
+
+  return sections.join("\n\n");
+}
+
+function formatRuleCatalog(rules: ProjectRule[]): string {
   const lines = [
     "## Available Project Rules",
-    "These project-root-relative rule files were discovered for this project. Rule bodies are added to context only when activated by an always rule, a matching path, a manual @rule mention, or reading the rule file.",
+    "These project-root-relative rule files were discovered for this project. Always rule bodies are included below; other rule bodies are added to context only when activated by a matching path, a manual @rule mention, or reading the rule file.",
   ];
 
   for (const rule of rules) {
     const metadata = formatCatalogMetadata(rule);
     lines.push(`- @${rule.name} — ${rule.relativePath}${metadata}`);
+  }
+
+  return lines.join("\n");
+}
+
+function formatAlwaysRules(rules: ProjectRule[]): string {
+  const lines = [
+    "## Always Project Rules",
+    "Follow these project rule bodies on every turn in addition to AGENTS.md, CLAUDE.md, and other loaded context files.",
+  ];
+
+  for (const rule of rules) {
+    lines.push("", `### ${rule.relativePath}`, "", rule.content || "[Empty rule file]");
   }
 
   return lines.join("\n");

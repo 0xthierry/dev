@@ -139,7 +139,8 @@ export function registerProjectRulesHandlers(pi: ExtensionAPI, runtime: ProjectR
       if (!activeRuleKeys.has(key) || deliveredRuleKeys.has(key) || pendingReadRuleKeys.has(key)) continue;
       const rule = rulesByKey.get(key);
       const reason = activationReasons.get(key);
-      if (!rule || !reason) continue;
+      // Always rule bodies live in the stable system prompt so they stay before dynamic user prompts for caching.
+      if (!rule || !reason || rule.mode === "always") continue;
       activations.push({ rule, reason });
     }
     return activations;
