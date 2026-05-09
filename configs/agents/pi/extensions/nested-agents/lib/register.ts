@@ -1,4 +1,7 @@
+import { realpath } from "node:fs/promises";
+import { resolve } from "node:path";
 import type {
+  BeforeAgentStartEvent,
   BeforeAgentStartEventResult,
   ExtensionAPI,
   ExtensionContext,
@@ -60,10 +63,6 @@ export function registerAgentsHandlers(pi: ExtensionAPI, runtime: AgentsRuntime)
           deliveredContextKeys.clear();
           activeContextFiles.clear();
           activeContextOrder.length = 0;
-
-          for (const file of nextSession.nativeFiles) {
-            nativeContextKeys.add(file.key);
-          }
         })
         .catch((error) => {
           if (loadingToken === token) {
@@ -111,6 +110,13 @@ export function registerAgentsHandlers(pi: ExtensionAPI, runtime: AgentsRuntime)
     }
   }
 
+  async function syncNativeContextKeys(event: BeforeAgentStartEvent): Promise<void> {
+    nativeContextKeys.clear();
+    for (const file of event.systemPromptOptions?.contextFiles ?? []) {
+      nativeContextKeys.add(await canonicalContextPath(file.path));
+    }
+  }
+
   pi.on("session_start", async (_event, ctx: ExtensionContext) => {
     const currentSession = await ensureSession(ctx.cwd);
     notifyDiagnostics(ctx, currentSession.diagnostics);
@@ -122,8 +128,9 @@ export function registerAgentsHandlers(pi: ExtensionAPI, runtime: AgentsRuntime)
 
   pi.on(
     "before_agent_start",
-    async (_event, ctx: ExtensionContext): Promise<BeforeAgentStartEventResult | undefined> => {
+    async (event: BeforeAgentStartEvent, ctx: ExtensionContext): Promise<BeforeAgentStartEventResult | undefined> => {
       await ensureSession(ctx.cwd);
+      await syncNativeContextKeys(event);
       const files = collectUndeliveredContextFiles();
       if (files.length === 0) return undefined;
 
@@ -147,6 +154,14 @@ export function registerAgentsHandlers(pi: ExtensionAPI, runtime: AgentsRuntime)
     notifyLoaded(ctx, loadedFiles);
     pi.sendMessage(agentsContextMessage(loadedFiles), { deliverAs: "steer" });
   });
+}
+
+async function canonicalContextPath(path: string): Promise<string> {
+  try {
+    return await realpath(path);
+  } catch {
+    return resolve(path);
+  }
 }
 
 function agentsContextMessage(files: AgentsContextFile[]) {

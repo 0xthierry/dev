@@ -8,7 +8,6 @@ export type AgentsContextFile = {
 
 export type AgentsSession = {
   projectRoot: string;
-  nativeFiles: AgentsContextFile[];
   diagnostics: string[];
 };
 

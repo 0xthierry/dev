@@ -6,15 +6,7 @@ import type { AgentsContextDiscovery, AgentsContextFile, AgentsPathTarget, Agent
 const CONTEXT_FILE_NAMES = ["AGENTS.md", "AGENTS.MD", "CLAUDE.md", "CLAUDE.MD"] as const;
 
 export async function discoverAgentsSession(cwd: string): Promise<AgentsSession> {
-  const resolvedCwd = resolve(cwd);
-  const projectRoot = findProjectRoot(resolvedCwd);
-  const diagnostics: string[] = [];
-  const nativeFiles = await discoverContextFilesInDirs(
-    ancestorDirs(projectRoot, resolvedCwd),
-    projectRoot,
-    diagnostics,
-  );
-  return { projectRoot, nativeFiles, diagnostics };
+  return { projectRoot: findProjectRoot(resolve(cwd)), diagnostics: [] };
 }
 
 export async function discoverAgentsContextForTarget(

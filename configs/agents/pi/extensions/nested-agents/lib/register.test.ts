@@ -17,7 +17,6 @@ function contextFile(overrides: Partial<AgentsContextFile>): AgentsContextFile {
 function agentsSession(overrides: Partial<AgentsSession> = {}): AgentsSession {
   return {
     projectRoot: overrides.projectRoot ?? "/repo",
-    nativeFiles: overrides.nativeFiles ?? [],
     diagnostics: overrides.diagnostics ?? [],
   };
 }
@@ -77,13 +76,19 @@ describe("registerAgentsHandlers", () => {
       relativePath: "tests/AGENTS.md",
       content: "Use test helpers.",
     });
-    const runtime = runtimeWithDiscovery(agentsSession({ nativeFiles: [root] }), {
+    const runtime = runtimeWithDiscovery(agentsSession(), {
       files: [root, nested],
       diagnostics: [],
     });
     registerAgentsHandlers(fake.pi, runtime);
 
     // Act
+    await fake.emit("before_agent_start", {
+      type: "before_agent_start",
+      prompt: "read tests/foo.test.ts",
+      systemPrompt: "base",
+      systemPromptOptions: { cwd: "/repo", contextFiles: [{ path: "/repo/AGENTS.md", content: "Follow repo rules." }] },
+    });
     await fake.emit("tool_call", {
       type: "tool_call",
       toolName: "read",
@@ -100,6 +105,44 @@ describe("registerAgentsHandlers", () => {
     expect(JSON.stringify(fake.sentMessages[0])).toContain("tests/AGENTS.md");
     expect(JSON.stringify(fake.sentMessages[0])).toContain("Use test helpers.");
     expect(JSON.stringify(fake.sentMessages[0])).not.toContain("Follow repo rules.");
+  });
+
+  test("does not skip context files when Pi did not load them", async () => {
+    // Arrange
+    const fake = createFakePi({ cwd: "/repo" });
+    const root = contextFile({ key: "/repo/AGENTS.md", path: "/repo/AGENTS.md", relativePath: "AGENTS.md" });
+    const nested = contextFile({
+      key: "/repo/tests/AGENTS.md",
+      path: "/repo/tests/AGENTS.md",
+      relativePath: "tests/AGENTS.md",
+      content: "Use test helpers.",
+    });
+    const runtime = runtimeWithDiscovery(agentsSession(), {
+      files: [root, nested],
+      diagnostics: [],
+    });
+    registerAgentsHandlers(fake.pi, runtime);
+
+    // Act
+    await fake.emit("before_agent_start", {
+      type: "before_agent_start",
+      prompt: "read tests/foo.test.ts",
+      systemPrompt: "base",
+      systemPromptOptions: { cwd: "/repo", contextFiles: [] },
+    });
+    await fake.emit("tool_call", {
+      type: "tool_call",
+      toolName: "read",
+      toolCallId: "read-1",
+      input: { path: "tests/foo.test.ts" },
+    });
+
+    // Assert
+    expect(fake.sentMessages).toHaveLength(1);
+    expect(JSON.stringify(fake.sentMessages[0])).toContain("AGENTS.md");
+    expect(JSON.stringify(fake.sentMessages[0])).toContain("Follow repo rules.");
+    expect(JSON.stringify(fake.sentMessages[0])).toContain("tests/AGENTS.md");
+    expect(JSON.stringify(fake.sentMessages[0])).toContain("Use test helpers.");
   });
 
   test("does not inject the same context file twice", async () => {

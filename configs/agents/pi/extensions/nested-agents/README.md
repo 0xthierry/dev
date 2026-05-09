@@ -8,6 +8,6 @@ Pi already loads context files from the session cwd and its parents at startup. 
 - When a tool touches a file or directory, Pi checks directories from the project root down to that path.
 - Newly applicable `AGENTS.md` / `CLAUDE.md` content is injected once as hidden `nested-agents` context.
 - Parent context appears before child context, so more specific files are later in context.
-- Files already loaded by Pi's cwd/ancestor startup context chain are skipped, and symlink duplicates are deduplicated by real path.
+- Files already loaded by Pi's actual startup context list are skipped, and symlink duplicates are deduplicated by real path.
 
 The extension recognizes the same direct context filenames Pi uses natively: `AGENTS.md`, `AGENTS.MD`, `CLAUDE.md`, and `CLAUDE.MD`.

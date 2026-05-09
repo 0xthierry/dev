@@ -17,7 +17,7 @@ describe("nested agents context discovery", () => {
     tempDir = undefined;
   });
 
-  test("discovers native cwd-chain files and target descendant files in parent-to-child order", async () => {
+  test("discovers target context files in parent-to-child order", async () => {
     // Arrange
     tempDir = await mkdtemp(join(tmpdir(), "pi-nested-agents-discovery-"));
     await mkdir(join(tempDir, ".git"));
@@ -35,7 +35,6 @@ describe("nested agents context discovery", () => {
 
     // Assert
     expect(session.projectRoot).toBe(tempDir);
-    expect(session.nativeFiles.map((file) => file.relativePath)).toEqual(["AGENTS.md"]);
     expect(result.files.map((file) => file.relativePath)).toEqual([
       "AGENTS.md",
       "tests/AGENTS.md",
