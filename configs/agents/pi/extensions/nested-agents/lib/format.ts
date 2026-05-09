@@ -1,3 +1,4 @@
+import { sortAgentsContextFiles } from "./ordering";
 import type { AgentsContextFile } from "./types";
 
 export function formatAgentsContext(files: AgentsContextFile[]): string {
@@ -6,7 +7,7 @@ export function formatAgentsContext(files: AgentsContextFile[]): string {
     "These instructions became applicable after the agent touched files under their directories. Treat them as additional project instructions. More specific files appear later and take precedence when instructions conflict.",
   ];
 
-  for (const file of files) {
+  for (const file of sortAgentsContextFiles(files)) {
     lines.push("", `## Scope: ${contextScope(file.relativePath)}`, "", file.content || "[Empty context file]");
   }
 

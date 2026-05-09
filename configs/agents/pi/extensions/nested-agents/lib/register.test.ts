@@ -146,6 +146,40 @@ describe("registerAgentsHandlers", () => {
     expect(JSON.stringify((result as { message?: unknown }).message)).toContain("Use test helpers.");
   });
 
+  test("orders delivered nested context by stable project scope", async () => {
+    // Arrange
+    const fake = createFakePi({ cwd: "/repo" });
+    const parent = contextFile({
+      key: "/repo/tests/AGENTS.md",
+      path: "/repo/tests/AGENTS.md",
+      relativePath: "tests/AGENTS.md",
+      content: "Use test helpers.",
+    });
+    const child = contextFile({
+      key: "/repo/tests/unit/CLAUDE.md",
+      path: "/repo/tests/unit/CLAUDE.md",
+      relativePath: "tests/unit/CLAUDE.md",
+      filename: "CLAUDE.md",
+      content: "Prefer unit fixtures.",
+    });
+    const runtime = runtimeWithDiscovery(agentsSession(), { files: [child, parent], diagnostics: [] });
+    registerAgentsHandlers(fake.pi, runtime);
+
+    // Act
+    await fake.emit("tool_call", {
+      type: "tool_call",
+      toolName: "read",
+      toolCallId: "read-1",
+      input: { path: "tests/unit/a.ts" },
+    });
+
+    // Assert
+    const message = fake.sentMessages[0]?.message as { content?: string; details?: { files?: string[] } };
+    const content = message.content ?? "";
+    expect(message.details?.files).toEqual(["tests/AGENTS.md", "tests/unit/CLAUDE.md"]);
+    expect(content.indexOf("Use test helpers.")).toBeLessThan(content.indexOf("Prefer unit fixtures."));
+  });
+
   test("notifies UI about loaded context and discovery diagnostics", async () => {
     // Arrange
     const fake = createFakePi({ cwd: "/repo" });

@@ -5,6 +5,7 @@ import type {
   ToolCallEvent,
 } from "@earendil-works/pi-coding-agent";
 import { formatAgentsContext, formatLoadedNotification } from "./format";
+import { sortAgentsContextFiles } from "./ordering";
 import { type AgentsRuntime, createAgentsRuntime } from "./runtime";
 import { extractAgentsPathTargets } from "./targets";
 import type { AgentsContextFile, AgentsSession } from "./types";
@@ -110,12 +111,13 @@ export function registerAgentsHandlers(pi: ExtensionAPI, runtime: AgentsRuntime)
 }
 
 function agentsContextMessage(files: AgentsContextFile[]) {
+  const orderedFiles = sortAgentsContextFiles(files);
   return {
     customType: MESSAGE_TYPE,
-    content: formatAgentsContext(files),
+    content: formatAgentsContext(orderedFiles),
     display: false,
     details: {
-      files: files.map((file) => file.relativePath),
+      files: orderedFiles.map((file) => file.relativePath),
     },
   };
 }

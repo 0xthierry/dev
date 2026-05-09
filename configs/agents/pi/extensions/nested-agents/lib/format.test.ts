@@ -13,11 +13,11 @@ function contextFile(overrides: Partial<AgentsContextFile>): AgentsContextFile {
 }
 
 describe("formatAgentsContext", () => {
-  test("formats context files in order", () => {
+  test("formats context files in stable parent-before-child order", () => {
     // Arrange
     const files = [
-      contextFile({ relativePath: "tests/AGENTS.md", content: "Use test helpers." }),
       contextFile({ relativePath: "tests/unit/CLAUDE.md", filename: "CLAUDE.md", content: "Prefer unit fixtures." }),
+      contextFile({ relativePath: "tests/AGENTS.md", content: "Use test helpers." }),
     ];
 
     // Act
@@ -26,8 +26,7 @@ describe("formatAgentsContext", () => {
     // Assert
     expect(result).toContain("# Nested Agent Instructions");
     expect(result.indexOf("## Scope: tests")).toBeLessThan(result.indexOf("## Scope: tests/unit"));
-    expect(result).toContain("Use test helpers.");
-    expect(result).toContain("Prefer unit fixtures.");
+    expect(result.indexOf("Use test helpers.")).toBeLessThan(result.indexOf("Prefer unit fixtures."));
     expect(result).not.toContain("CLAUDE.md");
   });
 
