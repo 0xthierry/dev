@@ -1,120 +1,165 @@
 # AGENTS.md
 
-Repository-level instructions for coding agents working in this project. Apply higher-priority system and user instructions first. Use this file to guide implementation, validation, debugging, and handoff behavior inside the repository.
+Apply higher-priority system, developer, tool, harness, user, and nearer repository instructions first. Treat this file as the strict global baseline. A repository-level `AGENTS.md`, `CLAUDE.md`, README, CI file, or local script may add more specific rules.
 
-## Correctness and uncertainty
+## Start Here
 
-Be explicit about uncertainty. Do not invent facts, sources, APIs, command results, file contents, implementation details, external-system behavior, or test outcomes.
+**Default: before implementing non-trivial work, identify the project operating profile.** Prefer the nearest repository instructions over these global defaults.
 
-Treat a claim as verified only when it is supported by code inspection, command output, tests, installed package/source inspection, official documentation, or observed runtime behavior.
+Look for:
 
-If something is uncertain, resolve it through inspection or execution when possible. When the uncertainty changes architecture, scope, target files, external systems, credentials, compatibility, or user-visible behavior, ask a concise clarifying question if clarification is allowed. When clarification is not allowed, choose the safest reasonable default, continue, and document the assumption.
+- local agent instructions: `AGENTS.md`, `CLAUDE.md`, `.cursor/rules`, `.github/copilot-instructions.md`, or similar;
+- package manager and lockfile: `package.json`, `bun.lock`, `pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`, `go.mod`, `Cargo.toml`, `pyproject.toml`, `Gemfile`, etc.;
+- build, test, lint, typecheck, format, dev-server, release, and health-check commands;
+- framework/runtime conventions, test helpers, fixtures, generated-code workflows, deployment files, and CI definitions;
+- the codebase map: source directories, test directories, generated files, vendored code, scripts, and docs.
 
-Do not present approximate work as complete. Implement the real solution, verify it, and clearly separate what passed, what failed, and what could not be run.
+**CRITICAL**: Before editing in a git repository, inspect the worktree. Do not overwrite, reformat, move, stage, commit, or revert unrelated user changes.
 
-## Linked and referenced files
+**CRITICAL**: Do not assume commands from another ecosystem or repository apply here. Use the project-local toolchain, wrappers, scripts, and runtime unless the repository explicitly says otherwise.
 
-When asked to read or work from a file that contains links, references, imports, citations, attachments, or related file paths, assess whether those referenced materials are relevant to the current task or likely to affect upcoming work.
+**Default: read the whole relevant file before relying on it.** If output is truncated, continue reading until the relevant content is complete. When a file references links, imports, schemas, templates, examples, generated sources, or related docs that affect the task, inspect them too.
 
-Read the referenced materials when they are necessary to understand context, verify claims, resolve ambiguity, inspect dependencies, follow implementation flow, or avoid making unsupported assumptions.
+## Commands, Builds, and Runtime
 
-Do not ignore relevant linked or referenced materials merely because they are indirect. If a referenced item cannot be accessed, is unavailable, or is unnecessary for the task, state that clearly and explain the impact, if any, on the work.
+- **Default: run the relevant command yourself when it is available in the current environment.** Do not offload execution to the user unless credentials, interactive authentication, permissions, missing tools, or inaccessible infrastructure block you.
+- **CRITICAL**: Long-running builds, tests, and checks are allowed. Do not skip a relevant check only because it may take time. Use a generous timeout when appropriate; if the project says a command must not be timed, do not set a timeout.
+- Prefer project-local commands: package scripts, `make`, `just`, `task`, `go test`, `cargo test`, `cargo xtask`, repo wrappers, or documented scripts.
+- A validation run does not count if it uses the wrong runtime, a globally installed binary when the project requires a local build, stale build output, unrelated tests, or a mocked production path that bypasses the changed code.
 
-When relevance is uncertain and the decision could affect architecture, scope, target files, external systems, credentials, compatibility, or user-visible behavior, ask a concise clarifying question if clarification is allowed. When clarification is not allowed, choose the safest reasonable default, continue, and document the assumption.
+### JavaScript / TypeScript
 
-## Authorization and interaction
+- **CRITICAL**: Use the package manager declared by `packageManager` or implied by the lockfile. Do not run `npm` in a `pnpm`, `yarn`, or `bun` project unless the repo instructs you to.
+- Lockfile defaults: `bun.lock`/`bun.lockb` => `bun`; `pnpm-lock.yaml` => `pnpm`; `yarn.lock` => `yarn`; `package-lock.json` => `npm`.
+- Prefer package scripts over raw binaries. If the repo has `test`, `lint`, `typecheck`, `build`, or `format` scripts, use those before inventing commands.
+- For dynamic user-facing behavior, run or add the normal browser, end-to-end, integration, or workflow test for that stack when practical.
 
-A direct request to build, implement, fix, validate, or refactor authorizes the normal non-destructive work required to complete that task.
+### Go
 
-A design question such as “how can I…”, “what if we…”, or “can we make it…” is a discussion prompt, not implementation authorization. Present options and tradeoffs first. Write code only after the user clearly asks for implementation, unless higher-priority instructions say to proceed.
+- Run `gofmt` on changed Go files.
+- Use the repository's documented test command. If none exists, prefer targeted `go test ./path` for the changed package, then broader `go test ./...` when risk justifies it.
+- Do not edit `go.sum` manually. Let `go mod tidy`, `go test`, or the appropriate Go command update it.
 
-Do not offload execution by giving the user commands that you can run yourself. When a command is within tool access and the action is authorized, run it. Reserve “run this yourself” for interactive authentication, unavailable credentials, inaccessible environments, missing permissions, or tools outside the current runtime.
+### Rust
 
-## Existing repository behavior
+- Run `cargo fmt` for changed Rust code unless the repo uses another formatter command.
+- Use the repository's documented test command. If none exists, prefer targeted `cargo test -p <crate>` or `cargo test <name>`, then broader `cargo test` when risk justifies it.
+- Run `cargo clippy` when the repo treats it as part of validation or the change is risky.
+- Do not edit `Cargo.lock` manually. Let Cargo update it.
 
-Match the existing repository style, naming, file organization, formatting, testing patterns, and framework conventions, even when they differ from your default preferences.
+## Testing
 
-Prefer focused changes. Avoid broad rewrites when a smaller change satisfies the request.
+**Default: all behavior changes get tests.** If you are not testing the behavior you changed, you are not done.
 
-Do not create helpers, utilities, service objects, abstractions, or indirection layers merely for appearance. Add an abstraction when it creates a meaningful boundary, isolates an external dependency, improves testability, clarifies domain behavior, removes real duplication, or supports an explicit requirement.
+**Default: add or update tests next to existing coverage for the code you changed.** Do not create a new test file when an existing nearby file already covers that component or behavior.
 
-Backward compatibility is not an automatic hidden requirement. When a change may affect public APIs, persisted data, configuration formats, integrations, deployment contracts, or user-visible behavior, ask whether compatibility is required if clarification is allowed. When clarification is not allowed, make the smallest safe change that satisfies the request. Preserve existing behavior when doing so is cheap and does not conflict with the requested change, but do not add legacy paths, shims, or duplicate behavior by default.
+**Exception:** create a new test file only when the project pattern expects it, no suitable file exists, or the new behavior spans a genuinely new test area.
 
-## External systems, credentials, and secrets
+### Changes that may not require runtime tests
 
-Before work depends on credentials, tokens, external services, project selection, provider models, generated IDs, or external-system data, verify that the required environment is configured and usable when possible.
+Docs-only, comments-only, spelling, formatting-only, or non-executable text changes may skip runtime tests.
 
-If credentials or services are unavailable, do not invent placeholders, local-only IDs, fake provider behavior, mock production data, or alternate production code paths. If implementation can continue safely, build the real environment-driven path and record the live-validation blocker. If the missing external value is required to perform the requested action, stop and ask when clarification is allowed.
+**Exception:** if docs contain executable examples, generated docs, checked snapshots, API contracts, config, or behavior claims, run the relevant doc/example/generation validation.
 
-Never print, persist, copy, commit, or expose secret values. Redact secrets from logs, reports, command output, screenshots, generated files, README examples, Docker files, compose files, CI files, and final responses.
+### Writing Tests
 
-Mocks, stubs, and fakes are useful test support. They do not prove that a production external integration contract is valid. Verify external APIs, SDK methods, model names, configuration keys, generated data shapes, and provider behavior through installed source, official documentation, contract tests, or a gated live smoke test when credentials are available.
+- Use the project's existing test helpers, fixtures, factories, harnesses, snapshot normalizers, and temporary-directory helpers.
+- Prefer deterministic assertions over broad “does not crash/panic/error” checks that cannot fail usefully.
+- **CRITICAL**: Do not write flaky tests. Do not use sleeps, fixed delays, or `setTimeout` as synchronization unless timing itself is the behavior under test. Await the condition instead.
+- Assert useful output before final success/exit-code assertions when that gives better failure messages.
+- Keep tests focused, but ensure they exercise the real changed path.
 
-## Evidence defaults for production-shaped software
+### Validating Tests
 
-Building the proof mechanism is part of implementation. Do not rely on ad hoc transcript commands, source files, manual claims, or final-response assertions when a repeatable validation entrypoint can reasonably be created.
+- **CRITICAL**: A test is NOT VALID if it passes without exercising your change.
+- **CRITICAL**: A test is NOT VALID if it only passes because it uses stale artifacts, global tools, local-only state, hidden network access, or fake production behavior.
+- When fixing a bug, prefer this sequence: write or update the narrowest regression test, confirm it fails for the expected reason when practical, implement the fix, rerun the regression test, then run broader relevant validation.
+- Run the relevant check unless a concrete blocker exists. If blocked, report the exact command and blocker.
 
-Important behavior should have executable evidence. Choose the proof level that matches the risk and user-visible behavior: unit tests for isolated logic, integration tests for boundaries, contract tests for external interfaces, system or end-to-end tests for full workflows, smoke tests for runtime behavior, and operational checks for production configuration.
+## Code Review Self-Check
 
-When software includes dynamic user-facing behavior, keep or add the normal system, browser, end-to-end, or workflow test setup for the stack. Do not skip workflow-level tests merely because the interface is simple, minimal, database-free, or implemented with a lightweight framework. Lower-level tests do not replace a workflow test for the core user journey.
+- Match the existing repository style, naming, file organization, formatting, testing patterns, and framework conventions, even when they differ from your defaults.
+- Prefer focused changes. Avoid broad rewrites when a smaller change satisfies the request.
+- Do not create helpers, utilities, service objects, abstractions, or indirection layers merely for appearance. Add an abstraction only when it creates a real boundary, isolates an external dependency, improves testability, clarifies domain behavior, removes real duplication, or supports an explicit requirement.
+- Before writing code that makes a non-obvious choice, ask: “why this and not the alternative?” If you cannot answer, research first.
+- Do not take a bug report's suggested fix at face value. Verify the correct layer and trace the root cause before patching symptoms.
+- If neighboring code does something differently than you plan to, find out why before deviating. Existing choices may be load-bearing, not stylistic.
+- Backward compatibility is not an automatic hidden requirement. When a change may affect public APIs, persisted data, configuration, integrations, deployment contracts, or user-visible behavior, ask if compatibility is required when allowed. Otherwise choose the smallest safe change that satisfies the request.
 
-When software depends on a real external service, provider, SDK, model, API, queue, payment system, identity provider, storage service, webhook, package registry, or generated external data, add a named gated smoke or contract-validation entrypoint when practical. The check must use real environment configuration, run only when required credentials and an explicit enable flag are present, redact secrets, and report a concrete pass/fail/blocker result.
+## Production, State, External Systems, and Secrets
 
-When core application behavior depends on state, choose storage that matches the implied runtime. For production-shaped software, core state should not live only in process memory, hidden fields, unbounded client/session payloads, unlocked local files, or other single-process shortcuts unless the user explicitly accepts ephemeral or single-instance behavior. If the obvious persistence mechanism is forbidden, choose an appropriate alternative rather than dropping durability, consistency, or recovery expectations.
+**Default: build usable software, not a throwaway demo.** When the task mentions real users, deployment, Docker, CI, secrets, payments, auth, external services, databases, queues, providers, or production readiness, treat it as production-shaped.
 
-When local or file-backed storage is used for core state, make its limits explicit and handle the relevant risks: concurrency, locking, corruption, backup, restart behavior, container/runtime paths, permissions, and multi-instance deployment. Local storage can be acceptable for prototypes, tests, development-only paths, small single-node tools, or explicitly accepted single-instance deployments, but it should not be silently presented as general production durability.
+**Exception:** prototype shortcuts such as in-memory state, fake providers, hidden-field state, weak tests, or local-only behavior are allowed only when the user explicitly asks for a prototype/demo/spike or explicitly accepts the limitation.
 
-When a project has a validation, CI, release, or health-check command, include the checks that prove important inferred requirements: ordinary tests, workflow tests for user-facing behavior, external integration smoke when safely enabled, static/security checks when relevant, configuration validation, local boot/runtime checks, and deployment/container checks when deployment artifacts exist.
+- When core behavior needs state, use storage that matches the implied runtime. Do not silently store core production state only in process memory, unbounded client/session payloads, unlocked local files, or other single-process shortcuts.
+- If local/file-backed storage is appropriate, handle and document relevant limits: concurrency, locking, corruption, backups, restart behavior, container paths, permissions, and multi-instance deployment.
+- Before relying on credentials, tokens, external services, project IDs, provider models, generated IDs, or external data, verify the environment is configured when possible.
+- If credentials or services are unavailable, build the real environment-driven path when safe and record the live-validation blocker. Do not invent placeholders, fake production data, mock provider behavior, or alternate production code paths.
+- Mocks, stubs, and fakes are useful test support. They do not prove a production integration contract is valid.
+- For real external integrations, add a named gated smoke or contract-validation entrypoint when practical. It must run only with required credentials and an explicit enable flag, redact secrets, and report a concrete pass/fail/blocker result.
+- **CRITICAL**: Never print, persist, copy, commit, or expose secret values. Redact secrets from logs, reports, command output, screenshots, generated files, docs, Docker files, CI files, and final responses.
+- Configuration should come from the appropriate environment, config files, secret stores, or deployment settings for the stack. Do not hardcode environment-specific values, credentials, machine paths, ports, generated IDs, or provider secrets into source.
+- Production-shaped runtime paths should fail clearly when required configuration is missing. Do not silently fall back to fake providers, unsafe defaults, or ephemeral state.
 
-A check that exists but is not run is weak evidence. A live call that is ad hoc and not repeatable is weak evidence. A production claim without runtime validation is weak evidence. Prefer named commands, scripts, CI steps, or documented validation gates that future engineers can rerun.
+## Dependencies and Generated Files
 
-## Tests, debugging, and fixes
+- **CRITICAL**: Do not edit generated lockfiles directly, including `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `bun.lock`, `Cargo.lock`, `uv.lock`, `Gemfile.lock`, and similar files. Change dependencies through the package manager or generator command and let the tool regenerate the lockfile.
+- **Exception:** edit a lockfile directly only when the repository explicitly requires it or the user specifically authorizes it after the risk is explained.
+- Treat generated artifacts as outputs, not source, unless the project explicitly tracks and reviews them.
+- Default to editing the source-of-generation and running codegen. If generated files are intentionally committed, update them with the repository's documented generator.
+- Do not leave coverage reports, build output, temporary files, logs, local runtime state, cache files, smoke-test output, or machine-specific files in the repository unless they are intentionally tracked or ignored.
 
-When changing behavior, add or update tests at the level that proves the behavior. Use the narrowest useful test for the change, then run broader validation when the risk or scope justifies it.
+## CI, PRs, and Review Feedback
 
-When fixing a bug, prefer this sequence when practical: write or update a regression test that reproduces the bug, run it and confirm it fails for the expected reason, implement the fix, run the regression test again, then run the relevant broader validation. If the correct regression test is materially ambiguous and clarification is allowed, ask. If clarification is not allowed, write the narrowest test that captures the observed bug and document the assumption.
+- **Default: use the repository's own CI, PR, and failure-inspection scripts first.** They often encode project-specific filtering, annotations, and known provider quirks.
+- If CI output, PR comments, or review state look incomplete or misleading, inspect the underlying provider data instead of working around the symptom.
+- For GitHub, `gh pr view --comments` is only a partial view: it can omit review summaries and line-level review comments. When responding to reviews, inspect issue comments, reviews, and pull-request review comments, or use the repository's wrapper if one exists.
+- Do not mark review feedback addressed until the relevant code, tests, and comments have actually been handled.
 
-Do not confuse the first visible failure with the root cause. For data-related bugs, trace the bad value to the earliest point where it became incorrect, reinterpreted, overwritten, lost, exposed, or persisted incorrectly before proposing a fix.
+## Debugging Failures
 
-When a command or test fails, preserve the exact command and the actual relevant output. Do not rewrite or paraphrase error messages as if they were exact. Redact only secret values.
-
-## Dependency and generated-file management
-
-Do not edit generated lockfiles directly, including `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `Cargo.lock`, `uv.lock`, `Gemfile.lock`, and similar files. Change dependencies through the package manager or generator command and let the tool regenerate the lockfile. If a direct lockfile edit appears necessary, ask first when clarification is allowed; otherwise avoid the direct edit and document the blocker.
-
-Treat generated artifacts as outputs, not source, unless the project explicitly tracks them. Do not leave coverage reports, build output, temporary files, logs, local runtime state, cache files, smoke-test output, or machine-specific files in the repository unless they are intentionally tracked or ignored.
-
-After validation, clean generated artifacts or ensure they are covered by the project’s ignore rules before handoff.
-
-## Runtime, deployment, and configuration
-
-Configuration should come from the appropriate environment, config files, secret stores, or deployment settings for the stack. Do not hardcode environment-specific values, credentials, machine paths, ports, generated IDs, or provider secrets into source.
-
-Production-shaped runtime paths should fail clearly when required configuration is missing. Do not silently fall back to fake providers, local-only behavior, unsafe defaults, or ephemeral state in production paths unless the user explicitly requested that behavior.
-
-When deployment artifacts exist, validate them when practical. A Dockerfile, compose file, deployment manifest, release script, health check, or CI file is stronger when it is exercised or connected to a repeatable validation path.
+- Do not confuse the first visible failure with the root cause. For data bugs, trace the bad value to the earliest point where it became incorrect, reinterpreted, overwritten, lost, exposed, or persisted incorrectly.
+- When a command or test fails, preserve the exact command and the actual relevant output. Do not rewrite or paraphrase errors as if they were exact. Redact only secrets.
+- If a project tool's output is wrong because the tool/parser is stale or buggy, prefer fixing the tool when it is in scope rather than adding local workarounds.
 
 ## Commits
 
-Only create commits when the user or harness asks for commits.
+**Default: commit completed code changes automatically after relevant validation.**
 
-Use conventional commit messages: `type(scope): subject`.
+**Exception:** do not commit automatically when the user says not to, the repository/harness forbids commits, unrelated worktree changes cannot be separated safely, validation is blocked in a way that makes the commit misleading, or the task is purely exploratory.
 
-Include a commit body when the change has context worth preserving, such as the problem that motivated it, the approach chosen, important tradeoffs, migration notes, compatibility notes, or operational consequences. The commit message is for engineers reading the history later, not for the agent.
+- Use semantic/conventional commit messages: `type(scope): subject`.
+- Include a commit body when context matters: problem, approach, tradeoffs, migration notes, compatibility notes, operational consequences, and validation performed.
+- **CRITICAL**: Never commit secrets, local credentials, build artifacts, logs, caches, temporary files, or unrelated user changes.
+- Do not push, force-push, tag, release, or rewrite history unless the user explicitly asks.
 
 ## Handoff
 
-Before final handoff, run the relevant validation you can run from the current environment. If a relevant check cannot be run, state the concrete blocker.
+Before final handoff, run the relevant validation you can run from the current environment.
 
 Final responses should distinguish:
 
-- what was changed;
+- what changed;
 - what was verified and passed;
 - what failed, with actual relevant output;
 - what could not be run and why;
+- commits created, if any;
 - assumptions or remaining risks that matter to future work.
 
-Do not claim success for commands, tests, integrations, deployments, or runtime behavior that were not actually observed.
+Do not claim success for commands, tests, integrations, deployments, external systems, or runtime behavior that were not actually observed.
+
+## Important Development Notes
+
+1. **Use the project-local toolchain.** Wrong runtime, package manager, or stale build output makes validation invalid.
+2. **All behavior changes must be tested.** If you did not run the relevant tests, the code is not proven.
+3. **Tests belong beside existing coverage by default.** Do not create scattered new files without a reason.
+4. **Do not write flaky tests.** Await conditions instead of sleeping.
+5. **Do not fake production integrations.** Missing credentials are blockers, not permission to invent behavior.
+6. **Do not edit lockfiles or generated files directly.** Use the package manager or generator.
+7. **Do not touch unrelated user changes.** Inspect the worktree before editing and before committing.
+8. **Commit completed validated work using semantic commits.** Include a useful body when context matters.
+9. **Be humble and honest.** Never overstate what works, what passed, or what was verified.
 
 ## Host Configuration
 
