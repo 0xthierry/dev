@@ -13,6 +13,7 @@ describe("normalizeBlueprintDefinition", () => {
           type: "pi",
           prompt: "Implement {{input.task}}",
           tools: ["read", "edit"],
+          skills: ["./skills/research/SKILL.md"],
           thinking: "HIGH",
           next: "lint",
         },
@@ -27,7 +28,7 @@ describe("normalizeBlueprintDefinition", () => {
           maxAttempts: 2,
           next: "lint",
         },
-        done: { type: "final", message: "Done" },
+        done: { type: "stop", message: "Done" },
       },
     };
 
@@ -38,7 +39,12 @@ describe("normalizeBlueprintDefinition", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.definition.name).toBe("implement");
-    expect(result.definition.nodes.implement).toMatchObject({ type: "pi", thinking: "high", tools: ["read", "edit"] });
+    expect(result.definition.nodes.implement).toMatchObject({
+      type: "pi",
+      thinking: "high",
+      tools: ["read", "edit"],
+      skills: ["./skills/research/SKILL.md"],
+    });
     expect(result.definition.nodes.lint).toMatchObject({ type: "command", run: "bun run lint" });
   });
 
@@ -47,7 +53,7 @@ describe("normalizeBlueprintDefinition", () => {
     const input = {
       name: "simple",
       nodes: {
-        first: { type: "final" },
+        first: { type: "stop" },
       },
     };
 

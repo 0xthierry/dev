@@ -3,6 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { normalizeBlueprintDefinition } from "./definition";
+import { parseJsonc } from "./jsonc";
 import type { BlueprintDiscoveryError, BlueprintDiscoveryResult, BlueprintScope, LoadedBlueprint } from "./types";
 
 export interface BlueprintDiscoveryOptions {
@@ -93,10 +94,12 @@ async function findBlueprintCandidates(dirs: BlueprintDir[]): Promise<BlueprintC
     for (const entry of entries) {
       const entryPath = join(dir.path, entry.name);
       if (entry.name.startsWith(".")) continue;
-      if (entry.isFile() && entry.name.endsWith(".json")) candidates.push({ scope: dir.scope, filePath: entryPath });
+      if (entry.isFile() && isBlueprintDefinitionFile(entry.name)) {
+        candidates.push({ scope: dir.scope, filePath: entryPath });
+      }
       if (entry.isDirectory()) {
-        const nestedPath = join(entryPath, "blueprint.json");
-        if (existsSync(nestedPath)) candidates.push({ scope: dir.scope, filePath: nestedPath });
+        const nestedPath = nestedBlueprintPath(entryPath);
+        if (nestedPath) candidates.push({ scope: dir.scope, filePath: nestedPath });
       }
     }
   }
@@ -114,14 +117,10 @@ async function loadBlueprintCandidate(
     return { ok: false, error: errorMessage(error) };
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw) as unknown;
-  } catch (error) {
-    return { ok: false, error: `Invalid JSON: ${errorMessage(error)}` };
-  }
+  const parsed = parseJsonc(raw);
+  if (!parsed.ok) return { ok: false, error: `Invalid JSONC: ${parsed.error}` };
 
-  const normalized = normalizeBlueprintDefinition(parsed);
+  const normalized = normalizeBlueprintDefinition(parsed.value);
   if (!normalized.ok) return { ok: false, error: normalized.errors.join(" ") };
 
   return {
@@ -135,6 +134,18 @@ async function loadBlueprintCandidate(
       definition: normalized.definition,
     },
   };
+}
+
+function isBlueprintDefinitionFile(fileName: string): boolean {
+  return fileName.endsWith(".jsonc") || fileName.endsWith(".json");
+}
+
+function nestedBlueprintPath(dir: string): string | undefined {
+  for (const fileName of ["blueprint.jsonc", "blueprint.json"]) {
+    const filePath = join(dir, fileName);
+    if (existsSync(filePath)) return filePath;
+  }
+  return undefined;
 }
 
 function uniqueScopedDirs(dirs: BlueprintDir[]): BlueprintDir[] {

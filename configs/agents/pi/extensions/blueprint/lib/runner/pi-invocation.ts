@@ -28,6 +28,7 @@ export function buildPiNodeInvocation(request: PiNodeInvocationRequest): PiNodeI
   if (model) args.push("--model", model);
   if (thinking) args.push("--thinking", thinking);
   if (request.node.tools?.length) args.push("--tools", request.node.tools.join(","));
+  for (const skill of request.node.skills ?? []) args.push("--skill", skill);
 
   args.push(`@${resolve(request.contextFile)}`, request.prompt);
   return { args, env: childEnvironment(process.env) };

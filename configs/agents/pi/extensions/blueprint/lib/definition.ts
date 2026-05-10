@@ -4,9 +4,8 @@ import type {
   BlueprintEdges,
   BlueprintNode,
   CommandBlueprintNode,
-  FinalBlueprintNode,
-  HydrateBlueprintNode,
   PiBlueprintNode,
+  StopBlueprintNode,
 } from "./types";
 
 export type BlueprintDefinitionResult = { ok: true; definition: BlueprintDefinition } | { ok: false; errors: string[] };
@@ -55,18 +54,16 @@ function normalizeNode(nodeId: string, input: unknown, errors: string[]): Bluepr
   };
 
   switch (type) {
-    case "hydrate":
-      return stripUndefined({ ...base, type: "hydrate" }) as HydrateBlueprintNode;
     case "pi":
       return normalizePiNode(nodeId, input, base, errors);
     case "command":
       return normalizeCommandNode(nodeId, input, base, errors);
-    case "final":
+    case "stop":
       return stripUndefined({
         ...base,
-        type: "final",
+        type: "stop",
         message: readOptionalString(input.message),
-      }) as FinalBlueprintNode;
+      }) as StopBlueprintNode;
     default:
       errors.push(`Node '${nodeId}' has unsupported type '${type}'.`);
       return undefined;
@@ -95,6 +92,7 @@ function normalizePiNode(
     systemPrompt: readOptionalString(input.systemPrompt),
     systemPromptFile: readOptionalString(input.systemPromptFile),
     tools,
+    skills: readStringArray(input.skills, `nodes.${nodeId}.skills`, errors),
     model: readOptionalString(input.model),
     thinking,
   }) as PiBlueprintNode;

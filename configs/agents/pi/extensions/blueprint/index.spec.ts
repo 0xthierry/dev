@@ -25,7 +25,7 @@ describe("blueprint extension E2E", () => {
     const piAgentDir = join(tempDir, "pi-agent");
     const blueprintsDir = join(piAgentDir, "blueprints");
     await mkdir(blueprintsDir, { recursive: true });
-    await writeFile(join(blueprintsDir, "echo.json"), JSON.stringify(echoBlueprint(), null, 2), "utf8");
+    await writeFile(join(blueprintsDir, "echo.jsonc"), `${JSON.stringify(echoBlueprint(), null, 2)}\n`, "utf8");
 
     harness = await startPiRpcHarness({
       extensionPath,
@@ -40,7 +40,7 @@ describe("blueprint extension E2E", () => {
     // Assert
     expect(response.success).toBe(true);
     expect(notifyEvent.message).toContain("Blueprint user/echo succeeded.");
-    expect(notifyEvent.message).toContain("Nodes: 3/3 succeeded.");
+    expect(notifyEvent.message).toContain("Nodes: 2/2 succeeded.");
     expect(harness.stderr()).toBe("");
   }, 90_000);
 });
@@ -49,11 +49,10 @@ function echoBlueprint() {
   return {
     name: "echo",
     description: "E2E deterministic blueprint",
-    start: "hydrate",
+    start: "echo",
     nodes: {
-      hydrate: { type: "hydrate", next: "echo" },
       echo: { type: "command", run: "printf 'Blueprint E2E deterministic result.'", next: "done" },
-      done: { type: "final", message: "E2E blueprint done." },
+      done: { type: "stop", message: "E2E blueprint done." },
     },
   };
 }

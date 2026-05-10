@@ -2,21 +2,21 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { LoadedBlueprint } from "../types";
 
-export interface HydrateContextOptions {
+export interface InitialContextOptions {
   runCommand?: (command: string) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
 }
 
-export async function hydrateBlueprintContext(
+export async function buildInitialBlueprintContext(
   blueprint: LoadedBlueprint,
   cwd: string,
   task: string,
-  options: HydrateContextOptions = {},
+  options: InitialContextOptions = {},
 ): Promise<string> {
   const runCommand = options.runCommand ?? (async () => ({ stdout: "", stderr: "", exitCode: 1 }));
   const [gitStatus, packageScripts] = await Promise.all([readGitStatus(runCommand), readPackageScripts(cwd)]);
 
   return [
-    "# Blueprint Hydrated Context",
+    "# Blueprint Context",
     "",
     `Blueprint: ${blueprint.id}`,
     blueprint.description ? `Description: ${blueprint.description}` : "Description: (none)",

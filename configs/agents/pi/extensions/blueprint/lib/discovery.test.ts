@@ -4,8 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defaultProjectBlueprintDirs, defaultUserBlueprintDirs, discoverBlueprints } from "./discovery";
 
-const finalBlueprint = (name: string) =>
-  JSON.stringify({ name, description: `${name} description`, nodes: { done: { type: "final" } } });
+const stopBlueprint = (name: string) => `{
+  // JSONC comments are allowed in blueprint definitions.
+  "name": "${name}",
+  "description": "${name} description",
+  "nodes": {
+    "done": { "type": "stop" },
+  },
+}`;
 
 describe("discoverBlueprints", () => {
   let tempDir: string | undefined;
@@ -15,16 +21,16 @@ describe("discoverBlueprints", () => {
     tempDir = undefined;
   });
 
-  test("loads user and project blueprints from JSON files and directories", async () => {
+  test("loads user and project blueprints from JSONC files and directories", async () => {
     // Arrange
     tempDir = await mkdtemp(join(tmpdir(), "pi-blueprint-discovery-"));
     const userDir = join(tempDir, "user-blueprints");
     const projectDir = join(tempDir, "repo", ".pi", "blueprint");
     await mkdir(join(userDir, "nested"), { recursive: true });
     await mkdir(projectDir, { recursive: true });
-    await writeFile(join(userDir, "user.json"), finalBlueprint("user-flow"), "utf8");
-    await writeFile(join(userDir, "nested", "blueprint.json"), finalBlueprint("nested-flow"), "utf8");
-    await writeFile(join(projectDir, "project.json"), finalBlueprint("project-flow"), "utf8");
+    await writeFile(join(userDir, "user.jsonc"), stopBlueprint("user-flow"), "utf8");
+    await writeFile(join(userDir, "nested", "blueprint.jsonc"), stopBlueprint("nested-flow"), "utf8");
+    await writeFile(join(projectDir, "project.jsonc"), stopBlueprint("project-flow"), "utf8");
 
     // Act
     const result = await discoverBlueprints(join(tempDir, "repo"), { userDirs: [userDir], projectDirs: [projectDir] });
@@ -44,7 +50,7 @@ describe("discoverBlueprints", () => {
     tempDir = await mkdtemp(join(tmpdir(), "pi-blueprint-discovery-"));
     const siblingUserDir = join(tempDir, ".pi", "blueprint");
     await mkdir(siblingUserDir, { recursive: true });
-    await writeFile(join(siblingUserDir, "personal.json"), finalBlueprint("personal"), "utf8");
+    await writeFile(join(siblingUserDir, "personal.jsonc"), stopBlueprint("personal"), "utf8");
 
     // Act
     const result = await discoverBlueprints(tempDir, { userDirs: [siblingUserDir], projectDirs: [] });
@@ -58,8 +64,8 @@ describe("discoverBlueprints", () => {
     tempDir = await mkdtemp(join(tmpdir(), "pi-blueprint-discovery-"));
     const userDir = join(tempDir, "blueprints");
     await mkdir(userDir, { recursive: true });
-    await writeFile(join(userDir, "valid.json"), finalBlueprint("valid"), "utf8");
-    await writeFile(join(userDir, "broken.json"), "{", "utf8");
+    await writeFile(join(userDir, "valid.jsonc"), stopBlueprint("valid"), "utf8");
+    await writeFile(join(userDir, "broken.jsonc"), "{", "utf8");
 
     // Act
     const result = await discoverBlueprints(tempDir, { userDirs: [userDir], projectDirs: [] });
@@ -67,7 +73,7 @@ describe("discoverBlueprints", () => {
     // Assert
     expect(result.blueprints.map((blueprint) => blueprint.id)).toEqual(["user/valid"]);
     expect(result.errors).toHaveLength(1);
-    expect(result.errors[0].message).toContain("Invalid JSON");
+    expect(result.errors[0].message).toContain("Invalid JSONC");
   });
 });
 

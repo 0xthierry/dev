@@ -1,7 +1,7 @@
 import type { PiThinkingLevel } from "./thinking";
 
 export type BlueprintScope = "user" | "project";
-export type BlueprintNodeType = "hydrate" | "pi" | "command" | "final";
+export type BlueprintNodeType = "pi" | "command" | "stop";
 export type BlueprintNodeStatus = "success" | "failure";
 export type BlueprintRunStatus = "running" | "succeeded" | "failed";
 
@@ -18,10 +18,6 @@ export interface BlueprintNodeBase {
   maxAttempts?: number;
 }
 
-export interface HydrateBlueprintNode extends BlueprintNodeBase {
-  type: "hydrate";
-}
-
 export interface PiBlueprintNode extends BlueprintNodeBase {
   type: "pi";
   prompt: string;
@@ -29,6 +25,7 @@ export interface PiBlueprintNode extends BlueprintNodeBase {
   systemPrompt?: string;
   systemPromptFile?: string;
   tools?: string[];
+  skills?: string[];
   model?: string;
   thinking?: PiThinkingLevel;
 }
@@ -39,12 +36,12 @@ export interface CommandBlueprintNode extends BlueprintNodeBase {
   timeoutMs?: number;
 }
 
-export interface FinalBlueprintNode extends BlueprintNodeBase {
-  type: "final";
+export interface StopBlueprintNode extends BlueprintNodeBase {
+  type: "stop";
   message?: string;
 }
 
-export type BlueprintNode = HydrateBlueprintNode | PiBlueprintNode | CommandBlueprintNode | FinalBlueprintNode;
+export type BlueprintNode = PiBlueprintNode | CommandBlueprintNode | StopBlueprintNode;
 
 export interface BlueprintDefinition {
   name: string;

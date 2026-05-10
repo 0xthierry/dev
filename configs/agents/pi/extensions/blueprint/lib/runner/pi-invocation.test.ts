@@ -16,6 +16,7 @@ describe("buildPiNodeInvocation", () => {
         model: "inherit",
         thinking: "high" as const,
         tools: ["read", "bash"],
+        skills: ["/repo/.pi/skills/research/SKILL.md"],
       },
       contextFile: "/runs/context.md",
       prompt: "Task: implement",
@@ -38,6 +39,8 @@ describe("buildPiNodeInvocation", () => {
     expect(invocation.args).toContain("high");
     expect(invocation.args).toContain("--tools");
     expect(invocation.args).toContain("read,bash");
+    expect(invocation.args).toContain("--skill");
+    expect(invocation.args).toContain("/repo/.pi/skills/research/SKILL.md");
     expect(invocation.args.at(-1)).toBe("Task: implement");
     expect(invocation.env[BLUEPRINT_DEPTH_ENV]).toBe("1");
   });

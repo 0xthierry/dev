@@ -92,9 +92,9 @@ function loadedBlueprint(scope: LoadedBlueprint["scope"], name: string): LoadedB
     name,
     description: `${name} description`,
     scope,
-    filePath: `/blueprints/${name}.json`,
+    filePath: `/blueprints/${name}.jsonc`,
     dir: "/blueprints",
-    definition: { name, description: `${name} description`, start: "done", nodes: { done: { type: "final" } } },
+    definition: { name, description: `${name} description`, start: "done", nodes: { done: { type: "stop" } } },
   };
 }
 

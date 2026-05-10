@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import type { BlueprintTemplateState } from "../template";
 import type { PiThinkingLevel } from "../thinking";
 import type {
@@ -10,7 +10,7 @@ import type {
 } from "../types";
 import { type BlueprintRunArtifacts, createBlueprintRunArtifacts } from "./artifacts";
 import { executeCommandNode } from "./command-node";
-import { hydrateBlueprintContext } from "./context";
+import { buildInitialBlueprintContext } from "./context";
 import { executePiNode } from "./pi-node";
 import { runShellCommand } from "./shell";
 
@@ -25,7 +25,6 @@ export interface BlueprintRunRequest {
 }
 
 export interface BlueprintNodeExecutors {
-  hydrate: typeof hydrateBlueprintContext;
   command: typeof executeCommandNode;
   pi: typeof executePiNode;
 }
@@ -33,6 +32,7 @@ export interface BlueprintNodeExecutors {
 export interface BlueprintRunOptions {
   executors?: BlueprintNodeExecutors;
   createArtifacts?: typeof createBlueprintRunArtifacts;
+  buildInitialContext?: typeof buildInitialBlueprintContext;
 }
 
 const DEFAULT_MAX_STEPS = 50;
@@ -43,22 +43,22 @@ export async function runBlueprint(
   options: BlueprintRunOptions = {},
 ): Promise<BlueprintRunResult> {
   const executors = options.executors ?? {
-    hydrate: hydrateBlueprintContext,
     command: executeCommandNode,
     pi: executePiNode,
   };
   const createArtifacts = options.createArtifacts ?? createBlueprintRunArtifacts;
+  const createInitialContext = options.buildInitialContext ?? buildInitialBlueprintContext;
   const artifacts = await createArtifacts(request.blueprint, request.cwd, { rootDir: request.artifactRootDir });
-  const startedContext = await executors.hydrate(request.blueprint, request.cwd, request.task, {
+  const initialContext = await createInitialContext(request.blueprint, request.cwd, request.task, {
     runCommand: (command) => runShellCommand(command, { cwd: request.cwd, signal: request.signal }),
   });
-  await artifacts.writeContext(startedContext);
+  await artifacts.writeContext(initialContext);
 
   const state: BlueprintTemplateState = {
     blueprint: request.blueprint,
     input: { task: request.task },
     contextFile: artifacts.contextFile,
-    context: startedContext,
+    context: initialContext,
     nodes: {},
   };
   const results: BlueprintNodeResult[] = [];
@@ -90,13 +90,9 @@ export async function runBlueprint(
     results.push(result);
     state.nodes[currentNodeId] = result;
     await artifacts.writeNodeResult(result);
+    state.context = await readContextFile(artifacts.contextFile, state.context);
 
-    if (node.type === "hydrate" && result.status === "success") {
-      state.context = result.output;
-      await artifacts.writeContext(result.output);
-    }
-
-    if (node.type === "final") {
+    if (node.type === "stop") {
       status = result.status === "success" ? "succeeded" : "failed";
       message = result.output;
       currentNodeId = undefined;
@@ -148,8 +144,6 @@ async function executeNode(
   await mkdir(nodeDir, { recursive: true });
 
   switch (node.type) {
-    case "hydrate":
-      return executeHydrateNode(nodeId, attempt, request, executors);
     case "command":
       return executors.command({
         nodeId,
@@ -176,42 +170,21 @@ async function executeNode(
         parentModelRef: request.modelRef,
         parentThinking: request.thinking,
       });
-    case "final":
-      return executeFinalNode(nodeId, node, attempt, state);
+    case "stop":
+      return executeStopNode(nodeId, node, attempt, state);
   }
 }
 
-async function executeHydrateNode(
+function executeStopNode(
   nodeId: string,
-  attempt: number,
-  request: BlueprintRunRequest,
-  executors: BlueprintNodeExecutors,
-): Promise<BlueprintNodeResult> {
-  const startedAt = new Date().toISOString();
-  const output = await executors.hydrate(request.blueprint, request.cwd, request.task, {
-    runCommand: (command) => runShellCommand(command, { cwd: request.cwd, signal: request.signal }),
-  });
-  return {
-    nodeId,
-    type: "hydrate",
-    attempt,
-    status: "success",
-    output,
-    startedAt,
-    finishedAt: new Date().toISOString(),
-  };
-}
-
-function executeFinalNode(
-  nodeId: string,
-  node: Extract<BlueprintNode, { type: "final" }>,
+  node: Extract<BlueprintNode, { type: "stop" }>,
   attempt: number,
   state: BlueprintTemplateState,
 ): BlueprintNodeResult {
   const now = new Date().toISOString();
   return {
     nodeId,
-    type: "final",
+    type: "stop",
     attempt,
     status: "success",
     output: node.message ?? `Blueprint ${state.blueprint.id} completed.`,
@@ -223,6 +196,14 @@ function executeFinalNode(
 function nextNodeId(node: BlueprintNode, result: BlueprintNodeResult): string | undefined {
   if (result.status === "success") return node.on?.success ?? node.next;
   return node.on?.failure;
+}
+
+async function readContextFile(contextFile: string, fallback: string): Promise<string> {
+  try {
+    return await readFile(contextFile, "utf8");
+  } catch {
+    return fallback;
+  }
 }
 
 function emitProgress(

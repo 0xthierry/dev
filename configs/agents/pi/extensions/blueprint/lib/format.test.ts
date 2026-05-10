@@ -30,7 +30,7 @@ describe("formatBlueprintList", () => {
     // Arrange
     const discovery = discoveryResult(
       [loadedBlueprint("user", "flow")],
-      [{ filePath: "/bad.json", message: "Invalid JSON" }],
+      [{ filePath: "/bad.jsonc", message: "Invalid JSONC" }],
     );
 
     // Act
@@ -38,7 +38,7 @@ describe("formatBlueprintList", () => {
 
     // Assert
     expect(text).toContain("user/flow — flow description");
-    expect(text).toContain("/bad.json: Invalid JSON");
+    expect(text).toContain("/bad.jsonc: Invalid JSONC");
   });
 });
 
@@ -90,8 +90,8 @@ function loadedBlueprint(scope: LoadedBlueprint["scope"], name: string): LoadedB
     name,
     description: `${name} description`,
     scope,
-    filePath: `/blueprints/${name}.json`,
+    filePath: `/blueprints/${name}.jsonc`,
     dir: "/blueprints",
-    definition: { name, description: `${name} description`, start: "done", nodes: { done: { type: "final" } } },
+    definition: { name, description: `${name} description`, start: "done", nodes: { done: { type: "stop" } } },
   };
 }

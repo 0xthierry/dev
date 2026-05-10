@@ -3,9 +3,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LoadedBlueprint } from "../types";
-import { hydrateBlueprintContext } from "./context";
+import { buildInitialBlueprintContext } from "./context";
 
-describe("hydrateBlueprintContext", () => {
+describe("buildInitialBlueprintContext", () => {
   test("renders task, git status, and package scripts", async () => {
     // Arrange
     const dir = await mkdtemp(join(tmpdir(), "pi-blueprint-context-"));
@@ -18,7 +18,9 @@ describe("hydrateBlueprintContext", () => {
 
     try {
       // Act
-      const context = await hydrateBlueprintContext(loadedBlueprint("implement"), dir, "add feature", { runCommand });
+      const context = await buildInitialBlueprintContext(loadedBlueprint("implement"), dir, "add feature", {
+        runCommand,
+      });
 
       // Assert
       expect(context).toContain("Blueprint: user/implement");
@@ -38,8 +40,8 @@ function loadedBlueprint(name: string): LoadedBlueprint {
     name,
     description: `${name} description`,
     scope: "user",
-    filePath: `/blueprints/${name}.json`,
+    filePath: `/blueprints/${name}.jsonc`,
     dir: "/blueprints",
-    definition: { name, description: `${name} description`, start: "done", nodes: { done: { type: "final" } } },
+    definition: { name, description: `${name} description`, start: "done", nodes: { done: { type: "stop" } } },
   };
 }

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { homedir } from "node:os";
+import { isAbsolute, join } from "node:path";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateTail } from "@earendil-works/pi-coding-agent";
 import { type BlueprintTemplateState, renderBlueprintTemplate } from "../template";
 import type { BlueprintNodeResult, PiBlueprintNode } from "../types";
@@ -37,7 +38,7 @@ export async function executePiNode(options: ExecutePiNodeOptions): Promise<Blue
   if (systemPromptFile) await writeFile(systemPromptFile, systemPrompt, "utf8");
 
   const invocation = buildPiNodeInvocation({
-    node: options.node,
+    node: { ...options.node, skills: resolveNodeSkills(options.node.skills, options.blueprintDir) },
     contextFile: options.contextFile,
     prompt,
     systemPromptFile,
@@ -134,14 +135,25 @@ export async function executePiNode(options: ExecutePiNodeOptions): Promise<Blue
   };
 }
 
+function resolveNodeSkills(skills: string[] | undefined, blueprintDir: string): string[] | undefined {
+  return skills?.map((skill) => resolveBlueprintPath(skill, blueprintDir));
+}
+
+function resolveBlueprintPath(path: string, blueprintDir: string): string {
+  if (path.startsWith("~/")) return join(homedir(), path.slice(2));
+  if (isAbsolute(path)) return path;
+  return join(blueprintDir, path);
+}
+
 async function readNodePrompt(node: PiBlueprintNode, blueprintDir: string): Promise<string> {
-  if (node.promptFile) return readFile(join(blueprintDir, node.promptFile), "utf8");
+  if (node.promptFile) return readFile(resolveBlueprintPath(node.promptFile, blueprintDir), "utf8");
   return node.prompt;
 }
 
 async function readNodeSystemPrompt(node: PiBlueprintNode, blueprintDir: string): Promise<string> {
   const parts = [];
-  if (node.systemPromptFile) parts.push(await readFile(join(blueprintDir, node.systemPromptFile), "utf8"));
+  if (node.systemPromptFile)
+    parts.push(await readFile(resolveBlueprintPath(node.systemPromptFile, blueprintDir), "utf8"));
   if (node.systemPrompt) parts.push(node.systemPrompt);
   return parts.join("\n\n").trim();
 }

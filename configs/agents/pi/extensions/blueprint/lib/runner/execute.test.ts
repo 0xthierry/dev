@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { BlueprintNodeResult, LoadedBlueprint } from "../types";
@@ -27,7 +27,7 @@ describe("runBlueprint", () => {
       nodes: {
         lint: { type: "command", run: "lint", on: { success: "done", failure: "fix" } },
         fix: { type: "pi", prompt: "Fix {{nodes.lint.output}}", maxAttempts: 2, next: "lint" },
-        done: { type: "final", message: "done" },
+        done: { type: "stop", message: "done" },
       },
     });
 
@@ -35,6 +35,7 @@ describe("runBlueprint", () => {
       // Act
       const result = await runBlueprint({ blueprint, task: "task", cwd: "/repo", artifactRootDir }, undefined, {
         executors,
+        buildInitialContext: mock(async () => "initial context"),
       });
 
       // Assert
@@ -46,6 +47,41 @@ describe("runBlueprint", () => {
         "done:success",
       ]);
       expect(executors.pi).toHaveBeenCalledTimes(1);
+    } finally {
+      await rm(artifactRootDir, { recursive: true, force: true });
+    }
+  });
+
+  test("refreshes context.md after a pi node updates it", async () => {
+    // Arrange
+    const artifactRootDir = await mkdtemp(join(tmpdir(), "pi-blueprint-run-"));
+    const command = mock(async (options: Parameters<BlueprintNodeExecutors["command"]>[0]) =>
+      nodeResult(options.nodeId, "command", "success", options.attempt, { output: options.templateState.context }),
+    );
+    const pi = mock(async (options: Parameters<BlueprintNodeExecutors["pi"]>[0]) => {
+      await writeFile(options.contextFile, "updated context from pi", "utf8");
+      return nodeResult(options.nodeId, "pi", "success", options.attempt, { output: "wrote context" });
+    });
+    const executors = fakeExecutors(command, pi);
+    const blueprint = loadedBlueprint({
+      start: "research",
+      nodes: {
+        research: { type: "pi", prompt: "Build context", next: "check" },
+        check: { type: "command", run: "printf ok", next: "done" },
+        done: { type: "stop", message: "done" },
+      },
+    });
+
+    try {
+      // Act
+      const result = await runBlueprint({ blueprint, task: "task", cwd: "/repo", artifactRootDir }, undefined, {
+        executors,
+        buildInitialContext: mock(async () => "initial context"),
+      });
+
+      // Assert
+      expect(result.status).toBe("succeeded");
+      expect(result.results.find((node) => node.nodeId === "check")?.output).toBe("updated context from pi");
     } finally {
       await rm(artifactRootDir, { recursive: true, force: true });
     }
@@ -73,6 +109,7 @@ describe("runBlueprint", () => {
       // Act
       const result = await runBlueprint({ blueprint, task: "task", cwd: "/repo", artifactRootDir }, undefined, {
         executors,
+        buildInitialContext: mock(async () => "initial context"),
       });
 
       // Assert
@@ -89,7 +126,6 @@ function fakeExecutors(
   pi: BlueprintNodeExecutors["pi"],
 ): BlueprintNodeExecutors {
   return {
-    hydrate: mock(async (_blueprint, _cwd, task) => `hydrated ${task}`),
     command,
     pi,
   };
@@ -120,7 +156,7 @@ function loadedBlueprint(definition: Pick<LoadedBlueprint["definition"], "start"
     name: "test-flow",
     description: "Test flow",
     scope: "user",
-    filePath: "/blueprints/test-flow.json",
+    filePath: "/blueprints/test-flow.jsonc",
     dir: "/blueprints",
     definition: { name: "test-flow", description: "Test flow", ...definition },
   };
