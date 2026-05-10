@@ -35,23 +35,19 @@ describe("blueprint extension E2E", () => {
 
     // Act
     const response = await harness.request({ type: "prompt", message: "/blueprint echo say hello" }, 60_000);
-    const notifyEvent = await harness.waitForEvent(isBlueprintSuccessNotification, 60_000);
     const messageEvent = await harness.waitForEvent(isBlueprintProgressMessageEnd, 60_000);
-    const widgetEvent = await harness.waitForEvent(isBlueprintWorkflowWidget, 60_000);
 
     // Assert
     expect(response.success).toBe(true);
-    expect(notifyEvent.message).toContain("Blueprint user/echo succeeded.");
-    expect(notifyEvent.message).toContain("Nodes: 2/2 succeeded.");
-    expect(message(messageEvent)?.content).toContain("Blueprint user/echo");
+    expect(message(messageEvent)?.content).toContain("Blueprint user/echo succeeded");
     expect(message(messageEvent)?.details).toMatchObject({
       blueprint: { id: "user/echo" },
-      progress: { currentNodeId: "echo" },
+      progress: { status: "succeeded" },
     });
-    expect(widgetText(widgetEvent)).toContain("Blueprint user/echo");
-    expect(widgetText(widgetEvent)).toContain("Workflow:");
-    expect(widgetText(widgetEvent)).toContain("echo [command]");
-    expect(widgetText(widgetEvent)).toContain("done [stop]");
+    expect(harness.events.filter(isBlueprintProgressMessageEnd)).toHaveLength(1);
+    expect(harness.events.filter(isBlueprintWorkflowWidget)).toHaveLength(0);
+    expect(harness.events.filter(isBlueprintStatusSet)).toHaveLength(0);
+    expect(harness.events.filter(isBlueprintSuccessNotification)).toHaveLength(0);
     expect(harness.stderr()).toBe("");
   }, 90_000);
 });
@@ -86,13 +82,18 @@ function isBlueprintWorkflowWidget(event: JsonObject): boolean {
     event.type === "extension_ui_request" &&
     event.method === "setWidget" &&
     event.widgetKey === "blueprint" &&
-    Array.isArray(event.widgetLines) &&
-    event.widgetLines.some((line) => typeof line === "string" && line.includes("Workflow:"))
+    Array.isArray(event.widgetLines)
   );
 }
 
-function widgetText(event: JsonObject): string {
-  return Array.isArray(event.widgetLines) ? event.widgetLines.join("\n") : "";
+function isBlueprintStatusSet(event: JsonObject): boolean {
+  return (
+    event.type === "extension_ui_request" &&
+    event.method === "setStatus" &&
+    event.statusKey === "blueprint" &&
+    typeof event.statusText === "string" &&
+    event.statusText.length > 0
+  );
 }
 
 function message(event: JsonObject): JsonObject | undefined {

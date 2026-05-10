@@ -37,20 +37,19 @@ describe("handleBlueprintCommand", () => {
     // Assert
     expect(runtime.runBlueprint).toHaveBeenCalledWith(
       expect.objectContaining({ blueprint, task: "add feature", cwd: "/repo", modelRef: "anthropic/sonnet" }),
-      expect.any(Function),
+      undefined,
     );
-    expect(fakePi.sentMessages).toContainEqual({
-      message: expect.objectContaining({
-        customType: BLUEPRINT_PROGRESS_MESSAGE_TYPE,
-        display: true,
-        details: expect.objectContaining({ progress: expect.objectContaining({ currentNodeId: "done" }) }),
-      }),
-      options: undefined,
-    });
-    expect(fakePi.uiNotifications.at(-1)).toEqual({
-      message: expect.stringContaining("Blueprint project/flow succeeded."),
-      type: "info",
-    });
+    expect(fakePi.sentMessages).toEqual([
+      {
+        message: expect.objectContaining({
+          customType: BLUEPRINT_PROGRESS_MESSAGE_TYPE,
+          display: true,
+          details: expect.objectContaining({ progress: expect.objectContaining({ status: "succeeded" }) }),
+        }),
+        options: undefined,
+      },
+    ]);
+    expect(fakePi.uiNotifications).toEqual([]);
   });
 
   test("reports unknown blueprint selections", async () => {

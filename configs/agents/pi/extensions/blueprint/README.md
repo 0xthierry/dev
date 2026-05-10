@@ -42,7 +42,7 @@ The same schema is tracked in this extension at [`schema.json`](./schema.json). 
 
 With no arguments, `/blueprint` lists discovered blueprints. With a name and task, it executes the selected blueprint. The first argument autocompletes discovered blueprint IDs and unique short names.
 
-While a blueprint runs, Pi publishes rendered workflow progress cards in the transcript and keeps a workflow widget below the editor. The card shows the blueprint name, task, run id, per-node queued/running/succeeded/failed state, command routes, and artifact path.
+When a blueprint finishes, Pi publishes one rendered workflow card in the transcript. The card shows the blueprint name, task, run id, per-node succeeded/failed state, command routes, and artifact path.
 
 ## Blueprint format
 
