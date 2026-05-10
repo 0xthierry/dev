@@ -235,6 +235,8 @@ The result tells the model to use Pi's `read` and `bash` tools at the cloned pat
 
 For a plain YouTube URL, `fetch_content` asks Gemini Web to extract video title, channel, duration, summary, transcript with timestamps, and visual descriptions. A thumbnail is included when available.
 
+When the user wants a general YouTube summary, description, or transcript, omit `prompt` so the default video extraction prompt is used. Passing `prompt` replaces that default request, so use it only for narrow video questions or explicitly include "transcript with timestamps" when the answer needs the transcript.
+
 For a timestamp or frame request:
 
 - `timestamp` supports `SS`, `MM:SS`, `H:MM:SS`, or `start-end` ranges.

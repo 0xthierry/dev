@@ -54,6 +54,22 @@ describe("registerWebAccessExtension", () => {
     }
   });
 
+  test("guides YouTube transcript requests without overriding default extraction", () => {
+    // Arrange
+    const fake = createFakePi();
+
+    // Act
+    registerWebAccessExtension(fake.pi);
+    const fetchContent = fake.tools.get("fetch_content");
+    const fetchContentProperties = parameterProperties(fetchContent);
+
+    // Assert
+    expect(fetchContent?.promptSnippet).toContain("call fetch_content without prompt");
+    expect(fetchContent?.promptSnippet).toContain("transcript with timestamps");
+    expect(fetchContentProperties.prompt?.description).toContain("omit for plain YouTube");
+    expect(fetchContentProperties.prompt?.description).toContain("transcript with timestamps");
+  });
+
   test("gives optional parameters short usage guidance and constrains content analysis models", () => {
     // Arrange
     const fake = createFakePi();

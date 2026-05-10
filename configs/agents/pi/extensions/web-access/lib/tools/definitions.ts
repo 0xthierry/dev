@@ -50,7 +50,7 @@ export const FETCH_CONTENT_PARAMETERS = Type.Object({
   prompt: Type.Optional(
     Type.String({
       description:
-        "Question or extraction instructions for the fetched content. Use when the user asks for specific details.",
+        "Question or extraction instructions for fetched content. Use for narrow page/video questions; omit for plain YouTube summary, description, or transcript requests so default video extraction includes transcript with timestamps.",
     }),
   ),
   timestamp: Type.Optional(
