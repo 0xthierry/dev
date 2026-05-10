@@ -3,6 +3,7 @@ import {
   formatBlueprintList,
   formatBlueprintProgress,
   formatBlueprintRunSummary,
+  formatBlueprintWorkflow,
   resolveBlueprintSelection,
 } from "./format";
 import type { BlueprintDiscoveryResult, BlueprintRunResult, LoadedBlueprint } from "./types";
@@ -43,6 +44,41 @@ describe("formatBlueprintList", () => {
 });
 
 describe("blueprint run formatting", () => {
+  test("formats workflow visualization", () => {
+    // Arrange
+    const blueprint = loadedBlueprint("project", "flow", {
+      start: "context",
+      nodes: {
+        context: { type: "pi", prompt: "write context", tools: ["read", "write"], next: "implement" },
+        implement: { type: "pi", prompt: "implement", next: "lint" },
+        lint: { type: "command", run: "bun run lint", on: { success: "done", failure: "fix_lint" } },
+        fix_lint: { type: "pi", prompt: "fix {{nodes.lint.output}}", maxAttempts: 2, next: "lint" },
+        done: { type: "stop", message: "Workflow complete." },
+      },
+    });
+    const progress = {
+      runId: "run-1",
+      runDir: "/runs/run-1",
+      status: "running" as const,
+      currentNodeId: "lint",
+      message: "Running lint (command).",
+      results: [nodeResult("context", "pi", "success"), nodeResult("implement", "pi", "success")],
+    };
+
+    // Act
+    const lines = formatBlueprintWorkflow(progress, blueprint, "add auth");
+    const text = lines.join("\n");
+
+    // Assert
+    expect(text).toContain("⏳ Blueprint project/flow — running");
+    expect(text).toContain("Task: add auth");
+    expect(text).toContain("2/5 done · lint running · 2 queued");
+    expect(text).toContain("✓ context [pi] succeeded attempt 1 — tools read,write");
+    expect(text).toContain("⏳ lint [command] running attempt 1 — bun run lint");
+    expect(text).toContain("↳ success → done · failure → fix_lint");
+    expect(text).toContain("○ fix_lint [pi] queued");
+  });
+
   test("formats progress and final summary", () => {
     // Arrange
     const result: BlueprintRunResult = {
@@ -84,7 +120,11 @@ function discoveryResult(
   return { dirs: ["/blueprints"], blueprints, errors };
 }
 
-function loadedBlueprint(scope: LoadedBlueprint["scope"], name: string): LoadedBlueprint {
+function loadedBlueprint(
+  scope: LoadedBlueprint["scope"],
+  name: string,
+  definition: Partial<LoadedBlueprint["definition"]> = {},
+): LoadedBlueprint {
   return {
     id: `${scope}/${name}`,
     name,
@@ -92,6 +132,28 @@ function loadedBlueprint(scope: LoadedBlueprint["scope"], name: string): LoadedB
     scope,
     filePath: `/blueprints/${name}.jsonc`,
     dir: "/blueprints",
-    definition: { name, description: `${name} description`, start: "done", nodes: { done: { type: "stop" } } },
+    definition: {
+      name,
+      description: `${name} description`,
+      start: "done",
+      nodes: { done: { type: "stop" } },
+      ...definition,
+    },
+  };
+}
+
+function nodeResult(
+  nodeId: string,
+  type: BlueprintRunResult["results"][number]["type"],
+  status: BlueprintRunResult["results"][number]["status"],
+): BlueprintRunResult["results"][number] {
+  return {
+    nodeId,
+    type,
+    attempt: 1,
+    status,
+    output: `${nodeId} output`,
+    startedAt: "start",
+    finishedAt: "finish",
   };
 }

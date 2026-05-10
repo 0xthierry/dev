@@ -2,8 +2,8 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 import { parseBlueprintCommandArgs } from "./args";
 import {
   formatBlueprintList,
-  formatBlueprintProgress,
   formatBlueprintRunSummary,
+  formatBlueprintWorkflow,
   resolveBlueprintSelection,
 } from "./format";
 import type { BlueprintRuntime } from "./runtime";
@@ -35,7 +35,22 @@ export async function handleBlueprintCommand(
 
   await ctx.waitForIdle();
   ctx.ui.setStatus("blueprint", `blueprint: ${selection.blueprint.name}`);
-  ctx.ui.setWidget("blueprint", [`Starting blueprint ${selection.blueprint.id}...`], { placement: "belowEditor" });
+  ctx.ui.setWidget(
+    "blueprint",
+    formatBlueprintWorkflow(
+      {
+        runId: "pending",
+        runDir: "(pending)",
+        status: "running",
+        currentNodeId: selection.blueprint.definition.start,
+        message: `Starting blueprint ${selection.blueprint.id}.`,
+        results: [],
+      },
+      selection.blueprint,
+      parsed.task,
+    ),
+    { placement: "belowEditor" },
+  );
 
   try {
     const result = await runtime.runBlueprint(
@@ -48,14 +63,19 @@ export async function handleBlueprintCommand(
         thinking: pi.getThinkingLevel?.() as PiThinkingLevel | undefined,
       },
       (progress) => {
-        ctx.ui.setStatus("blueprint", `blueprint: ${progress.status}`);
-        ctx.ui.setWidget("blueprint", formatBlueprintProgress(progress), { placement: "belowEditor" });
+        const current = progress.currentNodeId ? ` · ${progress.currentNodeId}` : "";
+        ctx.ui.setStatus("blueprint", `blueprint: ${progress.status}${current}`);
+        ctx.ui.setWidget("blueprint", formatBlueprintWorkflow(progress, selection.blueprint, parsed.task), {
+          placement: "belowEditor",
+        });
       },
     );
 
     const summary = formatBlueprintRunSummary(result);
     ctx.ui.setStatus("blueprint", result.status === "succeeded" ? "blueprint: done" : "blueprint: failed");
-    ctx.ui.setWidget("blueprint", summary.split("\n"), { placement: "belowEditor" });
+    ctx.ui.setWidget("blueprint", formatBlueprintWorkflow(result, selection.blueprint, parsed.task), {
+      placement: "belowEditor",
+    });
     ctx.ui.notify(summary, result.status === "succeeded" ? "info" : "error");
   } catch (error) {
     const message = error instanceof Error && error.message.trim() ? error.message.trim() : String(error);

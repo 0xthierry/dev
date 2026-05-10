@@ -1,4 +1,11 @@
-import type { BlueprintDiscoveryResult, BlueprintRunProgress, BlueprintRunResult, LoadedBlueprint } from "./types";
+import type {
+  BlueprintDiscoveryResult,
+  BlueprintNode,
+  BlueprintNodeResult,
+  BlueprintRunProgress,
+  BlueprintRunResult,
+  LoadedBlueprint,
+} from "./types";
 
 export type BlueprintSelectionResult = { ok: true; blueprint: LoadedBlueprint } | { ok: false; message: string };
 
@@ -52,6 +59,49 @@ export function formatBlueprintProgress(progress: BlueprintRunProgress): string[
   return lines;
 }
 
+export function formatBlueprintWorkflow(
+  progress: BlueprintRunProgress,
+  blueprint: LoadedBlueprint,
+  task: string,
+): string[] {
+  const nodeIds = Object.keys(blueprint.definition.nodes);
+  const nodeStates = nodeIds.map((nodeId) => describeNodeState(nodeId, progress));
+  const counts = countWorkflowStates(nodeStates);
+  const runningNode = nodeStates.find((state) => state.status === "running");
+  const headerIcon = progress.status === "failed" ? "✗" : progress.status === "succeeded" ? "✓" : "⏳";
+  const countParts = [
+    `${counts.succeeded}/${nodeIds.length} done`,
+    counts.failed ? `${counts.failed} failed` : "",
+    runningNode ? `${runningNode.nodeId} running` : "",
+    counts.queued ? `${counts.queued} queued` : "",
+  ].filter(Boolean);
+
+  const lines = [
+    `${headerIcon} Blueprint ${blueprint.id} — ${progress.status}`,
+    blueprint.description ? `  ${truncateInline(blueprint.description, 140)}` : "",
+    task ? `  Task: ${truncateInline(task, 140)}` : "",
+    `  Run: ${progress.runId}`,
+    `  ${countParts.join(" · ")}`,
+    progress.message ? `  Now: ${truncateInline(progress.message, 160)}` : "",
+    "",
+    "Workflow:",
+  ].filter(Boolean);
+
+  for (const nodeId of nodeIds) {
+    const node = blueprint.definition.nodes[nodeId];
+    if (!node) continue;
+    const state = describeNodeState(nodeId, progress);
+    lines.push(formatWorkflowNodeLine(nodeId, node, state));
+    const route = formatNodeRoute(node);
+    if (route) lines.push(`  ${route}`);
+    const output = formatNodeOutputPreview(state.result);
+    if (output) lines.push(`  ${output}`);
+  }
+
+  lines.push(`Artifacts: ${progress.runDir}`);
+  return lines;
+}
+
 export function formatBlueprintRunSummary(result: BlueprintRunResult): string {
   const succeeded = result.results.filter((node) => node.status === "success").length;
   return [
@@ -60,4 +110,99 @@ export function formatBlueprintRunSummary(result: BlueprintRunResult): string {
     `Nodes: ${succeeded}/${result.results.length} succeeded.`,
     `Artifacts: ${result.runDir}`,
   ].join("\n");
+}
+
+type WorkflowNodeStatus = "queued" | "running" | "succeeded" | "failed";
+
+interface WorkflowNodeState {
+  nodeId: string;
+  status: WorkflowNodeStatus;
+  attempt: number;
+  result?: BlueprintNodeResult;
+}
+
+function describeNodeState(nodeId: string, progress: BlueprintRunProgress): WorkflowNodeState {
+  const nodeResults = progress.results.filter((result) => result.nodeId === nodeId);
+  const lastResult = nodeResults.at(-1);
+  const isRunning = progress.status === "running" && progress.currentNodeId === nodeId;
+
+  if (isRunning) {
+    return { nodeId, status: "running", attempt: (lastResult?.attempt ?? 0) + 1, result: lastResult };
+  }
+
+  if (!lastResult) return { nodeId, status: "queued", attempt: 0 };
+  return {
+    nodeId,
+    status: lastResult.status === "success" ? "succeeded" : "failed",
+    attempt: lastResult.attempt,
+    result: lastResult,
+  };
+}
+
+function countWorkflowStates(states: WorkflowNodeState[]): Record<WorkflowNodeStatus, number> {
+  return {
+    queued: states.filter((state) => state.status === "queued").length,
+    running: states.filter((state) => state.status === "running").length,
+    succeeded: states.filter((state) => state.status === "succeeded").length,
+    failed: states.filter((state) => state.status === "failed").length,
+  };
+}
+
+function formatWorkflowNodeLine(nodeId: string, node: BlueprintNode, state: WorkflowNodeState): string {
+  const attempt = state.attempt > 0 ? ` attempt ${state.attempt}` : "";
+  const detail = formatNodeDetail(node);
+  return `${statusIcon(state.status)} ${nodeId} [${node.type}] ${state.status}${attempt}${detail}`;
+}
+
+function formatNodeDetail(node: BlueprintNode): string {
+  switch (node.type) {
+    case "command":
+      return ` — ${truncateInline(node.run, 96)}`;
+    case "pi": {
+      const parts = [
+        node.thinking ? `thinking ${node.thinking}` : "",
+        node.tools?.length ? `tools ${node.tools.join(",")}` : "",
+        node.skills?.length ? `skills ${node.skills.length}` : "",
+      ].filter(Boolean);
+      return parts.length > 0 ? ` — ${parts.join(" · ")}` : "";
+    }
+    case "stop":
+      return node.message ? ` — ${truncateInline(node.message, 96)}` : "";
+  }
+}
+
+function formatNodeRoute(node: BlueprintNode): string {
+  if (node.type === "stop") return "";
+  const success = node.on?.success ?? node.next;
+  const failure = node.on?.failure;
+  const parts = [success ? `success → ${success}` : "", failure ? `failure → ${failure}` : ""].filter(Boolean);
+  return parts.length > 0 ? `↳ ${parts.join(" · ")}` : "";
+}
+
+function formatNodeOutputPreview(result: BlueprintNodeResult | undefined): string {
+  if (!result || result.status === "success") return "";
+  const firstLine = result.output
+    .split("\n")
+    .map((line) => line.trim())
+    .find(Boolean);
+  return firstLine ? `last: ${truncateInline(firstLine, 140)}` : "";
+}
+
+function statusIcon(status: WorkflowNodeStatus): string {
+  switch (status) {
+    case "queued":
+      return "○";
+    case "running":
+      return "⏳";
+    case "succeeded":
+      return "✓";
+    case "failed":
+      return "✗";
+  }
+}
+
+function truncateInline(text: string, maxChars: number): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxChars) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
 }
