@@ -46,6 +46,7 @@ export type FakePi = {
   handlers: Map<string, Handler[]>;
   activeTools: Set<string>;
   appendedEntries: Array<{ customType: string; data?: unknown }>;
+  messageRenderers: Map<string, unknown>;
   sentMessages: Array<{ message: unknown; options?: unknown }>;
   sentUserMessages: Array<{ content: unknown; options?: unknown }>;
   uiNotifications: Array<{ message: string; type?: "info" | "warning" | "error" }>;
@@ -62,6 +63,7 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
   const handlers = new Map<string, Handler[]>();
   const activeTools = new Set<string>();
   const appendedEntries: FakePi["appendedEntries"] = [];
+  const messageRenderers = new Map<string, unknown>();
   const sentMessages: FakePi["sentMessages"] = [];
   const sentUserMessages: FakePi["sentUserMessages"] = [];
   const uiNotifications: FakePi["uiNotifications"] = [];
@@ -111,6 +113,10 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
 
     appendEntry(customType: string, data?: unknown) {
       appendedEntries.push({ customType, data });
+    },
+
+    registerMessageRenderer(customType: string, renderer: unknown) {
+      messageRenderers.set(customType, renderer);
     },
 
     sendMessage(message: unknown, sendOptions?: unknown) {
@@ -181,6 +187,7 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
     handlers,
     activeTools,
     appendedEntries,
+    messageRenderers,
     sentMessages,
     sentUserMessages,
     uiNotifications,

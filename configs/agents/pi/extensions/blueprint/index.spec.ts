@@ -36,12 +36,18 @@ describe("blueprint extension E2E", () => {
     // Act
     const response = await harness.request({ type: "prompt", message: "/blueprint echo say hello" }, 60_000);
     const notifyEvent = await harness.waitForEvent(isBlueprintSuccessNotification, 60_000);
+    const messageEvent = await harness.waitForEvent(isBlueprintProgressMessageEnd, 60_000);
     const widgetEvent = await harness.waitForEvent(isBlueprintWorkflowWidget, 60_000);
 
     // Assert
     expect(response.success).toBe(true);
     expect(notifyEvent.message).toContain("Blueprint user/echo succeeded.");
     expect(notifyEvent.message).toContain("Nodes: 2/2 succeeded.");
+    expect(message(messageEvent)?.content).toContain("Blueprint user/echo");
+    expect(message(messageEvent)?.details).toMatchObject({
+      blueprint: { id: "user/echo" },
+      progress: { currentNodeId: "echo" },
+    });
     expect(widgetText(widgetEvent)).toContain("Blueprint user/echo");
     expect(widgetText(widgetEvent)).toContain("Workflow:");
     expect(widgetText(widgetEvent)).toContain("echo [command]");
@@ -71,6 +77,10 @@ function isBlueprintSuccessNotification(event: JsonObject): boolean {
   );
 }
 
+function isBlueprintProgressMessageEnd(event: JsonObject): boolean {
+  return event.type === "message_end" && message(event)?.customType === "blueprint-progress";
+}
+
 function isBlueprintWorkflowWidget(event: JsonObject): boolean {
   return (
     event.type === "extension_ui_request" &&
@@ -83,4 +93,9 @@ function isBlueprintWorkflowWidget(event: JsonObject): boolean {
 
 function widgetText(event: JsonObject): string {
   return Array.isArray(event.widgetLines) ? event.widgetLines.join("\n") : "";
+}
+
+function message(event: JsonObject): JsonObject | undefined {
+  const value = event.message;
+  return value && typeof value === "object" ? (value as JsonObject) : undefined;
 }

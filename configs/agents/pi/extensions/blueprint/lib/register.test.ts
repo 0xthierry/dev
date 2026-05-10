@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { AutocompleteProvider } from "@earendil-works/pi-tui";
 import { createFakePi } from "../../_shared/testing/fake-pi";
+import { BLUEPRINT_PROGRESS_MESSAGE_TYPE } from "./progress-message";
 import { registerBlueprintCommand, registerBlueprintExtension } from "./register";
 import { BLUEPRINT_DEPTH_ENV } from "./runner/pi-invocation";
 import type { BlueprintRuntime } from "./runtime";
@@ -36,7 +37,7 @@ describe("registerBlueprintExtension", () => {
 });
 
 describe("registerBlueprintCommand", () => {
-  test("registers the user-facing command with argument completions", () => {
+  test("registers the user-facing command and progress message renderer", () => {
     // Arrange
     const fakePi = createFakePi();
     const runtime: BlueprintRuntime = {
@@ -53,6 +54,7 @@ describe("registerBlueprintCommand", () => {
     const command = fakePi.commands.get("blueprint");
     expect(command?.description).toContain("blueprint graph");
     expect(typeof command?.getArgumentCompletions).toBe("function");
+    expect(fakePi.messageRenderers.has(BLUEPRINT_PROGRESS_MESSAGE_TYPE)).toBe(true);
   });
 
   test("registers a UI autocomplete provider for explicit tab completions", async () => {

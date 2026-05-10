@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { createFakePi } from "../../_shared/testing/fake-pi";
 import { handleBlueprintCommand } from "./command";
+import { BLUEPRINT_PROGRESS_MESSAGE_TYPE } from "./progress-message";
 import type { BlueprintRuntime } from "./runtime";
 import type { BlueprintDiscoveryResult, BlueprintRunResult, LoadedBlueprint } from "./types";
 
@@ -38,6 +39,14 @@ describe("handleBlueprintCommand", () => {
       expect.objectContaining({ blueprint, task: "add feature", cwd: "/repo", modelRef: "anthropic/sonnet" }),
       expect.any(Function),
     );
+    expect(fakePi.sentMessages).toContainEqual({
+      message: expect.objectContaining({
+        customType: BLUEPRINT_PROGRESS_MESSAGE_TYPE,
+        display: true,
+        details: expect.objectContaining({ progress: expect.objectContaining({ currentNodeId: "done" }) }),
+      }),
+      options: undefined,
+    });
     expect(fakePi.uiNotifications.at(-1)).toEqual({
       message: expect.stringContaining("Blueprint project/flow succeeded."),
       type: "info",

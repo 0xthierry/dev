@@ -6,6 +6,7 @@ import {
   formatBlueprintWorkflow,
   resolveBlueprintSelection,
 } from "./format";
+import { publishBlueprintProgressMessage } from "./progress-message";
 import type { BlueprintRuntime } from "./runtime";
 import type { PiThinkingLevel } from "./thinking";
 
@@ -68,6 +69,7 @@ export async function handleBlueprintCommand(
         ctx.ui.setWidget("blueprint", formatBlueprintWorkflow(progress, selection.blueprint, parsed.task), {
           placement: "belowEditor",
         });
+        publishBlueprintProgressMessage(pi, selection.blueprint, parsed.task, progress);
       },
     );
 
