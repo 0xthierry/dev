@@ -27,26 +27,6 @@ Look for:
 - Prefer project-local commands: package scripts, `make`, `just`, `task`, `go test`, `cargo test`, `cargo xtask`, repo wrappers, or documented scripts.
 - A validation run does not count if it uses the wrong runtime, a globally installed binary when the project requires a local build, stale build output, unrelated tests, or a mocked production path that bypasses the changed code.
 
-### JavaScript / TypeScript
-
-- **CRITICAL**: Use the package manager declared by `packageManager` or implied by the lockfile. Do not run `npm` in a `pnpm`, `yarn`, or `bun` project unless the repo instructs you to.
-- Lockfile defaults: `bun.lock`/`bun.lockb` => `bun`; `pnpm-lock.yaml` => `pnpm`; `yarn.lock` => `yarn`; `package-lock.json` => `npm`.
-- Prefer package scripts over raw binaries. If the repo has `test`, `lint`, `typecheck`, `build`, or `format` scripts, use those before inventing commands.
-- For dynamic user-facing behavior, run or add the normal browser, end-to-end, integration, or workflow test for that stack when practical.
-
-### Go
-
-- Run `gofmt` on changed Go files.
-- Use the repository's documented test command. If none exists, prefer targeted `go test ./path` for the changed package, then broader `go test ./...` when risk justifies it.
-- Do not edit `go.sum` manually. Let `go mod tidy`, `go test`, or the appropriate Go command update it.
-
-### Rust
-
-- Run `cargo fmt` for changed Rust code unless the repo uses another formatter command.
-- Use the repository's documented test command. If none exists, prefer targeted `cargo test -p <crate>` or `cargo test <name>`, then broader `cargo test` when risk justifies it.
-- Run `cargo clippy` when the repo treats it as part of validation or the change is risky.
-- Do not edit `Cargo.lock` manually. Let Cargo update it.
-
 ## Testing
 
 **Default: all behavior changes get tests.** If you are not testing the behavior you changed, you are not done.
@@ -78,13 +58,9 @@ Docs-only, comments-only, spelling, formatting-only, or non-executable text chan
 
 ## Code Review Self-Check
 
-- Match the existing repository style, naming, file organization, formatting, testing patterns, and framework conventions, even when they differ from your defaults.
-- Prefer focused changes. Avoid broad rewrites when a smaller change satisfies the request.
-- Do not create helpers, utilities, service objects, abstractions, or indirection layers merely for appearance. Add an abstraction only when it creates a real boundary, isolates an external dependency, improves testability, clarifies domain behavior, removes real duplication, or supports an explicit requirement.
-- Before writing code that makes a non-obvious choice, ask: “why this and not the alternative?” If you cannot answer, research first.
-- Do not take a bug report's suggested fix at face value. Verify the correct layer and trace the root cause before patching symptoms.
-- If neighboring code does something differently than you plan to, find out why before deviating. Existing choices may be load-bearing, not stylistic.
-- Backward compatibility is not an automatic hidden requirement. When a change may affect public APIs, persisted data, configuration, integrations, deployment contracts, or user-visible behavior, ask if compatibility is required when allowed. Otherwise choose the smallest safe change that satisfies the request.
+- Before writing code that makes a non-obvious choice, pre-emptively ask "why this and not the alternative?" If you can't answer, research until you can — don't write first and justify later.
+- Don't take a bug report's suggested fix at face value; verify it's the right layer.
+If neighboring code does something differently than you're about to, find out why before deviating — its choices are often load-bearing, not stylistic.
 
 ## Production, State, External Systems, and Secrets
 
@@ -105,7 +81,6 @@ Docs-only, comments-only, spelling, formatting-only, or non-executable text chan
 ## Dependencies and Generated Files
 
 - **CRITICAL**: Do not edit generated lockfiles directly, including `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `bun.lock`, `Cargo.lock`, `uv.lock`, `Gemfile.lock`, and similar files. Change dependencies through the package manager or generator command and let the tool regenerate the lockfile.
-- **Exception:** edit a lockfile directly only when the repository explicitly requires it or the user specifically authorizes it after the risk is explained.
 - Treat generated artifacts as outputs, not source, unless the project explicitly tracks and reviews them.
 - Default to editing the source-of-generation and running codegen. If generated files are intentionally committed, update them with the repository's documented generator.
 - Do not leave coverage reports, build output, temporary files, logs, local runtime state, cache files, smoke-test output, or machine-specific files in the repository unless they are intentionally tracked or ignored.
