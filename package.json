@@ -16,6 +16,9 @@
       "./configs/agents/pi/extensions/statusline",
       "./configs/agents/pi/extensions/nested-agents",
       "./configs/agents/pi/extensions/project-rules"
+    ],
+    "prompts": [
+      "./configs/agents/pi/prompts"
     ]
   },
   "scripts": {
