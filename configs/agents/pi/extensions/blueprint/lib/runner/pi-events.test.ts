@@ -20,7 +20,12 @@ describe("applyPiChildJsonEvent", () => {
 
     // Assert
     expect(parsed).toBe(true);
-    expect(state).toEqual({ finalOutput: "Child result", model: "test-model", stopReason: "stop" });
+    expect(state).toMatchObject({
+      finalOutput: "Child result",
+      model: "test-model",
+      stopReason: "stop",
+      activity: [{ kind: "assistant", status: "completed", text: "Child result" }],
+    });
   });
 
   test("ignores malformed and non-assistant events", () => {
@@ -38,6 +43,52 @@ describe("applyPiChildJsonEvent", () => {
     expect(malformed).toBe(false);
     expect(user).toBe(false);
     expect(state.finalOutput).toBe("");
+  });
+
+  test("captures streaming assistant deltas and tool activity", () => {
+    // Arrange
+    const state = createPiChildEventState();
+
+    // Act
+    const assistantUpdate = applyPiChildJsonEvent(
+      state,
+      JSON.stringify({
+        type: "message_update",
+        message: { role: "assistant", content: [{ type: "text", text: "Looking at files" }] },
+      }),
+    );
+    const toolStart = applyPiChildJsonEvent(
+      state,
+      JSON.stringify({
+        type: "tool_execution_start",
+        toolCallId: "call-1",
+        toolName: "bash",
+        args: { command: "bun test" },
+      }),
+    );
+    const toolEnd = applyPiChildJsonEvent(
+      state,
+      JSON.stringify({
+        type: "tool_execution_end",
+        toolCallId: "call-1",
+        toolName: "bash",
+        result: { content: [{ type: "text", text: "pass" }] },
+      }),
+    );
+
+    // Assert
+    expect([assistantUpdate, toolStart, toolEnd]).toEqual([true, true, true]);
+    expect(state.activity).toEqual([
+      { kind: "assistant", status: "running", text: "Looking at files" },
+      {
+        kind: "tool",
+        toolCallId: "call-1",
+        toolName: "bash",
+        status: "succeeded",
+        argsPreview: "$ bun test",
+        outputPreview: "pass",
+      },
+    ]);
   });
 });
 

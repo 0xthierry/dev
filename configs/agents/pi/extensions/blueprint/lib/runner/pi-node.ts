@@ -5,7 +5,7 @@ import { isAbsolute, join } from "node:path";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateTail } from "@earendil-works/pi-coding-agent";
 import { type BlueprintTemplateState, renderBlueprintTemplate } from "../template";
 import type { BlueprintNodeResult, PiBlueprintNode } from "../types";
-import { applyPiChildJsonEvent, createPiChildEventState } from "./pi-events";
+import { applyPiChildJsonEvent, clonePiActivity, createPiChildEventState, type PiChildEventState } from "./pi-events";
 import { buildPiNodeInvocation } from "./pi-invocation";
 
 export interface ExecutePiNodeOptions {
@@ -21,6 +21,15 @@ export interface ExecutePiNodeOptions {
   signal?: AbortSignal;
   parentModelRef?: string;
   parentThinking?: PiBlueprintNode["thinking"];
+  onProgress?: (progress: ExecutePiNodeProgress) => void;
+}
+
+export interface ExecutePiNodeProgress {
+  activity: NonNullable<BlueprintNodeResult["activity"]>;
+  finalOutput: string;
+  model?: string;
+  stopReason?: string;
+  errorMessage?: string;
 }
 
 export async function executePiNode(options: ExecutePiNodeOptions): Promise<BlueprintNodeResult> {
@@ -89,7 +98,9 @@ export async function executePiNode(options: ExecutePiNodeOptions): Promise<Blue
       stdoutBuffer += text;
       const lines = stdoutBuffer.split("\n");
       stdoutBuffer = lines.pop() ?? "";
-      for (const line of lines) applyPiChildJsonEvent(state, line);
+      for (const line of lines) {
+        if (applyPiChildJsonEvent(state, line)) options.onProgress?.(buildPiNodeProgress(state));
+      }
     });
 
     child.stderr.on("data", (chunk) => {
@@ -102,7 +113,9 @@ export async function executePiNode(options: ExecutePiNodeOptions): Promise<Blue
     });
 
     child.once("close", (code) => {
-      if (stdoutBuffer.trim()) applyPiChildJsonEvent(state, stdoutBuffer);
+      if (stdoutBuffer.trim() && applyPiChildJsonEvent(state, stdoutBuffer)) {
+        options.onProgress?.(buildPiNodeProgress(state));
+      }
       finish(code ?? 0);
     });
 
@@ -130,8 +143,19 @@ export async function executePiNode(options: ExecutePiNodeOptions): Promise<Blue
     model: state.model,
     stopReason: aborted ? "aborted" : state.stopReason,
     errorMessage: state.errorMessage,
+    activity: clonePiActivity(state.activity),
     startedAt,
     finishedAt: new Date().toISOString(),
+  };
+}
+
+function buildPiNodeProgress(state: PiChildEventState): ExecutePiNodeProgress {
+  return {
+    activity: clonePiActivity(state.activity),
+    finalOutput: state.finalOutput,
+    model: state.model,
+    stopReason: state.stopReason,
+    errorMessage: state.errorMessage,
   };
 }
 

@@ -1,9 +1,14 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { parseBlueprintCommandArgs } from "./args";
 import { formatBlueprintList, formatBlueprintRunSummary, resolveBlueprintSelection } from "./format";
-import { publishBlueprintProgressMessage } from "./progress-message";
+import {
+  type BlueprintProgressMessageHandle,
+  createBlueprintProgressMessageHandle,
+  publishBlueprintProgressMessage,
+} from "./progress-message";
 import type { BlueprintRuntime } from "./runtime";
 import type { PiThinkingLevel } from "./thinking";
+import type { BlueprintRunProgress } from "./types";
 
 export async function handleBlueprintCommand(
   pi: ExtensionAPI,
@@ -34,6 +39,23 @@ export async function handleBlueprintCommand(
 
   await ctx.waitForIdle();
 
+  let progressHandle: BlueprintProgressMessageHandle | undefined;
+  let lastProgress: BlueprintRunProgress | undefined;
+  const publishOrUpdateProgress = (progress: BlueprintRunProgress) => {
+    lastProgress = progress;
+    if (!progressHandle) {
+      progressHandle = createBlueprintProgressMessageHandle(pi, selection.blueprint, parsed.task, progress);
+      progressHandle.publish();
+    } else {
+      progressHandle.update(progress);
+    }
+
+    // Custom command messages are immutable transcript entries, so the live renderer reads the
+    // mutated details object and this no-op status clear asks the TUI to repaint without adding
+    // footer chrome or a new chat card for every progress event.
+    ctx.ui.setStatus("blueprint", undefined);
+  };
+
   try {
     const result = await runtime.runBlueprint(
       {
@@ -44,14 +66,26 @@ export async function handleBlueprintCommand(
         modelRef: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined,
         thinking: pi.getThinkingLevel?.() as PiThinkingLevel | undefined,
       },
-      undefined,
+      publishOrUpdateProgress,
     );
 
     const summary = formatBlueprintRunSummary(result);
+    if (progressHandle) progressHandle.finish(result);
     publishBlueprintProgressMessage(pi, selection.blueprint, parsed.task, result);
+    ctx.ui.setStatus("blueprint", undefined);
     if (result.status !== "succeeded") ctx.ui.notify(summary, "error");
   } catch (error) {
     const message = error instanceof Error && error.message.trim() ? error.message.trim() : String(error);
+    if (progressHandle && lastProgress) {
+      const failedProgress: BlueprintRunProgress = {
+        ...lastProgress,
+        status: "failed",
+        message: `Blueprint failed: ${message}`,
+        activeNode: undefined,
+      };
+      progressHandle.finish(failedProgress);
+      publishBlueprintProgressMessage(pi, selection.blueprint, parsed.task, failedProgress);
+    }
     ctx.ui.setStatus("blueprint", undefined);
     ctx.ui.notify(`Blueprint failed: ${message}`, "error");
   }

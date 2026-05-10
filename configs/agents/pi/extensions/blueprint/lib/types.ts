@@ -5,6 +5,30 @@ export type BlueprintNodeType = "pi" | "command" | "stop";
 export type BlueprintNodeStatus = "success" | "failure";
 export type BlueprintRunStatus = "running" | "succeeded" | "failed";
 
+export type BlueprintPiActivityItem = BlueprintPiAssistantActivityItem | BlueprintPiToolActivityItem;
+
+export interface BlueprintPiAssistantActivityItem {
+  kind: "assistant";
+  status: "running" | "completed";
+  text: string;
+}
+
+export interface BlueprintPiToolActivityItem {
+  kind: "tool";
+  toolCallId: string;
+  toolName: string;
+  status: "running" | "succeeded" | "failed";
+  argsPreview: string;
+  outputPreview?: string;
+}
+
+export interface BlueprintActiveNodeProgress {
+  nodeId: string;
+  type: BlueprintNodeType;
+  attempt: number;
+  activity?: BlueprintPiActivityItem[];
+}
+
 export interface BlueprintEdges {
   success?: string;
   failure?: string;
@@ -90,6 +114,7 @@ export interface BlueprintNodeResult {
   model?: string;
   stopReason?: string;
   errorMessage?: string;
+  activity?: BlueprintPiActivityItem[];
 }
 
 export interface BlueprintRunProgress {
@@ -99,6 +124,7 @@ export interface BlueprintRunProgress {
   message: string;
   results: BlueprintNodeResult[];
   runDir: string;
+  activeNode?: BlueprintActiveNodeProgress;
 }
 
 export interface BlueprintRunResult extends BlueprintRunProgress {

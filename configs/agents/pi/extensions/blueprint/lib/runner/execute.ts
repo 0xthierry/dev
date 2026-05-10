@@ -2,6 +2,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import type { BlueprintTemplateState } from "../template";
 import type { PiThinkingLevel } from "../thinking";
 import type {
+  BlueprintActiveNodeProgress,
   BlueprintNode,
   BlueprintNodeResult,
   BlueprintRunProgress,
@@ -85,8 +86,22 @@ export async function runBlueprint(
       break;
     }
 
-    emitProgress(onProgress, artifacts, status, currentNodeId, `Running ${currentNodeId} (${node.type}).`, results);
-    const result = await executeNode(currentNodeId, node, attempt, request, artifacts, state, executors);
+    const activeNode = activeNodeProgress(currentNodeId, node, attempt);
+    emitProgress(
+      onProgress,
+      artifacts,
+      status,
+      currentNodeId,
+      `Running ${currentNodeId} (${node.type}).`,
+      results,
+      activeNode,
+    );
+    const result = await executeNode(currentNodeId, node, attempt, request, artifacts, state, executors, (progress) =>
+      emitProgress(onProgress, artifacts, status, currentNodeId, `Running ${currentNodeId} (${node.type}).`, results, {
+        ...activeNode,
+        ...progress,
+      }),
+    );
     results.push(result);
     state.nodes[currentNodeId] = result;
     await artifacts.writeNodeResult(result);
@@ -139,6 +154,7 @@ async function executeNode(
   artifacts: BlueprintRunArtifacts,
   state: BlueprintTemplateState,
   executors: BlueprintNodeExecutors,
+  onNodeProgress: (progress: Partial<BlueprintActiveNodeProgress>) => void,
 ): Promise<BlueprintNodeResult> {
   const nodeDir = artifacts.nodeDir(nodeId, attempt);
   await mkdir(nodeDir, { recursive: true });
@@ -169,6 +185,7 @@ async function executeNode(
         signal: request.signal,
         parentModelRef: request.modelRef,
         parentThinking: request.thinking,
+        onProgress: (progress) => onNodeProgress({ activity: progress.activity }),
       });
     case "stop":
       return executeStopNode(nodeId, node, attempt, state);
@@ -193,6 +210,10 @@ function executeStopNode(
   };
 }
 
+function activeNodeProgress(nodeId: string, node: BlueprintNode, attempt: number): BlueprintActiveNodeProgress {
+  return { nodeId, type: node.type, attempt };
+}
+
 function nextNodeId(node: BlueprintNode, result: BlueprintNodeResult): string | undefined {
   if (result.status === "success") return node.on?.success ?? node.next;
   return node.on?.failure;
@@ -213,6 +234,7 @@ function emitProgress(
   currentNodeId: string | undefined,
   message: string,
   results: BlueprintNodeResult[],
+  activeNode?: BlueprintActiveNodeProgress,
 ): void {
   onProgress?.({
     runId: artifacts.runId,
@@ -220,6 +242,11 @@ function emitProgress(
     status,
     currentNodeId,
     message,
-    results: results.map((result) => ({ ...result })),
+    results: cloneNodeResults(results),
+    activeNode: activeNode ? { ...activeNode, activity: activeNode.activity?.map((item) => ({ ...item })) } : undefined,
   });
+}
+
+function cloneNodeResults(results: BlueprintNodeResult[]): BlueprintNodeResult[] {
+  return results.map((result) => ({ ...result, activity: result.activity?.map((item) => ({ ...item })) }));
 }

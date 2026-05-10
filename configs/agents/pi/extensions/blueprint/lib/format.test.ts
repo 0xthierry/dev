@@ -79,6 +79,49 @@ describe("blueprint run formatting", () => {
     expect(text).toContain("○ fix_lint [pi] queued");
   });
 
+  test("formats live pi node activity", () => {
+    // Arrange
+    const blueprint = loadedBlueprint("project", "flow", {
+      start: "implement",
+      nodes: {
+        implement: { type: "pi", prompt: "implement", next: "done" },
+        done: { type: "stop", message: "Workflow complete." },
+      },
+    });
+    const progress = {
+      runId: "run-1",
+      runDir: "/runs/run-1",
+      status: "running" as const,
+      currentNodeId: "implement",
+      message: "Running implement (pi).",
+      results: [],
+      activeNode: {
+        nodeId: "implement",
+        type: "pi" as const,
+        attempt: 1,
+        activity: [
+          { kind: "assistant" as const, status: "running" as const, text: "I am planning the edit." },
+          {
+            kind: "tool" as const,
+            toolCallId: "tool-1",
+            toolName: "read",
+            status: "succeeded" as const,
+            argsPreview: "read src/index.ts",
+            outputPreview: "file contents",
+          },
+        ],
+      },
+    };
+
+    // Act
+    const text = formatBlueprintWorkflow(progress, blueprint, "add auth").join("\n");
+
+    // Assert
+    expect(text).toContain("⏳ implement [pi] running attempt 1");
+    expect(text).toContain("assistant: I am planning the edit.");
+    expect(text).toContain("✓ read read src/index.ts → file contents");
+  });
+
   test("formats progress and final summary", () => {
     // Arrange
     const result: BlueprintRunResult = {

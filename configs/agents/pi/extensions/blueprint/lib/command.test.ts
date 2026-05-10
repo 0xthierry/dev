@@ -37,9 +37,18 @@ describe("handleBlueprintCommand", () => {
     // Assert
     expect(runtime.runBlueprint).toHaveBeenCalledWith(
       expect.objectContaining({ blueprint, task: "add feature", cwd: "/repo", modelRef: "anthropic/sonnet" }),
-      undefined,
+      expect.any(Function),
     );
     expect(fakePi.sentMessages).toEqual([
+      {
+        message: expect.objectContaining({
+          customType: BLUEPRINT_PROGRESS_MESSAGE_TYPE,
+          content: expect.stringContaining("live progress card"),
+          display: true,
+          details: expect.objectContaining({ ephemeral: true, superseded: true }),
+        }),
+        options: undefined,
+      },
       {
         message: expect.objectContaining({
           customType: BLUEPRINT_PROGRESS_MESSAGE_TYPE,

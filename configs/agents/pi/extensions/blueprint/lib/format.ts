@@ -2,6 +2,7 @@ import type {
   BlueprintDiscoveryResult,
   BlueprintNode,
   BlueprintNodeResult,
+  BlueprintPiActivityItem,
   BlueprintRunProgress,
   BlueprintRunResult,
   LoadedBlueprint,
@@ -94,6 +95,8 @@ export function formatBlueprintWorkflow(
     lines.push(formatWorkflowNodeLine(nodeId, node, state));
     const route = formatNodeRoute(node);
     if (route) lines.push(`  ${route}`);
+    const activity = formatPiActivityPreview(state, progress);
+    for (const activityLine of activity) lines.push(`  ${activityLine}`);
     const output = formatNodeOutputPreview(state.result);
     if (output) lines.push(`  ${output}`);
   }
@@ -119,6 +122,7 @@ interface WorkflowNodeState {
   status: WorkflowNodeStatus;
   attempt: number;
   result?: BlueprintNodeResult;
+  activity?: BlueprintPiActivityItem[];
 }
 
 function describeNodeState(nodeId: string, progress: BlueprintRunProgress): WorkflowNodeState {
@@ -127,7 +131,13 @@ function describeNodeState(nodeId: string, progress: BlueprintRunProgress): Work
   const isRunning = progress.status === "running" && progress.currentNodeId === nodeId;
 
   if (isRunning) {
-    return { nodeId, status: "running", attempt: (lastResult?.attempt ?? 0) + 1, result: lastResult };
+    return {
+      nodeId,
+      status: "running",
+      attempt: progress.activeNode?.nodeId === nodeId ? progress.activeNode.attempt : (lastResult?.attempt ?? 0) + 1,
+      result: lastResult,
+      activity: progress.activeNode?.nodeId === nodeId ? progress.activeNode.activity : lastResult?.activity,
+    };
   }
 
   if (!lastResult) return { nodeId, status: "queued", attempt: 0 };
@@ -136,6 +146,7 @@ function describeNodeState(nodeId: string, progress: BlueprintRunProgress): Work
     status: lastResult.status === "success" ? "succeeded" : "failed",
     attempt: lastResult.attempt,
     result: lastResult,
+    activity: lastResult.activity,
   };
 }
 
@@ -186,6 +197,32 @@ function formatNodeOutputPreview(result: BlueprintNodeResult | undefined): strin
     .map((line) => line.trim())
     .find(Boolean);
   return firstLine ? `last: ${truncateInline(firstLine, 140)}` : "";
+}
+
+function formatPiActivityPreview(state: WorkflowNodeState, progress: BlueprintRunProgress): string[] {
+  const activity = state.activity ?? [];
+  if (activity.length === 0) return [];
+
+  const expanded = progress.status !== "running" || progress.currentNodeId !== state.nodeId;
+  const items = expanded ? activity : activity.slice(-6);
+  return items.map(formatPiActivityItem);
+}
+
+function formatPiActivityItem(item: BlueprintPiActivityItem): string {
+  if (item.kind === "assistant") {
+    return `assistant: ${truncateInline(firstLines(item.text, 3), 160)}`;
+  }
+
+  const status = item.status === "running" ? "↻" : item.status === "failed" ? "✗" : "✓";
+  const args = item.argsPreview ? ` ${truncateInline(item.argsPreview, 160)}` : "";
+  const output = item.outputPreview ? ` → ${truncateInline(item.outputPreview, 160)}` : "";
+  return `${status} ${item.toolName}${args}${output}`;
+}
+
+function firstLines(text: string, maxLines: number): string {
+  const lines = text.split("\n");
+  const shown = lines.slice(0, maxLines).join("\n");
+  return lines.length > maxLines ? `${shown}\n…` : shown;
 }
 
 function statusIcon(status: WorkflowNodeStatus): string {

@@ -52,6 +52,53 @@ describe("runBlueprint", () => {
     }
   });
 
+  test("emits child Pi activity while a pi node is running", async () => {
+    // Arrange
+    const artifactRootDir = await mkdtemp(join(tmpdir(), "pi-blueprint-run-"));
+    const command = mock(async (options: Parameters<BlueprintNodeExecutors["command"]>[0]) =>
+      nodeResult(options.nodeId, "command", "success", options.attempt),
+    );
+    const pi = mock(async (options: Parameters<BlueprintNodeExecutors["pi"]>[0]) => {
+      options.onProgress?.({
+        finalOutput: "",
+        activity: [{ kind: "tool", toolCallId: "tool-1", toolName: "bash", status: "running", argsPreview: "$ test" }],
+      });
+      return nodeResult(options.nodeId, "pi", "success", options.attempt, {
+        output: "implemented",
+        activity: [
+          { kind: "tool", toolCallId: "tool-1", toolName: "bash", status: "succeeded", argsPreview: "$ test" },
+        ],
+      });
+    });
+    const progressEvents: string[] = [];
+    const executors = fakeExecutors(command, pi);
+    const blueprint = loadedBlueprint({
+      start: "implement",
+      nodes: {
+        implement: { type: "pi", prompt: "Implement", next: "done" },
+        done: { type: "stop", message: "done" },
+      },
+    });
+
+    try {
+      // Act
+      await runBlueprint(
+        { blueprint, task: "task", cwd: "/repo", artifactRootDir },
+        (progress) => {
+          const active = progress.activeNode;
+          if (active?.activity?.[0])
+            progressEvents.push(`${active.nodeId}:${active.activity[0].kind}:${active.activity[0].status}`);
+        },
+        { executors, buildInitialContext: mock(async () => "initial context") },
+      );
+
+      // Assert
+      expect(progressEvents).toContain("implement:tool:running");
+    } finally {
+      await rm(artifactRootDir, { recursive: true, force: true });
+    }
+  });
+
   test("refreshes context.md after a pi node updates it", async () => {
     // Arrange
     const artifactRootDir = await mkdtemp(join(tmpdir(), "pi-blueprint-run-"));
