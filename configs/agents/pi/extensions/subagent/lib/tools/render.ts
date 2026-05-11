@@ -34,11 +34,15 @@ export function formatAgentToolCall(args: AgentParams, theme: Theme): string {
       .join("\n");
   }
 
+  const resumeId = typeof args.agent_id === "string" && args.agent_id.trim() ? args.agent_id.trim() : "";
   const agent = typeof args.subagent_type === "string" && args.subagent_type.trim() ? args.subagent_type.trim() : "…";
   const prompt = typeof args.prompt === "string" ? args.prompt : "";
   const description = typeof args.description === "string" ? args.description.trim() : "";
   return [
-    `${theme.fg("toolTitle", theme.bold("Agent "))}${theme.fg("accent", agent)}`,
+    `${theme.fg("toolTitle", theme.bold("Agent "))}${theme.fg(
+      "accent",
+      resumeId ? `resume ${resumeId.slice(0, 8)}` : agent,
+    )}`,
     `  ${theme.fg("dim", truncate(description || prompt || "Waiting for task arguments…", MAX_TASK_PREVIEW))}`,
   ].join("\n");
 }
@@ -67,10 +71,12 @@ export function formatAgentToolResult(
 }
 
 function formatCallTaskLine(task: AgentTaskInput, index: number, theme: Theme): string {
+  const resumeId = typeof task.agent_id === "string" && task.agent_id.trim() ? task.agent_id.trim() : "";
   const agent = typeof task.subagent_type === "string" && task.subagent_type.trim() ? task.subagent_type.trim() : "…";
+  const label = resumeId ? `resume ${resumeId.slice(0, 8)}` : agent;
   const prompt = typeof task.prompt === "string" ? task.prompt : "";
   const description = typeof task.description === "string" ? task.description.trim() : "";
-  return `  ${theme.fg("muted", `${index + 1}.`)} ${theme.fg("accent", agent)} ${theme.fg(
+  return `  ${theme.fg("muted", `${index + 1}.`)} ${theme.fg("accent", label)} ${theme.fg(
     "dim",
     truncate(description || prompt || "Waiting for task arguments…", MAX_TASK_PREVIEW),
   )}`;
@@ -105,7 +111,11 @@ function formatAgentResult(result: AgentRunResult, expanded: boolean, theme: The
     `${statusIcon(result.status, theme)} ${theme.fg("accent", label)} ${theme.fg("muted", result.status)}`,
   ];
 
-  if (expanded) lines.push(`  ${theme.fg("muted", "Task:")} ${theme.fg("dim", result.task)}`);
+  if (expanded) {
+    if (result.agentId) lines.push(`  ${theme.fg("muted", "Agent ID:")} ${theme.fg("dim", result.agentId)}`);
+    if (result.sessionFile) lines.push(`  ${theme.fg("muted", "Session:")} ${theme.fg("dim", result.sessionFile)}`);
+    lines.push(`  ${theme.fg("muted", "Task:")} ${theme.fg("dim", result.task)}`);
+  }
 
   const activity = expanded ? result.activity : result.activity.slice(-COLLAPSED_ACTIVITY_ITEMS);
   if (activity.length > 0) {
@@ -164,6 +174,7 @@ function formatUsage(result: AgentRunResult): string {
   if (result.usage.cacheRead) parts.push(`R${formatTokens(result.usage.cacheRead)}`);
   if (result.usage.cacheWrite) parts.push(`W${formatTokens(result.usage.cacheWrite)}`);
   if (result.usage.cost) parts.push(`$${result.usage.cost.toFixed(4)}`);
+  if (result.agentId) parts.push(`id:${result.agentId.slice(0, 8)}`);
   if (result.model) parts.push(result.thinking ? `${result.model} • ${result.thinking}` : result.model);
   else if (result.thinking) parts.push(`thinking: ${result.thinking}`);
   return parts.join(" ");

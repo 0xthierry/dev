@@ -1,6 +1,7 @@
 import { delimiter, resolve } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { AgentDefinition } from "../agents/types";
+import { getProjectAgentSessionDir } from "../sessions/paths";
 import type { PiThinkingLevel } from "../thinking";
 import type { AgentContextMode } from "../tools/schemas";
 
@@ -9,15 +10,20 @@ export const CHILD_NO_EXTENSIONS_ENV = "PI_SUBAGENT_CHILD_NO_EXTENSIONS";
 export const CHILD_EXTENSIONS_ENV = "PI_SUBAGENT_CHILD_EXTENSIONS";
 export const CHILD_UNSET_ENV = "PI_SUBAGENT_CHILD_UNSET_ENV";
 
+export type AgentRunContextMode = AgentContextMode | "resume";
+
 export interface AgentRunRequest {
   agent: AgentDefinition;
   task: string;
   description?: string;
-  context: AgentContextMode;
+  context: AgentRunContextMode;
   cwd: string;
+  agentSessionDir: string;
   parentSessionFile?: string;
   modelRef?: string;
   thinking?: PiThinkingLevel;
+  resumeAgentId?: string;
+  resumeSessionFile?: string;
 }
 
 export interface ChildInvocation {
@@ -27,12 +33,13 @@ export interface ChildInvocation {
 
 export function buildAgentRunRequest(
   ctx: ExtensionContext,
-  task: Omit<AgentRunRequest, "cwd" | "modelRef" | "thinking" | "parentSessionFile">,
+  task: Omit<AgentRunRequest, "agentSessionDir" | "cwd" | "modelRef" | "thinking" | "parentSessionFile">,
   thinking: PiThinkingLevel,
 ): AgentRunRequest {
   return {
     ...task,
     cwd: ctx.cwd,
+    agentSessionDir: getProjectAgentSessionDir(ctx.cwd),
     parentSessionFile: ctx.sessionManager.getSessionFile() ?? undefined,
     modelRef: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined,
     thinking,
@@ -45,11 +52,15 @@ export function buildChildInvocation(request: AgentRunRequest, promptPath: strin
   if (isTruthy(process.env[CHILD_NO_EXTENSIONS_ENV])) args.push("--no-extensions");
   for (const extensionPath of parsePathList(process.env[CHILD_EXTENSIONS_ENV])) args.push("-e", resolve(extensionPath));
 
-  if (request.context === "fork") {
-    if (!request.parentSessionFile) throw new Error("Agent context=fork requires a saved parent Pi session.");
-    args.push("--fork", request.parentSessionFile);
+  if (request.context === "resume") {
+    if (!request.resumeSessionFile) throw new Error("Agent resume requires a saved child Pi session file.");
+    args.push("--session", request.resumeSessionFile);
   } else {
-    args.push("--no-session");
+    args.push("--session-dir", request.agentSessionDir);
+    if (request.context === "fork") {
+      if (!request.parentSessionFile) throw new Error("Agent context=fork requires a saved parent Pi session.");
+      args.push("--fork", request.parentSessionFile);
+    }
   }
 
   if (request.modelRef) args.push("--model", request.modelRef);

@@ -10,6 +10,18 @@ const theme = {
 } as unknown as Theme;
 
 describe("formatAgentToolCall", () => {
+  test("shows a resumed subagent id", () => {
+    // Arrange
+    const params = { agent_id: "019e1882-8bc8-767c-a1e6-d7c9ebd3a574", prompt: "Continue review" };
+
+    // Act
+    const text = formatAgentToolCall(params, theme);
+
+    // Assert
+    expect(text).toContain("Agent resume 019e1882");
+    expect(text).toContain("Continue review");
+  });
+
   test("shows parallel subagents", () => {
     // Arrange
     const params = {
@@ -65,6 +77,32 @@ describe("formatAgentToolResult", () => {
     expect(text).toContain("locator");
     expect(text).toContain("$ rg auth configs");
     expect(text).toContain("reviewer");
+  });
+
+  test("shows child agent id and session file when expanded", () => {
+    // Arrange
+    const result: AgentToolResult<AgentToolDetails> = {
+      content: [{ type: "text", text: "done" }],
+      details: {
+        ok: true,
+        mode: "single",
+        agentsDir: "/agents",
+        results: [
+          {
+            ...agentResult("reviewer", "succeeded"),
+            agentId: "019e1882-8bc8-767c-a1e6-d7c9ebd3a574",
+            sessionFile: "/agent-sessions/session.jsonl",
+          },
+        ],
+      },
+    };
+
+    // Act
+    const text = formatAgentToolResult(result, { expanded: true }, theme);
+
+    // Assert
+    expect(text).toContain("Agent ID: 019e1882-8bc8-767c-a1e6-d7c9ebd3a574");
+    expect(text).toContain("Session: /agent-sessions/session.jsonl");
   });
 
   test("shows child model thinking level in usage", () => {

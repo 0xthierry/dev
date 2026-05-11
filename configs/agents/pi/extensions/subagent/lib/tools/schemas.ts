@@ -3,12 +3,13 @@ import { type Static, Type } from "typebox";
 
 export const AgentContextSchema = StringEnum(["fresh", "fork"] as const, {
   description:
-    'Context mode. "fresh" starts an isolated child session. "fork" inherits the current Pi session when a saved parent session is available.',
+    'Context mode for new child sessions. "fresh" starts an isolated saved child session. "fork" inherits the current Pi session when a saved parent session is available.',
   default: "fresh",
 });
 
 export const AgentTaskSchema = Type.Object({
-  subagent_type: Type.String({ description: "Name of the configured or built-in subagent to run." }),
+  subagent_type: Type.Optional(Type.String({ description: "Name of the configured or built-in subagent to start." })),
+  agent_id: Type.Optional(Type.String({ description: "Existing child agent/session id to resume." })),
   description: Type.Optional(Type.String({ description: "Short human-readable task summary." })),
   prompt: Type.String({ description: "Task prompt for the subagent." }),
   context: Type.Optional(AgentContextSchema),
@@ -16,7 +17,10 @@ export const AgentTaskSchema = Type.Object({
 
 export const AgentParamsSchema = Type.Object({
   subagent_type: Type.Optional(
-    Type.String({ description: "Name of the configured or built-in subagent to run for single-agent mode." }),
+    Type.String({ description: "Name of the configured or built-in subagent to start for single-agent mode." }),
+  ),
+  agent_id: Type.Optional(
+    Type.String({ description: "Existing child agent/session id to resume in single-agent mode." }),
   ),
   description: Type.Optional(Type.String({ description: "Short human-readable task summary for single-agent mode." })),
   prompt: Type.Optional(Type.String({ description: "Task prompt for single-agent mode." })),

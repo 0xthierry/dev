@@ -14,7 +14,9 @@ describe("planAgentInvocation", () => {
       ok: true,
       plan: {
         mode: "single",
-        tasks: [{ subagentType: "reviewer", prompt: "Review diff", description: "Review", context: "fresh" }],
+        tasks: [
+          { kind: "start", subagentType: "reviewer", prompt: "Review diff", description: "Review", context: "fresh" },
+        ],
       },
     });
   });
@@ -38,8 +40,72 @@ describe("planAgentInvocation", () => {
       plan: {
         mode: "parallel",
         tasks: [
-          { subagentType: "locator", prompt: "Find auth files", description: undefined, context: "fork" },
-          { subagentType: "reviewer", prompt: "Review auth", description: undefined, context: "fresh" },
+          {
+            kind: "start",
+            subagentType: "locator",
+            prompt: "Find auth files",
+            description: undefined,
+            context: "fork",
+          },
+          { kind: "start", subagentType: "reviewer", prompt: "Review auth", description: undefined, context: "fresh" },
+        ],
+      },
+    });
+  });
+
+  test("plans a resume invocation", () => {
+    // Arrange
+    const params = { agent_id: " 019e1882 ", prompt: " Continue review ", subagent_type: "reviewer" };
+
+    // Act
+    const result = planAgentInvocation(params);
+
+    // Assert
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        mode: "single",
+        tasks: [
+          {
+            kind: "resume",
+            agentId: "019e1882",
+            subagentType: "reviewer",
+            prompt: "Continue review",
+            description: undefined,
+            context: "resume",
+          },
+        ],
+      },
+    });
+  });
+
+  test("plans parallel tasks mixing new and resumed agents", () => {
+    // Arrange
+    const params = {
+      tasks: [
+        { subagent_type: "locator", prompt: "Find files" },
+        { agent_id: "019e1882", prompt: "Continue the previous review" },
+      ],
+    };
+
+    // Act
+    const result = planAgentInvocation(params);
+
+    // Assert
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        mode: "parallel",
+        tasks: [
+          { kind: "start", subagentType: "locator", prompt: "Find files", description: undefined, context: "fresh" },
+          {
+            kind: "resume",
+            agentId: "019e1882",
+            subagentType: undefined,
+            prompt: "Continue the previous review",
+            description: undefined,
+            context: "resume",
+          },
         ],
       },
     });

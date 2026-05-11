@@ -18,7 +18,7 @@ describe("registerAgentTool", () => {
     // Assert
     const tool = fakePi.tools.get("Agent");
     expect(tool).toBeDefined();
-    expect(tool?.description).toContain("Spawn a subagent");
+    expect(tool?.description).toContain("Spawn or resume a subagent");
     expect(tool?.description).toContain("built-in agents");
     expect(tool?.promptGuidelines).toContain(
       "Before delegating, decide what immediate critical-path work you should do locally; do not hand off urgent blocking work when your next step depends on the result.",
@@ -35,7 +35,7 @@ describe("executeAgentTool", () => {
     const ctx = fakePi.createContext({
       cwd: "/repo",
       model: { provider: "test-provider", id: "test-model" },
-      sessionManager: { getSessionFile: () => "/sessions/parent.jsonl" },
+      sessionManager: { getSessionFile: () => "/sessions/parent.jsonl", getBranch: () => [] },
     }) as unknown as ExtensionContext;
 
     // Act
@@ -88,6 +88,69 @@ describe("executeAgentTool", () => {
       expect.any(Function),
     );
     expect(result.details?.results[0].thinking).toBe("high");
+  });
+
+  test("resumes a prior child agent session by agent_id", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const reviewer = agent("reviewer");
+    const runtime = fakeRuntime([reviewer]);
+    const ctx = fakePi.createContext({
+      sessionManager: {
+        getSessionFile: () => "/sessions/parent.jsonl",
+        getBranch: () => [
+          {
+            type: "message",
+            message: {
+              role: "toolResult",
+              toolName: "Agent",
+              details: {
+                results: [
+                  {
+                    agent: "reviewer",
+                    agentId: "019e1882-8bc8-767c-a1e6-d7c9ebd3a574",
+                    sessionFile: "/agent-sessions/session.jsonl",
+                    task: "Review auth",
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    }) as unknown as ExtensionContext;
+
+    // Act
+    const result = await executeAgentTool(
+      fakePi.pi,
+      runtime,
+      { agent_id: "019e1882", prompt: "Continue the review" },
+      undefined,
+      undefined,
+      ctx,
+    );
+
+    // Assert
+    expect(runtime.runAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: reviewer,
+        context: "resume",
+        task: "Continue the review",
+        resumeAgentId: "019e1882-8bc8-767c-a1e6-d7c9ebd3a574",
+        resumeSessionFile: "/agent-sessions/session.jsonl",
+      }),
+      undefined,
+      expect.any(Function),
+    );
+    expect(result.content[0]).toEqual({
+      type: "text",
+      text: "agent_id: 019e1882-8bc8-767c-a1e6-d7c9ebd3a574\nreviewer completed: Continue the review",
+    });
+    expect(result.details?.results[0]).toMatchObject({
+      context: "resume",
+      agentId: "019e1882-8bc8-767c-a1e6-d7c9ebd3a574",
+      sessionFile: "/agent-sessions/session.jsonl",
+    });
   });
 
   test("runs parallel tasks and reports aggregate output", async () => {
@@ -221,7 +284,12 @@ function fakeRuntime(agents: AgentDefinition[]): SubagentRuntime {
   return {
     discoverAgents: mock(async () => ({ agentsDir: "/agents", agents })),
     runAgent: mock(async (request, _signal, onProgress) => {
-      const result = resultFor(request.agent.name, request.task, request.thinking);
+      const result = {
+        ...resultFor(request.agent.name, request.task, request.thinking),
+        context: request.context,
+        agentId: request.resumeAgentId,
+        sessionFile: request.resumeSessionFile,
+      };
       onProgress?.(result);
       return result;
     }),

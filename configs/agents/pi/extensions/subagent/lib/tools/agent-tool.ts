@@ -3,6 +3,9 @@ import type { AgentDefinition } from "../agents/types";
 import { buildAgentRunRequest } from "../runner/invocation";
 import type { AgentRunResult } from "../runner/run-result";
 import type { SubagentRuntime } from "../runtime";
+import { findAgentSessionFileById, getProjectAgentSessionDir } from "../sessions/paths";
+import type { AgentSessionRecord } from "../sessions/registry";
+import { findAgentSessionRecord, restoreAgentSessionRecords } from "../sessions/registry";
 import type { PiThinkingLevel } from "../thinking";
 import { type PlannedAgentTask, planAgentInvocation } from "./params";
 import { renderAgentToolCall, renderAgentToolResult } from "./render";
@@ -17,9 +20,16 @@ export interface AgentToolDetails {
 
 const PARALLEL_CONCURRENCY = 4;
 
-interface ResolvedAgentTask extends PlannedAgentTask {
+interface ResolvedAgentTask {
+  kind: PlannedAgentTask["kind"];
+  subagentType: string;
+  agentId?: string;
+  description?: string;
+  prompt: string;
+  context: PlannedAgentTask["context"];
   agentDefinition: AgentDefinition;
   thinking: PiThinkingLevel;
+  resumeSessionFile?: string;
 }
 
 export function registerAgentTool(pi: ExtensionAPI, runtime: SubagentRuntime): void {
@@ -27,16 +37,17 @@ export function registerAgentTool(pi: ExtensionAPI, runtime: SubagentRuntime): v
     name: "Agent",
     label: "Agent",
     description: [
-      "Spawn a subagent for a well-scoped task.",
-      "Use subagent_type + prompt for one task, or tasks[] for independent parallel tasks.",
+      "Spawn or resume a subagent for a well-scoped task.",
+      "Use subagent_type + prompt to start one task, agent_id + prompt to resume, or tasks[] for independent parallel tasks.",
       "Configured and built-in agents are listed in the system prompt when available.",
       "Child agents inherit the current model and thinking level by default unless their agent definition sets effort.",
     ].join(" "),
-    promptSnippet: "Spawn a focused child subagent for a well-scoped task.",
+    promptSnippet: "Spawn or resume a focused child subagent for a well-scoped task.",
     promptGuidelines: [
       "Do not use Agent when a quick direct file read or command in the main session is sufficient.",
       "Before delegating, decide what immediate critical-path work you should do locally; do not hand off urgent blocking work when your next step depends on the result.",
       "Delegate concrete, bounded tasks that materially advance the main task and can run independently; avoid duplicating work between the parent and child agents.",
+      "Use Agent.agent_id with a follow-up prompt to resume a previous child session when the prior Agent result returned an agent_id.",
       "Use Agent.tasks for multiple independent tasks that can run in parallel, then synthesize the returned results in the main session.",
       "For coding subtasks, give each child a disjoint write scope and tell it to edit files directly, list changed paths, and report validation.",
       "Prompt child agents with a compact contract: goal, context/evidence, success criteria, hard constraints, validation, expected output, and stop rules.",
@@ -69,16 +80,8 @@ export async function executeAgentTool(
   const planResult = planAgentInvocation(params);
   if (!planResult.ok) return errorResult(planResult.error, "single", discovery.agentsDir, []);
 
-  const taskResult = resolveAgentTasks(discovery.agents, planResult.plan.tasks, readThinkingLevel(pi));
-  if (!taskResult.ok) {
-    const available = discovery.agents.map((agent) => agent.name).join(", ") || "none";
-    return errorResult(
-      `Unknown subagent: ${taskResult.missing}. Available agents: ${available}.`,
-      planResult.plan.mode,
-      discovery.agentsDir,
-      [],
-    );
-  }
+  const taskResult = await resolveAgentTasks(discovery.agents, planResult.plan.tasks, readThinkingLevel(pi), ctx);
+  if (!taskResult.ok) return errorResult(taskResult.error, planResult.plan.mode, discovery.agentsDir, []);
 
   const emitUpdate = (results: AgentRunResult[]) => {
     onUpdate?.({
@@ -103,6 +106,8 @@ export async function executeAgentTool(
         task: task.prompt,
         description: task.description,
         context: task.context,
+        resumeAgentId: task.agentId,
+        resumeSessionFile: task.resumeSessionFile,
       },
       task.thinking,
     );
@@ -121,23 +126,143 @@ export async function executeAgentTool(
   };
 }
 
-type ResolveAgentTasksResult = { ok: true; tasks: ResolvedAgentTask[] } | { ok: false; missing: string };
+type ResolveAgentTasksResult = { ok: true; tasks: ResolvedAgentTask[] } | { ok: false; error: string };
 
-function resolveAgentTasks(
+async function resolveAgentTasks(
   agents: AgentDefinition[],
   tasks: PlannedAgentTask[],
   parentThinking: PiThinkingLevel,
-): ResolveAgentTasksResult {
+  ctx: ExtensionContext,
+): Promise<ResolveAgentTasksResult> {
   const agentsByName = new Map(agents.map((agent) => [agent.name, agent]));
+  const sessionRecords = restoreAgentSessionRecords(ctx.sessionManager.getBranch());
+  const agentSessionDir = getProjectAgentSessionDir(ctx.cwd);
   const resolved: ResolvedAgentTask[] = [];
 
   for (const task of tasks) {
-    const agentDefinition = agentsByName.get(task.subagentType);
-    if (!agentDefinition) return { ok: false, missing: task.subagentType };
-    resolved.push({ ...task, agentDefinition, thinking: agentDefinition.effort ?? parentThinking });
+    const result =
+      task.kind === "start"
+        ? resolveStartTask(task, agentsByName, parentThinking, agents)
+        : await resolveResumeTask(task, agentsByName, parentThinking, sessionRecords, agentSessionDir, agents);
+    if (!result.ok) return result;
+    resolved.push(result.task);
   }
 
   return { ok: true, tasks: resolved };
+}
+
+function resolveStartTask(
+  task: Extract<PlannedAgentTask, { kind: "start" }>,
+  agentsByName: Map<string, AgentDefinition>,
+  parentThinking: PiThinkingLevel,
+  agents: AgentDefinition[],
+): { ok: true; task: ResolvedAgentTask } | { ok: false; error: string } {
+  const agentDefinition = agentsByName.get(task.subagentType);
+  if (!agentDefinition) return { ok: false, error: unknownAgentMessage(task.subagentType, agents) };
+
+  return {
+    ok: true,
+    task: {
+      kind: "start",
+      subagentType: task.subagentType,
+      description: task.description,
+      prompt: task.prompt,
+      context: task.context,
+      agentDefinition,
+      thinking: agentDefinition.effort ?? parentThinking,
+    },
+  };
+}
+
+async function resolveResumeTask(
+  task: Extract<PlannedAgentTask, { kind: "resume" }>,
+  agentsByName: Map<string, AgentDefinition>,
+  parentThinking: PiThinkingLevel,
+  sessionRecords: AgentSessionRecord[],
+  agentSessionDir: string,
+  agents: AgentDefinition[],
+): Promise<{ ok: true; task: ResolvedAgentTask } | { ok: false; error: string }> {
+  const restored = findAgentSessionRecord(sessionRecords, task.agentId);
+  if (restored.ok) {
+    return resolveResumeTaskFromRecord(task, restored.record, agentsByName, parentThinking, agents);
+  }
+  if (restored.reason === "ambiguous") {
+    return { ok: false, error: ambiguousAgentSessionMessage(task.agentId, restored.matches) };
+  }
+
+  const fileLookup = await findAgentSessionFileById(agentSessionDir, task.agentId);
+  if (!fileLookup.ok) {
+    if (fileLookup.reason === "ambiguous") {
+      return { ok: false, error: ambiguousAgentSessionMessage(task.agentId, fileLookup.matches) };
+    }
+    return { ok: false, error: unknownAgentSessionMessage(task.agentId, agentSessionDir) };
+  }
+  if (!task.subagentType) {
+    return {
+      ok: false,
+      error: `Agent session ${fileLookup.match.sessionId} exists on disk, but this parent session has no record of its subagent type. Provide subagent_type with agent_id to resume it.`,
+    };
+  }
+
+  return resolveResumeTaskFromRecord(
+    task,
+    { agentId: fileLookup.match.sessionId, agent: task.subagentType, sessionFile: fileLookup.match.sessionFile },
+    agentsByName,
+    parentThinking,
+    agents,
+  );
+}
+
+function resolveResumeTaskFromRecord(
+  task: Extract<PlannedAgentTask, { kind: "resume" }>,
+  record: AgentSessionRecord,
+  agentsByName: Map<string, AgentDefinition>,
+  parentThinking: PiThinkingLevel,
+  agents: AgentDefinition[],
+): { ok: true; task: ResolvedAgentTask } | { ok: false; error: string } {
+  if (task.subagentType && task.subagentType !== record.agent) {
+    return {
+      ok: false,
+      error: `Agent session ${record.agentId} belongs to subagent ${record.agent}, not ${task.subagentType}.`,
+    };
+  }
+
+  const agentDefinition = agentsByName.get(record.agent);
+  if (!agentDefinition) return { ok: false, error: unknownAgentMessage(record.agent, agents) };
+
+  return {
+    ok: true,
+    task: {
+      kind: "resume",
+      subagentType: record.agent,
+      agentId: record.agentId,
+      description: task.description,
+      prompt: task.prompt,
+      context: "resume",
+      agentDefinition,
+      thinking: agentDefinition.effort ?? parentThinking,
+      resumeSessionFile: record.sessionFile,
+    },
+  };
+}
+
+function unknownAgentMessage(agentName: string, agents: AgentDefinition[]): string {
+  const available = agents.map((agent) => agent.name).join(", ") || "none";
+  return `Unknown subagent: ${agentName}. Available agents: ${available}.`;
+}
+
+function unknownAgentSessionMessage(agentId: string, agentSessionDir: string): string {
+  return `Unknown agent session: ${agentId}. Use an agent_id returned by an earlier Agent result, or resume with subagent_type after confirming the session exists in ${agentSessionDir}.`;
+}
+
+function ambiguousAgentSessionMessage(
+  agentId: string,
+  matches: Array<{ agentId?: string; sessionId?: string }>,
+): string {
+  const ids = matches
+    .map((match) => match.agentId ?? match.sessionId)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  return `Agent session id "${agentId}" is ambiguous. Matches: ${ids.join(", ") || "multiple sessions"}.`;
 }
 
 function errorResult(
@@ -154,13 +279,22 @@ function errorResult(
 
 function formatResults(mode: "single" | "parallel", results: AgentRunResult[]): string {
   if (results.length === 0) return "No subagent results.";
-  if (mode === "single") return results[0].finalOutput;
+  if (mode === "single") return formatSingleAgentOutput(results[0]);
 
   const succeeded = results.filter((result) => result.ok).length;
   return [
     `Parallel agents completed: ${succeeded}/${results.length} succeeded.`,
-    ...results.map((result) => `\n## ${result.agent}\n${result.finalOutput}`),
+    ...results.map((result) => `\n## ${formatAgentResultHeading(result)}\n${result.finalOutput}`),
   ].join("\n");
+}
+
+function formatSingleAgentOutput(result: AgentRunResult): string {
+  const idLine = result.agentId ? `agent_id: ${result.agentId}\n` : "";
+  return `${idLine}${result.finalOutput}`;
+}
+
+function formatAgentResultHeading(result: AgentRunResult): string {
+  return result.agentId ? `${result.agent} (agent_id: ${result.agentId})` : result.agent;
 }
 
 function formatProgress(mode: "single" | "parallel", results: AgentRunResult[]): string {
@@ -174,7 +308,7 @@ function formatProgress(mode: "single" | "parallel", results: AgentRunResult[]):
   const failed = results.filter((result) => result.status === "failed").length;
   return [
     `Parallel agents running: ${succeeded} succeeded, ${failed} failed, ${running} running, ${queued} queued.`,
-    ...results.map((result) => `\n## ${result.agent} (${result.status})\n${result.finalOutput}`),
+    ...results.map((result) => `\n## ${formatAgentResultHeading(result)} (${result.status})\n${result.finalOutput}`),
   ].join("\n");
 }
 
@@ -277,6 +411,8 @@ function baseAgentRunResult(
     stderr: "",
     usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, totalTokens: 0, turns: 0 },
     activity: [],
+    agentId: task.agentId,
+    sessionFile: task.resumeSessionFile,
     thinking: task.thinking,
   };
 }

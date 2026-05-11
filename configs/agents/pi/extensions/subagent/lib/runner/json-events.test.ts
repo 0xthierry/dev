@@ -2,6 +2,19 @@ import { describe, expect, test } from "bun:test";
 import { applyChildJsonEvent, createChildAgentEventState } from "./json-events";
 
 describe("applyChildJsonEvent", () => {
+  test("captures the child Pi session id from the session header", () => {
+    // Arrange
+    const state = createChildAgentEventState();
+    const event = { type: "session", id: "019e1882-8bc8-767c-a1e6-d7c9ebd3a574" };
+
+    // Act
+    const parsed = applyChildJsonEvent(state, JSON.stringify(event));
+
+    // Assert
+    expect(parsed).toBe(true);
+    expect(state.sessionId).toBe("019e1882-8bc8-767c-a1e6-d7c9ebd3a574");
+  });
+
   test("captures final assistant text and usage from message_end events", () => {
     // Arrange
     const state = createChildAgentEventState();

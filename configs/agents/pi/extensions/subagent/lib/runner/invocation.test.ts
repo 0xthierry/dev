@@ -13,7 +13,7 @@ import {
 } from "./invocation";
 
 describe("buildAgentRunRequest", () => {
-  test("inherits cwd, saved session, model, and thinking from the parent context", () => {
+  test("inherits cwd, saved session, model, thinking, and agent session storage from the parent context", () => {
     // Arrange
     const ctx = {
       cwd: "/repo",
@@ -38,11 +38,12 @@ describe("buildAgentRunRequest", () => {
       description: "Review diff",
       context: "fork",
     });
+    expect(request.agentSessionDir).toContain("agent-sessions");
   });
 });
 
 describe("buildChildInvocation", () => {
-  test("builds a fresh child Pi invocation", () => {
+  test("builds a fresh saved child Pi invocation", () => {
     // Arrange
     process.env[CHILD_NO_EXTENSIONS_ENV] = "1";
     process.env[CHILD_EXTENSIONS_ENV] = "configs/agents/pi/extensions/_shared/testing/faux-provider-extension.ts";
@@ -51,6 +52,7 @@ describe("buildChildInvocation", () => {
       task: "Review diff",
       context: "fresh" as const,
       cwd: "/repo",
+      agentSessionDir: "/agent-sessions/--repo--",
       modelRef: "openai/gpt-5.5",
       thinking: "medium" as const,
     };
@@ -60,7 +62,9 @@ describe("buildChildInvocation", () => {
       const invocation = buildChildInvocation(request, "/tmp/prompt.md");
 
       // Assert
-      expect(invocation.args).toContain("--no-session");
+      expect(invocation.args).toContain("--session-dir");
+      expect(invocation.args).toContain("/agent-sessions/--repo--");
+      expect(invocation.args).not.toContain("--no-session");
       expect(invocation.args).toContain("--no-extensions");
       expect(invocation.args).toContain("-e");
       expect(invocation.args).toContain("--model");
@@ -81,6 +85,7 @@ describe("buildChildInvocation", () => {
       task: "Review diff",
       context: "fork" as const,
       cwd: "/repo",
+      agentSessionDir: "/agent-sessions/--repo--",
       parentSessionFile: "/sessions/parent.jsonl",
     };
 
@@ -88,14 +93,44 @@ describe("buildChildInvocation", () => {
     const invocation = buildChildInvocation(request, "/tmp/prompt.md");
 
     // Assert
+    expect(invocation.args).toContain("--session-dir");
+    expect(invocation.args).toContain("/agent-sessions/--repo--");
     expect(invocation.args).toContain("--fork");
     expect(invocation.args).toContain("/sessions/parent.jsonl");
     expect(invocation.args).not.toContain("--no-session");
   });
 
+  test("builds a resumed child Pi invocation", () => {
+    // Arrange
+    const request = {
+      agent: agent("reviewer"),
+      task: "Continue review",
+      context: "resume" as const,
+      cwd: "/repo",
+      agentSessionDir: "/agent-sessions/--repo--",
+      resumeAgentId: "019e1882",
+      resumeSessionFile: "/agent-sessions/--repo--/session.jsonl",
+    };
+
+    // Act
+    const invocation = buildChildInvocation(request, "/tmp/prompt.md");
+
+    // Assert
+    expect(invocation.args).toContain("--session");
+    expect(invocation.args).toContain("/agent-sessions/--repo--/session.jsonl");
+    expect(invocation.args).not.toContain("--session-dir");
+    expect(invocation.args).not.toContain("--no-session");
+  });
+
   test("rejects forked context without a saved parent session", () => {
     // Arrange
-    const request = { agent: agent("reviewer"), task: "Review diff", context: "fork" as const, cwd: "/repo" };
+    const request = {
+      agent: agent("reviewer"),
+      task: "Review diff",
+      context: "fork" as const,
+      cwd: "/repo",
+      agentSessionDir: "/agent-sessions/--repo--",
+    };
 
     // Act / Assert
     expect(() => buildChildInvocation(request, "/tmp/prompt.md")).toThrow("requires a saved parent Pi session");

@@ -1,10 +1,22 @@
 import type { AgentContextMode, AgentParams, AgentTaskInput } from "./schemas";
 
-export interface PlannedAgentTask {
+export type PlannedAgentTask = PlannedStartAgentTask | PlannedResumeAgentTask;
+
+export interface PlannedStartAgentTask {
+  kind: "start";
   subagentType: string;
   description?: string;
   prompt: string;
   context: AgentContextMode;
+}
+
+export interface PlannedResumeAgentTask {
+  kind: "resume";
+  agentId: string;
+  subagentType?: string;
+  description?: string;
+  prompt: string;
+  context: "resume";
 }
 
 export type AgentExecutionPlan =
@@ -37,15 +49,17 @@ export function planAgentInvocation(params: AgentParams): AgentPlanResult {
 }
 
 function readSingleTask(params: AgentParams): PlannedAgentTask | undefined {
-  if (typeof params.subagent_type !== "string" && typeof params.prompt !== "string") return undefined;
-  if (typeof params.subagent_type !== "string" || !params.subagent_type.trim()) return undefined;
-  if (typeof params.prompt !== "string" || !params.prompt.trim()) return undefined;
+  const hasStartAgent = typeof params.subagent_type === "string" && params.subagent_type.trim().length > 0;
+  const hasResumeAgent = typeof params.agent_id === "string" && params.agent_id.trim().length > 0;
+  const hasPrompt = typeof params.prompt === "string" && params.prompt.trim().length > 0;
+  if (!hasPrompt || (!hasStartAgent && !hasResumeAgent)) return undefined;
 
   return normalizeTask(
     {
       subagent_type: params.subagent_type,
+      agent_id: params.agent_id,
       description: params.description,
-      prompt: params.prompt,
+      prompt: params.prompt as string,
       context: params.context,
     },
     params.context,
@@ -68,18 +82,32 @@ function normalizeTask(task: AgentTaskInput, defaultContext?: AgentContextMode):
   if (!task || typeof task !== "object") return undefined;
 
   const value = task as Record<string, unknown>;
-  if (typeof value.subagent_type !== "string" || typeof value.prompt !== "string") return undefined;
+  if (typeof value.prompt !== "string") return undefined;
 
-  const subagentType = value.subagent_type.trim();
+  const subagentType = typeof value.subagent_type === "string" ? value.subagent_type.trim() : "";
+  const agentId = typeof value.agent_id === "string" ? value.agent_id.trim() : "";
   const prompt = value.prompt.trim();
-  if (!subagentType || !prompt) return undefined;
+  if (!prompt || (!subagentType && !agentId)) return undefined;
+
+  const description = typeof value.description === "string" ? value.description.trim() || undefined : undefined;
+  if (agentId) {
+    return {
+      kind: "resume",
+      agentId,
+      subagentType: subagentType || undefined,
+      description,
+      prompt,
+      context: "resume",
+    };
+  }
 
   const context = value.context ?? defaultContext ?? "fresh";
   if (context !== "fresh" && context !== "fork") return undefined;
 
   return {
+    kind: "start",
     subagentType,
-    description: typeof value.description === "string" ? value.description.trim() || undefined : undefined,
+    description,
     prompt,
     context,
   };

@@ -15,6 +15,7 @@ describe("buildAgentPromptSection", () => {
     expect(section).toContain("- locator: Finds files");
     expect(section).toContain("- reviewer: Reviews code");
     expect(section).toContain("normal Pi discovery");
+    expect(section).toContain("agent_id");
     expect(section).toContain("compact contract");
     expect(section).not.toContain("override built-in agents");
     expect(section).not.toContain("effort");

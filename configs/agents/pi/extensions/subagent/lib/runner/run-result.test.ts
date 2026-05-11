@@ -11,11 +11,12 @@ describe("buildAgentRunResult", () => {
     state.finalOutput = "Agent completed.";
     state.model = "test-model";
     state.stopReason = "stop";
+    state.sessionId = "019e1882-8bc8-767c-a1e6-d7c9ebd3a574";
     state.usage.input = 10;
     const request = runRequest("reviewer", "Review diff");
 
     // Act
-    const result = buildAgentRunResult(request, state, 0, "");
+    const result = buildAgentRunResult(request, state, 0, "", "/agent-sessions/session.jsonl");
 
     // Assert
     expect(result).toMatchObject({
@@ -26,12 +27,34 @@ describe("buildAgentRunResult", () => {
       ok: true,
       exitCode: 0,
       finalOutput: "Agent completed.",
+      agentId: "019e1882-8bc8-767c-a1e6-d7c9ebd3a574",
+      sessionFile: "/agent-sessions/session.jsonl",
       model: "test-model",
       thinking: undefined,
       stopReason: "stop",
     });
     expect(result.usage.input).toBe(10);
     expect(result.activity).toEqual([]);
+  });
+
+  test("uses the requested resume session id and file when the child header is unavailable", () => {
+    // Arrange
+    const state = createChildAgentEventState();
+    state.finalOutput = "Agent completed.";
+    state.stopReason = "stop";
+    const request = {
+      ...runRequest("reviewer", "Continue review"),
+      context: "resume" as const,
+      resumeAgentId: "019e1882",
+      resumeSessionFile: "/agent-sessions/session.jsonl",
+    };
+
+    // Act
+    const result = buildAgentRunResult(request, state, 0, "");
+
+    // Assert
+    expect(result.agentId).toBe("019e1882");
+    expect(result.sessionFile).toBe("/agent-sessions/session.jsonl");
   });
 
   test("includes inherited thinking level", () => {
@@ -108,6 +131,7 @@ function runRequest(agentName: string, task: string): AgentRunRequest {
     description: "Review task",
     context: "fresh",
     cwd: "/repo",
+    agentSessionDir: "/agent-sessions/--repo--",
   };
 }
 

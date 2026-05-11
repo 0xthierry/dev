@@ -2,7 +2,7 @@
 
 Claude/Codex-style subagents for Pi.
 
-This extension registers one `Agent` tool that delegates focused work to child `pi` sessions. It is intentionally small: foreground execution, single-agent or independent parallel tasks, fresh context by default, optional forked context, and no background scheduler, memory store, pool, dashboard, or mux panes.
+This extension registers one `Agent` tool that delegates focused work to child `pi` sessions. It is intentionally small: foreground execution, single-agent or independent parallel tasks, saved fresh context by default, optional forked context, resumable child sessions, and no background scheduler, memory store, pool, dashboard, or mux panes.
 
 The Agent tool renders live progress in Pi's tool row. Single-agent runs show the child assistant stream and tool activity as it arrives. Parallel runs show one batch with each agent's queued/running/succeeded/failed status, recent child tool calls, and final output/usage when available.
 
@@ -47,6 +47,15 @@ Single task:
 }
 ```
 
+Resume a previous child session using the `agent_id` returned by an earlier Agent result:
+
+```json
+{
+  "agent_id": "019e1882-8bc8-767c-a1e6-d7c9ebd3a574",
+  "prompt": "Continue that review and now inspect authorization logic."
+}
+```
+
 Parallel independent tasks:
 
 ```json
@@ -62,8 +71,17 @@ Prompt children with a compact contract: goal, context/evidence, success criteri
 
 Context modes:
 
-- `fresh` (default): starts an isolated child session with `--no-session`.
-- `fork`: forks the current saved parent session. This requires the parent session to have a session file.
+- `fresh` (default): starts an isolated saved child session.
+- `fork`: forks the current saved parent session into a saved child session. This requires the parent session to have a session file.
+- resume by `agent_id`: continues an existing saved child session with Pi's `--session` support.
+
+Child sessions are saved under Pi's agent directory in a separate namespace that mirrors Pi's normal per-project session layout:
+
+```text
+~/.pi/agent/agent-sessions/--home-thierry-dev--/<timestamp>_<child-session-id>.jsonl
+```
+
+`PI_CODING_AGENT_DIR` is respected, so custom Pi agent directories keep child sessions beside the rest of that Pi state.
 
 ## Child process controls
 

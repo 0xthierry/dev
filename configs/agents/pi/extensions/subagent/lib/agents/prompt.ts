@@ -6,7 +6,8 @@ export function buildAgentPromptSection(agents: AgentDefinition[], _agentsDir: s
   return [
     "## Subagents",
     "Use the Agent tool to delegate self-contained work to a focused child Pi session.",
-    "Each child starts with fresh context by default, loads Pi context files and skills through normal Pi discovery, and returns only its final result.",
+    "Each child starts with fresh context by default, loads Pi context files and skills through normal Pi discovery, saves its own session, and returns only its final result.",
+    "When an Agent result includes an agent_id, pass agent_id with a follow-up prompt to resume that saved child session.",
     "For independent work, pass multiple entries in Agent.tasks so they can run concurrently.",
     "Prompt children with a compact contract: goal, context/evidence, success criteria, hard constraints, validation, expected output, and stop rules.",
     "Available subagents:",

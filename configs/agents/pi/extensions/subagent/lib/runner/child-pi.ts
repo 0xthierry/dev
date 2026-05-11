@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 import { rm } from "node:fs/promises";
+import { findAgentSessionFileById } from "../sessions/paths";
 import { type AgentRunRequest, buildChildInvocation } from "./invocation";
-import { applyChildJsonEvent, createChildAgentEventState } from "./json-events";
+import { applyChildJsonEvent, type ChildAgentEventState, createChildAgentEventState } from "./json-events";
 import { writeAgentPromptFile } from "./prompt-file";
 import { type AgentRunResult, buildAgentRunResult } from "./run-result";
 
@@ -77,10 +78,22 @@ export async function runChildPiAgent(
       else signal?.addEventListener("abort", abortChild, { once: true });
     });
 
-    const result = buildAgentRunResult(request, state, aborted ? 1 : exitCode, stderr);
+    const sessionFile = await resolveChildSessionFile(request, state);
+    const result = buildAgentRunResult(request, state, aborted ? 1 : exitCode, stderr, sessionFile);
     onProgress?.(result);
     return result;
   } finally {
     await rm(promptFile.dir, { recursive: true, force: true });
   }
+}
+
+async function resolveChildSessionFile(
+  request: AgentRunRequest,
+  state: ChildAgentEventState,
+): Promise<string | undefined> {
+  if (request.resumeSessionFile) return request.resumeSessionFile;
+  if (!state.sessionId) return undefined;
+
+  const lookup = await findAgentSessionFileById(request.agentSessionDir, state.sessionId);
+  return lookup.ok ? lookup.match.sessionFile : undefined;
 }

@@ -36,6 +36,7 @@ export interface ChildAgentEventState {
   usage: AgentUsageStats;
   activity: AgentActivityItem[];
   currentAssistantText: string;
+  sessionId?: string;
   model?: string;
   stopReason?: string;
   errorMessage?: string;
@@ -64,6 +65,8 @@ export function applyChildJsonEvent(state: ChildAgentEventState, line: string): 
   const record = event as Record<string, unknown>;
 
   switch (record.type) {
+    case "session":
+      return applySessionHeader(state, record);
     case "message_update":
       return applyAssistantMessageUpdate(state, record);
     case "message_end":
@@ -77,6 +80,13 @@ export function applyChildJsonEvent(state: ChildAgentEventState, line: string): 
     default:
       return false;
   }
+}
+
+function applySessionHeader(state: ChildAgentEventState, record: Record<string, unknown>): boolean {
+  const sessionId = stringValue(record.id);
+  if (!sessionId || state.sessionId === sessionId) return false;
+  state.sessionId = sessionId;
+  return true;
 }
 
 function applyAssistantMessageUpdate(state: ChildAgentEventState, record: Record<string, unknown>): boolean {

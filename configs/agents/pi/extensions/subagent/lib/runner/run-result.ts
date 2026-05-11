@@ -1,5 +1,4 @@
-import type { AgentContextMode } from "../tools/schemas";
-import type { AgentRunRequest } from "./invocation";
+import type { AgentRunContextMode, AgentRunRequest } from "./invocation";
 import type { AgentActivityItem, AgentUsageStats, ChildAgentEventState } from "./json-events";
 import { prepareAgentOutput } from "./output";
 
@@ -9,7 +8,7 @@ export interface AgentRunResult {
   agent: string;
   description?: string;
   task: string;
-  context: AgentContextMode;
+  context: AgentRunContextMode;
   status: AgentRunStatus;
   ok: boolean;
   exitCode: number;
@@ -18,6 +17,8 @@ export interface AgentRunResult {
   stderr: string;
   usage: AgentUsageStats;
   activity: AgentActivityItem[];
+  agentId?: string;
+  sessionFile?: string;
   model?: string;
   thinking?: AgentRunRequest["thinking"];
   stopReason?: string;
@@ -29,6 +30,7 @@ export function buildAgentRunResult(
   state: ChildAgentEventState,
   exitCode: number,
   stderr: string,
+  sessionFile?: string,
 ): AgentRunResult {
   const status = inferRunStatus(state, exitCode);
   const rawOutput = state.finalOutput || state.errorMessage || stderr.trim() || fallbackOutput(status);
@@ -48,6 +50,8 @@ export function buildAgentRunResult(
     stderr,
     usage: { ...state.usage },
     activity: state.activity.map((item) => ({ ...item })),
+    agentId: state.sessionId ?? request.resumeAgentId,
+    sessionFile: sessionFile ?? request.resumeSessionFile,
     model: state.model,
     thinking: request.thinking,
     stopReason: state.stopReason,
