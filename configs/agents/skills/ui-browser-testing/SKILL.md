@@ -122,13 +122,23 @@ For blockers, disabled states, debounces, guards, race fixes, and permission che
 
 ### 4. Start Stable
 
-Use the least disruptive browser setup that matches the user request:
+Use the least disruptive browser setup that matches the user request. For non-trivial checks, use a task-specific named session and an absolute artifact directory:
 
 ```bash
+AB_SESSION="ui-<short-task-name>"
+ARTIFACT_DIR="$(pwd)/.dev/prints/$AB_SESSION"
+mkdir -p "$ARTIFACT_DIR"
+agent-browser --session "$AB_SESSION" get url || true
+agent-browser --session "$AB_SESSION" open <url>
+agent-browser --session "$AB_SESSION" wait --load networkidle
+agent-browser --session "$AB_SESSION" snapshot -i
+```
+
+If the user specifically asked you to use an existing tab, do not create a new session first. Inspect and select the intended tab with stable ids such as `t10`, not positional integers:
+
+```bash
+agent-browser tab list
 agent-browser get url
-agent-browser open <url>
-agent-browser wait --load networkidle
-agent-browser snapshot -i
 ```
 
 If deep-linking opens a broken or partial app state, navigate through the normal user entry point instead, such as a dashboard, list page, or login flow.
@@ -147,7 +157,7 @@ agent-browser snapshot -s "<stable selector>" -i
 agent-browser get text body
 ```
 
-When snapshots time out on heavy apps, stop retrying the same command. Switch to screenshots, targeted `get` commands, or narrow `eval` checks.
+When snapshots time out on heavy apps, stop retrying the same command. Switch to screenshots, targeted `get` commands, or narrow `eval --stdin` checks. If `DOM.enable`, `Page.enable`, or `Runtime.evaluate` timeouts repeat, close that browser session and start a fresh named session instead of piling on more commands.
 
 ### 6. Interact Like A User
 
@@ -183,9 +193,16 @@ Assert the smallest stable fact that proves the claim. Examples:
 agent-browser get url
 agent-browser get text @e5
 agent-browser is checked @e7
-agent-browser eval '([...document.querySelectorAll("input[type=checkbox]")].map(e => e.checked))'
 agent-browser errors
 agent-browser console --clear
+```
+
+For anything beyond a trivial expression, use `eval --stdin` and plain browser JavaScript, not TypeScript syntax:
+
+```bash
+agent-browser eval --stdin <<'EVALEOF'
+(() => JSON.stringify([...document.querySelectorAll('input[type=checkbox]')].map(input => input.checked)))()
+EVALEOF
 ```
 
 For a passing UI check, record:
@@ -217,18 +234,25 @@ For detailed screenshot/video guidance, load `references/evidence-and-screenshot
 Save artifacts in an ignored project artifact directory when one exists, or under `/tmp/ui-browser-testing` otherwise. Do not put proof files in tracked source paths unless the user explicitly asks.
 
 ```bash
-mkdir -p .dev/prints/<short-task-name>
-agent-browser screenshot .dev/prints/<short-task-name>/after.png
-agent-browser record start .dev/prints/<short-task-name>/flow.webm <url>
-agent-browser record stop
+AB_SESSION="ui-<short-task-name>"
+ARTIFACT_DIR="$(pwd)/.dev/prints/$AB_SESSION"
+mkdir -p "$ARTIFACT_DIR"
+agent-browser --session "$AB_SESSION" screenshot "$ARTIFACT_DIR/after.png"
+test -s "$ARTIFACT_DIR/after.png"
+agent-browser --session "$AB_SESSION" record start "$ARTIFACT_DIR/flow.webm" <url>
+agent-browser --session "$AB_SESSION" record stop
+test -s "$ARTIFACT_DIR/flow.webm"
 ```
 
 Before using a screenshot as proof:
 
 - Open it locally with the image viewer.
 - Confirm it visibly shows the behavior, not just the page.
+- Reject stale, blank, spinner-only, splash-overlay, or unrelated screenshots even if the command succeeded.
 - Crop if the relevant state is too small.
 - Avoid annotation overlays unless the user asked for them or refs are the point.
+
+If `agent-browser screenshot` saves somewhere unexpected or times out, do not assume evidence exists. Locate the output, copy it to the artifact directory if appropriate, and verify `test -s` before citing it.
 
 For focused crops:
 
@@ -244,12 +268,14 @@ For GitHub-specific attachment details, load `references/github-pr-attachments.m
 
 When the user wants media in GitHub/GitLab/Linear/etc. but not committed:
 
-1. Upload through the browser attachment flow.
+1. Upload through the browser attachment flow using absolute file paths only.
 2. Extract the hosted attachment URL.
 3. Map each uploaded URL to the QA case it proves.
 4. Clear any draft comment used for upload unless the user wanted a comment.
 5. Update the PR/issue description with the hosted URL and case result.
 6. Reload the page and verify the media renders.
+
+If an upload command returns `✓ Done` but no hosted URL appears and no upload request is visible, treat it as not uploaded. Retry once with absolute paths and then report the blocker.
 
 For GitHub PRs, prefer generating the section from the manifest and uploaded URL map:
 
@@ -264,6 +290,18 @@ agent-browser eval '([...document.images].map(img => ({ src: img.src, complete: 
 ```
 
 ### 10. Clean Up
+
+Close only the browser sessions you created, then verify the session list. Do not leave extra Brave windows, tabs, or recording contexts behind.
+
+```bash
+agent-browser --session "$AB_SESSION" close || true
+agent-browser session list
+# If the closed session still appears or the daemon is wedged:
+agent-browser close --all || true
+agent-browser session list
+```
+
+Do not kill unrelated user browser processes. If you must terminate a stuck daemon, target `agent-browser` only and say so in the handoff.
 
 If you changed app data to test:
 
@@ -293,17 +331,25 @@ Confirm no temporary artifacts are staged or accidentally committed.
 
 Do not keep piling commands onto a stuck browser session.
 
+Stop conditions:
+
+- If the same browser-control timeout happens twice in a row, stop retrying that command and reset the named session.
+- If three browser-control failures happen in one flow, switch strategy: semantic locator instead of ref, targeted `eval --stdin` instead of snapshot, direct URL instead of click navigation, or fresh session instead of current session.
+- If artifact capture fails twice, continue with machine-readable assertions and report the screenshot/video blocker.
+
 If a command times out:
 
 1. Check `agent-browser get url`.
-2. Try a simple screenshot.
+2. Try a simple screenshot with an absolute path and verify `test -s`.
 3. If simple commands work, continue with narrower checks.
-4. If all commands hang, kill only `agent-browser` and reconnect.
+4. If all commands hang, close the named session; if still stuck, kill only `agent-browser` and reconnect.
 5. If the app itself is rebuilding/loading, wait for the app, then retry from a normal entry route.
 
-If `snapshot -i` times out repeatedly on `DOM.enable`, avoid more snapshots for that page and use screenshot plus targeted `eval` or direct refs from earlier stable snapshots.
+If `snapshot -i` times out repeatedly on `DOM.enable`, avoid more snapshots for that page and use screenshot plus targeted `eval --stdin` or direct refs from earlier stable snapshots.
 
 If `Runtime.evaluate` times out, make the eval smaller. Avoid broad reads like full `document.body.innerText` in large editor or canvas apps.
+
+If clicking a ref fails with `DOM.getBoxModel` or `Unknown ref`, treat the ref as stale/hidden. Re-snapshot, scroll, use `snapshot -i -C`, or use a semantic locator; do not retry the same ref blindly.
 
 ## Evidence Quality Bar
 
@@ -352,3 +398,6 @@ If the test failed, lead with the failure and include expected vs actual behavio
 - Committing generated media artifacts.
 - Retrying heavy snapshots after the browser already showed that snapshots are the slow path.
 - Uploading media to a PR and not verifying that GitHub renders it.
+- Using relative paths for screenshots, videos, or uploads and assuming the artifact landed where requested.
+- Reusing stale refs after route changes, modals, dropdowns, or editor updates.
+- Opening extra browser sessions/recordings and not cleaning them up.

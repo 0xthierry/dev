@@ -28,6 +28,38 @@ agent-browser wait --load networkidle
 agent-browser snapshot -i  # Check result
 ```
 
+## Operational Safety Defaults
+
+For non-trivial browser work, favor isolation, durable artifacts, and recoverable sessions.
+
+- Use a named session unless you intentionally need the default session or a user-owned browser tab:
+
+```bash
+AB_SESSION="task-short-name"
+agent-browser --session "$AB_SESSION" open https://example.com
+```
+
+- Before reusing a browser, check where you are. If the user asked for an existing tab, list tabs and switch by stable tab id such as `t10`; do not use positional integers like `10`.
+
+```bash
+agent-browser session list
+agent-browser tab list
+agent-browser get url || true
+```
+
+- Save screenshots, videos, downloads, HARs, and upload inputs with absolute paths. Relative paths may be interpreted from the daemon/process context or fall back to the temp screenshot directory.
+
+```bash
+ARTIFACT_DIR="$(pwd)/.dev/prints/$AB_SESSION"
+mkdir -p "$ARTIFACT_DIR"
+agent-browser screenshot "$ARTIFACT_DIR/after.png"
+test -s "$ARTIFACT_DIR/after.png"
+```
+
+- For browser uploads, use absolute paths and verify that the target page actually received a hosted URL or upload request. `✓ Done` only means the command completed.
+- Never dump cookies, auth headers, localStorage, or sessionStorage into logs unless the task explicitly requires it. If auth state must be inspected, extract only booleans or redacted key names.
+- Do not open additional windows/tabs/recording contexts unless needed. If you do, close them and verify with `agent-browser session list` before handoff.
+
 ## Command Chaining
 
 Commands can be chained with `&&` in a single shell invocation. The browser persists between commands via a background daemon, so chaining is safe and more efficient than separate calls.
@@ -514,6 +546,33 @@ agent-browser wait 5000
 
 When dealing with consistently slow websites, use `wait --load networkidle` after `open` to ensure the page is fully loaded before taking a snapshot. If a specific element is slow to render, wait for it directly with `wait <selector>` or `wait @ref`.
 
+Do not keep retrying the same stuck command. If the same timeout repeats twice, change strategy or reset the browser session.
+
+## Failure Recovery Playbook
+
+Use the error text to choose the recovery path instead of blindly retrying:
+
+| Symptom | Likely cause | Recovery |
+| --- | --- | --- |
+| `Unknown ref: eNN` | Refs are stale after a route, modal, popover, or DOM update | Run `snapshot -i` again and use the new refs. |
+| `DOM.getBoxModel` / `Could not compute box model` | Ref exists but element is hidden, detached, offscreen, or covered | Re-snapshot with `-i -C`, scroll it into view, use a semantic locator, or interact through the visible parent. Do not repeat the same stale click. |
+| `Element not found` | Selector/locator does not match current DOM | Inspect `snapshot -i -C` or targeted `eval`; prefer labels/roles/testids over brittle ids. |
+| `Page.captureScreenshot` timeout | Page is too large, rendering is stuck, or CDP is wedged | Try a viewport screenshot, targeted crop, or close/reopen the session. Verify the output file with `test -s`. |
+| `Runtime.evaluate` timeout | Eval is too broad or the page/CDP is overloaded | Use smaller `eval --stdin` checks; avoid full `document.body.innerText` on heavy editor/canvas pages. If simple eval also times out, reset the session. |
+| `DOM.enable` / `Page.enable` / `Page.navigate` repeated timeout | CDP target is wedged | Stop using that session. Close the named session; if needed run `agent-browser close --all`, then start a fresh named session. |
+| Recording or `ffmpeg` failure | Output directory, codec, or recording context issue | Create the video directory first, retry once, and if it still fails continue with screenshots/assertions and report the recording blocker. |
+
+When recovering, prefer the least destructive reset first:
+
+```bash
+agent-browser --session "$AB_SESSION" close || true
+agent-browser session list
+# Only if the daemon/session list is inconsistent or everything is stuck:
+agent-browser close --all || true
+```
+
+Do not kill unrelated app servers, databases, or user browser processes unless explicitly asked.
+
 ## Session Management and Cleanup
 
 When running multiple agents or automations concurrently, always use named sessions to avoid conflicts:
@@ -532,9 +591,10 @@ Always close your browser session when done to avoid leaked processes:
 ```bash
 agent-browser close                    # Close default session
 agent-browser --session agent1 close   # Close specific session
+agent-browser session list             # Verify no unexpected sessions remain
 ```
 
-If a previous session was not closed properly, the daemon may still be running. Use `agent-browser close` to clean it up before starting new work.
+If a previous session was not closed properly, the daemon may still be running. Use `agent-browser close` for the current/default session, or `agent-browser close --all` only when stale sessions or a wedged daemon block further work. If `close` reports success but `session list` still shows the session, run `close --all` and verify again.
 
 To auto-shutdown the daemon after a period of inactivity (useful for ephemeral/CI environments):
 
@@ -614,9 +674,21 @@ agent-browser eval -b "$(echo -n 'Array.from(document.querySelectorAll("a")).map
 
 **Rules of thumb:**
 
-- Single-line, no nested quotes -> regular `eval 'expression'` with single quotes is fine
-- Nested quotes, arrow functions, template literals, or multiline -> use `eval --stdin <<'EVALEOF'`
-- Programmatic/generated scripts -> use `eval -b` with base64
+- Single-line, no nested quotes -> regular `eval 'expression'` with single quotes is fine.
+- Any async code, multiline code, loops, object-heavy code, arrow functions with nested quotes, or template literals -> use `eval --stdin <<'EVALEOF'`.
+- Programmatic/generated scripts -> use `eval -b` with base64.
+- Wrap async evals in an IIFE so `await` is valid in every browser context.
+- Use plain browser JavaScript only. Do not paste TypeScript syntax such as `(el: any)` into `eval`.
+- Keep evals small and targeted. On large editor/canvas apps, avoid broad reads like full `document.body.innerText` unless a narrower selector cannot answer the question.
+
+```bash
+agent-browser eval --stdin <<'EVALEOF'
+(async () => {
+  const buttons = [...document.querySelectorAll('button')]
+  return JSON.stringify(buttons.map(button => button.innerText.trim()).filter(Boolean).slice(0, 20))
+})()
+EVALEOF
+```
 
 ## Configuration File
 
