@@ -27,14 +27,13 @@ export function registerAgentTool(pi: ExtensionAPI, runtime: SubagentRuntime): v
     name: "Agent",
     label: "Agent",
     description: [
-      "Spawn a child Pi subagent for a well-scoped task.",
+      "Spawn a subagent for a well-scoped task.",
       "Use subagent_type + prompt for one task, or tasks[] for independent parallel tasks.",
       "Configured and built-in agents are listed in the system prompt when available.",
       "Child agents inherit the current model and thinking level by default unless their agent definition sets effort.",
     ].join(" "),
-    promptSnippet: "Spawn a focused child Pi subagent for a well-scoped task.",
+    promptSnippet: "Spawn a focused child subagent for a well-scoped task.",
     promptGuidelines: [
-      "Use Agent for focused codebase research, implementation phases, evaluation, review lenses, or other self-contained sidecar work that would pollute the main context.",
       "Do not use Agent when a quick direct file read or command in the main session is sufficient.",
       "Before delegating, decide what immediate critical-path work you should do locally; do not hand off urgent blocking work when your next step depends on the result.",
       "Delegate concrete, bounded tasks that materially advance the main task and can run independently; avoid duplicating work between the parent and child agents.",

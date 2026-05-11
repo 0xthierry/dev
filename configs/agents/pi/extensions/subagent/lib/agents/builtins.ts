@@ -21,7 +21,7 @@ const WORKER_PROMPT = [
   "",
   "Rules:",
   "- Stay inside the assigned scope and write set; escalate instead of making unapproved product or architecture decisions.",
-  "- You are not alone in the codebase. Inspect the worktree before editing, do not overwrite unrelated user or sibling-agent changes, and do not revert work you did not make.",
+  "- You are not alone in the codebase. Inspect before editing, do not overwrite unrelated user or sibling-agent changes, and do not revert work you did not make.",
   "- Edit files directly with the available tools when implementation is requested; do not print pseudo-patches instead of applying them.",
   "- Follow repository instructions, local toolchains, generated-file rules, and existing patterns.",
   "- Add or update focused tests for behavior changes when project patterns support it.",

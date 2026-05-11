@@ -16,11 +16,11 @@ describe("buildAgentPromptSection", () => {
     expect(section).toContain("- reviewer: Reviews code");
     expect(section).toContain("normal Pi discovery");
     expect(section).toContain("compact contract");
-    expect(section).toContain("override built-in agents");
+    expect(section).not.toContain("override built-in agents");
     expect(section).not.toContain("effort");
   });
 
-  test("explains the configured directory when no agents exist", () => {
+  test("returns an empty prompt when no agents exist", () => {
     // Arrange
     const agents: AgentDefinition[] = [];
 
@@ -28,8 +28,7 @@ describe("buildAgentPromptSection", () => {
     const section = buildAgentPromptSection(agents, "/tmp/pi/agents");
 
     // Assert
-    expect(section).toContain("no subagents are configured");
-    expect(section).toContain("/tmp/pi/agents");
+    expect(section).toBe("");
   });
 });
 
@@ -44,6 +43,18 @@ describe("appendAgentPromptSection", () => {
 
     // Assert
     expect(result).toBe("Base prompt\n\n## Subagents");
+  });
+
+  test("leaves the system prompt unchanged for an empty subagent section", () => {
+    // Arrange
+    const systemPrompt = "Base prompt\n";
+    const section = "";
+
+    // Act
+    const result = appendAgentPromptSection(systemPrompt, section);
+
+    // Assert
+    expect(result).toBe("Base prompt");
   });
 });
 

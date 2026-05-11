@@ -18,7 +18,7 @@ describe("registerAgentTool", () => {
     // Assert
     const tool = fakePi.tools.get("Agent");
     expect(tool).toBeDefined();
-    expect(tool?.description).toContain("child Pi subagent");
+    expect(tool?.description).toContain("Spawn a subagent");
     expect(tool?.description).toContain("built-in agents");
     expect(tool?.promptGuidelines).toContain(
       "Before delegating, decide what immediate critical-path work you should do locally; do not hand off urgent blocking work when your next step depends on the result.",
