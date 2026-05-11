@@ -1,6 +1,6 @@
 ---
 name: notion-cli
-description: "Use for Notion via ntn: call APIs, query databases, create pages, upload files, or deploy/manage workers."
+description: "Use when working with Notion via ntn: call APIs, query databases, create pages, upload files, or deploy/manage workers."
 ---
 
 # Notion CLI

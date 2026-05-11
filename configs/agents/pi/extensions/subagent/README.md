@@ -23,8 +23,8 @@ The extension uses `getAgentDir()/agents`, so `PI_CODING_AGENT_DIR` is respected
 
 ```markdown
 ---
-name: codebase-locator
-description: Finds files relevant to a feature or task.
+name: custom-reviewer
+description: Reviews a focused code change.
 effort: medium
 ---
 
@@ -41,7 +41,7 @@ Single task:
 
 ```json
 {
-  "subagent_type": "codebase-locator",
+  "subagent_type": "explorer",
   "description": "Find auth files",
   "prompt": "Find the files that implement login and session validation."
 }
@@ -52,8 +52,8 @@ Parallel independent tasks:
 ```json
 {
   "tasks": [
-    { "subagent_type": "codebase-locator", "prompt": "Find auth files." },
-    { "subagent_type": "codebase-pattern-finder", "prompt": "Find comparable auth tests." }
+    { "subagent_type": "explorer", "prompt": "Find auth files." },
+    { "subagent_type": "web-search", "prompt": "Find current official docs for the auth provider." }
   ]
 }
 ```

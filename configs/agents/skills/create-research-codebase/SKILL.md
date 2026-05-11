@@ -47,16 +47,16 @@ Before final response:
 - Do not recommend changes, explain what should be built, assign blame, critique design, or perform root-cause analysis unless the user explicitly asks for that separate mode.
 - Use web research only when the user explicitly asks for external documentation or when a current external API contract is required to explain code already present. Cite links when used.
 - Ask for clarification only when the research target or output location cannot be safely inferred. Otherwise make a reasonable assumption, continue, and record it.
-- Use the specialized research agents for codebase exploration. The main session owns input reading, agenda design, synthesis, spot-checking, document writing, and validation; it should not absorb broad source context that a research agent can inspect and summarize.
+- Use focused `explorer` subagents for codebase exploration. The main session owns input reading, agenda design, synthesis, spot-checking, document writing, and validation; it should not absorb broad source context that a research agent can inspect and summarize.
 
 ## Available Research Agents
 
-Use these agents to reduce main-session context and improve coverage:
+Use focused subagents to reduce main-session context and improve coverage:
 
-- **codebase-locator**: finds relevant source files, configs, routes, schemas, migrations, tests, fixtures, and docs. Use first when the relevant files or boundaries are not already clear.
-- **codebase-analyzer**: traces how a known component, flow, function, class, endpoint, job, or data path works. Use for current behavior, data/control flow, contracts, errors, and lifecycle details.
-- **codebase-pattern-finder**: finds comparable existing implementations and testing patterns. Use when later design/planning will need examples to follow, or when the research questions ask about patterns.
-- **web-search-researcher**: researches external documentation only when explicitly requested or needed to explain a current external API/SDK integration in the codebase. Require source links in its findings.
+- **explorer / file-map prompt**: find relevant source files, configs, routes, schemas, migrations, tests, fixtures, and docs. Use first when relevant files or boundaries are not already clear.
+- **explorer / behavior-trace prompt**: trace how a known component, flow, function, class, endpoint, job, or data path works. Use for current behavior, data/control flow, contracts, errors, and lifecycle details.
+- **explorer / pattern prompt**: find comparable existing implementations and testing patterns. Use when later design/planning will need examples to follow, or when the research questions ask about patterns.
+- **web-search**: research external documentation only when explicitly requested or needed to explain a current external API/SDK integration in the codebase. Require source links in its findings.
 
 Agent use is part of the research workflow, not optional decoration.
 
@@ -113,12 +113,12 @@ Use concise, outcome-first prompts:
 Research the current-state behavior for [area]. Return factual findings only: file:line evidence, data/control flow, contracts, tests/fixtures, configuration or external boundaries, and open questions. Do not recommend changes or discuss implementation plans.
 ```
 
-Choose agents by need:
+Choose subagent prompts by need:
 
-- Start with **codebase-locator** when files or boundaries are unknown.
-- Use **codebase-analyzer** for known flows/components that need behavior tracing.
-- Use **codebase-pattern-finder** for comparable implementations, conventions, and testing patterns.
-- Use **web-search-researcher** only for explicitly requested external docs or current external API/SDK contracts.
+- Start with an **explorer file-map** prompt when files or boundaries are unknown.
+- Use an **explorer behavior-trace** prompt for known flows/components that need behavior tracing.
+- Use an **explorer pattern** prompt for comparable implementations, conventions, and testing patterns.
+- Use **web-search** only for explicitly requested external docs or current external API/SDK contracts.
 
 ### 4. Gather evidence
 

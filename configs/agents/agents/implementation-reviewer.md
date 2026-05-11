@@ -1,7 +1,6 @@
 ---
 name: implementation-reviewer
-model: opus
-description: "Compares implementation against plan files to identify deviations, surprises, and differences for PR descriptions. Use when generating PR descriptions for PRs that have associated plan files."
+description: "Use when generating PR descriptions for work with associated plan files and implementation deviations or surprises need comparison."
 ---
 
 # Implementation Reviewer Agent

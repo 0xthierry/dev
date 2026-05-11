@@ -31,9 +31,9 @@ status: complete
 
 | Agent | Area | Purpose |
 | --- | --- | --- |
-| codebase-locator | [area] | [files/boundaries located] |
-| codebase-analyzer | [area] | [behavior/contracts traced] |
-| codebase-pattern-finder | [area] | [patterns/tests identified] |
+| explorer (file map) | [area] | [files/boundaries located] |
+| explorer (behavior trace) | [area] | [behavior/contracts traced] |
+| explorer (patterns/tests) | [area] | [patterns/tests identified] |
 
 [Add one row per research agent used.]
 

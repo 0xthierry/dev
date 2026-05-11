@@ -1,6 +1,6 @@
 ---
 name: agent-slack
-description: "Use for Slack: read/search/send messages, inspect channels/threads/users, add reactions, manage canvases, or mark read."
+description: "Use when working with Slack: read/search/send messages, inspect channels/threads/users, add reactions, manage canvases, or mark read."
 ---
 
 # Slack automation with `agent-slack`

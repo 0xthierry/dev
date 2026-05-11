@@ -1,7 +1,6 @@
 ---
 name: implementer-agent
-model: opus
-description: "Implements one phase of an ai_docs/tasks implementation plan. Writes code/tests, runs targeted checks, reports evidence, and never commits."
+description: "Use when implementing one phase of an ai_docs/tasks implementation plan with code/tests, targeted checks, evidence, and no commit."
 ---
 
 # Implementer Agent

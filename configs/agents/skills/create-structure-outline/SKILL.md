@@ -53,12 +53,12 @@ Before final response:
 
 ## Available Research Agents
 
-Use agents for targeted follow-up evidence when the design/research docs do not provide enough information to sequence phases confidently.
+Use subagents for targeted follow-up evidence when the design/research docs do not provide enough information to sequence phases confidently.
 
-- **codebase-locator**: find additional files, tests, schemas, routes, configs, or build/test command locations.
-- **codebase-analyzer**: verify a specific current contract, data flow, lifecycle, error path, or dependency that affects phase boundaries.
-- **codebase-pattern-finder**: find comparable implementation/testing patterns to shape phase file groups and validation.
-- **web-search-researcher**: use only for external SDK/API/platform constraints that materially affect phase order or validation. Require source links.
+- **explorer / file-map prompt**: find additional files, tests, schemas, routes, configs, or build/test command locations.
+- **explorer / narrow-fact prompt**: verify a specific current contract, data flow, lifecycle, error path, or dependency that affects phase boundaries.
+- **explorer / pattern prompt**: find comparable implementation/testing patterns to shape phase file groups and validation.
+- **web-search**: use only for external SDK/API/platform constraints that materially affect phase order or validation. Require source links.
 
 Use concise prompts, for example:
 

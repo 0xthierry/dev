@@ -1,6 +1,6 @@
 ---
 name: ui-browser-testing
-description: "Use for browser-driven UI testing: reproduce frontend bugs, verify fixes, collect screenshots/videos, validate PR evidence, and debug browser-only behavior."
+description: "Use when browser-driven UI testing is needed: reproduce frontend bugs, verify fixes, collect screenshots/videos, validate PR evidence, and debug browser-only behavior."
 disable_model_invocation: true
 disable-model-invocation: true
 ---

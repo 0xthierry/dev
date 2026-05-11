@@ -1,6 +1,6 @@
 ---
 name: agent-browser
-description: "Use for browser automation: open sites, click/fill forms, log in, scrape pages, take screenshots, or test web apps."
+description: "Use when browser automation is needed: open sites, click/fill forms, log in, scrape pages, take screenshots, or test web apps."
 ---
 
 # Browser Automation with agent-browser

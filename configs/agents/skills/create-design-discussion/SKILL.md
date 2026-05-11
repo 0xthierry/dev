@@ -54,12 +54,12 @@ Before final response:
 
 ## Available Research Agents
 
-Keep agent use focused and evidence-seeking. The main session owns the design synthesis and final recommendations.
+Keep subagent use focused and evidence-seeking. The main session owns the design synthesis and final recommendations.
 
-- **codebase-locator**: find additional files, tests, schemas, routes, configs, or task/grill documents when the research leaves boundaries unclear.
-- **codebase-analyzer**: verify a narrow behavior, contract, data shape, error path, or lifecycle fact before using it in a tradeoff.
-- **codebase-pattern-finder**: find comparable existing implementations and tests that can support Patterns to Follow and validation implications.
-- **web-search-researcher**: use only when an external SDK/API/product constraint is part of the design decision. Require source links.
+- **explorer / file-map prompt**: find additional files, tests, schemas, routes, configs, or task/grill documents when the research leaves boundaries unclear.
+- **explorer / narrow-fact prompt**: verify a behavior, contract, data shape, error path, or lifecycle fact before using it in a tradeoff.
+- **explorer / pattern prompt**: find comparable existing implementations and tests that can support Patterns to Follow and validation implications.
+- **web-search**: use only when an external SDK/API/product constraint is part of the design decision. Require source links.
 
 Use concise outcome-first prompts, for example:
 

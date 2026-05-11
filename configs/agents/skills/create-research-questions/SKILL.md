@@ -43,18 +43,18 @@ Before final response:
 - Read directly mentioned files fully before drafting questions. If a task directory or ticket ID is mentioned, inspect that task directory and read the relevant task/spec/ticket files.
 - Use the task request as context, but do not leak the proposed implementation into the question wording.
 - Do not conduct full codebase research. Use only enough discovery to identify the right current systems and names for good questions.
-- When codebase discovery is needed, use specialized research agents instead of loading broad source context into the main session.
+- When codebase discovery is needed, use focused `explorer` subagents instead of loading broad source context into the main session.
 - Ask a narrow clarification only when the task/topic or destination directory cannot be inferred. Otherwise make a reasonable assumption, proceed, and state it.
 - If the user gives feedback, treat it as an instruction to update the questions document, not to start research/design/implementation.
 
 ## Available Research Agents
 
-Use these agents for light discovery so the main session can stay focused on question design:
+Use focused subagents for light discovery so the main session can stay focused on question design:
 
-- **codebase-locator**: finds relevant files and boundaries. Use when the target subsystem, source files, tests, config, schemas, or routes are unclear.
-- **codebase-analyzer**: answers a narrow current-state fact needed to phrase a useful question. Use sparingly; this phase should not become full research.
-- **codebase-pattern-finder**: finds names of comparable existing flows/features so questions can ask about real patterns instead of vague analogies.
-- **web-search-researcher**: researches external docs only when the task explicitly depends on an external SDK/API and the research questions need to name that boundary.
+- **explorer / file-map prompt**: find relevant files, tests, configs, schemas, routes, docs, and boundaries when the target subsystem is unclear.
+- **explorer / narrow-fact prompt**: answer one current-state fact needed to phrase a useful question. Use sparingly; this phase should not become full research.
+- **explorer / pattern prompt**: find names of comparable existing flows/features so questions can ask about real patterns instead of vague analogies.
+- **web-search**: research external docs only when the task explicitly depends on an external SDK/API and the research questions need to name that boundary.
 
 Agent use is part of discovery when codebase context is unclear. Keep prompts short and ask for concise file/path oriented findings, not full explanations.
 
@@ -63,8 +63,8 @@ Agent use is part of discovery when codebase context is unclear. Keep prompts sh
 Use the smallest evidence set that can produce useful questions:
 
 1. Read provided task/spec/ticket files and any existing files in the referenced task directory.
-2. If component names are unclear, use **codebase-locator** for a light discovery pass before reading source files in the main session.
-3. If a question would otherwise be vague, use **codebase-analyzer** or **codebase-pattern-finder** for one narrow discovery pass.
+2. If component names are unclear, use an **explorer file-map** prompt for a light discovery pass before reading source files in the main session.
+3. If a question would otherwise be vague, use an **explorer narrow-fact** or **explorer pattern** prompt for one narrow discovery pass.
 4. Stop discovery once you can name the existing area, adjacent flows, or likely code boundaries well enough to write 2-8 questions.
 
 Expand only when a missing fact would materially change the question set, such as the target subsystem, framework boundary, data entity, external provider, or task directory.
@@ -126,9 +126,9 @@ Good: Where is account status represented today, and which services, validations
    - Note unknowns that should become research questions rather than assumptions.
 
 3. Use agent-assisted light discovery when names or boundaries are unclear:
-   - Prefer **codebase-locator** to find relevant files, tests, and directories.
-   - Use **codebase-pattern-finder** when comparable patterns need real codebase names.
-   - Use **codebase-analyzer** only for a narrow fact that materially improves the question set.
+   - Prefer an **explorer file-map** prompt to find relevant files, tests, and directories.
+   - Use an **explorer pattern** prompt when comparable patterns need real codebase names.
+   - Use an **explorer narrow-fact** prompt only for a fact that materially improves the question set.
    - Keep the main session from reading large source files unless needed to verify a discovery result.
 
 4. Draft 2-8 questions:

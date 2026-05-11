@@ -1,6 +1,6 @@
 ---
 name: implement-plan
-description: "Use when implementing an ai_docs/tasks/* plan phase-by-phase with implementer/evaluator agents, sprint-contract validation, human checkpoints, and commits."
+description: "Use when implementing an ai_docs/tasks/* plan phase-by-phase with implementation subagents, parallel review/validation, sprint-contract checks, human checkpoints, and commits."
 effort: high
 disable_model_invocation: true
 disable-model-invocation: true
@@ -12,7 +12,7 @@ disable-model-invocation: true
 
 Orchestrate phased implementation of an approved `ai_docs/tasks/.../*-plan.md` file.
 
-Good execution keeps each phase bounded, uses `implementer-agent` for code changes, uses `evaluator-agent` for empirical verification, fixes only evaluator-confirmed failures, pauses for human review at the right checkpoints, and commits clean phase-sized changes without unrelated work.
+Good execution keeps each phase bounded, uses an implementation subagent for code changes, uses validation commands plus read-only `explorer` review subagents for empirical verification, fixes only evidence-backed failures, pauses for human review at the right checkpoints, and commits clean phase-sized changes without unrelated work.
 
 ## When to Use
 
@@ -24,9 +24,9 @@ Use a different skill when the user wants to create or revise the plan (`create-
 
 Before final response:
 
-- Every requested phase has completed the implementer → evaluator → fix loop.
-- The evaluator has run full regression checks and phase-specific `.sprint-contract.json` criteria when present.
-- No phase is treated as passing unless automated criteria pass and evaluator quality review has no blocking issues/concerns.
+- Every requested phase has completed the implementer → validation/review → fix loop.
+- Phase-specific `.sprint-contract.json` criteria and relevant regression checks have been run when present.
+- No phase is treated as passing unless automated criteria pass and read-only quality review has no blocking issues/concerns.
 - Human-required manual verification has been surfaced and confirmed before committing/proceeding, unless the user explicitly authorized batching or skipping the pause.
 - Each committed phase contains only that phase's code, tests, plan/checkbox updates, and directly related generated files.
 - Any failed phase stops after the retry budget and reports all evaluator evidence instead of silently continuing.
@@ -38,7 +38,7 @@ Before final response:
 - If no plan path is provided, ask for it. Do not guess among multiple plan files.
 - Read the plan fully before launching agents. Read `.sprint-contract.json` if present.
 - Check `git status --short` before starting and before each commit. Do not include unrelated user changes in phase commits.
-- The orchestrator coordinates; it does not bypass the implementer/evaluator loop for normal code changes.
+- The orchestrator coordinates; it does not bypass the implementer/validation/review loop for normal code changes.
 - Keep subagent prompts short and outcome-first. The agents read the plan and contract themselves.
 - Do not proceed to the next phase or commit unless the user has approved the phase checkpoint, except when the user explicitly requested consecutive phases without intermediate pauses.
 - Do not create AI attribution in commits, code comments, or generated artifacts.
@@ -91,23 +91,27 @@ Evaluator report:
 [paste full evaluator report]
 ```
 
-### 3. Evaluate the phase
+### 3. Validate and review the phase
 
-Launch `evaluator-agent` after each implementation/fix attempt:
+Run the phase-specific `.sprint-contract.json` criteria and relevant regression commands in the parent session when practical. Preserve exact command output for failures.
+
+Then launch read-only `explorer` review subagents in parallel for the phase diff:
 
 ```text
-Evaluate Phase [N] of [plan path].
+Review Phase [N] of [plan path] after implementation.
 Working directory: [cwd]
-Use .sprint-contract.json if present. Run regression commands, phase criteria, and read-only quality review.
+Scope: read-only review of the current diff for Phase [N]. Do not edit files.
+Lens: [correctness/regressions | tests/validation | contracts/state/security as relevant].
+Return blocking findings with path:line evidence, concrete scenario, and suggested fix. If none, return No findings.
 ```
 
-Treat evaluator output as authoritative evidence. A clean pass requires automated success plus no blocking quality issues/concerns.
+A clean pass requires automated success plus no blocking quality issues/concerns from the review subagents or parent spot-checks.
 
-### 4. Handle evaluator result
+### 4. Handle validation/review result
 
 - **Clean PASS:** report the checkpoint to the human.
-- **PASS with quality issues/concerns:** treat as failure unless the evaluator labels them non-blocking nits only; send the report to the implementer for targeted fixes.
-- **FAIL:** send the report to the implementer for targeted fixes within the retry budget.
+- **PASS with non-blocking nits only:** report the nits and ask whether to address them now.
+- **Blocking review finding or failed command:** send the exact evidence to the implementer for targeted fixes within the retry budget.
 - **Blocked/unclear:** stop and ask the human with the concrete blocker and evidence.
 
 ### 5. Report checkpoint to human
@@ -117,7 +121,7 @@ Use this shape after a clean evaluator pass:
 ```markdown
 ## Phase [N]: PASS after [attempt count] implementation attempt(s)
 
-**Evaluator verdict:** PASS ([passed]/[total] criteria)
+**Validation verdict:** PASS ([passed]/[total] criteria)
 
 **Regression suite:** [concise result]
 **Phase criteria:** [concise result]
@@ -147,7 +151,7 @@ Do not commit unrelated changes. If unrelated files are dirty, leave them unstag
 
 If a phase still fails after the retry budget, report:
 
-- all evaluator reports or links/summaries with exact failures;
+- all validation/review reports or links/summaries with exact failures;
 - what the implementer attempted each round;
 - current git status;
 - options: revise plan, continue with a new approach, skip/relax a criterion, or stop.
@@ -172,8 +176,8 @@ If the user explicitly asks to run multiple phases consecutively:
 
 ## Common Mistakes
 
-- Letting the implementer self-certify without evaluator verification.
-- Treating passing tests as enough when evaluator quality review found a blocking issue.
+- Letting the implementer self-certify without independent validation/review.
+- Treating passing tests as enough when read-only quality review found a blocking issue.
 - Retrying indefinitely instead of escalating with evidence.
 - Committing before human confirmation.
 - Sweeping unrelated dirty files into a phase commit.

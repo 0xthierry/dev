@@ -127,8 +127,8 @@ check_installed_agents() {
     fail "missing ~/.pi/agent/agents; run configs/agents/install.sh --yes first"
   fi
 
-  if [ ! -f "$HOME/.pi/agent/agents/codebase-locator.md" ]; then
-    fail "missing codebase-locator in ~/.pi/agent/agents"
+  if [ ! -f "$HOME/.pi/agent/agents/web-search.md" ]; then
+    fail "missing web-search in ~/.pi/agent/agents"
   fi
 
   log "ok: ~/.pi/agent/agents exists"

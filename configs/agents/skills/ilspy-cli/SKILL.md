@@ -1,8 +1,8 @@
 ---
 name: ilspy-cli
 description: >
-    Use ilspy-cli for .NET assembly decompilation and analysis. Produces clean C# source from .NET IL bytecode.
-    Activate when the user requests:
+    Use when .NET assembly decompilation or analysis needs ilspy-cli. Produces clean C# source from .NET IL bytecode.
+    Also use when the user requests:
     - .NET assembly decompilation
     - .NET type or method inspection
     - Detecting whether a binary is .NET or native

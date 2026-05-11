@@ -20,7 +20,7 @@ Create objective, current-state codebase research for [brief topic]. These quest
 
 ## Discovery Notes
 
-- Research agents used for light discovery: [codebase-locator/codebase-analyzer/codebase-pattern-finder/web-search-researcher, or "none needed"]
+- Subagents used for light discovery: [explorer file-map/explorer narrow-fact/explorer pattern/web-search, or "none needed"]
 - Discovery clarified: [current subsystem names, adjacent flows, test locations, or external boundaries]
 
 ## Boundaries

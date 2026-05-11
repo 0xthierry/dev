@@ -66,12 +66,12 @@ Before final response:
 
 ## Available Research Agents
 
-Use agents for targeted evidence gathering, then read the actual files yourself before writing final code blocks.
+Use subagents for targeted evidence gathering, then read the actual files yourself before writing final code blocks.
 
-- **codebase-locator**: find source files, tests, fixtures, schemas, config, package scripts, migrations, routes, or command definitions.
-- **codebase-analyzer**: trace a narrow current behavior, data flow, type contract, lifecycle, failure path, or integration boundary.
-- **codebase-pattern-finder**: find comparable implementation and test examples to copy structurally in the plan.
-- **web-search-researcher**: use only for external SDK/API/platform behavior that the plan must encode. Require source links.
+- **explorer / file-map prompt**: find source files, tests, fixtures, schemas, config, package scripts, migrations, routes, or command definitions.
+- **explorer / narrow-fact prompt**: trace a current behavior, data flow, type contract, lifecycle, failure path, or integration boundary.
+- **explorer / pattern prompt**: find comparable implementation and test examples to copy structurally in the plan.
+- **web-search**: use only for external SDK/API/platform behavior that the plan must encode. Require source links.
 
 Use concise prompts, for example:
 

@@ -1,6 +1,6 @@
 ---
 name: linear
-description: "Use for Linear issues/projects: create, update, query, comment, attach files, or inspect Linear URLs/tickets."
+description: "Use when working with Linear issues/projects: create, update, query, comment, attach files, or inspect Linear URLs/tickets."
 ---
 
 # Using Linear

@@ -1,7 +1,6 @@
 ---
 name: ghidra-agent
-description: Binary analysis and reverse engineering specialist using ghidra-cli and ilspy-cli.
-model: sonnet
+description: Use when binary analysis or reverse engineering requires ghidra-cli or ilspy-cli expertise.
 ---
 
 # Ghidra Binary Analysis Subagent

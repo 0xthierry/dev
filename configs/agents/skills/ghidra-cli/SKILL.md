@@ -1,8 +1,8 @@
 ---
 name: ghidra-cli
 description: >
-    Use ghidra-cli for reverse engineering tasks: binary analysis, decompilation, function inspection, cross-reference analysis, pattern discovery, binary patching, and type system management.
-    Activate when the user requests:
+    Use when reverse engineering tasks need ghidra-cli: binary analysis, decompilation, function inspection, cross-reference analysis, pattern discovery, binary patching, and type system management.
+    Also use when the user requests:
     - Binary analysis or reverse engineering
     - Decompilation or disassembly
     - Function listing, inspection, or renaming

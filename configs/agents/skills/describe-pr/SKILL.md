@@ -1,6 +1,6 @@
 ---
 name: describe-pr
-description: "Use to generate PR descriptions in CI or other noninteractive runs."
+description: "Use when generating PR descriptions in CI or other noninteractive runs."
 ---
 
 # Generate PR Description
