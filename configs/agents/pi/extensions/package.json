@@ -9,6 +9,7 @@
       "./web-access",
       "./create-image",
       "./comment",
+      "./agent-feedback",
       "./subagent",
       "./blueprint",
       "./statusline",
