@@ -171,7 +171,7 @@ run_pi_json_smoke() {
         --no-extensions --no-skills --no-context-files \
         -e "$SUBAGENT_EXTENSION" \
         -e "$FAUX_EXTENSION" \
-        --tools Agent \
+        --tools agent \
         --provider "$FAUX_PROVIDER" \
         --model "$FAUX_MODEL" \
         -p "$prompt_text" > "$stdout_file" 2> "$stderr_file"; then
@@ -191,7 +191,7 @@ run_pi_json_smoke() {
         --no-extensions --no-skills --no-context-files \
         -e "$SUBAGENT_EXTENSION" \
         -e "$FAUX_EXTENSION" \
-        --tools Agent \
+        --tools agent \
         --provider "$FAUX_PROVIDER" \
         --model "$FAUX_MODEL" \
         -p "$prompt_text" > "$stdout_file" 2> "$stderr_file"; then
@@ -201,11 +201,11 @@ run_pi_json_smoke() {
   fi
 
   cat "$stdout_file" >> "$JSON_LOG"
-  assert_file_contains "$stdout_file" '"type":"tool_execution_end"' "missing Agent tool end for $label"
-  assert_file_contains "$stdout_file" '"toolName":"Agent"' "missing Agent tool name for $label"
-  assert_file_contains "$stdout_file" "$expected_text" "missing expected Agent result for $label"
+  assert_file_contains "$stdout_file" '"type":"tool_execution_end"' "missing agent tool end for $label"
+  assert_file_contains "$stdout_file" '"toolName":"agent"' "missing agent tool name for $label"
+  assert_file_contains "$stdout_file" "$expected_text" "missing expected agent result for $label"
   assert_file_not_contains "$stdout_file" "Unknown subagent" "unknown subagent in $label"
-  assert_file_not_contains "$stdout_file" '"isError":true' "Agent tool error in $label"
+  assert_file_not_contains "$stdout_file" '"isError":true' "agent tool error in $label"
 
   if [ -s "$stderr_file" ]; then
     log "stderr for $label:"
@@ -218,7 +218,7 @@ run_pi_json_smoke() {
 run_optional_live_model_smoke() {
   if [ "${PI_SUBAGENT_SMOKE_LIVE:-0}" != "1" ]; then
     section "optional live model smoke"
-    log "skip: set PI_SUBAGENT_SMOKE_LIVE=1 to run a real provider/model Agent call"
+    log "skip: set PI_SUBAGENT_SMOKE_LIVE=1 to run a real provider/model agent call"
     return 0
   fi
 
@@ -242,17 +242,17 @@ run_optional_live_model_smoke() {
     "$PI_BIN" --mode json --session-dir "$session_dir" --no-session \
       --no-extensions --no-skills --no-context-files \
       -e "$SUBAGENT_EXTENSION" \
-      --tools Agent \
+      --tools agent \
       --model "$live_model" \
       --thinking "$live_thinking" \
-      -p 'From your system prompt, identify available subagents whose names start with live-. Then use the Agent tool exactly once with subagent_type live-path-finder and prompt: Find files under configs/agents/pi/extensions/subagent that implement agent discovery and child Pi invocation. Return concise file paths only. After the tool result, state whether live-path-finder was found. Do not edit files.' > "$stdout_file" 2> "$stderr_file"; then
+      -p 'From your system prompt, identify available subagents whose names start with live-. Then use the agent tool exactly once with subagent_type live-path-finder and prompt: Find files under configs/agents/pi/extensions/subagent that implement agent discovery and child Pi invocation. Return concise file paths only. After the tool result, state whether live-path-finder was found. Do not edit files.' > "$stdout_file" 2> "$stderr_file"; then
     tail -80 "$stderr_file" 2>/dev/null | tee -a "$SUMMARY_LOG" || true
     fail "optional live model smoke failed"
   fi
 
   cat "$stdout_file" >> "$JSON_LOG"
-  assert_file_contains "$stdout_file" '"type":"tool_execution_end"' "live model did not execute Agent"
-  assert_file_contains "$stdout_file" '"toolName":"Agent"' "live model Agent tool name missing"
+  assert_file_contains "$stdout_file" '"type":"tool_execution_end"' "live model did not execute agent"
+  assert_file_contains "$stdout_file" '"toolName":"agent"' "live model agent tool name missing"
   assert_file_contains "$stdout_file" "live-path-finder" "live model did not find custom agent"
   assert_file_not_contains "$stdout_file" "Unknown subagent" "live model used an unknown subagent"
   log "ok: optional live model smoke"
@@ -278,10 +278,10 @@ main() {
   run_checked bun run test:pi-extensions subagent
   run_checked bun run test:pi-extensions:e2e subagent
 
-  single_calls='[{"id":"smoke-single-agent","name":"Agent","arguments":{"subagent_type":"echo-agent","prompt":"Return the deterministic child response."}}]'
-  parallel_calls='[{"id":"smoke-parallel-agent","name":"Agent","arguments":{"tasks":[{"subagent_type":"echo-agent","prompt":"Return deterministic child response A."},{"subagent_type":"review-agent","prompt":"Return deterministic child response B."}]}}]'
-  fork_calls='[{"id":"smoke-fork-agent","name":"Agent","arguments":{"subagent_type":"echo-agent","context":"fork","prompt":"Return the deterministic forked child response."}}]'
-  custom_calls='[{"id":"smoke-custom-agent","name":"Agent","arguments":{"subagent_type":"live-path-finder","prompt":"Find files under configs/agents/pi/extensions/subagent that implement agent discovery and child Pi invocation. Return concise file paths only."}}]'
+  single_calls='[{"id":"smoke-single-agent","name":"agent","arguments":{"subagent_type":"echo-agent","prompt":"Return the deterministic child response."}}]'
+  parallel_calls='[{"id":"smoke-parallel-agent","name":"agent","arguments":{"tasks":[{"subagent_type":"echo-agent","prompt":"Return deterministic child response A."},{"subagent_type":"review-agent","prompt":"Return deterministic child response B."}]}}]'
+  fork_calls='[{"id":"smoke-fork-agent","name":"agent","arguments":{"subagent_type":"echo-agent","context":"fork","prompt":"Return the deterministic forked child response."}}]'
+  custom_calls='[{"id":"smoke-custom-agent","name":"agent","arguments":{"subagent_type":"live-path-finder","prompt":"Find files under configs/agents/pi/extensions/subagent that implement agent discovery and child Pi invocation. Return concise file paths only."}}]'
 
   run_pi_json_smoke "single-fresh" standard ephemeral \
     "Subagent smoke child result: single fresh." \

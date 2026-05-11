@@ -53,12 +53,12 @@ export function buildChildInvocation(request: AgentRunRequest, promptPath: strin
   for (const extensionPath of parsePathList(process.env[CHILD_EXTENSIONS_ENV])) args.push("-e", resolve(extensionPath));
 
   if (request.context === "resume") {
-    if (!request.resumeSessionFile) throw new Error("Agent resume requires a saved child Pi session file.");
+    if (!request.resumeSessionFile) throw new Error("agent resume requires a saved child Pi session file.");
     args.push("--session", request.resumeSessionFile);
   } else {
     args.push("--session-dir", request.agentSessionDir);
     if (request.context === "fork") {
-      if (!request.parentSessionFile) throw new Error("Agent context=fork requires a saved parent Pi session.");
+      if (!request.parentSessionFile) throw new Error("agent context=fork requires a saved parent Pi session.");
       args.push("--fork", request.parentSessionFile);
     }
   }

@@ -67,7 +67,7 @@ Recommended lenses:
 4. **State, lifecycle, and async** — races, stale cache, cancellation, cleanup, resource leaks, retries, and concurrent operations.
 5. **Tests, validation, and simplicity** — missing meaningful tests, invalid validation claims, over-complexity, dead code, and maintainability risks.
 
-Example Agent shape:
+Example agent tool shape:
 
 ```json
 {

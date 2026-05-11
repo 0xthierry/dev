@@ -3,7 +3,7 @@ import { createFakePi } from "../_shared/testing/fake-pi";
 import register from "./index";
 
 describe("subagent extension entrypoint", () => {
-  test("registers the Agent tool", () => {
+  test("registers the agent tool", () => {
     // Arrange
     const fakePi = createFakePi();
 
@@ -11,6 +11,6 @@ describe("subagent extension entrypoint", () => {
     register(fakePi.pi);
 
     // Assert
-    expect(fakePi.tools.has("Agent")).toBe(true);
+    expect(fakePi.tools.has("agent")).toBe(true);
   });
 });

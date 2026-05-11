@@ -7,7 +7,7 @@ import type { SubagentRuntime } from "../runtime";
 import { type AgentToolDetails, executeAgentTool, registerAgentTool } from "./agent-tool";
 
 describe("registerAgentTool", () => {
-  test("registers the Claude-compatible Agent tool", () => {
+  test("registers the lower-case agent tool", () => {
     // Arrange
     const fakePi = createFakePi();
     const runtime = fakeRuntime([agent("reviewer")]);
@@ -16,7 +16,7 @@ describe("registerAgentTool", () => {
     registerAgentTool(fakePi.pi, runtime);
 
     // Assert
-    const tool = fakePi.tools.get("Agent");
+    const tool = fakePi.tools.get("agent");
     expect(tool).toBeDefined();
     expect(tool?.description).toContain("Spawn or resume a subagent");
     expect(tool?.description).toContain("built-in agents");
@@ -103,7 +103,7 @@ describe("executeAgentTool", () => {
             type: "message",
             message: {
               role: "toolResult",
-              toolName: "Agent",
+              toolName: "agent",
               details: {
                 results: [
                   {
@@ -220,7 +220,7 @@ describe("executeAgentTool", () => {
     expect(result.details?.results).toHaveLength(2);
     expect(runtime.runAgent).toHaveBeenCalledTimes(2);
     expect(text).toContain("Parallel agents completed: 1/2 succeeded");
-    expect(text).toContain("## locator\nAgent locator failed: locator crashed");
+    expect(text).toContain("## locator\nagent locator failed: locator crashed");
     expect(text).toContain("## reviewer\nreviewer completed: Review files");
   });
 

@@ -63,7 +63,7 @@ For a narrow target, one or two `explorer` agents may be enough. For broader are
 4. **Patterns and tests** — comparable implementations, fixtures, mocks, assertion style, validation commands, and coverage gaps.
 5. **External/operational boundaries** — provider docs, SDK behavior, credentials, deployment/runtime constraints, permissions, failure modes, and observability.
 
-Example Agent shape:
+Example agent tool shape:
 
 ```json
 {

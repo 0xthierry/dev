@@ -34,8 +34,8 @@ interface ResolvedAgentTask {
 
 export function registerAgentTool(pi: ExtensionAPI, runtime: SubagentRuntime): void {
   pi.registerTool({
-    name: "Agent",
-    label: "Agent",
+    name: "agent",
+    label: "agent",
     description: [
       "Spawn or resume a subagent for a well-scoped task.",
       "Use subagent_type + prompt to start one task, agent_id + prompt to resume, or tasks[] for independent parallel tasks.",
@@ -44,11 +44,11 @@ export function registerAgentTool(pi: ExtensionAPI, runtime: SubagentRuntime): v
     ].join(" "),
     promptSnippet: "Spawn or resume a focused child subagent for a well-scoped task.",
     promptGuidelines: [
-      "Do not use Agent when a quick direct file read or command in the main session is sufficient.",
+      "Do not use the agent tool when a quick direct file read or command in the main session is sufficient.",
       "Before delegating, decide what immediate critical-path work you should do locally; do not hand off urgent blocking work when your next step depends on the result.",
       "Delegate concrete, bounded tasks that materially advance the main task and can run independently; avoid duplicating work between the parent and child agents.",
-      "Use Agent.agent_id with a follow-up prompt to resume a previous child session when the prior Agent result returned an agent_id.",
-      "Use Agent.tasks for multiple independent tasks that can run in parallel, then synthesize the returned results in the main session.",
+      "Use agent.agent_id with a follow-up prompt to resume a previous child session when the prior agent result returned an agent_id.",
+      "Use agent.tasks for multiple independent tasks that can run in parallel, then synthesize the returned results in the main session.",
       "For coding subtasks, give each child a disjoint write scope and tell it to edit files directly, list changed paths, and report validation.",
       "Prompt child agents with a compact contract: goal, context/evidence, success criteria, hard constraints, validation, expected output, and stop rules.",
     ],
@@ -200,7 +200,7 @@ async function resolveResumeTask(
   if (!task.subagentType) {
     return {
       ok: false,
-      error: `Agent session ${fileLookup.match.sessionId} exists on disk, but this parent session has no record of its subagent type. Provide subagent_type with agent_id to resume it.`,
+      error: `agent session ${fileLookup.match.sessionId} exists on disk, but this parent session has no record of its subagent type. Provide subagent_type with agent_id to resume it.`,
     };
   }
 
@@ -223,7 +223,7 @@ function resolveResumeTaskFromRecord(
   if (task.subagentType && task.subagentType !== record.agent) {
     return {
       ok: false,
-      error: `Agent session ${record.agentId} belongs to subagent ${record.agent}, not ${task.subagentType}.`,
+      error: `agent session ${record.agentId} belongs to subagent ${record.agent}, not ${task.subagentType}.`,
     };
   }
 
@@ -252,7 +252,7 @@ function unknownAgentMessage(agentName: string, agents: AgentDefinition[]): stri
 }
 
 function unknownAgentSessionMessage(agentId: string, agentSessionDir: string): string {
-  return `Unknown agent session: ${agentId}. Use an agent_id returned by an earlier Agent result, or resume with subagent_type after confirming the session exists in ${agentSessionDir}.`;
+  return `Unknown agent session: ${agentId}. Use an agent_id returned by an earlier agent result, or resume with subagent_type after confirming the session exists in ${agentSessionDir}.`;
 }
 
 function ambiguousAgentSessionMessage(
@@ -262,7 +262,7 @@ function ambiguousAgentSessionMessage(
   const ids = matches
     .map((match) => match.agentId ?? match.sessionId)
     .filter((id): id is string => typeof id === "string" && id.length > 0);
-  return `Agent session id "${agentId}" is ambiguous. Matches: ${ids.join(", ") || "multiple sessions"}.`;
+  return `agent session id "${agentId}" is ambiguous. Matches: ${ids.join(", ") || "multiple sessions"}.`;
 }
 
 function errorResult(
@@ -370,7 +370,7 @@ async function runParallelTasks(
   );
 
   return tasks.map(
-    (task, index) => results[index] ?? failedAgentRunResult(task, "Agent worker stopped before this task completed."),
+    (task, index) => results[index] ?? failedAgentRunResult(task, "agent worker stopped before this task completed."),
   );
 }
 
@@ -385,7 +385,7 @@ function runningAgentRunResult(task: ResolvedAgentTask): AgentRunResult {
 function failedAgentRunResult(task: ResolvedAgentTask, error: unknown): AgentRunResult {
   const message = errorMessage(error);
   return {
-    ...baseAgentRunResult(task, "failed", `Agent ${task.subagentType} failed: ${message}`),
+    ...baseAgentRunResult(task, "failed", `agent ${task.subagentType} failed: ${message}`),
     exitCode: 1,
     stderr: message,
     stopReason: "error",

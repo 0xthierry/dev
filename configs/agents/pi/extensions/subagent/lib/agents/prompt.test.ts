@@ -11,7 +11,7 @@ describe("buildAgentPromptSection", () => {
     const section = buildAgentPromptSection(agents, "/agents");
 
     // Assert
-    expect(section).toContain("Use the Agent tool");
+    expect(section).toContain("Use the agent tool");
     expect(section).toContain("- locator: Finds files");
     expect(section).toContain("- reviewer: Reviews code");
     expect(section).toContain("normal Pi discovery");

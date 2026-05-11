@@ -33,15 +33,15 @@ export function planAgentInvocation(params: AgentParams): AgentPlanResult {
   const modeCount = Number(single !== undefined) + Number(parallel !== undefined);
 
   if (modeCount !== 1) {
-    return { ok: false, error: "Provide exactly one Agent mode: subagent_type + prompt, or tasks[]." };
+    return { ok: false, error: "Provide exactly one agent mode: subagent_type + prompt, or tasks[]." };
   }
 
   if (single) return { ok: true, plan: { mode: "single", tasks: [single] } };
-  if (!parallel) return { ok: false, error: "No Agent tasks were provided." };
+  if (!parallel) return { ok: false, error: "No agent tasks were provided." };
   if (parallel.length > MAX_PARALLEL_AGENT_TASKS) {
     return {
       ok: false,
-      error: `Too many parallel Agent tasks (${parallel.length}). Maximum is ${MAX_PARALLEL_AGENT_TASKS}.`,
+      error: `Too many parallel agent tasks (${parallel.length}). Maximum is ${MAX_PARALLEL_AGENT_TASKS}.`,
     };
   }
 

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { MAX_PARALLEL_AGENT_TASKS, planAgentInvocation } from "./params";
 
 describe("planAgentInvocation", () => {
-  test("plans a single Agent invocation", () => {
+  test("plans a single agent invocation", () => {
     // Arrange
     const params = { subagent_type: " reviewer ", prompt: " Review diff ", description: " Review " };
 
@@ -21,7 +21,7 @@ describe("planAgentInvocation", () => {
     });
   });
 
-  test("plans parallel Agent tasks with a top-level context default", () => {
+  test("plans parallel agent tasks with a top-level context default", () => {
     // Arrange
     const params = {
       context: "fork" as const,
@@ -123,7 +123,7 @@ describe("planAgentInvocation", () => {
     const result = planAgentInvocation(params);
 
     // Assert
-    expect(result).toEqual({ ok: false, error: "Provide exactly one Agent mode: subagent_type + prompt, or tasks[]." });
+    expect(result).toEqual({ ok: false, error: "Provide exactly one agent mode: subagent_type + prompt, or tasks[]." });
   });
 
   test("rejects malformed parallel tasks without throwing", () => {
@@ -134,7 +134,7 @@ describe("planAgentInvocation", () => {
     const result = planAgentInvocation(params);
 
     // Assert
-    expect(result).toEqual({ ok: false, error: "Provide exactly one Agent mode: subagent_type + prompt, or tasks[]." });
+    expect(result).toEqual({ ok: false, error: "Provide exactly one agent mode: subagent_type + prompt, or tasks[]." });
   });
 
   test("rejects oversized parallel batches", () => {
@@ -149,6 +149,6 @@ describe("planAgentInvocation", () => {
 
     // Assert
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain("Too many parallel Agent tasks");
+    if (!result.ok) expect(result.error).toContain("Too many parallel agent tasks");
   });
 });

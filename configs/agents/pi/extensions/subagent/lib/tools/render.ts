@@ -26,7 +26,7 @@ export function formatAgentToolCall(args: AgentParams, theme: Theme): string {
   const tasks = Array.isArray(args.tasks) ? args.tasks : [];
   if (tasks.length > 0) {
     return [
-      `${theme.fg("toolTitle", theme.bold("Agent "))}${theme.fg("accent", `${tasks.length} subagents in parallel`)}`,
+      `${theme.fg("toolTitle", theme.bold("agent "))}${theme.fg("accent", `${tasks.length} subagents in parallel`)}`,
       ...tasks.slice(0, 6).map((task, index) => formatCallTaskLine(task, index, theme)),
       tasks.length > 6 ? `  ${theme.fg("muted", `… +${tasks.length - 6} more`)}` : "",
     ]
@@ -39,7 +39,7 @@ export function formatAgentToolCall(args: AgentParams, theme: Theme): string {
   const prompt = typeof args.prompt === "string" ? args.prompt : "";
   const description = typeof args.description === "string" ? args.description.trim() : "";
   return [
-    `${theme.fg("toolTitle", theme.bold("Agent "))}${theme.fg(
+    `${theme.fg("toolTitle", theme.bold("agent "))}${theme.fg(
       "accent",
       resumeId ? `resume ${resumeId.slice(0, 8)}` : agent,
     )}`,
@@ -86,7 +86,7 @@ function formatHeader(details: AgentToolDetails, theme: Theme): string {
   const counts = countStatuses(details.results);
   if (details.mode === "single") {
     const result = details.results[0];
-    return `${statusIcon(result.status, theme)} ${theme.fg("toolTitle", theme.bold("Agent "))}${theme.fg(
+    return `${statusIcon(result.status, theme)} ${theme.fg("toolTitle", theme.bold("agent "))}${theme.fg(
       "accent",
       result.agent,
     )} ${theme.fg("muted", result.status)}`;
@@ -112,7 +112,7 @@ function formatAgentResult(result: AgentRunResult, expanded: boolean, theme: The
   ];
 
   if (expanded) {
-    if (result.agentId) lines.push(`  ${theme.fg("muted", "Agent ID:")} ${theme.fg("dim", result.agentId)}`);
+    if (result.agentId) lines.push(`  ${theme.fg("muted", "agent_id:")} ${theme.fg("dim", result.agentId)}`);
     if (result.sessionFile) lines.push(`  ${theme.fg("muted", "Session:")} ${theme.fg("dim", result.sessionFile)}`);
     lines.push(`  ${theme.fg("muted", "Task:")} ${theme.fg("dim", result.task)}`);
   }

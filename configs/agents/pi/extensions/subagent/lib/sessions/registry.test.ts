@@ -2,14 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { findAgentSessionRecord, restoreAgentSessionRecords } from "./registry";
 
 describe("restoreAgentSessionRecords", () => {
-  test("restores child agent session metadata from prior Agent tool results on the branch", () => {
+  test("restores child agent session metadata from prior agent tool results on the branch", () => {
     // Arrange
     const entries = [
       {
         type: "message",
         message: {
           role: "toolResult",
-          toolName: "Agent",
+          toolName: "agent",
           details: {
             results: [
               {
@@ -35,6 +35,19 @@ describe("restoreAgentSessionRecords", () => {
         sessionFile: "/agent-sessions/session.jsonl",
         task: "Find auth files",
       },
+    ]);
+  });
+
+  test("restores legacy capitalized Agent tool results", () => {
+    // Arrange
+    const entries = [agentEntry("019e", "explorer", "/old-agent-tool.jsonl", "Legacy", "Agent")];
+
+    // Act
+    const records = restoreAgentSessionRecords(entries);
+
+    // Assert
+    expect(records).toEqual([
+      { agentId: "019e", agent: "explorer", sessionFile: "/old-agent-tool.jsonl", task: "Legacy" },
     ]);
   });
 
@@ -87,12 +100,12 @@ describe("findAgentSessionRecord", () => {
   });
 });
 
-function agentEntry(agentId: string, agent: string, sessionFile: string, task: string): unknown {
+function agentEntry(agentId: string, agent: string, sessionFile: string, task: string, toolName = "agent"): unknown {
   return {
     type: "message",
     message: {
       role: "toolResult",
-      toolName: "Agent",
+      toolName,
       details: { results: [{ agentId, agent, sessionFile, task }] },
     },
   };

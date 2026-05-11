@@ -6,7 +6,7 @@ import { CHILD_DEPTH_ENV } from "./runner/invocation";
 import type { SubagentRuntime } from "./runtime";
 
 describe("registerSubagentExtension", () => {
-  test("registers the Agent tool in the parent process", () => {
+  test("registers the agent tool in the parent process", () => {
     // Arrange
     const fakePi = createFakePi();
 
@@ -14,7 +14,7 @@ describe("registerSubagentExtension", () => {
     registerSubagentExtension(fakePi.pi);
 
     // Assert
-    expect(fakePi.tools.has("Agent")).toBe(true);
+    expect(fakePi.tools.has("agent")).toBe(true);
   });
 
   test("does not register parent orchestration inside child subagent processes", () => {
@@ -27,7 +27,7 @@ describe("registerSubagentExtension", () => {
       registerSubagentExtension(fakePi.pi);
 
       // Assert
-      expect(fakePi.tools.has("Agent")).toBe(false);
+      expect(fakePi.tools.has("agent")).toBe(false);
     } finally {
       delete process.env[CHILD_DEPTH_ENV];
     }

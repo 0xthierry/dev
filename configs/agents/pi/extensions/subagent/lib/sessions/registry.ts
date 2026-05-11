@@ -14,7 +14,7 @@ export function restoreAgentSessionRecords(entries: readonly unknown[]): AgentSe
 
   for (const entry of entries) {
     const message = messageFromEntry(entry);
-    if (!message || message.role !== "toolResult" || message.toolName !== "Agent") continue;
+    if (!message || message.role !== "toolResult" || !isAgentToolName(message.toolName)) continue;
 
     const details = objectValue(message.details);
     const results = Array.isArray(details?.results) ? details.results : [];
@@ -57,6 +57,10 @@ function recordFromAgentRunResult(result: unknown): AgentSessionRecord | undefin
 function messageFromEntry(entry: unknown): Record<string, unknown> | undefined {
   const value = objectValue(entry);
   return objectValue(value?.message);
+}
+
+function isAgentToolName(value: unknown): boolean {
+  return value === "agent" || value === "Agent";
 }
 
 function objectValue(value: unknown): Record<string, unknown> | undefined {

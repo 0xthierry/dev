@@ -2,9 +2,9 @@
 
 Claude/Codex-style subagents for Pi.
 
-This extension registers one `Agent` tool that delegates focused work to child `pi` sessions. It is intentionally small: foreground execution, single-agent or independent parallel tasks, saved fresh context by default, optional forked context, resumable child sessions, and no background scheduler, memory store, pool, dashboard, or mux panes.
+This extension registers one `agent` tool that delegates focused work to child `pi` sessions. It is intentionally small: foreground execution, single-agent or independent parallel tasks, saved fresh context by default, optional forked context, resumable child sessions, and no background scheduler, memory store, pool, dashboard, or mux panes.
 
-The Agent tool renders live progress in Pi's tool row. Single-agent runs show the child assistant stream and tool activity as it arrives. Parallel runs show one batch with each agent's queued/running/succeeded/failed status, recent child tool calls, and final output/usage when available.
+The agent tool renders live progress in Pi's tool row. Single-agent runs show the child assistant stream and tool activity as it arrives. Parallel runs show one batch with each agent's queued/running/succeeded/failed status, recent child tool calls, and final output/usage when available.
 
 ## Agent definitions
 
@@ -47,7 +47,7 @@ Single task:
 }
 ```
 
-Resume a previous child session using the `agent_id` returned by an earlier Agent result:
+Resume a previous child session using the `agent_id` returned by an earlier agent result:
 
 ```json
 {
@@ -85,7 +85,7 @@ Child sessions are saved under Pi's agent directory in a separate namespace that
 
 ## Child process controls
 
-The extension prevents recursive `Agent` registration in child subagents with `PI_SUBAGENT_DEPTH`.
+The extension prevents recursive `agent` registration in child subagents with `PI_SUBAGENT_DEPTH`.
 
 For tests or special launches, these environment variables tune child invocation:
 

@@ -34,7 +34,7 @@ describe("subagent extension E2E", () => {
     tempDir = undefined;
   });
 
-  test("executes the Agent tool through the Pi agent loop", async () => {
+  test("executes the agent tool through the Pi agent loop", async () => {
     // Arrange
     tempDir = await mkdtemp(join(tmpdir(), "pi-subagent-e2e-"));
     const piAgentDir = join(tempDir, "pi-agent");
@@ -60,7 +60,7 @@ describe("subagent extension E2E", () => {
         "-e",
         fauxProviderExtensionPath,
         "--tools",
-        "Agent",
+        "agent",
         "--provider",
         FAUX_PROVIDER_NAME,
         "--model",
@@ -73,7 +73,7 @@ describe("subagent extension E2E", () => {
         [FAUX_TOOL_CALLS_ENV]: JSON.stringify([
           {
             id: "subagent-e2e-call",
-            name: "Agent",
+            name: "agent",
             arguments: { subagent_type: "echo-agent", prompt: "Return the deterministic child response." },
           },
         ]),
@@ -176,7 +176,7 @@ describe("subagent extension E2E", () => {
 });
 
 function isAgentToolEnd(event: JsonObject): boolean {
-  return event.type === "tool_execution_end" && event.toolName === "Agent";
+  return event.type === "tool_execution_end" && event.toolName === "agent";
 }
 
 function agentToolResultEntry(details: AgentToolDetails | undefined): unknown {
@@ -184,7 +184,7 @@ function agentToolResultEntry(details: AgentToolDetails | undefined): unknown {
     type: "message",
     message: {
       role: "toolResult",
-      toolName: "Agent",
+      toolName: "agent",
       details,
     },
   };

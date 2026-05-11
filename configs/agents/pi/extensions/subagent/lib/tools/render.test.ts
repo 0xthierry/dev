@@ -18,7 +18,7 @@ describe("formatAgentToolCall", () => {
     const text = formatAgentToolCall(params, theme);
 
     // Assert
-    expect(text).toContain("Agent resume 019e1882");
+    expect(text).toContain("agent resume 019e1882");
     expect(text).toContain("Continue review");
   });
 
@@ -35,7 +35,7 @@ describe("formatAgentToolCall", () => {
     const text = formatAgentToolCall(params, theme);
 
     // Assert
-    expect(text).toContain("Agent 2 subagents in parallel");
+    expect(text).toContain("agent 2 subagents in parallel");
     expect(text).toContain("locator");
     expect(text).toContain("reviewer");
   });
@@ -101,7 +101,7 @@ describe("formatAgentToolResult", () => {
     const text = formatAgentToolResult(result, { expanded: true }, theme);
 
     // Assert
-    expect(text).toContain("Agent ID: 019e1882-8bc8-767c-a1e6-d7c9ebd3a574");
+    expect(text).toContain("agent_id: 019e1882-8bc8-767c-a1e6-d7c9ebd3a574");
     expect(text).toContain("Session: /agent-sessions/session.jsonl");
   });
 
