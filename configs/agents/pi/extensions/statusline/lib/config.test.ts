@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readStatuslineConfig } from "./config";
 
 describe("readStatuslineConfig", () => {
-  test("uses Cloudflare BDR defaults with a BRL display threshold", () => {
+  test("uses Cloudflare BDR defaults with no display threshold", () => {
     // Arrange
     const env = {};
 
@@ -18,7 +18,7 @@ describe("readStatuslineConfig", () => {
         label: "NET",
         ttlMs: 300_000,
         timeoutMs: 2_000,
-        maxPrice: 50,
+        maxPrice: null,
       },
     });
   });

@@ -65,6 +65,17 @@ describe("filterQuoteByMaxPrice", () => {
     // Assert
     expect(result).toBeNull();
   });
+
+  test("keeps quotes when the display threshold is disabled", () => {
+    // Arrange
+    const quote = { symbol: "N2ET34.SA", label: "NET", price: 500, currency: "BRL" };
+
+    // Act
+    const result = filterQuoteByMaxPrice(quote, null);
+
+    // Assert
+    expect(result).toBe(quote);
+  });
 });
 
 describe("createYahooStockQuoteProvider", () => {

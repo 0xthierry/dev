@@ -10,7 +10,7 @@ const DEFAULT_STOCK_TTL_MS = 5 * 60_000;
 const DEFAULT_STOCK_TIMEOUT_MS = 2_000;
 const DEFAULT_STOCK_SYMBOL = "N2ET34.SA";
 const DEFAULT_STOCK_LABEL = "NET";
-const DEFAULT_STOCK_MAX_PRICE = 50;
+const DEFAULT_STOCK_MAX_PRICE: number | null = null;
 
 export function readStatuslineConfig(env: NodeJS.ProcessEnv = process.env): StatuslineConfig {
   const stockSymbol = env.PI_STATUSLINE_STOCK_SYMBOL;
@@ -53,7 +53,7 @@ function parsePositiveInteger(value: string | undefined, fallback: number): numb
   return parsed;
 }
 
-function parseOptionalPositiveNumber(value: string | undefined, fallback: number): number | null {
+function parseOptionalPositiveNumber(value: string | undefined, fallback: number | null): number | null {
   if (value == null || value.trim() === "") return fallback;
   const normalized = value.trim().toLowerCase();
   if (normalized === "off" || normalized === "none" || normalized === "false" || normalized === "0") return null;
