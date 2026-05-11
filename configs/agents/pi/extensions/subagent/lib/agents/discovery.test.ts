@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { discoverUserAgents } from "./discovery";
+import { discoverAgents, discoverUserAgents } from "./discovery";
 
 describe("discoverUserAgents", () => {
   test("loads markdown agents with required frontmatter recursively", async () => {
@@ -60,6 +60,52 @@ describe("discoverUserAgents", () => {
       expect(result.agents).toHaveLength(1);
       expect(result.agents[0].description).toBe("First");
       expect(result.agents[0].systemPrompt).toBe("First body");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("discoverAgents", () => {
+  test("adds built-in agents after user discovery", async () => {
+    // Arrange
+    const dir = await mkdtemp(join(tmpdir(), "pi-agent-discovery-"));
+    await writeFile(
+      join(dir, "reviewer.md"),
+      "---\nname: reviewer\ndescription: Reviews code\n---\nReview body",
+      "utf8",
+    );
+
+    try {
+      // Act
+      const result = await discoverAgents({ agentsDir: dir });
+
+      // Assert
+      expect(result.agents.map((agent) => agent.name)).toEqual(["explorer", "reviewer", "worker"]);
+      expect(result.agents.find((agent) => agent.name === "explorer")).toMatchObject({ source: "builtin" });
+      expect(result.agents.find((agent) => agent.name === "worker")?.systemPrompt).toContain("bounded implementation");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("lets user agents override built-in agents with the same name", async () => {
+    // Arrange
+    const dir = await mkdtemp(join(tmpdir(), "pi-agent-discovery-"));
+    await writeFile(
+      join(dir, "explorer.md"),
+      "---\nname: explorer\ndescription: Custom explorer\n---\nCustom body",
+      "utf8",
+    );
+
+    try {
+      // Act
+      const result = await discoverAgents({ agentsDir: dir });
+
+      // Assert
+      const explorer = result.agents.find((agent) => agent.name === "explorer");
+      expect(explorer).toMatchObject({ source: "user", description: "Custom explorer", systemPrompt: "Custom body" });
+      expect(result.agents.map((agent) => agent.name)).toEqual(["explorer", "worker"]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

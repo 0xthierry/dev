@@ -8,14 +8,16 @@ export const AgentContextSchema = StringEnum(["fresh", "fork"] as const, {
 });
 
 export const AgentTaskSchema = Type.Object({
-  subagent_type: Type.String({ description: "Name of the subagent to run." }),
+  subagent_type: Type.String({ description: "Name of the configured or built-in subagent to run." }),
   description: Type.Optional(Type.String({ description: "Short human-readable task summary." })),
   prompt: Type.String({ description: "Task prompt for the subagent." }),
   context: Type.Optional(AgentContextSchema),
 });
 
 export const AgentParamsSchema = Type.Object({
-  subagent_type: Type.Optional(Type.String({ description: "Name of the subagent to run for single-agent mode." })),
+  subagent_type: Type.Optional(
+    Type.String({ description: "Name of the configured or built-in subagent to run for single-agent mode." }),
+  ),
   description: Type.Optional(Type.String({ description: "Short human-readable task summary for single-agent mode." })),
   prompt: Type.Optional(Type.String({ description: "Task prompt for single-agent mode." })),
   context: Type.Optional(AgentContextSchema),

@@ -3,6 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { parsePiThinkingLevel } from "../thinking";
+import { BUILTIN_AGENTS } from "./builtins";
 import type { AgentDefinition, AgentDiscoveryResult } from "./types";
 
 export interface AgentDiscoveryOptions {
@@ -13,6 +14,14 @@ interface AgentFrontmatter extends Record<string, unknown> {
   name?: unknown;
   description?: unknown;
   effort?: unknown;
+}
+
+export async function discoverAgents(options: AgentDiscoveryOptions = {}): Promise<AgentDiscoveryResult> {
+  const discovery = await discoverUserAgents(options);
+  return {
+    agentsDir: discovery.agentsDir,
+    agents: mergeBuiltInAgents(discovery.agents),
+  };
 }
 
 export async function discoverUserAgents(options: AgentDiscoveryOptions = {}): Promise<AgentDiscoveryResult> {
@@ -28,8 +37,21 @@ export async function discoverUserAgents(options: AgentDiscoveryOptions = {}): P
 
   return {
     agentsDir,
-    agents: [...agentsByName.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    agents: sortAgents([...agentsByName.values()]),
   };
+}
+
+function mergeBuiltInAgents(userAgents: AgentDefinition[]): AgentDefinition[] {
+  const agentsByName = new Map<string, AgentDefinition>();
+  for (const agent of userAgents) agentsByName.set(agent.name, agent);
+  for (const agent of BUILTIN_AGENTS) {
+    if (!agentsByName.has(agent.name)) agentsByName.set(agent.name, agent);
+  }
+  return sortAgents([...agentsByName.values()]);
+}
+
+function sortAgents(agents: AgentDefinition[]): AgentDefinition[] {
+  return agents.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function findMarkdownFiles(root: string): Promise<string[]> {

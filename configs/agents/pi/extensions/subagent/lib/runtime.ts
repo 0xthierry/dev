@@ -1,4 +1,4 @@
-import { discoverUserAgents } from "./agents/discovery";
+import { discoverAgents as discoverConfiguredAgents } from "./agents/discovery";
 import type { AgentDefinition, AgentDiscoveryResult } from "./agents/types";
 import { type AgentProgressCallback, runChildPiAgent } from "./runner/child-pi";
 import type { AgentRunRequest } from "./runner/invocation";
@@ -15,7 +15,7 @@ export interface SubagentRuntime {
 
 export function createSubagentRuntime(): SubagentRuntime {
   return {
-    discoverAgents: () => discoverUserAgents(),
+    discoverAgents: () => discoverConfiguredAgents(),
     runAgent: runChildPiAgent,
   };
 }

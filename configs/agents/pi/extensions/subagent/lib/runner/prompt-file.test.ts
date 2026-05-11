@@ -15,7 +15,10 @@ describe("writeAgentPromptFile", () => {
     try {
       // Assert
       expect(basename(promptFile.filePath)).toBe("reviewer_agent-system-prompt.md");
-      expect(await readFile(promptFile.filePath, "utf8")).toBe("Review carefully.");
+      const content = await readFile(promptFile.filePath, "utf8");
+      expect(content).toContain("You are a child subagent, not the parent orchestrator.");
+      expect(content).toContain("Do not propose or run more subagents.");
+      expect(content.endsWith("Review carefully.")).toBe(true);
       expect((await stat(promptFile.filePath)).mode & 0o777).toBe(0o600);
     } finally {
       await rm(promptFile.dir, { recursive: true, force: true });
@@ -31,7 +34,9 @@ describe("writeAgentPromptFile", () => {
 
     try {
       // Assert
-      expect(await readFile(promptFile.filePath, "utf8")).toBe("Review code safely.");
+      const content = await readFile(promptFile.filePath, "utf8");
+      expect(content).toContain("You are a child subagent");
+      expect(content.endsWith("Review code safely.")).toBe(true);
     } finally {
       await rm(promptFile.dir, { recursive: true, force: true });
     }

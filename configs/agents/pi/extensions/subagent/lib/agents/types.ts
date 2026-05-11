@@ -1,6 +1,6 @@
 import type { PiThinkingLevel } from "../thinking";
 
-export type AgentSource = "user";
+export type AgentSource = "user" | "builtin";
 
 export interface AgentDefinition {
   name: string;

@@ -16,8 +16,13 @@ describe("registerAgentTool", () => {
     registerAgentTool(fakePi.pi, runtime);
 
     // Assert
-    expect(fakePi.tools.has("Agent")).toBe(true);
-    expect(fakePi.tools.get("Agent")?.description).toContain("child Pi sessions");
+    const tool = fakePi.tools.get("Agent");
+    expect(tool).toBeDefined();
+    expect(tool?.description).toContain("child Pi subagent");
+    expect(tool?.description).toContain("built-in agents");
+    expect(tool?.promptGuidelines).toContain(
+      "Before delegating, decide what immediate critical-path work you should do locally; do not hand off urgent blocking work when your next step depends on the result.",
+    );
   });
 });
 

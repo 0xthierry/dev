@@ -8,7 +8,12 @@ The Agent tool renders live progress in Pi's tool row. Single-agent runs show th
 
 ## Agent definitions
 
-Agents are Markdown files under Pi's normal agent config directory:
+Two built-in agents are always available:
+
+- `explorer` — fast, read-only codebase reconnaissance for specific, well-scoped questions.
+- `worker` — bounded implementation agent for production changes, fixes, refactors, and validation.
+
+Configured agents are Markdown files under Pi's normal agent config directory and override built-ins with the same name:
 
 ```text
 ~/.pi/agent/agents/*.md
@@ -28,7 +33,7 @@ Agent system prompt goes here.
 
 Optional `effort` frontmatter sets the child Pi thinking level for that agent. Supported values are `off`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Agents without `effort` inherit the parent session's current thinking level.
 
-The child `pi` process loads Pi context files and skills through normal Pi discovery. The agent body is appended as the child system prompt.
+The child `pi` process loads Pi context files and skills through normal Pi discovery. A stable child-boundary prompt is prepended before the agent body so child sessions know the parent owns orchestration and that they must not run more subagents.
 
 ## Tool usage
 
@@ -52,6 +57,8 @@ Parallel independent tasks:
   ]
 }
 ```
+
+Prompt children with a compact contract: goal, context/evidence, success criteria, hard constraints, validation, expected output, and stop rules. Use parallel tasks only for independent work; do not hand off urgent blocking work when the parent session's next step depends on it.
 
 Context modes:
 
