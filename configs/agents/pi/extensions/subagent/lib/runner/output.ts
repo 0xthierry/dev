@@ -32,8 +32,8 @@ function outputNotices(
       )} of ${formatSize(truncation.totalBytes)}).]`,
     );
   }
-  if (artifactPath) notices.push(`Full subagent output saved to: ${artifactPath}`);
-  if (artifactError) notices.push(`Full subagent output artifact could not be saved: ${artifactError}`);
+  if (artifactPath) notices.push(`Detailed subagent output saved to: ${artifactPath}`);
+  if (artifactError) notices.push(`Detailed subagent output artifact could not be saved: ${artifactError}`);
   return notices;
 }
 

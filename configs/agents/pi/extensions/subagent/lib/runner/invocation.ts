@@ -26,6 +26,7 @@ export interface AgentRunRequest {
   thinking?: PiThinkingLevel;
   resumeAgentId?: string;
   resumeSessionFile?: string;
+  outputArtifactPath?: string;
 }
 
 export interface ChildInvocation {
@@ -68,9 +69,23 @@ export function buildChildInvocation(request: AgentRunRequest, promptPath: strin
 
   if (request.modelRef) args.push("--model", request.modelRef);
   if (request.thinking) args.push("--thinking", request.thinking);
-  args.push("--append-system-prompt", promptPath, `Task: ${request.task}`);
+  args.push("--append-system-prompt", promptPath, formatChildTask(request));
 
   return { args, env: childEnvironment(process.env) };
+}
+
+function formatChildTask(request: AgentRunRequest): string {
+  if (!request.outputArtifactPath) return `Task: ${request.task}`;
+  return [
+    `Task: ${request.task}`,
+    "",
+    "---",
+    "Output artifact:",
+    `Write your detailed handoff report to: ${request.outputArtifactPath}`,
+    "This artifact is the authoritative result for the parent session. Do not make it terse just to save parent context.",
+    "You may write this artifact even when your role is otherwise read-only; do not modify repository files unless the task explicitly allows it.",
+    "After writing the artifact, keep your final chat response brief and mention the artifact path.",
+  ].join("\n");
 }
 
 export function childEnvironment(parentEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {

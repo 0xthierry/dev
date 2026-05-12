@@ -37,7 +37,7 @@ describe("prepareAgentOutput", () => {
     expect(result.truncated).toBe(true);
     expect(result.text.length).toBeLessThan(output.length);
     expect(result.text).toContain("Output preview truncated");
-    expect(result.text).toContain("Full subagent output saved to: /agent/artifacts/output.md");
+    expect(result.text).toContain("Detailed subagent output saved to: /agent/artifacts/output.md");
   });
 
   test("appends artifact paths to short output", () => {
@@ -49,7 +49,7 @@ describe("prepareAgentOutput", () => {
 
     // Assert
     expect(result).toEqual({
-      text: "short result\n\nFull subagent output saved to: /agent/artifacts/output.md",
+      text: "short result\n\nDetailed subagent output saved to: /agent/artifacts/output.md",
       truncated: false,
     });
   });

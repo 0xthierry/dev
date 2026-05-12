@@ -1,3 +1,4 @@
+import type { AgentArtifactPaths } from "./artifacts";
 import type { AgentRunContextMode, AgentRunRequest } from "./invocation";
 import type { AgentActivityItem, AgentUsageStats, ChildAgentEventState } from "./json-events";
 import { prepareAgentOutput } from "./output";
@@ -16,6 +17,7 @@ export interface AgentRunResult {
   outputTruncated: boolean;
   outputArtifactPath?: string;
   outputArtifactError?: string;
+  artifactPaths?: AgentArtifactPaths;
   stderr: string;
   usage: AgentUsageStats;
   activity: AgentActivityItem[];
@@ -35,6 +37,7 @@ export function buildAgentRunResult(
   sessionFile?: string,
   outputArtifactPath?: string,
   outputArtifactError?: string,
+  artifactPaths?: AgentArtifactPaths,
 ): AgentRunResult {
   const status = inferRunStatus(state, exitCode);
   const rawOutput = state.finalOutput || state.errorMessage || stderr.trim() || fallbackOutput(status);
@@ -53,6 +56,7 @@ export function buildAgentRunResult(
     outputTruncated: prepared.truncated,
     ...(outputArtifactPath ? { outputArtifactPath } : {}),
     ...(outputArtifactError ? { outputArtifactError } : {}),
+    ...(artifactPaths ? { artifactPaths: { ...artifactPaths } } : {}),
     stderr,
     usage: { ...state.usage },
     activity: state.activity.map((item) => ({ ...item })),

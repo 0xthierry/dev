@@ -23,6 +23,13 @@ describe("buildAgentRunResult", () => {
       "",
       "/agent-sessions/session.jsonl",
       "/agent-artifacts/output.md",
+      undefined,
+      {
+        inputPath: "/agent-artifacts/input.md",
+        outputPath: "/agent-artifacts/output.md",
+        jsonlPath: "/agent-artifacts/run.jsonl",
+        metadataPath: "/agent-artifacts/meta.json",
+      },
     );
 
     // Assert
@@ -33,10 +40,16 @@ describe("buildAgentRunResult", () => {
       status: "succeeded",
       ok: true,
       exitCode: 0,
-      finalOutput: "Agent completed.\n\nFull subagent output saved to: /agent-artifacts/output.md",
+      finalOutput: "Agent completed.\n\nDetailed subagent output saved to: /agent-artifacts/output.md",
       agentId: "019e1882-8bc8-767c-a1e6-d7c9ebd3a574",
       sessionFile: "/agent-sessions/session.jsonl",
       outputArtifactPath: "/agent-artifacts/output.md",
+      artifactPaths: {
+        inputPath: "/agent-artifacts/input.md",
+        outputPath: "/agent-artifacts/output.md",
+        jsonlPath: "/agent-artifacts/run.jsonl",
+        metadataPath: "/agent-artifacts/meta.json",
+      },
       model: "test-model",
       thinking: undefined,
       stopReason: "stop",
@@ -127,7 +140,7 @@ describe("buildAgentRunResult", () => {
 
     // Assert
     expect(result.status).toBe("succeeded");
-    expect(result.finalOutput).toBe("Agent completed.\n\nFull subagent output artifact could not be saved: EACCES");
+    expect(result.finalOutput).toBe("Agent completed.\n\nDetailed subagent output artifact could not be saved: EACCES");
     expect(result.outputArtifactError).toBe("EACCES");
   });
 

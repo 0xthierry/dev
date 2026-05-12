@@ -107,6 +107,27 @@ describe("buildChildInvocation", () => {
     expect(invocation.args).not.toContain("--no-session");
   });
 
+  test("adds detailed output artifact instructions when an output path is provided", () => {
+    // Arrange
+    const request = {
+      agent: agent("reviewer"),
+      task: "Review diff",
+      context: "fresh" as const,
+      cwd: "/repo",
+      agentSessionDir: "/agent-sessions/--repo--",
+      outputArtifactPath: "/artifacts/reviewer_output.md",
+    };
+
+    // Act
+    const invocation = buildChildInvocation(request, "/tmp/prompt.md");
+
+    // Assert
+    const taskArg = invocation.args.at(-1) ?? "";
+    expect(taskArg).toContain("Task: Review diff");
+    expect(taskArg).toContain("Write your detailed handoff report to: /artifacts/reviewer_output.md");
+    expect(taskArg).toContain("Do not make it terse just to save parent context");
+  });
+
   test("builds a resumed child Pi invocation", () => {
     // Arrange
     const request = {

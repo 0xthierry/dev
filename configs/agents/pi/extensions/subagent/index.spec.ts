@@ -99,8 +99,14 @@ describe("subagent extension E2E", () => {
     expect(sessionFiles.some((file) => file.endsWith(".jsonl"))).toBe(true);
     const artifactRoots = await readdir(join(piAgentDir, "agent-sessions-artifacts"));
     expect(artifactRoots.length).toBe(1);
-    const artifactFiles = await readdir(join(piAgentDir, "agent-sessions-artifacts", artifactRoots[0], "artifacts"));
-    expect(artifactFiles.some((file) => file.endsWith("_echo-agent_output.md"))).toBe(true);
+    const artifactDir = join(piAgentDir, "agent-sessions-artifacts", artifactRoots[0], "artifacts");
+    const artifactFiles = await readdir(artifactDir);
+    const outputFile = artifactFiles.find((file) => file.endsWith("_echo-agent_output.md"));
+    expect(artifactFiles.some((file) => file.endsWith("_echo-agent_input.md"))).toBe(true);
+    expect(outputFile).toBeTruthy();
+    expect(artifactFiles.some((file) => file.endsWith("_echo-agent.jsonl"))).toBe(true);
+    expect(artifactFiles.some((file) => file.endsWith("_echo-agent_meta.json"))).toBe(true);
+    expect(await readFile(join(artifactDir, outputFile ?? ""), "utf8")).toContain(childResponse);
     expect(harness.stderr()).toBe("");
   }, 120_000);
 

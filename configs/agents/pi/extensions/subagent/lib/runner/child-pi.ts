@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { rm } from "node:fs/promises";
 import { findAgentSessionFileById } from "../sessions/paths";
-import { saveAgentOutputArtifact } from "./artifacts";
+import { createAgentArtifactPlan, finalizeAgentRunArtifacts, writeAgentInputArtifact } from "./artifacts";
 import { type AgentRunRequest, buildChildInvocation } from "./invocation";
 import { applyChildJsonEvent, type ChildAgentEventState, createChildAgentEventState } from "./json-events";
 import { writeAgentPromptFile } from "./prompt-file";
@@ -14,14 +14,28 @@ export async function runChildPiAgent(
   signal: AbortSignal | undefined,
   onProgress?: AgentProgressCallback,
 ): Promise<AgentRunResult> {
+  const artifactPlan = createAgentArtifactPlan({
+    sessionId: request.resumeAgentId,
+    agentName: request.agent.name,
+  });
+  let artifactSetupError: string | undefined;
+  try {
+    await writeAgentInputArtifact(artifactPlan, formatAgentInputArtifact(request));
+  } catch (error) {
+    artifactSetupError = error instanceof Error ? error.message : String(error);
+  }
   const promptFile = await writeAgentPromptFile(request.agent);
 
   try {
-    const invocation = buildChildInvocation(request, promptFile.filePath);
+    const invocation = buildChildInvocation(
+      { ...request, outputArtifactPath: artifactPlan.paths.outputPath },
+      promptFile.filePath,
+    );
     const state = createChildAgentEventState();
     let stderr = "";
     let stdoutBuffer = "";
     let aborted = false;
+    const jsonlLines: string[] = [];
 
     const exitCode = await new Promise<number>((resolveExit) => {
       const child = spawn("pi", invocation.args, {
@@ -57,6 +71,7 @@ export async function runChildPiAgent(
         const lines = stdoutBuffer.split("\n");
         stdoutBuffer = lines.pop() ?? "";
         for (const line of lines) {
+          if (line.trim()) jsonlLines.push(line);
           if (applyChildJsonEvent(state, line)) emitProgress();
         }
       });
@@ -71,7 +86,10 @@ export async function runChildPiAgent(
       });
 
       child.once("close", (code) => {
-        if (stdoutBuffer.trim()) applyChildJsonEvent(state, stdoutBuffer);
+        if (stdoutBuffer.trim()) {
+          jsonlLines.push(stdoutBuffer);
+          applyChildJsonEvent(state, stdoutBuffer);
+        }
         finalize(code ?? 0);
       });
 
@@ -79,16 +97,24 @@ export async function runChildPiAgent(
       else signal?.addEventListener("abort", abortChild, { once: true });
     });
 
+    const finalExitCode = aborted ? 1 : exitCode;
     const sessionFile = await resolveChildSessionFile(request, state);
-    const artifact = await saveChildOutputArtifact(request, state, stderr);
+    const artifacts = await finalizeAgentRunArtifacts(artifactPlan, {
+      sessionId: state.sessionId ?? request.resumeAgentId,
+      fallbackOutput: rawChildOutput(state, stderr),
+      jsonlLines,
+      metadata: buildAgentArtifactMetadata(request, state, finalExitCode, stderr, sessionFile, artifactSetupError),
+    });
+    const resultState = artifacts.ok ? { ...state, finalOutput: artifacts.output } : state;
     const result = buildAgentRunResult(
       request,
-      state,
-      aborted ? 1 : exitCode,
+      resultState,
+      finalExitCode,
       stderr,
       sessionFile,
-      artifact.ok ? artifact.path : undefined,
-      artifact.ok ? undefined : artifact.error,
+      artifacts.ok ? artifacts.paths.outputPath : undefined,
+      artifacts.ok ? undefined : artifacts.error,
+      artifacts.ok ? artifacts.paths : undefined,
     );
     onProgress?.(result);
     return result;
@@ -97,16 +123,53 @@ export async function runChildPiAgent(
   }
 }
 
-async function saveChildOutputArtifact(
+function formatAgentInputArtifact(request: AgentRunRequest): string {
+  return [
+    `# Subagent Input: ${request.agent.name}`,
+    "",
+    `Agent: ${request.agent.name}`,
+    request.description ? `Description: ${request.description}` : undefined,
+    `Context: ${request.context}`,
+    request.thinking ? `Thinking: ${request.thinking}` : undefined,
+    request.modelRef ? `Model: ${request.modelRef}` : undefined,
+    "",
+    "## Task",
+    "",
+    request.task,
+    "",
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join("\n");
+}
+
+function buildAgentArtifactMetadata(
   request: AgentRunRequest,
   state: ChildAgentEventState,
+  exitCode: number,
   stderr: string,
-): Promise<Awaited<ReturnType<typeof saveAgentOutputArtifact>>> {
-  return saveAgentOutputArtifact({
+  sessionFile: string | undefined,
+  artifactSetupError: string | undefined,
+): Record<string, unknown> {
+  return {
+    agent: request.agent.name,
+    description: request.description,
+    task: request.task,
+    context: request.context,
+    exitCode,
     sessionId: state.sessionId ?? request.resumeAgentId,
-    agentName: request.agent.name,
-    output: state.finalOutput || state.errorMessage || stderr.trim(),
-  });
+    sessionFile,
+    model: state.model,
+    thinking: request.thinking,
+    stopReason: state.stopReason,
+    errorMessage: state.errorMessage,
+    stderr: stderr.trim() || undefined,
+    usage: state.usage,
+    artifactSetupError,
+  };
+}
+
+function rawChildOutput(state: ChildAgentEventState, stderr: string): string {
+  return state.finalOutput || state.errorMessage || stderr.trim();
 }
 
 async function resolveChildSessionFile(
