@@ -4,6 +4,21 @@ set -euo pipefail
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+apply_pnpm_security_defaults() {
+  if ! check_installed pnpm; then
+    log_item "pnpm config: pnpm not installed, skipping"
+    return 0
+  fi
+
+  log_item "pnpm config: frozen lockfile + 24h minimum release age"
+  run_cmd pnpm config set -g frozen-lockfile true
+  run_cmd pnpm config set -g minimum-release-age 1440
+}
+
+apply_bun_config() {
+  safe_link_path "$REPO_ROOT/configs/cli/bun/bunfig.toml" "$HOME/.bunfig.toml" "bun config"
+}
+
 apply_tool_configs() {
   log_section "Tool Configuration"
 
@@ -21,4 +36,7 @@ apply_tool_configs() {
 
   ensure_dir "$HOME/.config/dev-setup"
   safe_link_path "$REPO_ROOT/configs/cli/fzf/env.sh" "$HOME/.config/dev-setup/fzf.sh" "fzf env"
+
+  apply_pnpm_security_defaults
+  apply_bun_config
 }

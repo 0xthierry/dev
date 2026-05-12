@@ -1,0 +1,7 @@
+# Global Bun install safety defaults.
+# Keep installs pinned to the reviewed lockfile unless explicitly overridden.
+[install]
+frozenLockfile = true
+
+# Bun uses seconds; 86400 seconds = 24 hours.
+minimumReleaseAge = 86400
