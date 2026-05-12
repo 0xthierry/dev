@@ -1,4 +1,5 @@
-import { delimiter, resolve } from "node:path";
+import { delimiter, dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { AgentDefinition } from "../agents/types";
 import { getProjectAgentSessionDir } from "../sessions/paths";
@@ -9,6 +10,7 @@ export const CHILD_DEPTH_ENV = "PI_SUBAGENT_DEPTH";
 export const CHILD_NO_EXTENSIONS_ENV = "PI_SUBAGENT_CHILD_NO_EXTENSIONS";
 export const CHILD_EXTENSIONS_ENV = "PI_SUBAGENT_CHILD_EXTENSIONS";
 export const CHILD_UNSET_ENV = "PI_SUBAGENT_CHILD_UNSET_ENV";
+export const CHILD_RUNTIME_EXTENSION_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "child-runtime.ts");
 
 export type AgentRunContextMode = AgentContextMode | "resume";
 
@@ -50,6 +52,7 @@ export function buildChildInvocation(request: AgentRunRequest, promptPath: strin
   const args = ["--mode", "json", "-p"];
 
   if (isTruthy(process.env[CHILD_NO_EXTENSIONS_ENV])) args.push("--no-extensions");
+  args.push("-e", CHILD_RUNTIME_EXTENSION_PATH);
   for (const extensionPath of parsePathList(process.env[CHILD_EXTENSIONS_ENV])) args.push("-e", resolve(extensionPath));
 
   if (request.context === "resume") {

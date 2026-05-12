@@ -14,6 +14,8 @@ export interface AgentRunResult {
   exitCode: number;
   finalOutput: string;
   outputTruncated: boolean;
+  outputArtifactPath?: string;
+  outputArtifactError?: string;
   stderr: string;
   usage: AgentUsageStats;
   activity: AgentActivityItem[];
@@ -31,10 +33,12 @@ export function buildAgentRunResult(
   exitCode: number,
   stderr: string,
   sessionFile?: string,
+  outputArtifactPath?: string,
+  outputArtifactError?: string,
 ): AgentRunResult {
   const status = inferRunStatus(state, exitCode);
   const rawOutput = state.finalOutput || state.errorMessage || stderr.trim() || fallbackOutput(status);
-  const prepared = prepareAgentOutput(rawOutput);
+  const prepared = prepareAgentOutput(rawOutput, outputArtifactPath, outputArtifactError);
   const ok = status === "succeeded";
 
   return {
@@ -47,6 +51,8 @@ export function buildAgentRunResult(
     exitCode,
     finalOutput: prepared.text,
     outputTruncated: prepared.truncated,
+    ...(outputArtifactPath ? { outputArtifactPath } : {}),
+    ...(outputArtifactError ? { outputArtifactError } : {}),
     stderr,
     usage: { ...state.usage },
     activity: state.activity.map((item) => ({ ...item })),

@@ -97,6 +97,10 @@ describe("subagent extension E2E", () => {
     expect(projectDirs.length).toBe(1);
     const sessionFiles = await readdir(join(piAgentDir, "agent-sessions", projectDirs[0]));
     expect(sessionFiles.some((file) => file.endsWith(".jsonl"))).toBe(true);
+    const artifactRoots = await readdir(join(piAgentDir, "agent-sessions-artifacts"));
+    expect(artifactRoots.length).toBe(1);
+    const artifactFiles = await readdir(join(piAgentDir, "agent-sessions-artifacts", artifactRoots[0], "artifacts"));
+    expect(artifactFiles.some((file) => file.endsWith("_echo-agent_output.md"))).toBe(true);
     expect(harness.stderr()).toBe("");
   }, 120_000);
 
@@ -161,11 +165,17 @@ describe("subagent extension E2E", () => {
         `agent_id: ${firstRun?.agentId}`,
       );
       expect(second.content[0]?.type === "text" ? second.content[0].text : "").toContain("Second child response.");
+      expect(firstRun?.outputArtifactPath).toBeTruthy();
+      expect(await readFile(firstRun?.outputArtifactPath ?? "", "utf8")).toContain("First child response.");
       expect(second.details?.results[0]).toMatchObject({
         agentId: firstRun?.agentId,
         sessionFile: firstRun?.sessionFile,
         context: "resume",
       });
+      expect(second.details?.results[0].outputArtifactPath).toBeTruthy();
+      expect(await readFile(second.details?.results[0].outputArtifactPath ?? "", "utf8")).toContain(
+        "Second child response.",
+      );
       const sessionText = await readFile(firstRun?.sessionFile ?? "", "utf8");
       expect(sessionText).toContain("First child response.");
       expect(sessionText).toContain("Second child response.");

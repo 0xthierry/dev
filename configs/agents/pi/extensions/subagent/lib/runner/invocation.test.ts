@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { resolve } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { AgentDefinition } from "../agents/types";
 import {
@@ -7,6 +8,7 @@ import {
   CHILD_DEPTH_ENV,
   CHILD_EXTENSIONS_ENV,
   CHILD_NO_EXTENSIONS_ENV,
+  CHILD_RUNTIME_EXTENSION_PATH,
   CHILD_UNSET_ENV,
   childEnvironment,
   shouldRegisterInCurrentProcess,
@@ -67,6 +69,10 @@ describe("buildChildInvocation", () => {
       expect(invocation.args).not.toContain("--no-session");
       expect(invocation.args).toContain("--no-extensions");
       expect(invocation.args).toContain("-e");
+      expect(invocation.args).toContain(CHILD_RUNTIME_EXTENSION_PATH);
+      expect(invocation.args).toContain(
+        resolve("configs/agents/pi/extensions/_shared/testing/faux-provider-extension.ts"),
+      );
       expect(invocation.args).toContain("--model");
       expect(invocation.args).toContain("openai/gpt-5.5");
       expect(invocation.args).toContain("--thinking");
@@ -97,6 +103,7 @@ describe("buildChildInvocation", () => {
     expect(invocation.args).toContain("/agent-sessions/--repo--");
     expect(invocation.args).toContain("--fork");
     expect(invocation.args).toContain("/sessions/parent.jsonl");
+    expect(invocation.args).toContain(CHILD_RUNTIME_EXTENSION_PATH);
     expect(invocation.args).not.toContain("--no-session");
   });
 

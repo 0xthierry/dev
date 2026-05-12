@@ -81,11 +81,17 @@ Child sessions are saved under Pi's agent directory in a separate namespace that
 ~/.pi/agent/agent-sessions/--home-thierry-dev--/<timestamp>_<child-session-id>.jsonl
 ```
 
-`PI_CODING_AGENT_DIR` is respected, so custom Pi agent directories keep child sessions beside the rest of that Pi state.
+Full child final output is saved outside the parent conversation under the child session id:
+
+```text
+~/.pi/agent/agent-sessions-artifacts/<child-session-id>/artifacts/<timestamp>_<agent>_output.md
+```
+
+The parent tool result keeps only a compact preview plus the artifact path, including in `details.results`, so large child reports remain inspectable without being re-injected into parent context. `PI_CODING_AGENT_DIR` is respected, so custom Pi agent directories keep child sessions and artifacts beside the rest of that Pi state.
 
 ## Child process controls
 
-The extension prevents recursive `agent` registration in child subagents with `PI_SUBAGENT_DEPTH`.
+The extension prevents recursive `agent` registration in child subagents with `PI_SUBAGENT_DEPTH`. Child Pi processes also load a tiny runtime context filter that removes inherited parent `agent` tool calls/results from forked or resumed child model context without modifying the saved parent session.
 
 For tests or special launches, these environment variables tune child invocation:
 

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { rm } from "node:fs/promises";
 import { findAgentSessionFileById } from "../sessions/paths";
+import { saveAgentOutputArtifact } from "./artifacts";
 import { type AgentRunRequest, buildChildInvocation } from "./invocation";
 import { applyChildJsonEvent, type ChildAgentEventState, createChildAgentEventState } from "./json-events";
 import { writeAgentPromptFile } from "./prompt-file";
@@ -79,12 +80,33 @@ export async function runChildPiAgent(
     });
 
     const sessionFile = await resolveChildSessionFile(request, state);
-    const result = buildAgentRunResult(request, state, aborted ? 1 : exitCode, stderr, sessionFile);
+    const artifact = await saveChildOutputArtifact(request, state, stderr);
+    const result = buildAgentRunResult(
+      request,
+      state,
+      aborted ? 1 : exitCode,
+      stderr,
+      sessionFile,
+      artifact.ok ? artifact.path : undefined,
+      artifact.ok ? undefined : artifact.error,
+    );
     onProgress?.(result);
     return result;
   } finally {
     await rm(promptFile.dir, { recursive: true, force: true });
   }
+}
+
+async function saveChildOutputArtifact(
+  request: AgentRunRequest,
+  state: ChildAgentEventState,
+  stderr: string,
+): Promise<Awaited<ReturnType<typeof saveAgentOutputArtifact>>> {
+  return saveAgentOutputArtifact({
+    sessionId: state.sessionId ?? request.resumeAgentId,
+    agentName: request.agent.name,
+    output: state.finalOutput || state.errorMessage || stderr.trim(),
+  });
 }
 
 async function resolveChildSessionFile(

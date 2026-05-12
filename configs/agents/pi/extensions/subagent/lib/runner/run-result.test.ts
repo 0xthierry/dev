@@ -16,7 +16,14 @@ describe("buildAgentRunResult", () => {
     const request = runRequest("reviewer", "Review diff");
 
     // Act
-    const result = buildAgentRunResult(request, state, 0, "", "/agent-sessions/session.jsonl");
+    const result = buildAgentRunResult(
+      request,
+      state,
+      0,
+      "",
+      "/agent-sessions/session.jsonl",
+      "/agent-artifacts/output.md",
+    );
 
     // Assert
     expect(result).toMatchObject({
@@ -26,9 +33,10 @@ describe("buildAgentRunResult", () => {
       status: "succeeded",
       ok: true,
       exitCode: 0,
-      finalOutput: "Agent completed.",
+      finalOutput: "Agent completed.\n\nFull subagent output saved to: /agent-artifacts/output.md",
       agentId: "019e1882-8bc8-767c-a1e6-d7c9ebd3a574",
       sessionFile: "/agent-sessions/session.jsonl",
+      outputArtifactPath: "/agent-artifacts/output.md",
       model: "test-model",
       thinking: undefined,
       stopReason: "stop",
@@ -106,6 +114,21 @@ describe("buildAgentRunResult", () => {
     expect(result.finalOutput).toBe("Provider failed.");
     expect(result.stderr).toBe("stderr fallback");
     expect(result.errorMessage).toBe("Provider failed.");
+  });
+
+  test("records artifact write failures without losing child output", () => {
+    // Arrange
+    const state = createChildAgentEventState();
+    state.finalOutput = "Agent completed.";
+    const request = runRequest("reviewer", "Review diff");
+
+    // Act
+    const result = buildAgentRunResult(request, state, 0, "", undefined, undefined, "EACCES");
+
+    // Assert
+    expect(result.status).toBe("succeeded");
+    expect(result.finalOutput).toBe("Agent completed.\n\nFull subagent output artifact could not be saved: EACCES");
+    expect(result.outputArtifactError).toBe("EACCES");
   });
 
   test("uses stderr when the child exits without assistant output", () => {

@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_MAX_BYTES } from "@earendil-works/pi-coding-agent";
-import { prepareAgentOutput, textFromContentParts } from "./output";
+import { AGENT_OUTPUT_PREVIEW_MAX_BYTES, prepareAgentOutput, textFromContentParts } from "./output";
 
 describe("prepareAgentOutput", () => {
   test("keeps short output unchanged", () => {
@@ -16,15 +15,43 @@ describe("prepareAgentOutput", () => {
 
   test("truncates large output", () => {
     // Arrange
-    const output = "x".repeat(DEFAULT_MAX_BYTES + 100);
+    const output = "x".repeat(AGENT_OUTPUT_PREVIEW_MAX_BYTES + 100);
 
     // Act
     const result = prepareAgentOutput(output);
 
     // Assert
     expect(result.truncated).toBe(true);
-    expect(result.text).toContain("Output truncated");
+    expect(result.text).toContain("Output preview truncated");
     expect(result.text.length).toBeLessThan(output.length);
+  });
+
+  test("keeps parent-visible artifact output compact", () => {
+    // Arrange
+    const output = "x".repeat(AGENT_OUTPUT_PREVIEW_MAX_BYTES * 3);
+
+    // Act
+    const result = prepareAgentOutput(output, "/agent/artifacts/output.md");
+
+    // Assert
+    expect(result.truncated).toBe(true);
+    expect(result.text.length).toBeLessThan(output.length);
+    expect(result.text).toContain("Output preview truncated");
+    expect(result.text).toContain("Full subagent output saved to: /agent/artifacts/output.md");
+  });
+
+  test("appends artifact paths to short output", () => {
+    // Arrange
+    const output = "short result";
+
+    // Act
+    const result = prepareAgentOutput(output, "/agent/artifacts/output.md");
+
+    // Assert
+    expect(result).toEqual({
+      text: "short result\n\nFull subagent output saved to: /agent/artifacts/output.md",
+      truncated: false,
+    });
   });
 });
 
