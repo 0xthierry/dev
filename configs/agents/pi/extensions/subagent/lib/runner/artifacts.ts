@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getAgentDir, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
+import { encodeProjectCwd } from "../sessions/paths";
 
 const ARTIFACT_ROOT_DIR = "agent-sessions-artifacts";
 const ARTIFACT_DIR = "artifacts";
@@ -17,6 +18,7 @@ export interface AgentArtifactPlan {
   agentDir: string;
   agentName: string;
   createdAt: Date;
+  projectKey: string;
   sessionId: string;
   pending: boolean;
   paths: AgentArtifactPaths;
@@ -34,6 +36,7 @@ export type FinalizeAgentRunArtifactsResult =
   | { ok: false; error: string };
 
 export function createAgentArtifactPlan(input: {
+  cwd: string;
   sessionId?: string;
   agentName: string;
   agentDir?: string;
@@ -42,27 +45,30 @@ export function createAgentArtifactPlan(input: {
   const sessionId = input.sessionId?.trim() || `pending-${randomUUID()}`;
   const agentDir = input.agentDir ?? getAgentDir();
   const createdAt = input.now ?? new Date();
+  const projectKey = encodeProjectCwd(input.cwd);
   return {
     agentDir,
     agentName: input.agentName,
     createdAt,
+    projectKey,
     sessionId,
     pending: !input.sessionId?.trim(),
-    paths: getAgentArtifactPaths({ sessionId, agentName: input.agentName, agentDir, now: createdAt }),
+    paths: getAgentArtifactPaths({ projectKey, sessionId, agentName: input.agentName, agentDir, now: createdAt }),
   };
 }
 
-export function getAgentSessionArtifactDir(sessionId: string, agentDir = getAgentDir()): string {
-  return join(agentDir, ARTIFACT_ROOT_DIR, safeArtifactSegment(sessionId), ARTIFACT_DIR);
+export function getAgentSessionArtifactDir(projectKey: string, sessionId: string, agentDir = getAgentDir()): string {
+  return join(agentDir, ARTIFACT_ROOT_DIR, projectKey, safeArtifactSegment(sessionId), ARTIFACT_DIR);
 }
 
 export function getAgentArtifactPaths(input: {
+  projectKey: string;
   sessionId: string;
   agentName: string;
   agentDir?: string;
   now?: Date;
 }): AgentArtifactPaths {
-  const dir = getAgentSessionArtifactDir(input.sessionId, input.agentDir);
+  const dir = getAgentSessionArtifactDir(input.projectKey, input.sessionId, input.agentDir);
   const stem = `${artifactTimestamp(input.now ?? new Date())}_${safeArtifactSegment(input.agentName)}`;
   return {
     inputPath: join(dir, `${stem}_input.md`),
@@ -73,6 +79,7 @@ export function getAgentArtifactPaths(input: {
 }
 
 export function getAgentOutputArtifactPath(input: {
+  projectKey: string;
   sessionId: string;
   agentName: string;
   agentDir?: string;
@@ -91,6 +98,7 @@ export async function finalizeAgentRunArtifacts(
 ): Promise<FinalizeAgentRunArtifactsResult> {
   const sessionId = input.sessionId?.trim() || plan.sessionId;
   const paths = getAgentArtifactPaths({
+    projectKey: plan.projectKey,
     sessionId,
     agentName: plan.agentName,
     agentDir: plan.agentDir,
@@ -116,7 +124,10 @@ export async function finalizeAgentRunArtifacts(
     });
 
     if (paths.outputPath !== plan.paths.outputPath) {
-      await rm(getAgentSessionArtifactRoot(plan.sessionId, plan.agentDir), { recursive: true, force: true });
+      await rm(getAgentSessionArtifactRoot(plan.projectKey, plan.sessionId, plan.agentDir), {
+        recursive: true,
+        force: true,
+      });
     }
 
     return { ok: true, paths, output, usedChildOutputFile: childOutput !== undefined };
@@ -155,8 +166,8 @@ function countLines(text: string): number {
   return text.split(/\r\n|\r|\n/).length;
 }
 
-function getAgentSessionArtifactRoot(sessionId: string, agentDir: string): string {
-  return join(agentDir, ARTIFACT_ROOT_DIR, safeArtifactSegment(sessionId));
+function getAgentSessionArtifactRoot(projectKey: string, sessionId: string, agentDir: string): string {
+  return join(agentDir, ARTIFACT_ROOT_DIR, projectKey, safeArtifactSegment(sessionId));
 }
 
 function artifactTimestamp(now: Date): string {

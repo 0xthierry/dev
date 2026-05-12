@@ -17,26 +17,30 @@ describe("agent run artifacts", () => {
     const agentDir = "/home/test/.pi/agent";
     const sessionId = "019e1882-8bc8-767c-a1e6-d7c9ebd3a574";
     const now = new Date("2026-05-12T10:20:30.400Z");
+    const projectKey = "--home-test-project--";
 
     // Act
-    const dir = getAgentSessionArtifactDir(sessionId, agentDir);
-    const paths = getAgentArtifactPaths({ sessionId, agentName: "code/scout", agentDir, now });
+    const dir = getAgentSessionArtifactDir(projectKey, sessionId, agentDir);
+    const paths = getAgentArtifactPaths({ projectKey, sessionId, agentName: "code/scout", agentDir, now });
 
     // Assert
-    expect(dir).toBe(`${agentDir}/agent-sessions-artifacts/${sessionId}/artifacts`);
+    expect(dir).toBe(`${agentDir}/agent-sessions-artifacts/${projectKey}/${sessionId}/artifacts`);
     expect(paths).toEqual({
       inputPath: `${dir}/2026-05-12T10-20-30-400Z_code-scout_input.md`,
       outputPath: `${dir}/2026-05-12T10-20-30-400Z_code-scout_output.md`,
       jsonlPath: `${dir}/2026-05-12T10-20-30-400Z_code-scout.jsonl`,
       metadataPath: `${dir}/2026-05-12T10-20-30-400Z_code-scout_meta.json`,
     });
-    expect(getAgentOutputArtifactPath({ sessionId, agentName: "code/scout", agentDir, now })).toBe(paths.outputPath);
+    expect(getAgentOutputArtifactPath({ projectKey, sessionId, agentName: "code/scout", agentDir, now })).toBe(
+      paths.outputPath,
+    );
   });
 
   test("finalizes detailed child-authored output into the real child session artifact directory", async () => {
     // Arrange
     const agentDir = await mkdtemp(join(tmpdir(), "pi-agent-artifacts-"));
     const pendingPlan = createAgentArtifactPlan({
+      cwd: "/home/test/project",
       agentName: "explorer",
       agentDir,
       now: new Date("2026-05-12T10:20:30.400Z"),
@@ -60,6 +64,7 @@ describe("agent run artifacts", () => {
           join(
             agentDir,
             "agent-sessions-artifacts",
+            "--home-test-project--",
             "019e1882-8bc8-767c-a1e6-d7c9ebd3a574",
             "artifacts",
             "2026-05-12T10-20-30-400Z_explorer_output.md",
@@ -88,6 +93,7 @@ describe("agent run artifacts", () => {
     // Arrange
     const agentDir = await mkdtemp(join(tmpdir(), "pi-agent-artifacts-"));
     const plan = createAgentArtifactPlan({
+      cwd: "/home/test/project",
       sessionId: "019e1882-8bc8-767c-a1e6-d7c9ebd3a574",
       agentName: "worker",
       agentDir,

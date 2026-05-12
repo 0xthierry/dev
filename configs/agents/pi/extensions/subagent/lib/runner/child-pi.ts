@@ -15,6 +15,7 @@ export async function runChildPiAgent(
   onProgress?: AgentProgressCallback,
 ): Promise<AgentRunResult> {
   const artifactPlan = createAgentArtifactPlan({
+    cwd: request.cwd,
     sessionId: request.resumeAgentId,
     agentName: request.agent.name,
   });

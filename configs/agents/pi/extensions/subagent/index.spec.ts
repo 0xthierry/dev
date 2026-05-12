@@ -97,9 +97,17 @@ describe("subagent extension E2E", () => {
     expect(projectDirs.length).toBe(1);
     const sessionFiles = await readdir(join(piAgentDir, "agent-sessions", projectDirs[0]));
     expect(sessionFiles.some((file) => file.endsWith(".jsonl"))).toBe(true);
-    const artifactRoots = await readdir(join(piAgentDir, "agent-sessions-artifacts"));
-    expect(artifactRoots.length).toBe(1);
-    const artifactDir = join(piAgentDir, "agent-sessions-artifacts", artifactRoots[0], "artifacts");
+    const artifactProjectKeys = await readdir(join(piAgentDir, "agent-sessions-artifacts"));
+    expect(artifactProjectKeys.length).toBe(1);
+    const artifactSessionIds = await readdir(join(piAgentDir, "agent-sessions-artifacts", artifactProjectKeys[0]));
+    expect(artifactSessionIds.length).toBe(1);
+    const artifactDir = join(
+      piAgentDir,
+      "agent-sessions-artifacts",
+      artifactProjectKeys[0],
+      artifactSessionIds[0],
+      "artifacts",
+    );
     const artifactFiles = await readdir(artifactDir);
     const outputFile = artifactFiles.find((file) => file.endsWith("_echo-agent_output.md"));
     expect(artifactFiles.some((file) => file.endsWith("_echo-agent_input.md"))).toBe(true);

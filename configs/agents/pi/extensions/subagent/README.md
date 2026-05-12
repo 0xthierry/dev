@@ -84,10 +84,10 @@ Child sessions are saved under Pi's agent directory in a separate namespace that
 Child runs also receive an output artifact path and are instructed to write a detailed handoff report there. The final files live outside the parent conversation under the child session id:
 
 ```text
-~/.pi/agent/agent-sessions-artifacts/<child-session-id>/artifacts/<timestamp>_<agent>_input.md
-~/.pi/agent/agent-sessions-artifacts/<child-session-id>/artifacts/<timestamp>_<agent>_output.md
-~/.pi/agent/agent-sessions-artifacts/<child-session-id>/artifacts/<timestamp>_<agent>.jsonl
-~/.pi/agent/agent-sessions-artifacts/<child-session-id>/artifacts/<timestamp>_<agent>_meta.json
+~/.pi/agent/agent-sessions-artifacts/<project-key>/<child-session-id>/artifacts/<timestamp>_<agent>_input.md
+~/.pi/agent/agent-sessions-artifacts/<project-key>/<child-session-id>/artifacts/<timestamp>_<agent>_output.md
+~/.pi/agent/agent-sessions-artifacts/<project-key>/<child-session-id>/artifacts/<timestamp>_<agent>.jsonl
+~/.pi/agent/agent-sessions-artifacts/<project-key>/<child-session-id>/artifacts/<timestamp>_<agent>_meta.json
 ```
 
 The child-authored `_output.md` file is the detailed result. If a child fails to write it, the extension falls back to the final assistant output. The parent tool result keeps only a compact preview plus artifact paths, including in `details.results`, so large child reports remain inspectable without being re-injected into parent context. `PI_CODING_AGENT_DIR` is respected, so custom Pi agent directories keep child sessions and artifacts beside the rest of that Pi state.
