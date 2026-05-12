@@ -126,6 +126,11 @@ describe("buildChildInvocation", () => {
     expect(taskArg).toContain("Task: Review diff");
     expect(taskArg).toContain("Write your detailed handoff report to: /artifacts/reviewer_output.md");
     expect(taskArg).toContain("Do not make it terse just to save parent context");
+    expect(taskArg).toContain(
+      "Create the artifact early with a report skeleton before your first repository search or read",
+    );
+    expect(taskArg).toContain("update it incrementally after every major investigation phase");
+    expect(taskArg).toContain("Before changing phases, write the current findings to the artifact");
   });
 
   test("builds a resumed child Pi invocation", () => {

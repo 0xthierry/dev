@@ -2,6 +2,8 @@ import { formatSize, truncateTail } from "@earendil-works/pi-coding-agent";
 
 export const AGENT_OUTPUT_PREVIEW_MAX_BYTES = 4 * 1024;
 export const AGENT_OUTPUT_PREVIEW_MAX_LINES = 80;
+export const AGENT_ARTIFACT_OUTPUT_PREVIEW_MAX_BYTES = 1200;
+export const AGENT_ARTIFACT_OUTPUT_PREVIEW_MAX_LINES = 12;
 
 export interface PreparedOutput {
   text: string;
@@ -10,8 +12,8 @@ export interface PreparedOutput {
 
 export function prepareAgentOutput(text: string, artifactPath?: string, artifactError?: string): PreparedOutput {
   const truncation = truncateTail(text, {
-    maxBytes: AGENT_OUTPUT_PREVIEW_MAX_BYTES,
-    maxLines: AGENT_OUTPUT_PREVIEW_MAX_LINES,
+    maxBytes: artifactPath ? AGENT_ARTIFACT_OUTPUT_PREVIEW_MAX_BYTES : AGENT_OUTPUT_PREVIEW_MAX_BYTES,
+    maxLines: artifactPath ? AGENT_ARTIFACT_OUTPUT_PREVIEW_MAX_LINES : AGENT_OUTPUT_PREVIEW_MAX_LINES,
   });
   const notices = outputNotices(truncation, artifactPath, artifactError);
   if (!truncation.truncated && notices.length === 0) return { text: truncation.content, truncated: false };

@@ -3,6 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  appendAgentJsonlArtifact,
   createAgentArtifactPlan,
   finalizeAgentRunArtifacts,
   getAgentArtifactPaths,
@@ -47,13 +48,15 @@ describe("agent run artifacts", () => {
     });
     await writeAgentInputArtifact(pendingPlan, "# Input\n\nTask details");
     await writeFile(pendingPlan.paths.outputPath, "Detailed child-authored report.", "utf8");
+    await appendAgentJsonlArtifact(pendingPlan, '{"type":"session"}');
+    await appendAgentJsonlArtifact(pendingPlan, '{"type":"message_end"}');
 
     try {
       // Act
       const result = await finalizeAgentRunArtifacts(pendingPlan, {
         sessionId: "019e1882-8bc8-767c-a1e6-d7c9ebd3a574",
         fallbackOutput: "Short final response.",
-        jsonlLines: ['{"type":"session"}', '{"type":"message_end"}'],
+        jsonlLines: [],
         metadata: { agent: "explorer", exitCode: 0 },
       });
 

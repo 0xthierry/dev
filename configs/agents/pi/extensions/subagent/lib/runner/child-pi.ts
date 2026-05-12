@@ -1,7 +1,12 @@
 import { spawn } from "node:child_process";
 import { rm } from "node:fs/promises";
 import { findAgentSessionFileById } from "../sessions/paths";
-import { createAgentArtifactPlan, finalizeAgentRunArtifacts, writeAgentInputArtifact } from "./artifacts";
+import {
+  appendAgentJsonlArtifact,
+  createAgentArtifactPlan,
+  finalizeAgentRunArtifacts,
+  writeAgentInputArtifact,
+} from "./artifacts";
 import { type AgentRunRequest, buildChildInvocation } from "./invocation";
 import { applyChildJsonEvent, type ChildAgentEventState, createChildAgentEventState } from "./json-events";
 import { writeAgentPromptFile } from "./prompt-file";
@@ -37,6 +42,15 @@ export async function runChildPiAgent(
     let stdoutBuffer = "";
     let aborted = false;
     const jsonlLines: string[] = [];
+    let jsonlArtifactError: string | undefined;
+    let jsonlWriteChain = Promise.resolve();
+    const queueJsonlArtifactLine = (line: string) => {
+      jsonlWriteChain = jsonlWriteChain
+        .then(() => appendAgentJsonlArtifact(artifactPlan, line))
+        .catch((error) => {
+          jsonlArtifactError ??= error instanceof Error ? error.message : String(error);
+        });
+    };
 
     const exitCode = await new Promise<number>((resolveExit) => {
       const child = spawn("pi", invocation.args, {
@@ -72,7 +86,10 @@ export async function runChildPiAgent(
         const lines = stdoutBuffer.split("\n");
         stdoutBuffer = lines.pop() ?? "";
         for (const line of lines) {
-          if (line.trim()) jsonlLines.push(line);
+          if (line.trim()) {
+            jsonlLines.push(line);
+            queueJsonlArtifactLine(line);
+          }
           if (applyChildJsonEvent(state, line)) emitProgress();
         }
       });
@@ -89,6 +106,7 @@ export async function runChildPiAgent(
       child.once("close", (code) => {
         if (stdoutBuffer.trim()) {
           jsonlLines.push(stdoutBuffer);
+          queueJsonlArtifactLine(stdoutBuffer);
           applyChildJsonEvent(state, stdoutBuffer);
         }
         finalize(code ?? 0);
@@ -98,13 +116,22 @@ export async function runChildPiAgent(
       else signal?.addEventListener("abort", abortChild, { once: true });
     });
 
+    await jsonlWriteChain;
     const finalExitCode = aborted ? 1 : exitCode;
     const sessionFile = await resolveChildSessionFile(request, state);
     const artifacts = await finalizeAgentRunArtifacts(artifactPlan, {
       sessionId: state.sessionId ?? request.resumeAgentId,
       fallbackOutput: rawChildOutput(state, stderr),
       jsonlLines,
-      metadata: buildAgentArtifactMetadata(request, state, finalExitCode, stderr, sessionFile, artifactSetupError),
+      metadata: buildAgentArtifactMetadata(
+        request,
+        state,
+        finalExitCode,
+        stderr,
+        sessionFile,
+        artifactSetupError,
+        jsonlArtifactError,
+      ),
     });
     const resultState = artifacts.ok ? { ...state, finalOutput: artifacts.output } : state;
     const result = buildAgentRunResult(
@@ -150,6 +177,7 @@ function buildAgentArtifactMetadata(
   stderr: string,
   sessionFile: string | undefined,
   artifactSetupError: string | undefined,
+  jsonlArtifactError: string | undefined,
 ): Record<string, unknown> {
   return {
     agent: request.agent.name,
@@ -166,6 +194,7 @@ function buildAgentArtifactMetadata(
     stderr: stderr.trim() || undefined,
     usage: state.usage,
     artifactSetupError,
+    jsonlArtifactError,
   };
 }
 
