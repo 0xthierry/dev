@@ -35,6 +35,7 @@ const PACKAGE_INSTALL_PATTERNS = [
 const GIT_PUSH_PATTERN = /\bgit\s+push\b/
 const BRANCH_COMMIT_PATTERN = /\bgit\s+(?:commit|push|merge)\b/
 const ENV_FILE_PATTERN = /\.env(?:$|\.)/
+const ENV_FILE_ALLOWED = /^\.env\.(?:example|test)$/
 const CONVENTIONAL_COMMIT = /^(?:feat|fix|refactor|test|chore|docs|perf|ci|build|style|revert)(?:\(.+\))?:\s.{1,72}/
 const GIT_COMMIT_MSG = /\bgit\s+commit\s+(?:\S+\s+)*-m\s+["']([^"']+)["']/
 
@@ -114,7 +115,7 @@ async function main(): Promise<void> {
   if (toolName === 'Write' || toolName === 'Edit' || toolName === 'MultiEdit') {
     const filePath = getFilePath(toolInput)
     const fileName = filePath.split('/').pop() || ''
-    if (ENV_FILE_PATTERN.test(fileName)) {
+    if (ENV_FILE_PATTERN.test(fileName) && !ENV_FILE_ALLOWED.test(fileName)) {
       log(input, 'guards', 'block', `env file write: ${fileName}`)
       block(`Cannot write to env file: ${fileName}`)
     }
@@ -128,7 +129,7 @@ async function main(): Promise<void> {
 
   if (toolName === 'Read') {
     const fileName = getFilePath(toolInput).split('/').pop() || ''
-    if (ENV_FILE_PATTERN.test(fileName)) {
+    if (ENV_FILE_PATTERN.test(fileName) && !ENV_FILE_ALLOWED.test(fileName)) {
       log(input, 'guards', 'warn', `env file read: ${fileName}`)
       warn('PreToolUse', `Reading env file: ${fileName} — do not log or expose its contents`)
     }

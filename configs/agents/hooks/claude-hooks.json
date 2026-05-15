@@ -11,53 +11,5 @@
         }
       ]
     }
-  ],
-  "PostToolUse": [
-    {
-      "matcher": "Write|Edit|MultiEdit",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "mise exec -- bun ~/.agents/hooks/verify/on-edit.ts",
-          "timeout": 2000,
-          "statusMessage": "Tracking edited files"
-        }
-      ]
-    },
-    {
-      "matcher": "Bash",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "mise exec -- bun ~/.agents/hooks/verify/on-bash.ts",
-          "timeout": 2000,
-          "statusMessage": "Tracking verification results"
-        }
-      ]
-    }
-  ],
-  "Stop": [
-    {
-      "hooks": [
-        {
-          "type": "command",
-          "command": "mise exec -- bun ~/.agents/hooks/verify/on-stop.ts",
-          "timeout": 5000,
-          "statusMessage": "Verifying test/lint results"
-        }
-      ]
-    }
-  ],
-  "SubagentStop": [
-    {
-      "hooks": [
-        {
-          "type": "command",
-          "command": "mise exec -- bun ~/.agents/hooks/verify/on-stop.ts",
-          "timeout": 5000,
-          "statusMessage": "Verifying subagent results"
-        }
-      ]
-    }
   ]
 }
