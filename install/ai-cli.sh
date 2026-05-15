@@ -156,6 +156,9 @@ install_ai_clis() {
 
   # Notion CLI (makenotion) — `ntn` binary, pairs with notion-cli skill
   install_notion_cli_binary "v0.12.0"
+
+  # Railway CLI — deploy/manage Railway projects
+  install_npm_global_cli "Railway CLI" "@railway/cli" "4.58.0"
 }
 
 # Run if executed directly
