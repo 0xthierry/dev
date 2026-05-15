@@ -13,6 +13,7 @@
       "./subagent",
       "./blueprint",
       "./statusline",
+      "./token-speed",
       "./codex-fast-mode",
       "./nested-agents",
       "./project-rules"

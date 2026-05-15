@@ -15,6 +15,7 @@
       "./configs/agents/pi/extensions/subagent",
       "./configs/agents/pi/extensions/blueprint",
       "./configs/agents/pi/extensions/statusline",
+      "./configs/agents/pi/extensions/token-speed",
       "./configs/agents/pi/extensions/codex-fast-mode",
       "./configs/agents/pi/extensions/nested-agents",
       "./configs/agents/pi/extensions/project-rules"
