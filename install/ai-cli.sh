@@ -100,8 +100,11 @@ install_agent_slack_binary() {
 
 install_notion_cli_binary() {
   local version="$1"
-  log_item "Installing Notion CLI @ $version..."
-  run_cmd env "NTN_VERSION=$version" \
+  local install_dir="$HOME/.local/bin"
+
+  ensure_dir "$install_dir"
+  log_item "Installing Notion CLI @ $version to $install_dir..."
+  run_cmd env "NTN_VERSION=$version" "NTN_INSTALL_DIR=$install_dir" \
     bash -c 'curl -fsSL https://ntn.dev | bash'
 }
 
