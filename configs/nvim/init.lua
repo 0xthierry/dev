@@ -1054,8 +1054,8 @@ require('lazy').setup({
   --   end,
   -- },
   -- { 'Shatur/neovim-ayu', name = 'ayu', priority = 1000 },
-  -- { 'catppuccin/nvim', name = 'catppuccin', priority = 1000 },
-  { 'shaunsingh/nord.nvim', name = 'nord', priority = 1000 },
+  { 'catppuccin/nvim', name = 'catppuccin', priority = 1000 },
+  -- { 'shaunsingh/nord.nvim', name = 'nord', priority = 1000 },
   -- { -- You can easily change to a different colorscheme.
   --   -- Change the name of the colorscheme plugin below, and then
   --   -- change the command in the config to whatever the name of that colorscheme is.
@@ -1202,8 +1202,8 @@ require('lazy').setup({
     },
   },
 })
--- vim.cmd.colorscheme 'catppuccin'
-vim.cmd.colorscheme 'nord'
+vim.cmd.colorscheme 'catppuccin'
+-- vim.cmd.colorscheme 'nord'
 -- vim.cmd.colorscheme 'ayu-mirage'
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
