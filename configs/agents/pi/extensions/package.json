@@ -13,6 +13,7 @@
       "./subagent",
       "./blueprint",
       "./statusline",
+      "./codex-fast-mode",
       "./nested-agents",
       "./project-rules"
     ]

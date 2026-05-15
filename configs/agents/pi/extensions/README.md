@@ -46,6 +46,7 @@ pi install ./configs/agents/pi/extensions/agent-feedback
 pi install ./configs/agents/pi/extensions/subagent
 pi install ./configs/agents/pi/extensions/blueprint
 pi install ./configs/agents/pi/extensions/statusline
+pi install ./configs/agents/pi/extensions/codex-fast-mode
 pi install ./configs/agents/pi/extensions/nested-agents
 pi install ./configs/agents/pi/extensions/project-rules
 ```
@@ -64,6 +65,7 @@ For day-to-day use on Thierry's machines, `configs/agents/install.sh` symlinks t
 - [`subagent`](./subagent/README.md) — registers a Claude-compatible `Agent` tool for foreground single and parallel child Pi subagents.
 - [`blueprint`](./blueprint/README.md) — registers `/blueprint` for deterministic graph workflows that can spawn isolated child Pi sessions.
 - [`statusline`](./statusline/README.md) — appends clickable PR number, git change counts, and the Cloudflare BDR quote to Pi's existing footer.
+- [`codex-fast-mode`](./codex-fast-mode/README.md) — injects Codex Fast mode's `service_tier: "priority"` for eligible ChatGPT-backed Codex requests.
 - [`nested-agents`](./nested-agents/README.md) — dynamically loads nested `AGENTS.md` / `CLAUDE.md` files when the agent touches files under those directories.
 - [`project-rules`](./project-rules/README.md) — loads `.pi/rules`, `.agents/rules`, and `.claude/rules` with cache-friendly activation.
 
