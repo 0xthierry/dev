@@ -23,7 +23,6 @@ SOURCE_PI_PROMPTS_DIR="$SOURCE_PI_DIR/prompts"
 SOURCE_PI_EXTENSIONS_DIR="$SOURCE_PI_DIR/extensions"
 SOURCE_PI_APPEND_SYSTEM="$SOURCE_PI_DIR/APPEND_SYSTEM.md"
 SOURCE_STATUSLINE="$SCRIPT_DIR/statusline.ts"
-SOURCE_AGENTS_MD="$SCRIPT_DIR/AGENTS.md"
 SOURCE_DEV_INSTRUCTIONS="$SCRIPT_DIR/developer-instructions.txt"
 
 usage() {
@@ -226,93 +225,6 @@ force_link_path_replacing_symlink() {
   force_link_path "$source_path" "$target_path" "$label"
 }
 
-detect_host_config() {
-  local os arch cores ram cpu disk shell_name hostname_short
-  os="$(uname -s)"
-  arch="$(uname -m)"
-  shell_name="$(basename "${SHELL:-unknown}")"
-  hostname_short="$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo "unknown")"
-
-  case "$os" in
-    Darwin)
-      cores="$(sysctl -n hw.ncpu 2>/dev/null || echo "unknown")"
-      ram="$(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1073741824 ))GB RAM"
-      cpu="$(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo "unknown")"
-      disk="$(df -h / 2>/dev/null | awk 'NR==2 { print $2 " total, " $4 " free" }' || echo "unknown")"
-      printf '%s\n' "macOS $(sw_vers -productVersion 2>/dev/null || echo "unknown") ($arch)"
-      printf '%s\n' "- CPU: $cpu ($cores cores)"
-      printf '%s\n' "- Memory: $ram"
-      printf '%s\n' "- Disk: $disk"
-      printf '%s\n' "- Shell: $shell_name"
-      printf '%s' "- Hostname: $hostname_short"
-      ;;
-    Linux)
-      cores="$(nproc 2>/dev/null || echo "unknown")"
-      ram="$(awk '/MemTotal/ { printf "%dGB RAM", $2/1048576 }' /proc/meminfo 2>/dev/null || echo "unknown")"
-      cpu="$(awk -F': ' '/model name/ { print $2; exit }' /proc/cpuinfo 2>/dev/null || echo "unknown")"
-      disk="$(df -h / 2>/dev/null | awk 'NR==2 { print $2 " total, " $4 " free" }' || echo "unknown")"
-      local os_line
-      if [[ -f /etc/os-release ]]; then
-        # shellcheck disable=SC1091
-        os_line="$(. /etc/os-release && echo "${PRETTY_NAME:-$ID}")"
-      else
-        os_line="Linux"
-      fi
-      printf '%s\n' "$os_line ($arch)"
-      printf '%s\n' "- CPU: $cpu ($cores cores)"
-      printf '%s\n' "- Memory: $ram"
-      printf '%s\n' "- Disk: $disk"
-      printf '%s\n' "- Shell: $shell_name"
-      printf '%s' "- Hostname: $hostname_short"
-      ;;
-    *)
-      printf '%s (%s)' "$os" "$arch"
-      ;;
-  esac
-}
-
-render_agents_md() {
-  local target_path="$1"
-  local label="$2"
-  local host_config
-  host_config="$(detect_host_config)"
-
-  local rendered before after
-  before="$(sed -n '/{{HOST_CONFIG}}/q;p' "$SOURCE_AGENTS_MD")"
-  after="$(sed -n '/{{HOST_CONFIG}}/,$ { /{{HOST_CONFIG}}/d; p; }' "$SOURCE_AGENTS_MD")"
-  rendered="${before}
-
-${host_config}"
-  if [[ -n "$after" ]]; then
-    rendered="${rendered}
-${after}"
-  fi
-
-  # Remove stale symlink from previous installs before writing
-  if [[ -L "$target_path" ]]; then
-    if (( DRY_RUN )); then
-      log "[dry-run] remove symlink $target_path before rendering"
-    else
-      rm -f "$target_path"
-    fi
-  fi
-
-  if [[ -f "$target_path" ]] && [[ "$(cat "$target_path")" == "$rendered" ]]; then
-    log "skip: $label already up to date"
-    ((SKIPPED_COUNT += 1))
-    return 0
-  fi
-
-  if (( DRY_RUN )); then
-    log "[dry-run] render $label with host config"
-    return 0
-  fi
-
-  printf '%s\n' "$rendered" > "$target_path"
-  log "rendered: $label"
-  ((LINKED_COUNT += 1))
-}
-
 copy_file_if_needed() {
   local source_path="$1"
   local target_path="$2"
@@ -471,7 +383,6 @@ install_agents_home_target() {
   force_link_skill_entries "$target_root"
   force_link_path "$SOURCE_HOOKS_DIR" "$target_root/hooks" ".agents hooks"
   force_link_path "$SOURCE_BIN_DIR" "$target_root/bin" ".agents bin"
-  render_agents_md "$target_root/AGENTS.md" ".agents AGENTS.md"
   force_link_path "$SOURCE_DEV_INSTRUCTIONS" "$target_root/developer-instructions.txt" ".agents developer-instructions.txt"
   force_link_path "$SOURCE_STATUSLINE" "$target_root/statusline.ts" ".agents statusline.ts"
 }
@@ -532,7 +443,6 @@ install_codex_target() {
   log "Installing into ~/.codex ($target_root)"
   generate_codex_agent_tomls "$target_root"
   force_link_skill_entries "$target_root"
-  force_link_path "$HOME/.agents/AGENTS.md" "$target_root/AGENTS.md" "codex AGENTS.md"
   render_codex_config "$target_root/config.toml"
   # Install hooks.json for Codex
   if [[ -f "$SOURCE_CODEX_HOOKS" ]]; then
@@ -593,7 +503,6 @@ install_claude_target() {
   local claude_hooks_json="$SOURCE_HOOKS_DIR/claude-hooks.json"
 
   install_target "$target_root" "$HOME/.claude"
-  force_link_path "$HOME/.agents/AGENTS.md" "$target_root/CLAUDE.md" "claude CLAUDE.md"
   # Symlink hooks directory
   if [[ -d "$SOURCE_HOOKS_DIR" ]]; then
     force_link_path "$SOURCE_HOOKS_DIR" "$target_root/hooks" "claude hooks"
@@ -612,7 +521,6 @@ install_pi_target() {
   log ""
   log "Installing into ~/.pi/agent ($target_root)"
   ensure_dir "$target_root"
-  render_agents_md "$target_root/AGENTS.md" "pi AGENTS.md"
   copy_file_if_needed "$SOURCE_PI_SETTINGS" "$target_root/settings.json" "pi settings.json"
   copy_file_if_needed "$SOURCE_PI_WEB_SEARCH_CONFIG" "$HOME/.pi/web-search.json" "pi web-search.json"
   force_link_path "$SOURCE_PI_APPEND_SYSTEM" "$target_root/APPEND_SYSTEM.md" "pi APPEND_SYSTEM.md"
@@ -710,11 +618,6 @@ main() {
 
   if [[ ! -f "$SOURCE_STATUSLINE" ]]; then
     warn "Missing source statusline file: $SOURCE_STATUSLINE"
-    exit 1
-  fi
-
-  if [[ ! -f "$SOURCE_AGENTS_MD" ]]; then
-    warn "Missing source AGENTS.md file: $SOURCE_AGENTS_MD"
     exit 1
   fi
 
