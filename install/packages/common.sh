@@ -26,6 +26,7 @@ COMMON_PACMAN_PACKAGES=(
   github-cli
   make
   shellcheck
+  actionlint
   gitleaks
   graphviz
   imagemagick
@@ -90,6 +91,7 @@ COMMON_BREW_FORMULAE=(
   infisical/get-cli/infisical
   make
   shellcheck
+  actionlint
   gitleaks
   graphviz
   imagemagick
