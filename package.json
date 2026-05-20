@@ -25,6 +25,7 @@
     ]
   },
   "scripts": {
+    "pi:usage": "bun scripts/pi-session-usage.ts",
     "test:pi-extensions": "bun scripts/pi-extension-tests.ts test",
     "test:pi-extensions:e2e": "bun scripts/pi-extension-tests.ts e2e",
     "lint:pi-extensions": "biome check",

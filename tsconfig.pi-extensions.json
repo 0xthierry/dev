@@ -11,6 +11,6 @@
     "target": "ES2022",
     "types": ["bun"]
   },
-  "include": ["configs/agents/pi/extensions/**/*.ts", "scripts/pi-extension-tests.ts"],
+  "include": ["configs/agents/pi/extensions/**/*.ts", "scripts/pi-extension-tests.ts", "scripts/pi-session-usage.ts"],
   "exclude": ["configs/agents/pi/extensions/**/node_modules/**", "node_modules/**"]
 }
