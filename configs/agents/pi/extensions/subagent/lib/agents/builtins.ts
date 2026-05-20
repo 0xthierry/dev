@@ -50,7 +50,8 @@ export const BUILTIN_AGENTS: readonly AgentDefinition[] = Object.freeze([
     systemPrompt: EXPLORER_PROMPT,
     filePath: "builtin://explorer",
     source: "builtin",
-    frontmatter: { name: "explorer", description: "Fast, read-only codebase reconnaissance." },
+    frontmatter: { name: "explorer", description: "Fast, read-only codebase reconnaissance.", effort: "medium" },
+    effort: "medium",
   }),
   Object.freeze({
     name: "worker",
@@ -58,6 +59,7 @@ export const BUILTIN_AGENTS: readonly AgentDefinition[] = Object.freeze([
     systemPrompt: WORKER_PROMPT,
     filePath: "builtin://worker",
     source: "builtin",
-    frontmatter: { name: "worker", description: "Bounded implementation agent." },
+    frontmatter: { name: "worker", description: "Bounded implementation agent.", effort: "xhigh" },
+    effort: "xhigh",
   }),
 ]);

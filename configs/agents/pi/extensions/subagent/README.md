@@ -10,8 +10,8 @@ The agent tool renders live progress in Pi's tool row. Single-agent runs show th
 
 Two built-in agents are always available:
 
-- `explorer` — fast, read-only codebase reconnaissance for specific, well-scoped questions.
-- `worker` — bounded implementation agent for production changes, fixes, refactors, and validation.
+- `explorer` — fast, read-only codebase reconnaissance for specific, well-scoped questions. Uses `medium` effort.
+- `worker` — bounded implementation agent for production changes, fixes, refactors, and validation. Uses `xhigh` effort.
 
 Configured agents are Markdown files under Pi's normal agent config directory and override built-ins with the same name:
 
@@ -31,7 +31,7 @@ effort: medium
 Agent system prompt goes here.
 ```
 
-Optional `effort` frontmatter sets the child Pi thinking level for that agent. Supported values are `off`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Agents without `effort` inherit the parent session's current thinking level.
+Optional `effort` frontmatter sets the child Pi thinking level for that agent. Supported values are `off`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Agents without `effort` inherit the parent session's current thinking level. Built-in agents have pinned effort values listed above.
 
 The child `pi` process loads Pi context files and skills through normal Pi discovery. A stable child-boundary prompt is prepended before the agent body so child sessions know the parent owns orchestration and that they must not run more subagents.
 

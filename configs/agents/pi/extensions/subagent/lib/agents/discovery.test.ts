@@ -82,7 +82,14 @@ describe("discoverAgents", () => {
 
       // Assert
       expect(result.agents.map((agent) => agent.name)).toEqual(["explorer", "reviewer", "worker"]);
-      expect(result.agents.find((agent) => agent.name === "explorer")).toMatchObject({ source: "builtin" });
+      expect(result.agents.find((agent) => agent.name === "explorer")).toMatchObject({
+        source: "builtin",
+        effort: "medium",
+      });
+      expect(result.agents.find((agent) => agent.name === "worker")).toMatchObject({
+        source: "builtin",
+        effort: "xhigh",
+      });
       expect(result.agents.find((agent) => agent.name === "worker")?.systemPrompt).toContain("bounded implementation");
     } finally {
       await rm(dir, { recursive: true, force: true });
