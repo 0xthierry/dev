@@ -23,6 +23,7 @@ describe("registerAgentFeedbackTool", () => {
     // Assert
     const tool = fakePi.tools.get(AGENT_FEEDBACK_TOOL_NAME);
     expect(tool?.description).toContain("verification blockers");
+    expect(tool?.description).toContain("current working directory");
     expect(tool?.promptGuidelines).toContain(
       "agent_feedback: Never include secrets, tokens, raw credential values, private keys, raw environment dumps, or sensitive user data; describe config names generically instead.",
     );
@@ -51,12 +52,10 @@ describe("registerAgentFeedbackTool", () => {
       filePath: "/feedback/repo/agent_feedback.md",
       entry: expect.stringContaining("## 2026-05-11 09:07 — verification_blocker"),
     });
-    expect(firstText(result)).toBe(
-      "Saved agent feedback to ~/.pi/agent/feedback/repo/agent_feedback.md (2026-05-11 09:07).",
-    );
+    expect(firstText(result)).toBe("Saved agent feedback to agent_feedback.md (2026-05-11 09:07).");
     expect(result.details).toMatchObject({
       ok: true,
-      path: "~/.pi/agent/feedback/repo/agent_feedback.md",
+      path: "agent_feedback.md",
       category: "verification_blocker",
       timestamp: "2026-05-11 09:07",
     });
@@ -135,8 +134,7 @@ function fakeRuntime(): AgentFeedbackRuntime {
     now: mock(() => new Date(2026, 4, 11, 9, 7, 30)),
     buildPath: mock(() => ({
       filePath: "/feedback/repo/agent_feedback.md",
-      displayPath: "~/.pi/agent/feedback/repo/agent_feedback.md",
-      projectKey: "repo",
+      displayPath: "agent_feedback.md",
     })),
     appendEntry: mock(async () => undefined),
   };

@@ -1,27 +1,17 @@
-import { homedir } from "node:os";
-import { join, resolve, sep } from "node:path";
+import { join, resolve } from "node:path";
 
 const FEEDBACK_FILE_NAME = "agent_feedback.md";
 
 export interface AgentFeedbackPath {
   filePath: string;
   displayPath: string;
-  projectKey: string;
 }
 
-export function buildAgentFeedbackPath(cwd: string, homeDir = homedir()): AgentFeedbackPath {
-  const projectSegments = projectCwdSegments(cwd);
-  const projectKey = projectSegments.join("/");
+export function buildAgentFeedbackPath(cwd: string): AgentFeedbackPath {
+  const absoluteCwd = resolve(cwd);
 
   return {
-    filePath: join(homeDir, ".pi", "agent", "feedback", ...projectSegments, FEEDBACK_FILE_NAME),
-    displayPath: join("~", ".pi", "agent", "feedback", ...projectSegments, FEEDBACK_FILE_NAME),
-    projectKey,
+    filePath: join(absoluteCwd, FEEDBACK_FILE_NAME),
+    displayPath: FEEDBACK_FILE_NAME,
   };
-}
-
-export function projectCwdSegments(cwd: string): string[] {
-  const absoluteCwd = resolve(cwd);
-  const segments = absoluteCwd.split(sep).filter(Boolean);
-  return segments.length > 0 ? segments : ["_root"];
 }

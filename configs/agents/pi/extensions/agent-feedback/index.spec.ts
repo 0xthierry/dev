@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve, sep } from "node:path";
+import { join, resolve } from "node:path";
 import {
   FAUX_API_KEY_ENV,
   FAUX_MODEL_ID,
@@ -84,19 +84,12 @@ describe("agent-feedback extension E2E", () => {
       60_000,
     );
     const agentEnd = await harness.waitForEvent((event) => event.type === "agent_end", 60_000);
-    const feedbackFile = join(
-      tempHome,
-      ".pi",
-      "agent",
-      "feedback",
-      ...resolve(tempProject).split(sep).filter(Boolean),
-      "agent_feedback.md",
-    );
+    const feedbackFile = join(tempProject, "agent_feedback.md");
     const feedbackContent = await readFile(feedbackFile, "utf8");
 
     // Assert
     expect(promptResponse.success).toBe(true);
-    expect(eventText(toolEnd)).toContain("Saved agent feedback to ~/.pi/agent/feedback/");
+    expect(eventText(toolEnd)).toContain("Saved agent feedback to agent_feedback.md");
     expect(eventText(agentEnd)).toContain(expectedResponseText);
     expect(feedbackContent).toContain("# Agent Feedback");
     expect(feedbackContent).toContain("## ");

@@ -8,16 +8,16 @@ It is not for one-off coding mistakes, normal lint/type failures, or avoiding av
 
 ## Storage
 
-Entries are appended under the user's Pi agent directory, grouped by the current project working directory:
+Entries are appended to `agent_feedback.md` in the current working directory:
 
 ```text
-~/.pi/agent/feedback/[project-cwd]/agent_feedback.md
+./agent_feedback.md
 ```
 
-For example, a project at `/home/thierry/dev` writes to:
+For example, a Pi session running in `/home/thierry/dev` writes to:
 
 ```text
-~/.pi/agent/feedback/home/thierry/dev/agent_feedback.md
+/home/thierry/dev/agent_feedback.md
 ```
 
 ## Tool

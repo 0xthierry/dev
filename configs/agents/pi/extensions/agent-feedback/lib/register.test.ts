@@ -25,8 +25,7 @@ describe("registerAgentFeedback", () => {
       now: mock(() => new Date(2026, 4, 11, 9, 7, 30)),
       buildPath: mock(() => ({
         filePath: "/feedback/repo/agent_feedback.md",
-        displayPath: "~/.pi/agent/feedback/repo/agent_feedback.md",
-        projectKey: "repo",
+        displayPath: "agent_feedback.md",
       })),
       appendEntry: mock(async () => undefined),
     };

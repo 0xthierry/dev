@@ -21,7 +21,6 @@ export type AgentFeedbackToolError =
 export interface AgentFeedbackToolDetails {
   ok: boolean;
   path?: string;
-  projectKey?: string;
   timestamp?: string;
   category?: FeedbackCategory;
   feedback?: NormalizedFeedback;
@@ -33,7 +32,7 @@ export function registerAgentFeedbackTool(pi: ExtensionAPI, runtime: AgentFeedba
     name: AGENT_FEEDBACK_TOOL_NAME,
     label: "agent feedback",
     description:
-      "Append structured agent workflow feedback and verification blockers to ~/.pi/agent/feedback/[project-cwd]/agent_feedback.md.",
+      "Append structured agent workflow feedback and verification blockers to agent_feedback.md in the current working directory.",
     promptSnippet:
       "Record repeated workflow friction, validation blockers, environment gaps, or instruction/docs gaps as durable agent feedback.",
     promptGuidelines: [
@@ -109,7 +108,6 @@ export async function executeAgentFeedbackTool(
     details: {
       ok: true,
       path: path.displayPath,
-      projectKey: path.projectKey,
       timestamp,
       category: normalized.feedback.category,
       feedback: normalized.feedback,

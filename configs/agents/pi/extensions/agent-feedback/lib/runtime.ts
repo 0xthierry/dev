@@ -7,10 +7,10 @@ export interface AgentFeedbackRuntime {
   appendEntry: (request: AppendAgentFeedbackEntryRequest) => Promise<void>;
 }
 
-export function createAgentFeedbackRuntime(homeDir?: string): AgentFeedbackRuntime {
+export function createAgentFeedbackRuntime(): AgentFeedbackRuntime {
   return {
     now: () => new Date(),
-    buildPath: (cwd) => buildAgentFeedbackPath(cwd, homeDir),
+    buildPath: buildAgentFeedbackPath,
     appendEntry: appendAgentFeedbackEntry,
   };
 }

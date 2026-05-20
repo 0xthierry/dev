@@ -15,7 +15,7 @@ describe("appendAgentFeedbackEntry", () => {
   test("creates the feedback file with a heading and first entry", async () => {
     // Arrange
     tempDir = await mkdtemp(join(tmpdir(), "pi-agent-feedback-storage-"));
-    const filePath = join(tempDir, ".pi", "agent", "feedback", "project", "agent_feedback.md");
+    const filePath = join(tempDir, "project", "agent_feedback.md");
     const entry = "## 2026-05-11 09:07 — verification_blocker\n\nSummary: Could not verify.\n\n";
 
     // Act
