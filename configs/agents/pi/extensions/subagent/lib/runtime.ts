@@ -1,11 +1,11 @@
-import { discoverAgents as discoverConfiguredAgents } from "./agents/discovery";
+import { type AgentDiscoveryOptions, discoverAgents as discoverConfiguredAgents } from "./agents/discovery";
 import type { AgentDefinition, AgentDiscoveryResult } from "./agents/types";
 import { type AgentProgressCallback, runChildPiAgent } from "./runner/child-pi";
 import type { AgentRunRequest } from "./runner/invocation";
 import type { AgentRunResult } from "./runner/run-result";
 
 export interface SubagentRuntime {
-  discoverAgents: () => Promise<AgentDiscoveryResult>;
+  discoverAgents: (options?: AgentDiscoveryOptions) => Promise<AgentDiscoveryResult>;
   runAgent: (
     request: AgentRunRequest,
     signal: AbortSignal | undefined,
@@ -15,7 +15,7 @@ export interface SubagentRuntime {
 
 export function createSubagentRuntime(): SubagentRuntime {
   return {
-    discoverAgents: () => discoverConfiguredAgents(),
+    discoverAgents: (options) => discoverConfiguredAgents(options),
     runAgent: runChildPiAgent,
   };
 }

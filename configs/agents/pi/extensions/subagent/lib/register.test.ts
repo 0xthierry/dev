@@ -37,9 +37,9 @@ describe("registerSubagentExtension", () => {
 describe("registerSubagentTools", () => {
   test("injects configured agents into the system prompt before the agent starts", async () => {
     // Arrange
-    const fakePi = createFakePi();
+    const fakePi = createFakePi({ cwd: "/repo" });
     const runtime: SubagentRuntime = {
-      discoverAgents: mock(async () => ({ agentsDir: "/agents", agents: [agent("reviewer")] })),
+      discoverAgents: mock(async () => ({ agentsDir: "/agents", agentDirs: ["/agents"], agents: [agent("reviewer")] })),
       runAgent: mock(async () => {
         throw new Error("not used");
       }),
@@ -51,6 +51,7 @@ describe("registerSubagentTools", () => {
 
     // Assert
     expect(results).toHaveLength(1);
+    expect(runtime.discoverAgents).toHaveBeenCalledWith({ cwd: "/repo" });
     const result = results[0] as { systemPrompt: string };
     expect(result.systemPrompt).toContain("- reviewer: reviewer description");
     expect(result.systemPrompt).toContain("Base prompt");

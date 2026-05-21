@@ -14,5 +14,6 @@ export interface AgentDefinition {
 
 export interface AgentDiscoveryResult {
   agentsDir: string;
+  agentDirs: string[];
   agents: AgentDefinition[];
 }

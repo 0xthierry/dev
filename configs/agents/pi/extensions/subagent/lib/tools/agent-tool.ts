@@ -76,7 +76,7 @@ export async function executeAgentTool(
   onUpdate: ((partial: AgentToolResult<AgentToolDetails>) => void) | undefined,
   ctx: ExtensionContext,
 ): Promise<AgentToolResult<AgentToolDetails>> {
-  const discovery = await runtime.discoverAgents();
+  const discovery = await runtime.discoverAgents({ cwd: ctx.cwd });
   const planResult = planAgentInvocation(params);
   if (!planResult.ok) return errorResult(planResult.error, "single", discovery.agentsDir, []);
 

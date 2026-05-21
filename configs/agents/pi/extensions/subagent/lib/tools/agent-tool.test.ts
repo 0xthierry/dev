@@ -51,6 +51,7 @@ describe("executeAgentTool", () => {
     // Assert
     expect(result.content[0]).toEqual({ type: "text", text: "reviewer completed: Review this diff" });
     expect(result.details).toMatchObject({ ok: true, mode: "single", agentsDir: "/agents" });
+    expect(runtime.discoverAgents).toHaveBeenCalledWith({ cwd: "/repo" });
     expect(runtime.runAgent).toHaveBeenCalledTimes(1);
     expect(runtime.runAgent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -192,7 +193,11 @@ describe("executeAgentTool", () => {
     // Arrange
     const fakePi = createFakePi();
     const runtime: SubagentRuntime = {
-      discoverAgents: mock(async () => ({ agentsDir: "/agents", agents: [agent("locator"), agent("reviewer")] })),
+      discoverAgents: mock(async () => ({
+        agentsDir: "/agents",
+        agentDirs: ["/agents"],
+        agents: [agent("locator"), agent("reviewer")],
+      })),
       runAgent: mock(async (request) => {
         if (request.agent.name === "locator") throw new Error("locator crashed");
         return resultFor(request.agent.name, request.task);
@@ -229,7 +234,7 @@ describe("executeAgentTool", () => {
     const fakePi = createFakePi();
     const agents = Array.from({ length: 8 }, (_, index) => agent(`agent-${index}`));
     const runtime: SubagentRuntime = {
-      discoverAgents: mock(async () => ({ agentsDir: "/agents", agents })),
+      discoverAgents: mock(async () => ({ agentsDir: "/agents", agentDirs: ["/agents"], agents })),
       runAgent: mock(async (request) => {
         const index = Number(request.agent.name.replace("agent-", ""));
         if (index < 4) throw new Error(`${request.agent.name} crashed`);
@@ -282,7 +287,7 @@ describe("executeAgentTool", () => {
 
 function fakeRuntime(agents: AgentDefinition[]): SubagentRuntime {
   return {
-    discoverAgents: mock(async () => ({ agentsDir: "/agents", agents })),
+    discoverAgents: mock(async () => ({ agentsDir: "/agents", agentDirs: ["/agents"], agents })),
     runAgent: mock(async (request, _signal, onProgress) => {
       const result = {
         ...resultFor(request.agent.name, request.task, request.thinking),

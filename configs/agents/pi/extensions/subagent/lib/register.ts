@@ -12,8 +12,8 @@ export function registerSubagentExtension(pi: ExtensionAPI): void {
 export function registerSubagentTools(pi: ExtensionAPI, runtime: SubagentRuntime): void {
   registerAgentTool(pi, runtime);
 
-  pi.on("before_agent_start", async (event) => {
-    const discovery = await runtime.discoverAgents();
+  pi.on("before_agent_start", async (event, ctx) => {
+    const discovery = await runtime.discoverAgents({ cwd: ctx.cwd });
     const section = buildAgentPromptSection(discovery.agents, discovery.agentsDir);
     return { systemPrompt: appendAgentPromptSection(event.systemPrompt, section) };
   });

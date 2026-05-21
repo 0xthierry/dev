@@ -1,6 +1,6 @@
-import type { Dirent } from "node:fs";
+import { type Dirent, existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { delimiter, relative, resolve, sep } from "node:path";
 import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { parsePiThinkingLevel } from "../thinking";
 import { BUILTIN_AGENTS } from "./builtins";
@@ -8,6 +8,7 @@ import type { AgentDefinition, AgentDiscoveryResult } from "./types";
 
 export interface AgentDiscoveryOptions {
   agentsDir?: string;
+  cwd?: string;
 }
 
 interface AgentFrontmatter extends Record<string, unknown> {
@@ -20,25 +21,79 @@ export async function discoverAgents(options: AgentDiscoveryOptions = {}): Promi
   const discovery = await discoverUserAgents(options);
   return {
     agentsDir: discovery.agentsDir,
+    agentDirs: discovery.agentDirs,
     agents: mergeBuiltInAgents(discovery.agents),
   };
 }
 
 export async function discoverUserAgents(options: AgentDiscoveryOptions = {}): Promise<AgentDiscoveryResult> {
-  const agentsDir = options.agentsDir ?? join(getAgentDir(), "agents");
-  const files = await findMarkdownFiles(agentsDir);
+  const agentDirs = resolveAgentDirs(options);
   const agentsByName = new Map<string, AgentDefinition>();
 
-  for (const filePath of files) {
-    const agent = await readAgentFile(filePath);
-    if (!agent) continue;
-    if (!agentsByName.has(agent.name)) agentsByName.set(agent.name, agent);
+  for (const agentsDir of agentDirs) {
+    const files = await findMarkdownFiles(agentsDir);
+    for (const filePath of files) {
+      const agent = await readAgentFile(filePath);
+      if (!agent) continue;
+      if (!agentsByName.has(agent.name)) agentsByName.set(agent.name, agent);
+    }
   }
 
   return {
-    agentsDir,
+    agentsDir: agentDirs.join(delimiter),
+    agentDirs,
     agents: sortAgents([...agentsByName.values()]),
   };
+}
+
+function resolveAgentDirs(options: AgentDiscoveryOptions): string[] {
+  const configuredAgentsDir = options.agentsDir ? resolve(options.agentsDir) : resolve(getAgentDir(), "agents");
+  return uniqueDirectories([...projectAgentDirs(options.cwd), configuredAgentsDir]);
+}
+
+function projectAgentDirs(cwd: string | undefined): string[] {
+  if (!cwd) return [];
+
+  const resolvedCwd = resolve(cwd);
+  const projectRoot = findProjectRoot(resolvedCwd);
+  return ancestorDirs(projectRoot, resolvedCwd)
+    .reverse()
+    .map((dir) => resolve(dir, ".pi", "agents"))
+    .filter((dir) => existsSync(dir));
+}
+
+function uniqueDirectories(dirs: string[]): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const dir of dirs) {
+    const resolved = resolve(dir);
+    if (seen.has(resolved)) continue;
+    seen.add(resolved);
+    result.push(resolved);
+  }
+  return result;
+}
+
+function findProjectRoot(cwd: string): string {
+  let current = resolve(cwd);
+  while (true) {
+    if (existsSync(resolve(current, ".git"))) return current;
+    const parent = resolve(current, "..");
+    if (parent === current) return cwd;
+    current = parent;
+  }
+}
+
+function ancestorDirs(root: string, cwd: string): string[] {
+  const dirs = [root];
+  let current = root;
+  while (current !== cwd) {
+    const relativeChild = relative(current, cwd).split(sep)[0];
+    if (!relativeChild || relativeChild.startsWith("..")) break;
+    current = resolve(current, relativeChild);
+    dirs.push(current);
+  }
+  return dirs;
 }
 
 function mergeBuiltInAgents(userAgents: AgentDefinition[]): AgentDefinition[] {
@@ -67,7 +122,7 @@ async function findMarkdownFiles(root: string): Promise<string[]> {
 
     for (const entry of entries) {
       if (entry.name.startsWith(".")) continue;
-      const path = join(directory, entry.name);
+      const path = resolve(directory, entry.name);
       if (entry.isDirectory()) {
         await walk(path);
         continue;

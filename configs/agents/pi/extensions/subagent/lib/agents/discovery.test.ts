@@ -64,6 +64,54 @@ describe("discoverUserAgents", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  test("loads project .pi agents before global agents when cwd is provided", async () => {
+    // Arrange
+    const dir = await mkdtemp(join(tmpdir(), "pi-agent-discovery-"));
+    const repo = join(dir, "repo");
+    const cwd = join(repo, "apps", "web");
+    const projectAgentsDir = join(repo, ".pi", "agents");
+    const globalAgentsDir = join(dir, "global-agents");
+    await mkdir(join(repo, ".git"), { recursive: true });
+    await mkdir(cwd, { recursive: true });
+    await mkdir(projectAgentsDir, { recursive: true });
+    await mkdir(globalAgentsDir, { recursive: true });
+    await writeFile(
+      join(projectAgentsDir, "project-only.md"),
+      "---\nname: project-only\ndescription: Project agent\n---\nProject body",
+      "utf8",
+    );
+    await writeFile(
+      join(projectAgentsDir, "shared.md"),
+      "---\nname: shared\ndescription: Project shared\n---\nProject shared body",
+      "utf8",
+    );
+    await writeFile(
+      join(globalAgentsDir, "global-only.md"),
+      "---\nname: global-only\ndescription: Global agent\n---\nGlobal body",
+      "utf8",
+    );
+    await writeFile(
+      join(globalAgentsDir, "shared.md"),
+      "---\nname: shared\ndescription: Global shared\n---\nGlobal shared body",
+      "utf8",
+    );
+
+    try {
+      // Act
+      const result = await discoverUserAgents({ agentsDir: globalAgentsDir, cwd });
+
+      // Assert
+      expect(result.agentDirs).toEqual([projectAgentsDir, globalAgentsDir]);
+      expect(result.agents.map((agent) => agent.name)).toEqual(["global-only", "project-only", "shared"]);
+      expect(result.agents.find((agent) => agent.name === "shared")).toMatchObject({
+        description: "Project shared",
+        systemPrompt: "Project shared body",
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("discoverAgents", () => {

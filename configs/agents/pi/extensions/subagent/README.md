@@ -13,13 +13,14 @@ Two built-in agents are always available:
 - `explorer` — fast, read-only codebase reconnaissance for specific, well-scoped questions. Uses `medium` effort.
 - `worker` — bounded implementation agent for production changes, fixes, refactors, and validation. Uses `xhigh` effort.
 
-Configured agents are Markdown files under Pi's normal agent config directory and override built-ins with the same name:
+Configured agents are Markdown files under project-local `.pi/agents` directories or Pi's normal agent config directory and override built-ins with the same name:
 
 ```text
+.pi/agents/*.md
 ~/.pi/agent/agents/*.md
 ```
 
-The extension uses `getAgentDir()/agents`, so `PI_CODING_AGENT_DIR` is respected. Files are discovered recursively and must include frontmatter:
+Project-local `.pi/agents` directories are discovered from the current working directory up to the git root and take precedence over global agents. The global directory uses `getAgentDir()/agents`, so `PI_CODING_AGENT_DIR` is respected. Files are discovered recursively and must include frontmatter:
 
 ```markdown
 ---
