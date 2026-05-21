@@ -1,0 +1,13 @@
+{
+  "name": "@0xthierry/pi-lsp",
+  "private": true,
+  "type": "module",
+  "keywords": ["pi-package", "pi-extension", "lsp", "language-server-protocol"],
+  "pi": {
+    "extensions": ["./index.ts"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  }
+}

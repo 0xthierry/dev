@@ -18,7 +18,8 @@
       "./configs/agents/pi/extensions/token-speed",
       "./configs/agents/pi/extensions/codex-fast-mode",
       "./configs/agents/pi/extensions/nested-agents",
-      "./configs/agents/pi/extensions/project-rules"
+      "./configs/agents/pi/extensions/project-rules",
+      "./configs/agents/pi/extensions/lsp"
     ],
     "prompts": [
       "./configs/agents/pi/prompts"

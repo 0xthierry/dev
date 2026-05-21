@@ -16,7 +16,8 @@
       "./token-speed",
       "./codex-fast-mode",
       "./nested-agents",
-      "./project-rules"
+      "./project-rules",
+      "./lsp"
     ]
   },
   "dependencies": {
