@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type Server } from "node:http";
-import type { Socket } from "node:net";
+import { createConnection, type Socket } from "node:net";
 
 const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const DEFAULT_HOST = "127.0.0.1";
@@ -13,6 +13,8 @@ const DEFAULT_ALLOWED_ORIGINS = new Set([
   "http://localhost",
   "http://127.0.0.1",
 ]);
+
+export type BridgeMode = "owner" | "attached" | "incompatible" | "stopped";
 
 export type BridgeClient = {
   socket: Socket;
@@ -31,10 +33,12 @@ export type BridgeClient = {
 
 export type BridgeStatus = {
   running: boolean;
+  mode: BridgeMode;
   host: string;
   port: number;
   clients: Array<Omit<BridgeClient, "socket" | "token"> & { hasToken: boolean }>;
   activeTabId?: string;
+  controllerCount?: number;
 };
 
 export type BridgeRequestOptions = {
@@ -63,8 +67,19 @@ type PendingRequest = {
   timeout: ReturnType<typeof setTimeout>;
 };
 
-type SocketWithBuffer = Socket & { wsBuffer?: Buffer; wsFragments?: Buffer[] };
+type ControllerClient = {
+  socket: Socket;
+  connectedAt: number;
+  lastSeenAt: number;
+};
 
+type ControllerPendingRequest = {
+  resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+  timeout: ReturnType<typeof setTimeout>;
+};
+
+type SocketWithBuffer = Socket & { wsBuffer?: Buffer; wsFragments?: Buffer[] };
 type JsonObject = Record<string, unknown>;
 
 export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}): ExcalidrawBridge {
@@ -76,30 +91,77 @@ export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}):
 
   let server: Server | undefined;
   let starting: Promise<void> | undefined;
+  let controllerSocket: SocketWithBuffer | undefined;
+  let controllerConnected = false;
+  let remoteStatus: BridgeStatus = stoppedStatus(host, port);
+  let attachError: string | undefined;
   const clients = new Map<Socket, BridgeClient>();
+  const controllers = new Map<Socket, ControllerClient>();
   const pending = new Map<string, PendingRequest>();
+  const controllerPending = new Map<string, ControllerPendingRequest>();
 
   async function start(): Promise<void> {
-    if (server?.listening) return;
+    if (server?.listening || isControllerOpen()) return;
     if (starting) return starting;
 
-    starting = new Promise<void>((resolve, reject) => {
+    starting = startOwnerBridge()
+      .catch(async (error) => {
+        if (!isAddressInUseError(error)) throw error;
+        await attachToExistingBridge();
+      })
+      .finally(() => {
+        starting = undefined;
+      });
+
+    return starting;
+  }
+
+  async function stop(): Promise<void> {
+    if (controllerSocket) {
+      await closeControllerSocket();
+      return;
+    }
+
+    // If another Pi session is attached, this process is currently the shared bridge owner.
+    // Keep the server alive so attached sessions and browser tabs do not lose the bridge.
+    if (controllers.size > 0) return;
+
+    await stopOwnerBridge();
+  }
+
+  function getStatus(): BridgeStatus {
+    if (controllerSocket) return remoteStatus;
+    if (server?.listening) return ownerStatus();
+    return stoppedStatus(host, port);
+  }
+
+  async function request(
+    action: string,
+    params: Record<string, unknown> = {},
+    requestOptions: BridgeRequestOptions = {},
+  ): Promise<unknown> {
+    await start();
+    if (controllerSocket) {
+      return requestThroughOwner(action, params, requestOptions);
+    }
+    return requestFromOwner(action, params, requestOptions);
+  }
+
+  function startOwnerBridge(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
       const nextServer = createServer();
       nextServer.on("upgrade", handleUpgrade);
       nextServer.once("error", reject);
       nextServer.listen(port, host, () => {
         nextServer.off("error", reject);
         server = nextServer;
+        remoteStatus = stoppedStatus(host, port);
         resolve();
       });
-    }).finally(() => {
-      starting = undefined;
     });
-
-    return starting;
   }
 
-  async function stop(): Promise<void> {
+  async function stopOwnerBridge(): Promise<void> {
     for (const request of pending.values()) {
       clearTimeout(request.timeout);
       request.reject(new Error("Excalidraw bridge stopped before the browser responded."));
@@ -108,6 +170,8 @@ export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}):
 
     for (const socket of clients.keys()) socket.destroy();
     clients.clear();
+    for (const controller of controllers.keys()) controller.destroy();
+    controllers.clear();
 
     if (!server) return;
     const current = server;
@@ -117,31 +181,160 @@ export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}):
     });
   }
 
-  function getStatus(): BridgeStatus {
-    const active = selectClient();
-    return {
-      running: !!server?.listening,
-      host,
-      port,
-      activeTabId: active?.tabId,
-      clients: [...clients.values()].map(({ socket: _socket, token, ...client }) => ({
-        ...client,
-        hasToken: !!token,
-      })),
-    };
+  async function attachToExistingBridge(): Promise<void> {
+    const socket = createConnection({ host, port }) as SocketWithBuffer;
+    controllerSocket = socket;
+    controllerConnected = false;
+    socket.wsBuffer = Buffer.alloc(0);
+    socket.wsFragments = [];
+
+    socket.on("close", () => {
+      if (controllerSocket === socket) controllerSocket = undefined;
+      controllerConnected = false;
+      rejectControllerPending("Excalidraw bridge controller disconnected.");
+      remoteStatus = stoppedStatus(host, port);
+      attachError = undefined;
+    });
+    socket.on("error", () => undefined);
+
+    await waitForControllerHandshake(socket, host, port);
+    socket.on("data", (chunk) =>
+      handleControllerSocketData(socket, typeof chunk === "string" ? Buffer.from(chunk) : chunk),
+    );
+    controllerConnected = true;
+    sendMaskedFrame(
+      socket,
+      JSON.stringify({ type: "controller_hello", pid: process.pid, timestamp: new Date().toISOString() }),
+    );
+    try {
+      const status = await requestControllerStatus();
+      remoteStatus = coerceStatus(status);
+      attachError = undefined;
+    } catch (error) {
+      attachError = error instanceof Error ? error.message : String(error);
+      remoteStatus = incompatibleStatus(host, port, attachError);
+    }
   }
 
-  async function request(
+  function requestThroughOwner(
+    action: string,
+    params: Record<string, unknown>,
+    requestOptions: BridgeRequestOptions,
+  ): Promise<unknown> {
+    return sendControllerRequest(
+      "browser_request",
+      { action, params, options: requestOptions },
+      (requestOptions.timeoutMs ?? requestTimeoutMs) + 1_000,
+    );
+  }
+
+  async function requestControllerStatus(): Promise<unknown> {
+    return sendControllerRequest("bridge_status", {}, 3_000);
+  }
+
+  function sendControllerRequest(action: string, params: Record<string, unknown>, timeoutMs: number): Promise<unknown> {
+    const socket = controllerSocket;
+    if (!socket || !controllerConnected || socket.destroyed) {
+      throw new Error("Excalidraw bridge is attached to another session but the controller socket is not connected.");
+    }
+    if (attachError) {
+      throw new Error(
+        `The existing Excalidraw bridge on ${host}:${port} does not support shared Pi sessions yet (${attachError}). Restart or reload the Pi session that owns the bridge.`,
+      );
+    }
+
+    const id = `controller-${action}-${now()}-${Math.random().toString(36).slice(2)}`;
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        controllerPending.delete(id);
+        reject(new Error(`Timed out waiting for shared Excalidraw bridge ${action} response after ${timeoutMs}ms.`));
+      }, timeoutMs);
+      controllerPending.set(id, { resolve, reject, timeout });
+      sendMaskedFrame(socket, JSON.stringify({ type: "controller_request", id, action, params }));
+    });
+  }
+
+  function handleControllerSocketData(socket: SocketWithBuffer, chunk: Buffer): void {
+    socket.wsBuffer = Buffer.concat([socket.wsBuffer ?? Buffer.alloc(0), chunk]);
+
+    while (socket.wsBuffer.length >= 2) {
+      const frame = readFrame(socket.wsBuffer);
+      if (!frame) return;
+      socket.wsBuffer = socket.wsBuffer.subarray(frame.consumed);
+      if (frame.opcode === 0x8) {
+        socket.end();
+        continue;
+      }
+      if (frame.opcode !== 0x1) continue;
+      handleControllerSocketMessage(frame.payload);
+    }
+  }
+
+  function handleControllerSocketMessage(payload: Buffer): void {
+    try {
+      const message = JSON.parse(payload.toString("utf8")) as JsonObject;
+      if (message.type !== "controller_response") return;
+      const id = stringValue(message.id);
+      if (!id) return;
+      const request = controllerPending.get(id);
+      if (!request) return;
+      controllerPending.delete(id);
+      clearTimeout(request.timeout);
+      if (message.ok === true) {
+        attachError = undefined;
+        if (message.action === "bridge_status") remoteStatus = coerceStatus(message.result);
+        request.resolve(message.result);
+      } else {
+        request.reject(new Error(stringValue(message.error) ?? "Shared Excalidraw bridge request failed."));
+      }
+    } catch {
+      // Ignore malformed owner messages.
+    }
+  }
+
+  async function closeControllerSocket(): Promise<void> {
+    const socket = controllerSocket;
+    controllerSocket = undefined;
+    remoteStatus = stoppedStatus(host, port);
+    attachError = undefined;
+    rejectControllerPending("Excalidraw bridge controller closed.");
+    controllerConnected = false;
+    if (!socket || socket.destroyed) return;
+    await new Promise<void>((resolve) => {
+      socket.once("close", () => resolve());
+      socket.end();
+      setTimeout(resolve, 250);
+    });
+  }
+
+  function rejectControllerPending(message: string): void {
+    for (const request of controllerPending.values()) {
+      clearTimeout(request.timeout);
+      request.reject(new Error(message));
+    }
+    controllerPending.clear();
+  }
+
+  function requestFromOwner(
     action: string,
     params: Record<string, unknown> = {},
     requestOptions: BridgeRequestOptions = {},
   ): Promise<unknown> {
-    await start();
     const candidates = selectClients(requestOptions.tabId);
     if (candidates.length === 0)
       throw new Error("No Excalidraw browser tab is connected. Open or reload http://excalidraw.localhost/.");
 
     const errors: string[] = [];
+    return tryClients(candidates, action, params, requestOptions.timeoutMs ?? requestTimeoutMs, errors);
+  }
+
+  async function tryClients(
+    candidates: BridgeClient[],
+    action: string,
+    params: Record<string, unknown>,
+    timeoutMs: number,
+    errors: string[],
+  ): Promise<unknown> {
     for (const client of candidates) {
       if (action !== "ping" && !client.token) {
         errors.push(`tab ${client.tabId}: missing bridge token`);
@@ -149,7 +342,7 @@ export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}):
       }
 
       try {
-        return await sendRequestToClient(client, action, params, requestOptions.timeoutMs ?? requestTimeoutMs);
+        return await sendRequestToClient(client, action, params, timeoutMs);
       } catch (error) {
         errors.push(`tab ${client.tabId}: ${error instanceof Error ? error.message : String(error)}`);
         client.apiReady = false;
@@ -210,24 +403,18 @@ export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}):
       ].join("\r\n"),
     );
 
-    const client: BridgeClient = {
-      socket,
-      tabId: `pending-${now()}-${Math.random().toString(36).slice(2)}`,
-      focused: false,
-      visible: false,
-      apiReady: false,
-      connectedAt: now(),
-      lastSeenAt: now(),
-      lastFocusedAt: 0,
-    };
-    clients.set(socket, client);
-
     const buffered = socket as SocketWithBuffer;
     buffered.wsBuffer = Buffer.alloc(0);
     buffered.wsFragments = [];
     socket.on("data", (chunk) => handleSocketData(buffered, typeof chunk === "string" ? Buffer.from(chunk) : chunk));
-    socket.on("close", () => clients.delete(socket));
-    socket.on("error", () => clients.delete(socket));
+    socket.on("close", () => {
+      clients.delete(socket);
+      controllers.delete(socket);
+    });
+    socket.on("error", () => {
+      clients.delete(socket);
+      controllers.delete(socket);
+    });
   }
 
   function handleSocketData(socket: SocketWithBuffer, chunk: Buffer): void {
@@ -264,18 +451,79 @@ export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}):
 
   function handleTextMessage(socket: Socket, payload: Buffer): void {
     try {
-      handleBrowserMessage(socket, JSON.parse(payload.toString("utf8")) as JsonObject);
+      handleSocketMessage(socket, JSON.parse(payload.toString("utf8")) as JsonObject);
     } catch {
-      // Drop malformed browser bridge messages without crashing the extension runtime.
+      // Drop malformed bridge messages without crashing the extension runtime.
+    }
+  }
+
+  function handleSocketMessage(socket: Socket, message: JsonObject): void {
+    if (message.type === "controller_hello") {
+      clients.delete(socket);
+      controllers.set(socket, { socket, connectedAt: now(), lastSeenAt: now() });
+      return;
+    }
+
+    if (message.type === "controller_request") {
+      void handleControllerRequest(socket, message);
+      return;
+    }
+
+    handleBrowserMessage(socket, message);
+  }
+
+  async function handleControllerRequest(socket: Socket, message: JsonObject): Promise<void> {
+    const controller = controllers.get(socket);
+    if (!controller) return;
+    controller.lastSeenAt = now();
+    const id = stringValue(message.id);
+    const action = stringValue(message.action);
+    if (!id || !action) return;
+
+    try {
+      const params = objectValue(message.params) ?? {};
+      const result =
+        action === "bridge_status"
+          ? ownerStatus()
+          : await requestFromOwner(
+              stringValue(params.action) ?? "",
+              objectValue(params.params) ?? {},
+              objectValue(params.options) as BridgeRequestOptions | undefined,
+            );
+      sendFrame(socket, JSON.stringify({ type: "controller_response", id, action, ok: true, result }));
+    } catch (error) {
+      sendFrame(
+        socket,
+        JSON.stringify({
+          type: "controller_response",
+          id,
+          action,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
     }
   }
 
   function handleBrowserMessage(socket: Socket, message: JsonObject): void {
-    const client = clients.get(socket);
-    if (!client) return;
-    client.lastSeenAt = now();
+    let client = clients.get(socket);
 
     if (message.type === "hello") {
+      if (!client) {
+        client = {
+          socket,
+          tabId: `pending-${now()}-${Math.random().toString(36).slice(2)}`,
+          focused: false,
+          visible: false,
+          apiReady: false,
+          connectedAt: now(),
+          lastSeenAt: now(),
+          lastFocusedAt: 0,
+        };
+        clients.set(socket, client);
+      }
+      controllers.delete(socket);
+      client.lastSeenAt = now();
       client.tabId = stringValue(message.tabId) ?? client.tabId;
       client.token = stringValue(message.token) ?? client.token;
       client.url = stringValue(message.url) ?? client.url;
@@ -286,6 +534,9 @@ export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}):
       if (client.focused) client.lastFocusedAt = now();
       return;
     }
+
+    if (!client) return;
+    client.lastSeenAt = now();
 
     if (message.type === "focus") {
       client.focused = booleanValue(message.focused) ?? client.focused;
@@ -312,6 +563,22 @@ export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}):
     }
   }
 
+  function ownerStatus(): BridgeStatus {
+    const active = selectClient();
+    return {
+      running: true,
+      mode: "owner",
+      host,
+      port,
+      activeTabId: active?.tabId,
+      controllerCount: controllers.size,
+      clients: [...clients.values()].map(({ socket: _socket, token, ...client }) => ({
+        ...client,
+        hasToken: !!token,
+      })),
+    };
+  }
+
   function selectClient(tabId?: string): BridgeClient | undefined {
     return selectClients(tabId)[0];
   }
@@ -334,12 +601,87 @@ export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}):
     return score;
   }
 
+  function isControllerOpen(): boolean {
+    return controllerConnected && !!controllerSocket && !controllerSocket.destroyed;
+  }
+
   return { start, stop, getStatus, request };
 }
 
 export function isAllowedOrigin(origin: string | undefined, allowedOrigins: Set<string>): boolean {
   if (!origin) return true;
   return allowedOrigins.has(origin);
+}
+
+function stoppedStatus(host: string, port: number): BridgeStatus {
+  return { running: false, mode: "stopped", host, port, clients: [] };
+}
+
+function incompatibleStatus(host: string, port: number, reason: string): BridgeStatus {
+  return {
+    running: true,
+    mode: "incompatible",
+    host,
+    port,
+    clients: [],
+    controllerCount: 0,
+    activeTabId: `Existing bridge does not support shared Pi sessions yet: ${reason}`,
+  };
+}
+
+function coerceStatus(value: unknown): BridgeStatus {
+  const object = objectValue(value);
+  if (!object) return stoppedStatus(DEFAULT_HOST, DEFAULT_PORT);
+  return {
+    running: object.running === true,
+    mode: object.mode === "owner" || object.mode === "attached" ? "attached" : "stopped",
+    host: stringValue(object.host) ?? DEFAULT_HOST,
+    port: numberValue(object.port) ?? DEFAULT_PORT,
+    activeTabId: stringValue(object.activeTabId),
+    controllerCount: numberValue(object.controllerCount),
+    clients: Array.isArray(object.clients) ? (object.clients as BridgeStatus["clients"]) : [],
+  };
+}
+
+async function waitForControllerHandshake(socket: Socket, host: string, port: number): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    socket.once("connect", resolve);
+    socket.once("error", reject);
+  });
+
+  const response = new Promise<void>((resolve, reject) => {
+    let buffered = "";
+    const timeout = setTimeout(() => reject(new Error("Timed out connecting to existing Excalidraw bridge.")), 3_000);
+    const onData = (chunk: Buffer) => {
+      buffered += chunk.toString("utf8");
+      if (!buffered.includes("\r\n\r\n")) return;
+      socket.off("data", onData);
+      clearTimeout(timeout);
+      if (buffered.startsWith("HTTP/1.1 101")) resolve();
+      else reject(new Error(`Existing Excalidraw bridge rejected controller connection: ${buffered}`));
+    };
+    socket.on("data", onData);
+    socket.once("error", reject);
+  });
+
+  const key = randomBytes(16).toString("base64");
+  socket.write(
+    [
+      "GET / HTTP/1.1",
+      `Host: ${host}:${port}`,
+      "Upgrade: websocket",
+      "Connection: Upgrade",
+      `Sec-WebSocket-Key: ${key}`,
+      "Sec-WebSocket-Version: 13",
+      "",
+      "",
+    ].join("\r\n"),
+  );
+  await response;
+}
+
+function isAddressInUseError(error: unknown): boolean {
+  return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "EADDRINUSE";
 }
 
 function readFrame(buffer: Buffer): { fin: boolean; opcode: number; payload: Buffer; consumed: number } | undefined {
@@ -377,22 +719,46 @@ function readFrame(buffer: Buffer): { fin: boolean; opcode: number; payload: Buf
 }
 
 function sendFrame(socket: Socket, text: string): void {
+  socket.write(encodeFrame(text, false));
+}
+
+function sendMaskedFrame(socket: Socket, text: string): void {
+  socket.write(encodeFrame(text, true));
+}
+
+function encodeFrame(text: string, masked: boolean): Buffer {
   const payload = Buffer.from(text, "utf8");
-  let header: Buffer;
+  const lengthBytes = payload.length < 126 ? 0 : payload.length < 65_536 ? 2 : 8;
+  const maskBytes = masked ? 4 : 0;
+  const header = Buffer.alloc(2 + lengthBytes + maskBytes);
+  header[0] = 0x81;
+  let offset = 2;
+
   if (payload.length < 126) {
-    header = Buffer.from([0x81, payload.length]);
+    header[1] = (masked ? 0x80 : 0) | payload.length;
   } else if (payload.length < 65_536) {
-    header = Buffer.alloc(4);
-    header[0] = 0x81;
-    header[1] = 126;
-    header.writeUInt16BE(payload.length, 2);
+    header[1] = (masked ? 0x80 : 0) | 126;
+    header.writeUInt16BE(payload.length, offset);
+    offset += 2;
   } else {
-    header = Buffer.alloc(10);
-    header[0] = 0x81;
-    header[1] = 127;
-    header.writeBigUInt64BE(BigInt(payload.length), 2);
+    header[1] = (masked ? 0x80 : 0) | 127;
+    header.writeBigUInt64BE(BigInt(payload.length), offset);
+    offset += 8;
   }
-  socket.write(Buffer.concat([header, payload]));
+
+  if (!masked) return Buffer.concat([header, payload]);
+
+  const mask = randomBytes(4);
+  mask.copy(header, offset);
+  const maskedPayload = Buffer.from(payload);
+  for (let index = 0; index < maskedPayload.length; index += 1) {
+    maskedPayload[index] ^= mask[index % 4];
+  }
+  return Buffer.concat([header, maskedPayload]);
+}
+
+function objectValue(value: unknown): JsonObject | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : undefined;
 }
 
 function stringValue(value: unknown): string | undefined {

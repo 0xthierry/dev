@@ -28,6 +28,7 @@ describe("createExcalidrawBridgeServer", () => {
 
     // Assert
     expect(status.running).toBe(true);
+    expect(status.mode).toBe("owner");
     expect(status.host).toBe("127.0.0.1");
     expect(status.port).toBe(port);
     expect(status.clients).toEqual([]);
@@ -46,6 +47,7 @@ describe("createExcalidrawBridgeServer", () => {
 
     // Assert
     expect(status.running).toBe(false);
+    expect(status.mode).toBe("stopped");
     expect(status.clients).toEqual([]);
   });
 

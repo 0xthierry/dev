@@ -126,6 +126,7 @@ function createFakeBridge(options: FakeBridgeOptions = {}): ExcalidrawBridge {
     stop: mock(async () => undefined),
     getStatus: mock(() => ({
       running: true,
+      mode: "owner" as const,
       host: "127.0.0.1",
       port: 19275,
       activeTabId: "tab-1",

@@ -12,8 +12,15 @@ export function summarizeStatus(status: JsonObject): string {
   const running = status.running === true ? "running" : "stopped";
   const clients = Array.isArray(status.clients) ? status.clients : [];
   const activeTabId = typeof status.activeTabId === "string" ? status.activeTabId : "none";
+  const mode = stringValue(status.mode);
+  const controllerCount = numberValue(status.controllerCount);
   const lines = [
     `Excalidraw bridge is ${running}.`,
+    ...(mode ? [`Bridge mode: ${mode}.`] : []),
+    ...(mode === "incompatible"
+      ? ["Existing bridge owner must be reloaded or restarted before this Pi session can share Excalidraw."]
+      : []),
+    ...(controllerCount !== undefined ? [`Attached Pi sessions: ${controllerCount}.`] : []),
     `Connected tabs: ${clients.length}.`,
     `Active tab: ${activeTabId}.`,
   ];

@@ -43,12 +43,11 @@ export function registerExcalidrawSession(pi: ExtensionAPI, runtime: ExcalidrawR
     },
   });
 
-  pi.on("session_start", async (_event, ctx: ExtensionContext) => {
+  pi.on("session_start", async (_event, _ctx: ExtensionContext) => {
     try {
       await runtime.bridge.start();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (ctx.hasUI) ctx.ui.notify(`Excalidraw bridge failed to start: ${message}`, "warning");
+    } catch {
+      // Keep startup quiet. /excalidraw status and excalidraw_canvas surface actionable bridge errors.
     }
   });
 

@@ -2,7 +2,7 @@
 
 Always-on Pi bridge for Thierry's local Excalidraw instance.
 
-The extension starts a local WebSocket bridge on `127.0.0.1:19275` and exposes one model tool, `excalidraw_canvas`, for the currently focused `http://excalidraw.localhost/` / `http://exacalidraw.localhost/` browser tab.
+The extension starts or attaches to a shared local WebSocket bridge on `127.0.0.1:19275` and exposes one model tool, `excalidraw_canvas`, for the currently focused `http://excalidraw.localhost/` / `http://exacalidraw.localhost/` browser tab. Multiple Pi sessions can share the same bridge: one session owns the port, and later sessions attach as controllers instead of failing with `EADDRINUSE`.
 
 ## Command
 
