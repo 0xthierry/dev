@@ -10,7 +10,7 @@ const DEFAULT_STOCK_TTL_MS = 5 * 60_000;
 const DEFAULT_STOCK_TIMEOUT_MS = 2_000;
 const DEFAULT_STOCK_SYMBOL = "N2ET34.SA";
 const DEFAULT_STOCK_LABEL = "NET";
-const DEFAULT_STOCK_MAX_PRICE: number | null = null;
+const DEFAULT_STOCK_MAX_PRICE: number | null = 55;
 
 export function readStatuslineConfig(env: NodeJS.ProcessEnv = process.env): StatuslineConfig {
   const stockSymbol = env.PI_STATUSLINE_STOCK_SYMBOL;

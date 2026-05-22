@@ -157,8 +157,8 @@ if (cwd) {
 // Cost
 parts.push(green(formatCost(data.cost?.total_cost_usd)));
 
-// Cloudflare BDR (N2ET34) — only show when price drops below R$50
-if (bdrPrice != null && bdrPrice < 50) {
+// Cloudflare BDR (N2ET34) — only show when price drops below R$55
+if (bdrPrice != null && bdrPrice < 55) {
   parts.push(yellow(`NET R$${bdrPrice.toFixed(2)}`));
 }
 
