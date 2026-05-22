@@ -17,7 +17,8 @@
       "./codex-fast-mode",
       "./nested-agents",
       "./project-rules",
-      "./lsp"
+      "./lsp",
+      "./excalidraw-session"
     ]
   },
   "dependencies": {

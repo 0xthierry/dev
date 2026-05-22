@@ -51,6 +51,7 @@ pi install ./configs/agents/pi/extensions/codex-fast-mode
 pi install ./configs/agents/pi/extensions/nested-agents
 pi install ./configs/agents/pi/extensions/project-rules
 pi install ./configs/agents/pi/extensions/lsp
+pi install ./configs/agents/pi/extensions/excalidraw-session
 ```
 
 The GitHub/repository-root package installs all extensions declared in the root `package.json`. To install only one extension, clone the repo and use one of the local per-extension install commands above, or install the bundle and use `pi config` to disable resources you do not want.
@@ -72,6 +73,7 @@ For day-to-day use on Thierry's machines, `configs/agents/install.sh` symlinks t
 - [`nested-agents`](./nested-agents/README.md) — dynamically loads nested `AGENTS.md` / `CLAUDE.md` files when the agent touches files under those directories.
 - [`project-rules`](./project-rules/README.md) — loads `.pi/rules`, `.agents/rules`, and `.claude/rules` with cache-friendly activation.
 - [`lsp`](./lsp/README.md) — exposes configured Language Server Protocol diagnostics and source fixes to Pi tools.
+- [`excalidraw-session`](./excalidraw-session/README.md) — exposes an always-on local Excalidraw bridge tool for the focused browser canvas.
 
 ## Dependencies
 
