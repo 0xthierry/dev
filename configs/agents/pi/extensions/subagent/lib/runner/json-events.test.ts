@@ -77,6 +77,19 @@ describe("applyChildJsonEvent", () => {
     expect(state.activity).toEqual([{ kind: "assistant", status: "running", text: "Partial agent output" }]);
   });
 
+  test("marks the child run complete from agent_end events", () => {
+    // Arrange
+    const state = createChildAgentEventState();
+    const event = { type: "agent_end", messages: [] };
+
+    // Act
+    const parsed = applyChildJsonEvent(state, JSON.stringify(event));
+
+    // Assert
+    expect(parsed).toBe(true);
+    expect(state.agentEnded).toBe(true);
+  });
+
   test("captures child tool execution activity", () => {
     // Arrange
     const state = createChildAgentEventState();

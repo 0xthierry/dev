@@ -36,6 +36,7 @@ export interface ChildAgentEventState {
   usage: AgentUsageStats;
   activity: AgentActivityItem[];
   currentAssistantText: string;
+  agentEnded: boolean;
   sessionId?: string;
   model?: string;
   stopReason?: string;
@@ -48,6 +49,7 @@ export function createChildAgentEventState(): ChildAgentEventState {
     usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, totalTokens: 0, turns: 0 },
     activity: [],
     currentAssistantText: "",
+    agentEnded: false,
   };
 }
 
@@ -77,6 +79,8 @@ export function applyChildJsonEvent(state: ChildAgentEventState, line: string): 
       return applyToolExecutionUpdate(state, record);
     case "tool_execution_end":
       return applyToolExecutionEnd(state, record);
+    case "agent_end":
+      return applyAgentEnd(state);
     default:
       return false;
   }
@@ -86,6 +90,12 @@ function applySessionHeader(state: ChildAgentEventState, record: Record<string, 
   const sessionId = stringValue(record.id);
   if (!sessionId || state.sessionId === sessionId) return false;
   state.sessionId = sessionId;
+  return true;
+}
+
+function applyAgentEnd(state: ChildAgentEventState): boolean {
+  if (state.agentEnded) return false;
+  state.agentEnded = true;
   return true;
 }
 

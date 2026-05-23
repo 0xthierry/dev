@@ -14,6 +14,8 @@ import { type AgentRunResult, buildAgentRunResult } from "./run-result";
 
 export type AgentProgressCallback = (result: AgentRunResult) => void;
 
+const CHILD_COMPLETION_EXIT_GRACE_MS = 250;
+
 export async function runChildPiAgent(
   request: AgentRunRequest,
   signal: AbortSignal | undefined,
@@ -60,9 +62,18 @@ export async function runChildPiAgent(
         stdio: ["ignore", "pipe", "pipe"],
       });
       let closed = false;
+      let completionExitTimer: ReturnType<typeof setTimeout> | undefined;
 
       const emitProgress = () => {
         onProgress?.(buildAgentRunResult(request, state, -1, stderr));
+      };
+
+      const requestCompletionExit = () => {
+        if (closed || completionExitTimer) return;
+        completionExitTimer = setTimeout(() => {
+          if (!closed) child.kill("SIGTERM");
+        }, CHILD_COMPLETION_EXIT_GRACE_MS);
+        completionExitTimer.unref();
       };
 
       const abortChild = () => {
@@ -77,21 +88,25 @@ export async function runChildPiAgent(
       const finalize = (exitCode: number) => {
         if (closed) return;
         closed = true;
+        if (completionExitTimer) clearTimeout(completionExitTimer);
         signal?.removeEventListener("abort", abortChild);
         resolveExit(exitCode);
+      };
+
+      const processStdoutLine = (line: string) => {
+        if (line.trim()) {
+          jsonlLines.push(line);
+          queueJsonlArtifactLine(line);
+        }
+        if (applyChildJsonEvent(state, line)) emitProgress();
+        if (state.agentEnded) requestCompletionExit();
       };
 
       child.stdout.on("data", (chunk) => {
         stdoutBuffer += String(chunk);
         const lines = stdoutBuffer.split("\n");
         stdoutBuffer = lines.pop() ?? "";
-        for (const line of lines) {
-          if (line.trim()) {
-            jsonlLines.push(line);
-            queueJsonlArtifactLine(line);
-          }
-          if (applyChildJsonEvent(state, line)) emitProgress();
-        }
+        for (const line of lines) processStdoutLine(line);
       });
 
       child.stderr.on("data", (chunk) => {
@@ -104,11 +119,7 @@ export async function runChildPiAgent(
       });
 
       child.once("close", (code) => {
-        if (stdoutBuffer.trim()) {
-          jsonlLines.push(stdoutBuffer);
-          queueJsonlArtifactLine(stdoutBuffer);
-          applyChildJsonEvent(state, stdoutBuffer);
-        }
+        if (stdoutBuffer.trim()) processStdoutLine(stdoutBuffer);
         finalize(code ?? 0);
       });
 

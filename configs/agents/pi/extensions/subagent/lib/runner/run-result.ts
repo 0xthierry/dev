@@ -70,9 +70,12 @@ export function buildAgentRunResult(
 }
 
 function inferRunStatus(state: ChildAgentEventState, exitCode: number): AgentRunStatus {
-  if (exitCode === -1) return "running";
+  if (exitCode === -1 && !state.agentEnded) return "running";
   if (state.finalOutput.trim()) return "succeeded";
   if (exitCode === 0 && state.stopReason !== "error" && state.stopReason !== "aborted" && !state.errorMessage) {
+    return "succeeded";
+  }
+  if (state.agentEnded && state.stopReason !== "error" && state.stopReason !== "aborted" && !state.errorMessage) {
     return "succeeded";
   }
   return "failed";

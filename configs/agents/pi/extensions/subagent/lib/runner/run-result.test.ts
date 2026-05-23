@@ -58,6 +58,35 @@ describe("buildAgentRunResult", () => {
     expect(result.activity).toEqual([]);
   });
 
+  test("keeps a child process running until agent_end arrives", () => {
+    // Arrange
+    const state = createChildAgentEventState();
+    state.finalOutput = "Assistant text before tool completion.";
+    const request = runRequest("reviewer", "Review diff");
+
+    // Act
+    const result = buildAgentRunResult(request, state, -1, "");
+
+    // Assert
+    expect(result.status).toBe("running");
+    expect(result.ok).toBe(false);
+  });
+
+  test("treats agent_end as completion even before the child process exits", () => {
+    // Arrange
+    const state = createChildAgentEventState();
+    state.finalOutput = "Agent completed.";
+    state.agentEnded = true;
+    const request = runRequest("reviewer", "Review diff");
+
+    // Act
+    const result = buildAgentRunResult(request, state, -1, "");
+
+    // Assert
+    expect(result.status).toBe("succeeded");
+    expect(result.ok).toBe(true);
+  });
+
   test("uses the requested resume session id and file when the child header is unavailable", () => {
     // Arrange
     const state = createChildAgentEventState();
