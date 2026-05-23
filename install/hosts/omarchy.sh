@@ -8,7 +8,6 @@ HOST_ENV_VARS=(
 # shellcheck disable=SC2034
 HOST_CONFIG_TARGETS=(
   nvim
-  zellij
   hypr
   ghostty
   agents

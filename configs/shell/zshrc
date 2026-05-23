@@ -102,11 +102,6 @@ claude() {
   command claude --append-system-prompt-file ~/.agents/developer-instructions.txt "$@"
 }
 
-alias zj='zellij'
-alias zl='zellij list-sessions'
-alias za='zellij attach'
-alias zk='zellij kill-session'
-alias zka='zellij kill-all-sessions'
 alias dstop='docker ps -q | xargs -r docker stop'
 
 mkcd() {

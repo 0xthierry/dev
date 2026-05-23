@@ -26,7 +26,6 @@ HOST_WORK_DIRS=(
 # shellcheck disable=SC2034
 HOST_CONFIG_TARGETS=(
   nvim
-  zellij
   agents
 )
 

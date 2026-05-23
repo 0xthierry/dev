@@ -101,9 +101,6 @@ apply_host_configs() {
       nvim)
         apply_nvim
         ;;
-      zellij)
-        apply_zellij
-        ;;
       hypr)
         apply_hypr
         ;;

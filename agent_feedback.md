@@ -18,3 +18,18 @@ shellcheck failed to load libHSregex-tdfa-1.3.2.5-3MyqFr9qg202qBHzsOweGn-ghc9.6.
 Suggested fix:
 Repair or reinstall shellcheck in the development environment, or make the hook detect unavailable shellcheck and print setup instructions.
 
+## 2026-05-23 13:01 — verification_blocker
+
+Summary: Local cleanup/validation hit machine-environment blockers
+
+Impact: The requested package removal could not be completed noninteractively because pacman removal requires sudo password entry; the prescribed shellcheck validation also could not run because the installed shellcheck binary is missing a shared library.
+
+Attempted:
+Ran a noninteractive pacman removal command and shellcheck setup.sh install/*.sh install/hosts/*.sh after repo edits.
+
+Blocker:
+sudo requires a password in the agent session; shellcheck exits with a missing libHSregex-tdfa shared-library error.
+
+Suggested fix:
+Document privileged cleanup commands for the human to run, and repair/reinstall shellcheck on this host so setup validation works.
+

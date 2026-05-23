@@ -26,7 +26,6 @@ The two layers don't validate each other. **Most recurring bug:** config deploye
 | Source | Deployed To | Method |
 |---|---|---|
 | `configs/nvim/` | `~/.config/nvim` | symlink |
-| `configs/zellij/` | `~/.config/zellij` | symlink |
 | `configs/hypr/` | `~/.config/hypr` | symlink (omarchy only) |
 | `configs/shell/` | sourced via `~/.zshrc` / `~/.zshenv` | written by `install/shell.sh` |
 | `configs/agents/` | `~/.agents/`, `~/.claude/`, `~/.codex/`, `~/.pi/agent/` | special installer |

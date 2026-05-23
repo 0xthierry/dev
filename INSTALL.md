@@ -38,14 +38,14 @@ Use `--dry-run` first when changing the setup flow or validating a host:
 
 - Linux desktop setup
 - Installs the shared CLI layer through `pacman`
-- Applies `nvim`, `zellij`, `hypr`, and `agents`
+- Applies `nvim`, `hypr`, and `agents`
 
 ### `macbook`
 
 - macOS setup
 - Installs the shared CLI layer through Homebrew
 - Uses OrbStack as the container engine and installs the `docker` CLI through Homebrew
-- Applies `nvim`, `zellij`, and `agents`
+- Applies `nvim` and `agents`
 
 ## What Setup Applies
 
@@ -77,7 +77,6 @@ For repo-owned config deployment, verify the symlink targets after a real setup:
 
 ```bash
 ls -la ~/.config/nvim
-ls -la ~/.config/zellij
 ls -la ~/.config/hypr
 ls -la ~/.config/zsh
 ```
