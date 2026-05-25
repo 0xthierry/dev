@@ -35,3 +35,5 @@ keybind = ctrl+shift+alt+l=goto_split:right
 mouse-scroll-multiplier = 0.95
 
 async-backend = epoll
+
+clipboard-paste-protection = false
