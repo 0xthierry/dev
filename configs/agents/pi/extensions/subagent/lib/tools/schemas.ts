@@ -1,10 +1,16 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import { type Static, Type } from "typebox";
+import { PI_THINKING_LEVELS } from "../thinking";
 
 export const AgentContextSchema = StringEnum(["fresh", "fork"] as const, {
   description:
     'Context mode for new child sessions. "fresh" starts an isolated saved child session. "fork" inherits the current Pi session when a saved parent session is available.',
   default: "fresh",
+});
+
+export const AgentEffortSchema = StringEnum(PI_THINKING_LEVELS, {
+  description:
+    "Thinking/effort level for this child run. Overrides the subagent definition effort and the parent session's current thinking level.",
 });
 
 export const AgentTaskSchema = Type.Object({
@@ -13,6 +19,7 @@ export const AgentTaskSchema = Type.Object({
   description: Type.Optional(Type.String({ description: "Short human-readable task summary." })),
   prompt: Type.String({ description: "Task prompt for the subagent." }),
   context: Type.Optional(AgentContextSchema),
+  effort: Type.Optional(AgentEffortSchema),
 });
 
 export const AgentParamsSchema = Type.Object({
@@ -25,6 +32,7 @@ export const AgentParamsSchema = Type.Object({
   description: Type.Optional(Type.String({ description: "Short human-readable task summary for single-agent mode." })),
   prompt: Type.Optional(Type.String({ description: "Task prompt for single-agent mode." })),
   context: Type.Optional(AgentContextSchema),
+  effort: Type.Optional(AgentEffortSchema),
   tasks: Type.Optional(Type.Array(AgentTaskSchema, { description: "Independent subagent tasks to run in parallel." })),
 });
 

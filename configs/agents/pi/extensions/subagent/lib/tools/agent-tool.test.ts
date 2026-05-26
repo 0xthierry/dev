@@ -91,6 +91,31 @@ describe("executeAgentTool", () => {
     expect(result.details?.results[0].thinking).toBe("high");
   });
 
+  test("uses tool call effort before agent frontmatter effort", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const reviewer = agent("reviewer", "xhigh");
+    const runtime = fakeRuntime([reviewer]);
+
+    // Act
+    const result = await executeAgentTool(
+      fakePi.pi,
+      runtime,
+      { subagent_type: "reviewer", prompt: "Review this diff", effort: "low" },
+      undefined,
+      undefined,
+      fakePi.createContext() as unknown as ExtensionContext,
+    );
+
+    // Assert
+    expect(runtime.runAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: reviewer, thinking: "low" }),
+      undefined,
+      expect.any(Function),
+    );
+    expect(result.details?.results[0].thinking).toBe("low");
+  });
+
   test("resumes a prior child agent session by agent_id", async () => {
     // Arrange
     const fakePi = createFakePi();

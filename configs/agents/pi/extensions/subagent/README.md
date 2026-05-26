@@ -32,7 +32,7 @@ effort: medium
 Agent system prompt goes here.
 ```
 
-Optional `effort` frontmatter sets the child Pi thinking level for that agent. Supported values are `off`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Agents without `effort` inherit the parent session's current thinking level. Built-in agents have pinned effort values listed above.
+Optional `effort` frontmatter sets the default child Pi thinking level for that agent. Supported values are `off`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Agents without `effort` inherit the parent session's current thinking level. Built-in agents have pinned effort values listed above. A tool call can pass `effort` to override both the agent definition and parent thinking level for that run.
 
 The child `pi` process loads Pi context files and skills through normal Pi discovery. A stable child-boundary prompt is prepended before the agent body so child sessions know the parent owns orchestration and that they must not run more subagents.
 
@@ -44,6 +44,7 @@ Single task:
 {
   "subagent_type": "explorer",
   "description": "Find auth files",
+  "effort": "low",
   "prompt": "Find the files that implement login and session validation."
 }
 ```
@@ -53,6 +54,7 @@ Resume a previous child session using the `agent_id` returned by an earlier agen
 ```json
 {
   "agent_id": "019e1882-8bc8-767c-a1e6-d7c9ebd3a574",
+  "effort": "medium",
   "prompt": "Continue that review and now inspect authorization logic."
 }
 ```
@@ -61,14 +63,15 @@ Parallel independent tasks:
 
 ```json
 {
+  "effort": "medium",
   "tasks": [
-    { "subagent_type": "explorer", "prompt": "Find auth files." },
+    { "subagent_type": "explorer", "effort": "low", "prompt": "Find auth files." },
     { "subagent_type": "web-search", "prompt": "Find current official docs for the auth provider." }
   ]
 }
 ```
 
-Prompt children with a compact contract: goal, context/evidence, success criteria, hard constraints, validation, expected output, and stop rules. Use parallel tasks only for independent work; do not hand off urgent blocking work when the parent session's next step depends on it.
+Prompt children with a compact contract: goal, context/evidence, success criteria, hard constraints, validation, expected output, and stop rules. Use parallel tasks only for independent work; do not hand off urgent blocking work when the parent session's next step depends on it. In parallel mode, top-level `effort` is the default for tasks that omit `effort`; a task-level value overrides it.
 
 Context modes:
 

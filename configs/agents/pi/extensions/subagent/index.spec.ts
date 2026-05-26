@@ -74,7 +74,11 @@ describe("subagent extension E2E", () => {
           {
             id: "subagent-e2e-call",
             name: "agent",
-            arguments: { subagent_type: "echo-agent", prompt: "Return the deterministic child response." },
+            arguments: {
+              subagent_type: "echo-agent",
+              prompt: "Return the deterministic child response.",
+              effort: "low",
+            },
           },
         ]),
         [CHILD_NO_EXTENSIONS_ENV]: "1",
@@ -92,6 +96,7 @@ describe("subagent extension E2E", () => {
     expect(response.success).toBe(true);
     expect(JSON.stringify(toolEnd)).toContain(childResponse);
     expect(JSON.stringify(toolEnd)).toContain("echo-agent");
+    expect(JSON.stringify(toolEnd)).toContain('"thinking":"low"');
     expect(JSON.stringify(agentEnd)).toContain(childResponse);
     const projectDirs = await readdir(join(piAgentDir, "agent-sessions"));
     expect(projectDirs.length).toBe(1);

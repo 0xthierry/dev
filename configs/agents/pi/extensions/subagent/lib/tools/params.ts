@@ -1,3 +1,4 @@
+import { type PiThinkingLevel, parsePiThinkingLevel } from "../thinking";
 import type { AgentContextMode, AgentParams, AgentTaskInput } from "./schemas";
 
 export type PlannedAgentTask = PlannedStartAgentTask | PlannedResumeAgentTask;
@@ -8,6 +9,7 @@ export interface PlannedStartAgentTask {
   description?: string;
   prompt: string;
   context: AgentContextMode;
+  effort?: PiThinkingLevel;
 }
 
 export interface PlannedResumeAgentTask {
@@ -17,6 +19,7 @@ export interface PlannedResumeAgentTask {
   description?: string;
   prompt: string;
   context: "resume";
+  effort?: PiThinkingLevel;
 }
 
 export type AgentExecutionPlan =
@@ -61,8 +64,10 @@ function readSingleTask(params: AgentParams): PlannedAgentTask | undefined {
       description: params.description,
       prompt: params.prompt as string,
       context: params.context,
+      effort: params.effort,
     },
     params.context,
+    params.effort,
   );
 }
 
@@ -71,14 +76,18 @@ function readParallelTasks(params: AgentParams): PlannedAgentTask[] | undefined 
 
   const tasks: PlannedAgentTask[] = [];
   for (const task of params.tasks) {
-    const normalized = normalizeTask(task, params.context);
+    const normalized = normalizeTask(task, params.context, params.effort);
     if (!normalized) return undefined;
     tasks.push(normalized);
   }
   return tasks;
 }
 
-function normalizeTask(task: AgentTaskInput, defaultContext?: AgentContextMode): PlannedAgentTask | undefined {
+function normalizeTask(
+  task: AgentTaskInput,
+  defaultContext?: AgentContextMode,
+  defaultEffort?: unknown,
+): PlannedAgentTask | undefined {
   if (!task || typeof task !== "object") return undefined;
 
   const value = task as Record<string, unknown>;
@@ -90,6 +99,10 @@ function normalizeTask(task: AgentTaskInput, defaultContext?: AgentContextMode):
   if (!prompt || (!subagentType && !agentId)) return undefined;
 
   const description = typeof value.description === "string" ? value.description.trim() || undefined : undefined;
+  const effortValue = value.effort ?? defaultEffort;
+  const effort = parsePiThinkingLevel(effortValue);
+  if (effortValue !== undefined && !effort) return undefined;
+
   if (agentId) {
     return {
       kind: "resume",
@@ -98,6 +111,7 @@ function normalizeTask(task: AgentTaskInput, defaultContext?: AgentContextMode):
       description,
       prompt,
       context: "resume",
+      ...(effort ? { effort } : {}),
     };
   }
 
@@ -110,5 +124,6 @@ function normalizeTask(task: AgentTaskInput, defaultContext?: AgentContextMode):
     description,
     prompt,
     context,
+    ...(effort ? { effort } : {}),
   };
 }

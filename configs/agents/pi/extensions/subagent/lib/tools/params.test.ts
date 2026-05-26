@@ -4,7 +4,12 @@ import { MAX_PARALLEL_AGENT_TASKS, planAgentInvocation } from "./params";
 describe("planAgentInvocation", () => {
   test("plans a single agent invocation", () => {
     // Arrange
-    const params = { subagent_type: " reviewer ", prompt: " Review diff ", description: " Review " };
+    const params = {
+      subagent_type: " reviewer ",
+      prompt: " Review diff ",
+      description: " Review ",
+      effort: "high" as const,
+    };
 
     // Act
     const result = planAgentInvocation(params);
@@ -15,19 +20,27 @@ describe("planAgentInvocation", () => {
       plan: {
         mode: "single",
         tasks: [
-          { kind: "start", subagentType: "reviewer", prompt: "Review diff", description: "Review", context: "fresh" },
+          {
+            kind: "start",
+            subagentType: "reviewer",
+            prompt: "Review diff",
+            description: "Review",
+            context: "fresh",
+            effort: "high",
+          },
         ],
       },
     });
   });
 
-  test("plans parallel agent tasks with a top-level context default", () => {
+  test("plans parallel agent tasks with top-level defaults", () => {
     // Arrange
     const params = {
       context: "fork" as const,
+      effort: "low" as const,
       tasks: [
         { subagent_type: "locator", prompt: "Find auth files" },
-        { subagent_type: "reviewer", prompt: "Review auth", context: "fresh" as const },
+        { subagent_type: "reviewer", prompt: "Review auth", context: "fresh" as const, effort: "high" as const },
       ],
     };
 
@@ -46,8 +59,16 @@ describe("planAgentInvocation", () => {
             prompt: "Find auth files",
             description: undefined,
             context: "fork",
+            effort: "low",
           },
-          { kind: "start", subagentType: "reviewer", prompt: "Review auth", description: undefined, context: "fresh" },
+          {
+            kind: "start",
+            subagentType: "reviewer",
+            prompt: "Review auth",
+            description: undefined,
+            context: "fresh",
+            effort: "high",
+          },
         ],
       },
     });
@@ -55,7 +76,12 @@ describe("planAgentInvocation", () => {
 
   test("plans a resume invocation", () => {
     // Arrange
-    const params = { agent_id: " 019e1882 ", prompt: " Continue review ", subagent_type: "reviewer" };
+    const params = {
+      agent_id: " 019e1882 ",
+      prompt: " Continue review ",
+      subagent_type: "reviewer",
+      effort: "minimal" as const,
+    };
 
     // Act
     const result = planAgentInvocation(params);
@@ -73,6 +99,7 @@ describe("planAgentInvocation", () => {
             prompt: "Continue review",
             description: undefined,
             context: "resume",
+            effort: "minimal",
           },
         ],
       },

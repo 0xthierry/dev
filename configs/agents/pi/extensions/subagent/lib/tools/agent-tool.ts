@@ -40,7 +40,7 @@ export function registerAgentTool(pi: ExtensionAPI, runtime: SubagentRuntime): v
       "Spawn or resume a subagent for a well-scoped task.",
       "Use subagent_type + prompt to start one task, agent_id + prompt to resume, or tasks[] for independent parallel tasks.",
       "Configured and built-in agents are listed in the system prompt when available.",
-      "Child agents inherit the current model and thinking level by default unless their agent definition sets effort.",
+      "Child agents inherit the current model and thinking level by default unless the tool call or agent definition sets effort.",
     ].join(" "),
     promptSnippet: "Spawn or resume a focused child subagent for a well-scoped task.",
     promptGuidelines: [
@@ -169,7 +169,7 @@ function resolveStartTask(
       prompt: task.prompt,
       context: task.context,
       agentDefinition,
-      thinking: agentDefinition.effort ?? parentThinking,
+      thinking: task.effort ?? agentDefinition.effort ?? parentThinking,
     },
   };
 }
@@ -240,7 +240,7 @@ function resolveResumeTaskFromRecord(
       prompt: task.prompt,
       context: "resume",
       agentDefinition,
-      thinking: agentDefinition.effort ?? parentThinking,
+      thinking: task.effort ?? agentDefinition.effort ?? parentThinking,
       resumeSessionFile: record.sessionFile,
     },
   };
