@@ -134,7 +134,7 @@ install_ai_clis() {
   log_section "AI Coding CLIs"
 
   # Claude Code (Anthropic) — standalone binary, not npm
-  install_claude_code_binary "2.1.150"
+  install_claude_code_binary "2.1.153"
 
   # Codex (OpenAI)
   install_npm_global_cli "Codex CLI" "@openai/codex" "0.133.0"
