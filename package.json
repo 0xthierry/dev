@@ -20,7 +20,8 @@
       "./configs/agents/pi/extensions/nested-agents",
       "./configs/agents/pi/extensions/project-rules",
       "./configs/agents/pi/extensions/lsp",
-      "./configs/agents/pi/extensions/excalidraw-session"
+      "./configs/agents/pi/extensions/excalidraw-session",
+      "./configs/agents/pi/extensions/dynamic-workflow"
     ],
     "prompts": [
       "./configs/agents/pi/prompts"
@@ -45,6 +46,7 @@
   "dependencies": {
     "@mozilla/readability": "0.6.0",
     "@types/turndown": "5.0.6",
+    "acorn": "8.16.0",
     "impit": "0.13.1",
     "linkedom": "0.18.12",
     "p-limit": "7.3.0",
