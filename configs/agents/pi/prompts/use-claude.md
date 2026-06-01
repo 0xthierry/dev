@@ -23,7 +23,7 @@ This is not "ask Claude to review this prompt" and not "let Claude answer instea
    - any known evidence, files, command output, or uncertainties;
    - what kind of final result the user needs.
 3. Choose a short, descriptive Claude session name using the form `pi-use-claude-<topic>`. Always run Claude with a named session so the discussion can be resumed later.
-4. Run Claude Code non-interactively from the current working directory with **these flags exactly**, plus the chosen `--name`. Use `--effort xhigh` by default; if the user explicitly wants the highest level of intelligence and accepts the extra cost/latency, use `--effort max` instead of `xhigh`.
+4. Run Claude Code non-interactively from the current working directory with **these flags exactly**, plus the chosen `--name`. Use `--effort xhigh` by default; if the user explicitly wants the highest level of intelligence and accepts the extra cost/latency, use `--effort max` instead of `xhigh`. Do not set a timeout by default; if the user chooses to set one, it should be 10 minutes.
 
 ```bash
 CLAUDE_SESSION_NAME="pi-use-claude-<topic>"
