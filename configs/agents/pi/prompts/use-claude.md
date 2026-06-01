@@ -22,7 +22,7 @@ This is not "ask Claude to review this prompt" and not "let Claude answer instea
    - Pi's current draft/plan/answer, if one exists;
    - any known evidence, files, command output, or uncertainties;
    - what kind of final result the user needs.
-3. Run Claude Code non-interactively from the current working directory with **these flags exactly**:
+3. Run Claude Code non-interactively from the current working directory with **these flags exactly**. Use `--effort xhigh` by default; if the user explicitly wants the highest level of intelligence and accepts the extra cost/latency, use `--effort max` instead of `xhigh`.
 
 ```bash
 claude -p --dangerously-skip-permissions --effort xhigh <<'CLAUDE_ADVERSARIAL_REVIEW'
