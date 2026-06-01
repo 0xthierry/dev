@@ -22,10 +22,12 @@ This is not "ask Claude to review this prompt" and not "let Claude answer instea
    - Pi's current draft/plan/answer, if one exists;
    - any known evidence, files, command output, or uncertainties;
    - what kind of final result the user needs.
-3. Run Claude Code non-interactively from the current working directory with **these flags exactly**. Use `--effort xhigh` by default; if the user explicitly wants the highest level of intelligence and accepts the extra cost/latency, use `--effort max` instead of `xhigh`.
+3. Choose a short, descriptive Claude session name using the form `pi-use-claude-<topic>`. Always run Claude with a named session so the discussion can be resumed later.
+4. Run Claude Code non-interactively from the current working directory with **these flags exactly**, plus the chosen `--name`. Use `--effort xhigh` by default; if the user explicitly wants the highest level of intelligence and accepts the extra cost/latency, use `--effort max` instead of `xhigh`.
 
 ```bash
-claude -p --dangerously-skip-permissions --effort xhigh <<'CLAUDE_ADVERSARIAL_REVIEW'
+CLAUDE_SESSION_NAME="pi-use-claude-<topic>"
+claude -p --name "$CLAUDE_SESSION_NAME" --dangerously-skip-permissions --effort xhigh <<'CLAUDE_ADVERSARIAL_REVIEW'
 You are an adversarial collaborator helping another LLM produce a better result for the user.
 
 Do not be a generic reviewer. Do not merely summarize. Your job is to challenge the current direction while remaining cooperative.
@@ -51,8 +53,15 @@ Packet:
 CLAUDE_ADVERSARIAL_REVIEW
 ```
 
-4. Read Claude's output skeptically. Do not copy it wholesale. Reconcile disagreements, verify factual or code claims when needed, and decide what survives scrutiny.
-5. Produce the final response to the user as Pi, incorporating Claude's useful challenges. Mention Claude only if useful; otherwise just provide the improved result.
+5. Read Claude's output skeptically. Do not copy it wholesale. Reconcile disagreements, verify factual or code claims when needed, and decide what survives scrutiny.
+6. Produce the final response to the user as Pi, incorporating Claude's useful challenges. Mention Claude only if useful; otherwise just provide the improved result.
+7. If the user may want to continue the Claude-side discussion, tell them the session name and how to resume it:
+
+```bash
+claude --resume "$CLAUDE_SESSION_NAME"
+```
+
+If `--resume` opens a picker instead of resuming directly, use the displayed session name as the search term and select the matching session.
 
 ## Rules
 
