@@ -28,6 +28,16 @@ export const nodeLspSessionFactory: LspSessionFactory = {
   },
 };
 
+export class LspResponseError extends Error {
+  constructor(
+    readonly code: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "LspResponseError";
+  }
+}
+
 export class LspClient implements LspSession {
   #child?: ChildProcessWithoutNullStreams;
   #buffer = Buffer.alloc(0);
@@ -305,7 +315,9 @@ export class LspClient implements LspSession {
       clearTimeout(pending.timeout);
       this.#pending.delete(message.id as number);
       if (message.error) {
-        pending.reject(new Error(`${this.adapter.name} LSP error: ${message.error.message}`));
+        pending.reject(
+          new LspResponseError(message.error.code, `${this.adapter.name} LSP error: ${message.error.message}`),
+        );
       } else {
         pending.resolve(message);
       }
@@ -405,8 +417,12 @@ export class LspClient implements LspSession {
   }
 }
 
-function isUnsupportedMethodError(error: unknown): boolean {
-  return error instanceof Error && /method not found|not supported|unsupported/i.test(error.message);
+export function isUnsupportedMethodError(error: unknown): boolean {
+  if (error instanceof LspResponseError && error.code === -32601) return true;
+  return (
+    error instanceof Error &&
+    /method not found|not supported|does not support|unsupported|unhandled method/i.test(error.message)
+  );
 }
 
 function formatErrorMessage(error: unknown): string {
