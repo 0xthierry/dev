@@ -32,7 +32,7 @@ HOST_BREW_CASKS=(
   discord
   figma
   ghostty
-  linear-linear
+  linear
   obs
   obsidian
   orbstack
@@ -42,7 +42,7 @@ HOST_BREW_CASKS=(
   signal
   spotify
   steam
-  tailscale
+  tailscale-app
   telegram
   zed
 )
