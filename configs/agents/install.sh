@@ -332,6 +332,20 @@ copy_agent_entries_stripped() {
   done < <(find "$SOURCE_AGENTS_DIR" -mindepth 1 -maxdepth 1 \( -type f -o -type d -o -type l \) -print0)
 }
 
+prune_broken_skill_links() {
+  local target_skills_dir="$1"
+  local entry=""
+
+  [[ -d "$target_skills_dir" ]] || return 0
+
+  while IFS= read -r -d '' entry; do
+    if [[ ! -e "$entry" ]]; then
+      run_cmd rm -f -- "$entry"
+      log "pruned stale: skill $(basename "$entry")"
+    fi
+  done < <(find "$target_skills_dir" -mindepth 1 -maxdepth 1 -type l -print0)
+}
+
 force_link_skill_entries() {
   local target_root="$1"
   local target_skills_dir="$target_root/skills"
@@ -346,6 +360,8 @@ force_link_skill_entries() {
     target_path="$target_skills_dir/$name"
     force_link_path "$source_path" "$target_path" "skill $name"
   done < <(find "$SOURCE_SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*' -print0)
+
+  prune_broken_skill_links "$target_skills_dir"
 }
 
 force_link_pi_skill_entries() {
@@ -362,6 +378,8 @@ force_link_pi_skill_entries() {
     target_path="$target_skills_dir/$name"
     force_link_path_replacing_symlink "$source_path" "$target_path" "pi skill $name"
   done < <(find "$SOURCE_SKILLS_DIR" -mindepth 1 -maxdepth 1 \( -type f -o -type d -o -type l \) ! -name '.*' -print0)
+
+  prune_broken_skill_links "$target_skills_dir"
 }
 
 install_target() {
@@ -508,8 +526,8 @@ install_claude_target() {
     force_link_path "$SOURCE_HOOKS_DIR" "$target_root/hooks" "claude hooks"
   fi
   # Symlink bin directory (indexer)
-  if [[ -d "$SOURCE_HOOKS_DIR/bin" ]]; then
-    force_link_path "$SOURCE_HOOKS_DIR/bin" "$target_root/bin" "claude bin"
+  if [[ -d "$SOURCE_BIN_DIR" ]]; then
+    force_link_path_replacing_symlink "$SOURCE_BIN_DIR" "$target_root/bin" "claude bin"
   fi
   # Sync settings (env, permissions, model, plugins, etc.) + hooks into settings.json
   sync_claude_settings "$SOURCE_CLAUDE_SETTINGS" "$claude_hooks_json" "$target_root/settings.json"
