@@ -76,7 +76,7 @@ COMMON_BREW_FORMULAE=(
   jq
   yq
   sd
-  choose
+  choose-rust
   curl
   wget
   xh
