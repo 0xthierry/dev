@@ -93,6 +93,7 @@ install_common_brew_formulae() {
 install_brew_casks() {
   local -a packages=("$@")
   local -a pending_packages=()
+  local -a failed_casks=()
   local brew_bin=""
   local package=""
 
@@ -113,18 +114,13 @@ install_brew_casks() {
 
   if (( ${DRY_RUN:-0} )); then
     log_item "Installing: ${packages[*]}"
-    run_brew install --cask "${packages[@]}"
+    run_brew install --cask --adopt "${packages[@]}"
     return 0
   fi
 
   brew_bin="$(resolve_brew_bin)"
 
   for package in "${packages[@]}"; do
-    if [[ "$package" == "brave-browser" ]] && [[ -d /Applications/Brave\ Browser.app ]]; then
-      log_item "Already installed: $package (/Applications/Brave Browser.app)"
-      continue
-    fi
-
     if "$brew_bin" list --cask --versions "$package" >/dev/null 2>&1; then
       log_item "Already installed: $package"
       continue
@@ -138,8 +134,29 @@ install_brew_casks() {
     return 0
   fi
 
-  log_item "Installing: ${pending_packages[*]}"
-  run_brew install --cask "${pending_packages[@]}"
+  # Apps already sitting in /Applications were installed manually (drag-and-drop),
+  # so brew won't overwrite them by default. --adopt brings a matching install
+  # under brew management in place; when the manual copy differs from the cask
+  # version, fall back to --force to overwrite and take ownership.
+  for package in "${pending_packages[@]}"; do
+    log_item "Installing/adopting: $package"
+
+    if run_brew install --cask --adopt "$package"; then
+      continue
+    fi
+
+    log_item "Adopt failed for $package; retrying with --force"
+    if run_brew install --cask --force "$package"; then
+      continue
+    fi
+
+    log_item "WARNING: failed to install cask: $package"
+    failed_casks+=("$package")
+  done
+
+  if [[ ${#failed_casks[@]} -gt 0 ]]; then
+    log_item "WARNING: casks needing manual attention: ${failed_casks[*]}"
+  fi
 }
 
 # Run if executed directly
