@@ -104,6 +104,9 @@ apply_host_configs() {
       hypr)
         apply_hypr
         ;;
+      voxtype)
+        apply_voxtype
+        ;;
       ghostty)
         apply_ghostty
         ;;

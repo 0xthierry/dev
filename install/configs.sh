@@ -14,6 +14,28 @@ apply_hypr() {
   safe_link_path "$REPO_ROOT/configs/hypr" "$HOME/.config/hypr" "hypr config"
 }
 
+apply_voxtype() {
+  local config_src="$REPO_ROOT/configs/voxtype/config.toml"
+  local config_dst="$HOME/.config/voxtype/config.toml"
+  local backup_path=""
+
+  ensure_dir "$HOME/.config/voxtype"
+
+  if [[ -f "$config_dst" ]] && cmp -s "$config_src" "$config_dst"; then
+    log_item "voxtype config: already up to date"
+    return 0
+  fi
+
+  if [[ -e "$config_dst" || -L "$config_dst" ]]; then
+    backup_path="$(next_backup_path "$config_dst")"
+    run_cmd mv "$config_dst" "$backup_path"
+    log_item "voxtype config: backed up to $backup_path"
+  fi
+
+  run_cmd cp "$config_src" "$config_dst"
+  log_item "voxtype config: installed"
+}
+
 apply_ghostty() {
   ensure_dir "$HOME/.config/ghostty"
   safe_link_path "$REPO_ROOT/configs/ghostty/config" "$HOME/.config/ghostty/config" "ghostty config"

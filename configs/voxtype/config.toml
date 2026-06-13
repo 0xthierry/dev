@@ -1,0 +1,37 @@
+# Voxtype Configuration
+# Managed by this repo; deployed to ~/.config/voxtype/config.toml on omarchy.
+# Omarchy's Hyprland defaults bind Super+Ctrl+X to `voxtype record toggle`.
+# This config disables Voxtype's evdev hotkey listener and lets Hyprland drive it.
+
+# Required for `voxtype record toggle` and `voxtype status`.
+state_file = "auto"
+
+# Best English accuracy with built-in punctuation/capitalization.
+# Requires an ONNX-enabled Voxtype binary and the Parakeet model to be installed.
+engine = "parakeet"
+
+[hotkey]
+enabled = false
+
+[audio]
+device = "default"
+sample_rate = 16000
+max_duration_secs = 60
+
+[parakeet]
+# Full-precision TDT model: best English accuracy, punctuation, and capitalization.
+# Smaller/faster alternative: "parakeet-tdt-0.6b-v3-int8".
+model = "parakeet-tdt-0.6b-v3"
+model_type = "tdt"
+# Keep loaded for low-latency dictation. Set true if RAM/battery matters more.
+on_demand_loading = false
+
+[output]
+mode = "type"
+fallback_to_clipboard = true
+type_delay_ms = 1
+
+[output.notification]
+on_recording_start = false
+on_recording_stop = false
+on_transcription = false
