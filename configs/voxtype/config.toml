@@ -27,7 +27,12 @@ model_type = "tdt"
 on_demand_loading = false
 
 [output]
-mode = "type"
+# Paste mode avoids character-by-character synthetic typing, which can trigger
+# shortcuts or completions in terminal/TUI apps while modifiers are still active.
+mode = "paste"
+paste_keys = "shift+insert"
+restore_clipboard = true
+restore_clipboard_delay_ms = 300
 fallback_to_clipboard = true
 type_delay_ms = 1
 
