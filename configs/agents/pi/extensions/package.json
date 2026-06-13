@@ -15,6 +15,7 @@
       "./statusline",
       "./token-speed",
       "./codex-fast-mode",
+      "./codex-compaction",
       "./nested-agents",
       "./project-rules",
       "./lsp",
