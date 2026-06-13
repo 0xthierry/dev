@@ -95,6 +95,7 @@ function createCommandContext(branch: SessionEntry[], hasUI = true) {
   const waitForIdle = mock(async () => undefined);
   const ctx: ExtensionCommandContext = {
     ui,
+    mode: "tui",
     hasUI,
     cwd: "/tmp/project",
     sessionManager: {
@@ -120,6 +121,7 @@ function createCommandContext(branch: SessionEntry[], hasUI = true) {
     modelRegistry: undefined as never,
     model: undefined,
     isIdle: mock(() => true),
+    isProjectTrusted: mock(() => false),
     signal: undefined,
     abort: mock(() => undefined),
     hasPendingMessages: mock(() => false),
@@ -127,6 +129,7 @@ function createCommandContext(branch: SessionEntry[], hasUI = true) {
     getContextUsage: mock(() => undefined),
     compact: mock(() => undefined),
     getSystemPrompt: mock(() => ""),
+    getSystemPromptOptions: mock(() => ({})) as never,
     waitForIdle,
     newSession: mock(async () => ({ cancelled: false })),
     fork: mock(async () => ({ cancelled: false })),

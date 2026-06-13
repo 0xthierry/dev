@@ -72,6 +72,7 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
 
   const createContext = (overrides: Record<string, unknown> = {}) => ({
     cwd: options.cwd ?? process.cwd(),
+    mode: "tui",
     hasUI: false,
     signal: undefined,
     ui: createFakeUi(autocompleteProviderFactories, uiNotifications),
@@ -79,12 +80,14 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
     modelRegistry: undefined,
     model: undefined,
     isIdle: () => true,
+    isProjectTrusted: () => false,
     abort: () => undefined,
     hasPendingMessages: () => false,
     shutdown: () => undefined,
     getContextUsage: () => undefined,
     compact: () => undefined,
     getSystemPrompt: () => "",
+    getSystemPromptOptions: () => ({}),
     waitForIdle: async () => undefined,
     newSession: async () => ({ cancelled: false }),
     fork: async () => ({ cancelled: false }),

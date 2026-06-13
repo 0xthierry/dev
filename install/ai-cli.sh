@@ -134,16 +134,16 @@ install_ai_clis() {
   log_section "AI Coding CLIs"
 
   # Claude Code (Anthropic) — standalone binary, not npm
-  install_claude_code_binary "2.1.168"
+  install_claude_code_binary "2.1.177"
 
   # Codex (OpenAI)
-  install_npm_global_cli "Codex CLI" "@openai/codex" "0.137.0"
+  install_npm_global_cli "Codex CLI" "@openai/codex" "0.139.0"
 
   # Gemini CLI (Google)
   install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.45.2"
 
   # Pi Coding Agent (Earendil Works) — minimal terminal coding harness
-  install_pi_coding_agent_cli "0.78.1"
+  install_pi_coding_agent_cli "0.79.3"
 
   # Agent Slack (Stably) — standalone binary
   install_agent_slack_binary "0.9.3"
