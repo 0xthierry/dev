@@ -8,26 +8,21 @@
       "./desktop-notification",
       "./web-access",
       "./create-image",
-      "./comment",
       "./agent-feedback",
       "./subagent",
-      "./blueprint",
       "./statusline",
       "./token-speed",
       "./codex-fast-mode",
       "./codex-compaction",
       "./nested-agents",
-      "./project-rules",
       "./lsp",
       "./fff",
-      "./excalidraw-session",
-      "./dynamic-workflow"
+      "./excalidraw-session"
     ]
   },
   "dependencies": {
     "@ff-labs/fff-node": "0.9.4",
     "@mozilla/readability": "0.6.0",
-    "acorn": "8.16.0",
     "impit": "0.13.1",
     "linkedom": "0.18.12",
     "p-limit": "7.3.0",

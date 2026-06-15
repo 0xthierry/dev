@@ -10,20 +10,16 @@
       "./configs/agents/pi/extensions/desktop-notification",
       "./configs/agents/pi/extensions/web-access",
       "./configs/agents/pi/extensions/create-image",
-      "./configs/agents/pi/extensions/comment",
       "./configs/agents/pi/extensions/agent-feedback",
       "./configs/agents/pi/extensions/subagent",
-      "./configs/agents/pi/extensions/blueprint",
       "./configs/agents/pi/extensions/statusline",
       "./configs/agents/pi/extensions/token-speed",
       "./configs/agents/pi/extensions/codex-fast-mode",
       "./configs/agents/pi/extensions/codex-compaction",
       "./configs/agents/pi/extensions/nested-agents",
-      "./configs/agents/pi/extensions/project-rules",
       "./configs/agents/pi/extensions/lsp",
       "./configs/agents/pi/extensions/fff",
-      "./configs/agents/pi/extensions/excalidraw-session",
-      "./configs/agents/pi/extensions/dynamic-workflow"
+      "./configs/agents/pi/extensions/excalidraw-session"
     ],
     "prompts": [
       "./configs/agents/pi/prompts"
@@ -50,7 +46,6 @@
     "@ff-labs/fff-node": "0.9.4",
     "@mozilla/readability": "0.6.0",
     "@types/turndown": "5.0.6",
-    "acorn": "8.16.0",
     "impit": "0.13.1",
     "linkedom": "0.18.12",
     "p-limit": "7.3.0",

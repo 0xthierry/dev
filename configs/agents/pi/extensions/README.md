@@ -41,20 +41,16 @@ Or install one extension at a time from a local checkout:
 pi install ./configs/agents/pi/extensions/desktop-notification
 pi install ./configs/agents/pi/extensions/web-access
 pi install ./configs/agents/pi/extensions/create-image
-pi install ./configs/agents/pi/extensions/comment
 pi install ./configs/agents/pi/extensions/agent-feedback
 pi install ./configs/agents/pi/extensions/subagent
-pi install ./configs/agents/pi/extensions/blueprint
 pi install ./configs/agents/pi/extensions/statusline
 pi install ./configs/agents/pi/extensions/token-speed
 pi install ./configs/agents/pi/extensions/codex-fast-mode
 pi install ./configs/agents/pi/extensions/codex-compaction
 pi install ./configs/agents/pi/extensions/nested-agents
-pi install ./configs/agents/pi/extensions/project-rules
 pi install ./configs/agents/pi/extensions/lsp
 pi install ./configs/agents/pi/extensions/fff
 pi install ./configs/agents/pi/extensions/excalidraw-session
-pi install ./configs/agents/pi/extensions/dynamic-workflow
 ```
 
 The GitHub/repository-root package installs all extensions declared in the root `package.json`. To install only one extension, clone the repo and use one of the local per-extension install commands above, or install the bundle and use `pi config` to disable resources you do not want.
@@ -66,20 +62,16 @@ For day-to-day use on Thierry's machines, `configs/agents/install.sh` symlinks t
 - [`desktop-notification`](./desktop-notification/README.md) — sends an OSC 777 desktop notification when an agent turn finishes.
 - [`web-access`](./web-access/README.md) — registers web search, content fetch, and stored-content retrieval tools.
 - [`create-image`](./create-image/README.md) — registers `/create-image` for prompt-to-image generation.
-- [`comment`](./comment/README.md) — registers `/comment` to edit a quoted copy of the last assistant response in `$EDITOR`.
 - [`agent-feedback`](./agent-feedback/README.md) — registers `agent_feedback` for durable workflow feedback and verification blockers.
 - [`subagent`](./subagent/README.md) — registers a Claude-compatible `Agent` tool for foreground single and parallel child Pi subagents.
-- [`blueprint`](./blueprint/README.md) — registers `/blueprint` for deterministic graph workflows that can spawn isolated child Pi sessions.
 - [`statusline`](./statusline/README.md) — appends clickable PR number, git change counts, and the Cloudflare BDR quote to Pi's existing footer.
 - [`token-speed`](./token-speed/README.md) — displays real-time assistant streaming throughput in Pi's footer.
 - [`codex-fast-mode`](./codex-fast-mode/README.md) — injects Codex Fast mode's `service_tier: "priority"` for eligible ChatGPT-backed Codex requests.
 - [`codex-compaction`](./codex-compaction/README.md) — uses Codex native opaque compaction for `/compact` on ChatGPT-backed Codex models.
 - [`nested-agents`](./nested-agents/README.md) — dynamically loads nested `AGENTS.md` / `CLAUDE.md` files when the agent touches files under those directories.
-- [`project-rules`](./project-rules/README.md) — loads `.pi/rules`, `.agents/rules`, and `.claude/rules` with cache-friendly activation.
 - [`lsp`](./lsp/README.md) — exposes configured Language Server Protocol diagnostics and source fixes to Pi tools.
 - [`fff`](./fff/README.md) — overrides `grep`, `find`, and `multi_grep` with FFF-backed search and autocomplete.
 - [`excalidraw-session`](./excalidraw-session/README.md) — exposes an always-on local Excalidraw bridge tool for the focused browser canvas.
-- [`dynamic-workflow`](./dynamic-workflow/README.md) — registers a deterministic JavaScript `workflow` tool for explicit fan-out/fan-in child Pi orchestration.
 
 ## Dependencies
 
