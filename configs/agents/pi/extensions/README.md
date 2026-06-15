@@ -52,6 +52,7 @@ pi install ./configs/agents/pi/extensions/nested-agents
 pi install ./configs/agents/pi/extensions/lsp
 pi install ./configs/agents/pi/extensions/fff
 pi install ./configs/agents/pi/extensions/excalidraw-session
+pi install ./configs/agents/pi/extensions/goal
 ```
 
 The GitHub/repository-root package installs all extensions declared in the root `package.json`. To install only one extension, clone the repo and use one of the local per-extension install commands above, or install the bundle and use `pi config` to disable resources you do not want.
@@ -74,6 +75,7 @@ For day-to-day use on Thierry's machines, `configs/agents/install.sh` symlinks t
 - [`lsp`](./lsp/README.md) — exposes configured Language Server Protocol diagnostics and source fixes to Pi tools.
 - [`fff`](./fff/README.md) — overrides `grep`, `find`, and `multi_grep` with FFF-backed search and autocomplete.
 - [`excalidraw-session`](./excalidraw-session/README.md) — exposes an always-on local Excalidraw bridge tool for the focused browser canvas.
+- [`goal`](./goal/README.md) — adds persistent autonomous goals with safe continuation, a high turn limit, and mandatory completion auditing.
 
 ## Dependencies
 

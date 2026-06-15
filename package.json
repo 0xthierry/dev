@@ -20,7 +20,8 @@
       "./configs/agents/pi/extensions/nested-agents",
       "./configs/agents/pi/extensions/lsp",
       "./configs/agents/pi/extensions/fff",
-      "./configs/agents/pi/extensions/excalidraw-session"
+      "./configs/agents/pi/extensions/excalidraw-session",
+      "./configs/agents/pi/extensions/goal"
     ],
     "prompts": [
       "./configs/agents/pi/prompts"

@@ -18,7 +18,8 @@
       "./nested-agents",
       "./lsp",
       "./fff",
-      "./excalidraw-session"
+      "./excalidraw-session",
+      "./goal"
     ]
   },
   "dependencies": {

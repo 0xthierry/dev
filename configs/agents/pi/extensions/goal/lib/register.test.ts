@@ -1,0 +1,144 @@
+import { afterEach, describe, expect, mock, setSystemTime, test } from "bun:test";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { createFakePi } from "../../_shared/testing/fake-pi";
+import { type GoalRuntime, registerGoalExtension } from "./register";
+import type { GoalAuditorRunInput, GoalAuditorRunResult } from "./types";
+
+function fakeRuntime(
+  auditorResult: GoalAuditorRunResult = { approved: true, disapproved: false, output: "Looks complete.\n<approved/>" },
+): GoalRuntime {
+  return {
+    setTimeout: mock((callback: () => void, delayMs: number) => setTimeout(callback, delayMs)),
+    clearTimeout: mock((timer: ReturnType<typeof setTimeout>) => clearTimeout(timer)),
+    runAuditor: mock(async (_ctx: ExtensionContext, _input: GoalAuditorRunInput) => auditorResult),
+  };
+}
+
+describe("registerGoalExtension", () => {
+  afterEach(() => {
+    setSystemTime();
+  });
+
+  test("creates a goal through the slash command and queues continuation", async () => {
+    // Arrange
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fakePi = createFakePi();
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+
+    // Act
+    await fakePi.runCommand("goal", "finish migration until tests pass");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    // Assert
+    expect(fakePi.appendedEntries.at(-1)?.customType).toBe("pi-goal-state");
+    expect(fakePi.sentMessages.some((message) => JSON.stringify(message).includes("Continue concrete work"))).toBe(
+      true,
+    );
+  });
+
+  test("rejects model-created vague goals", async () => {
+    // Arrange
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fakePi = createFakePi();
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+
+    // Act
+    const result = await fakePi.runTool("create_goal", {
+      objective: "fix it",
+      successCriteria: ["done"],
+      verificationPlan: ["check"],
+      constraints: ["none"],
+      evidenceSurface: ["files"],
+      autoContinue: true,
+    });
+
+    // Assert
+    expect(JSON.stringify(result)).toContain("create_goal rejected");
+  });
+
+  test("requires auditor approval before completion", async () => {
+    // Arrange
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const runtime = fakeRuntime({ approved: false, disapproved: true, output: "Missing tests.\n<disapproved/>" });
+    const fakePi = createFakePi();
+    registerGoalExtension(fakePi.pi, runtime);
+    await fakePi.runCommand("goal", "finish migration until tests pass");
+
+    // Act
+    const result = await fakePi.runTool("update_goal", {
+      status: "complete",
+      summary: "done",
+      evidenceRefs: ["tests passed"],
+    });
+
+    // Assert
+    expect(runtime.runAuditor).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(result)).toContain("Goal audit rejected");
+    expect(JSON.stringify(fakePi.appendedEntries.at(-1))).toContain("disapproved");
+  });
+
+  test("blocks mutating tool calls after update_goal appears in a turn", async () => {
+    // Arrange
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fakePi = createFakePi();
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+    await fakePi.emit("turn_start");
+    await fakePi.emit("tool_call", { toolName: "update_goal", input: { status: "complete" } });
+
+    // Act
+    const result = await fakePi.emit("tool_call", { toolName: "write", input: { path: "x", content: "y" } });
+
+    // Assert
+    expect(result).toEqual([
+      {
+        block: true,
+        reason:
+          "A goal lifecycle tool was already called in this turn. Do not perform more mutating work; yield after the lifecycle update.",
+      },
+    ]);
+  });
+
+  test("updates turn limit through the slash command", async () => {
+    // Arrange
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fakePi = createFakePi();
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+    await fakePi.runCommand("goal", "finish migration until tests pass");
+
+    // Act
+    await fakePi.runCommand("goal", "turns 512");
+
+    // Assert
+    expect(JSON.stringify(fakePi.appendedEntries.at(-1))).toContain('"turnBudget":512');
+  });
+
+  test("shows real auditor status through the slash command", async () => {
+    // Arrange
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fakePi = createFakePi({ ctx: { hasUI: true, model: { provider: "openai", id: "gpt-5.1" } } });
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+    await fakePi.runCommand("goal", "finish migration until tests pass");
+
+    // Act
+    await fakePi.runCommand("goal", "auditor");
+
+    // Assert
+    expect(fakePi.uiNotifications.at(-1)?.message).toContain("Goal auditor: mandatory");
+    expect(fakePi.uiNotifications.at(-1)?.message).toContain("Model: openai/gpt-5.1");
+    expect(fakePi.uiNotifications.at(-1)?.message).toContain("Audit attempts: 0");
+  });
+
+  test("injects goal context on model context events", async () => {
+    // Arrange
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fakePi = createFakePi();
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+    await fakePi.runCommand("goal", "finish migration until tests pass");
+
+    // Act
+    const result = await fakePi.emit("context", { messages: [] });
+
+    // Assert
+    expect(JSON.stringify(result)).toContain("PI GOAL ACTIVE");
+  });
+});
