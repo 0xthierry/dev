@@ -30,7 +30,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerProvider(FAUX_PROVIDER_NAME, {
     name: "Pi Extension E2E Faux Provider",
     baseUrl: "http://localhost:0",
-    apiKey: FAUX_API_KEY_ENV,
+    apiKey: `$${FAUX_API_KEY_ENV}`,
     api: faux.api,
     models: [model],
   });

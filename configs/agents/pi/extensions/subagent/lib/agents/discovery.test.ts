@@ -129,10 +129,10 @@ describe("discoverAgents", () => {
       const result = await discoverAgents({ agentsDir: dir });
 
       // Assert
-      expect(result.agents.map((agent) => agent.name)).toEqual(["explorer", "reviewer", "worker"]);
-      expect(result.agents.find((agent) => agent.name === "explorer")).toMatchObject({
+      expect(result.agents.map((agent) => agent.name)).toEqual(["reviewer", "scout", "worker"]);
+      expect(result.agents.find((agent) => agent.name === "scout")).toMatchObject({
         source: "builtin",
-        effort: "medium",
+        effort: "low",
       });
       expect(result.agents.find((agent) => agent.name === "worker")).toMatchObject({
         source: "builtin",
@@ -147,20 +147,52 @@ describe("discoverAgents", () => {
   test("lets user agents override built-in agents with the same name", async () => {
     // Arrange
     const dir = await mkdtemp(join(tmpdir(), "pi-agent-discovery-"));
-    await writeFile(
-      join(dir, "explorer.md"),
-      "---\nname: explorer\ndescription: Custom explorer\n---\nCustom body",
-      "utf8",
-    );
+    await writeFile(join(dir, "scout.md"), "---\nname: scout\ndescription: Custom scout\n---\nCustom body", "utf8");
 
     try {
       // Act
       const result = await discoverAgents({ agentsDir: dir });
 
       // Assert
-      const explorer = result.agents.find((agent) => agent.name === "explorer");
-      expect(explorer).toMatchObject({ source: "user", description: "Custom explorer", systemPrompt: "Custom body" });
-      expect(result.agents.map((agent) => agent.name)).toEqual(["explorer", "worker"]);
+      const scout = result.agents.find((agent) => agent.name === "scout");
+      expect(scout).toMatchObject({ source: "user", description: "Custom scout", systemPrompt: "Custom body" });
+      expect(result.agents.map((agent) => agent.name)).toEqual(["scout", "worker"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("lets a project .pi/agents agent override the built-in of the same name", async () => {
+    // Arrange
+    const dir = await mkdtemp(join(tmpdir(), "pi-agent-discovery-"));
+    const repo = join(dir, "repo");
+    const cwd = join(repo, "apps", "web");
+    const projectAgentsDir = join(repo, ".pi", "agents");
+    const globalAgentsDir = join(dir, "global-agents");
+    await mkdir(join(repo, ".git"), { recursive: true });
+    await mkdir(cwd, { recursive: true });
+    await mkdir(projectAgentsDir, { recursive: true });
+    await mkdir(globalAgentsDir, { recursive: true });
+    await writeFile(
+      join(projectAgentsDir, "scout.md"),
+      "---\nname: scout\ndescription: Repo scout\neffort: high\n---\nRepo scout body",
+      "utf8",
+    );
+
+    try {
+      // Act
+      const result = await discoverAgents({ agentsDir: globalAgentsDir, cwd });
+
+      // Assert: the repo scout fully replaces the built-in scout (exactly one, sourced from the repo)
+      const scouts = result.agents.filter((agent) => agent.name === "scout");
+      expect(scouts).toHaveLength(1);
+      expect(scouts[0]).toMatchObject({
+        source: "user",
+        description: "Repo scout",
+        systemPrompt: "Repo scout body",
+        effort: "high",
+      });
+      expect(result.agents.find((agent) => agent.name === "worker")?.source).toBe("builtin");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

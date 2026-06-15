@@ -10,7 +10,7 @@ The agent tool renders live progress in Pi's tool row. Single-agent runs show th
 
 Two built-in agents are always available:
 
-- `explorer` — fast, read-only codebase reconnaissance for specific, well-scoped questions. Uses `medium` effort.
+- `scout` — fast, read-only codebase reconnaissance for specific, well-scoped questions. Uses `low` effort.
 - `worker` — bounded implementation agent for production changes, fixes, refactors, and validation. Uses `xhigh` effort.
 
 Configured agents are Markdown files under project-local `.pi/agents` directories or Pi's normal agent config directory and override built-ins with the same name:
@@ -42,7 +42,7 @@ Single task:
 
 ```json
 {
-  "subagent_type": "explorer",
+  "subagent_type": "scout",
   "description": "Find auth files",
   "effort": "low",
   "prompt": "Find the files that implement login and session validation."
@@ -65,7 +65,7 @@ Parallel independent tasks:
 {
   "effort": "medium",
   "tasks": [
-    { "subagent_type": "explorer", "effort": "low", "prompt": "Find auth files." },
+    { "subagent_type": "scout", "effort": "low", "prompt": "Find auth files." },
     { "subagent_type": "web-search", "prompt": "Find current official docs for the auth provider." }
   ]
 }
