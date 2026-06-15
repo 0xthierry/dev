@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { createFakePi } from "../../_shared/testing/fake-pi";
 import { formatCreateImageResult, handleCreateImageCommand } from "./command";
@@ -37,13 +37,17 @@ function runtime(): CreateImageRuntime {
         bytes: 3,
       },
     ]),
-    now: mock(() => new Date("2026-05-01T17:30:04Z")),
   };
 }
+
+afterEach(() => {
+  setSystemTime();
+});
 
 describe("handleCreateImageCommand", () => {
   test("generates, saves, and publishes image results", async () => {
     // Arrange
+    setSystemTime(new Date("2026-05-01T17:30:04Z"));
     const fakePi = createFakePi();
     const fakeRuntime = runtime();
 
@@ -64,7 +68,6 @@ describe("handleCreateImageCommand", () => {
       fileName: undefined,
       prompt: "a tiny fox logo",
       providerId: "nano-banana",
-      now: new Date("2026-05-01T17:30:04Z"),
     });
     expect(fakePi.sentMessages[0]?.message).toMatchObject({
       customType: "create-image-result",

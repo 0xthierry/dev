@@ -1,15 +1,20 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { isRateLimitText, parseRateLimitDelayFromText, parseRetryAfterMs, rateLimitRetryDelayMs } from "./rate-limit";
+
+afterEach(() => {
+  setSystemTime();
+});
 
 describe("parseRetryAfterMs", () => {
   test("parses retry-after seconds and dates", () => {
     // Arrange
+    setSystemTime(new Date("2026-05-01T00:00:00Z"));
     const seconds = new Headers({ "retry-after": "2" });
     const date = new Headers({ "retry-after": "Fri, 01 May 2026 00:00:05 GMT" });
 
     // Act
-    const secondsDelay = parseRetryAfterMs(seconds, Date.parse("2026-05-01T00:00:00Z"));
-    const dateDelay = parseRetryAfterMs(date, Date.parse("2026-05-01T00:00:00Z"));
+    const secondsDelay = parseRetryAfterMs(seconds);
+    const dateDelay = parseRetryAfterMs(date);
 
     // Assert
     expect(secondsDelay).toBe(2_000);

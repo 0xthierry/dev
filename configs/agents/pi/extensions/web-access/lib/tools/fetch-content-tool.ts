@@ -47,7 +47,7 @@ export function registerFetchContentTool(pi: ExtensionAPI, runtime: WebAccessRun
         model: params.model,
       });
       const responseId = runtime.generateId("fetch", fetchRequest);
-      storeAndPublish(pi, { id: responseId, type: "fetch", timestamp: runtime.now(), urls: stripImages(results) });
+      storeAndPublish(pi, { id: responseId, type: "fetch", timestamp: Date.now(), urls: stripImages(results) });
 
       if (urls.length === 1) {
         const result = results[0] ?? missingResult(urls[0] ?? DEFAULT_MISSING_URL);

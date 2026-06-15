@@ -275,11 +275,10 @@ Good:
 export interface MyRuntime {
   search: typeof search;
   fetchContent: typeof fetchContent;
-  now: () => number;
 }
 
 export function createMyRuntime(): MyRuntime {
-  return { search, fetchContent, now: Date.now };
+  return { search, fetchContent };
 }
 ```
 
@@ -289,7 +288,6 @@ In tests, pass a complete fake:
 const runtime: MyRuntime = {
   search: mock(async () => ({ answer: "ok", results: [] })),
   fetchContent: mock(async () => []),
-  now: mock(() => 123),
 };
 ```
 
@@ -297,11 +295,11 @@ Bad:
 
 ```ts
 function resolveDependencies(overrides: Partial<MyRuntime> = {}): MyRuntime {
-  return { search, fetchContent, now: Date.now, ...overrides };
+  return { search, fetchContent, ...overrides };
 }
 ```
 
-A partial override bag usually means the production abstraction exists only for tests. Prefer an explicit runtime or a pure function that accepts the implementation it needs.
+A partial override bag usually means the production abstraction exists only for tests. Prefer an explicit runtime or a pure function that accepts the implementation it needs. Do not add `now: () => new Date()` or `now: Date.now` runtime seams only to make timestamps testable; production code can call `new Date()` / `Date.now()` directly, and tests should use Bun `setSystemTime()`.
 
 ## Naming
 

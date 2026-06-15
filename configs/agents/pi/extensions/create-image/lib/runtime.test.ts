@@ -10,6 +10,5 @@ describe("createCreateImageRuntime", () => {
     // Assert
     expect(runtime.providers.map((provider) => provider.id)).toEqual(["nano-banana", "chatgpt-web"]);
     expect(runtime.saveImages).toBe(saveGeneratedImages);
-    expect(runtime.now()).toBeInstanceOf(Date);
   });
 });

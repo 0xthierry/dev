@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { createFakePi } from "../../_shared/testing/fake-pi";
 import { DEFAULT_TOKEN_SPEED_CONFIG, TOKEN_SPEED_STATUS_KEY } from "./constants";
 import { TokenSpeedEngine } from "./engine";
@@ -24,6 +24,10 @@ function createUiContext(setStatus = mock((_key: string, _text?: string) => unde
   };
 }
 
+afterEach(() => {
+  setSystemTime();
+});
+
 describe("registerTokenSpeed", () => {
   test("sets the idle status and reports config warnings on session start", async () => {
     // Arrange
@@ -44,9 +48,9 @@ describe("registerTokenSpeed", () => {
 
   test("updates the status from assistant streaming events", async () => {
     // Arrange
-    let now = 0;
+    setSystemTime(new Date(1_000));
     const fakePi = createFakePi();
-    const engine = new TokenSpeedEngine(() => now);
+    const engine = new TokenSpeedEngine();
     const runtime = createRuntime(engine);
     const setStatus = mock((_key: string, _text?: string) => undefined);
     const ctx = createUiContext(setStatus);
@@ -54,13 +58,13 @@ describe("registerTokenSpeed", () => {
 
     // Act
     await fakePi.emit("message_start", { message: { role: "assistant" } }, ctx);
-    now = 100;
+    setSystemTime(new Date(1_100));
     await fakePi.emit(
       "message_update",
       { message: { role: "assistant" }, assistantMessageEvent: { type: "text_delta", delta: "Hello" } },
       ctx,
     );
-    now = 500;
+    setSystemTime(new Date(1_500));
     await fakePi.emit("message_end", { message: { role: "assistant" } }, ctx);
 
     // Assert
@@ -73,9 +77,9 @@ describe("registerTokenSpeed", () => {
 
   test("stops a dangling stream at turn end", async () => {
     // Arrange
-    let now = 0;
+    setSystemTime(new Date(1_000));
     const fakePi = createFakePi();
-    const engine = new TokenSpeedEngine(() => now);
+    const engine = new TokenSpeedEngine();
     const runtime = createRuntime(engine);
     const setStatus = mock((_key: string, _text?: string) => undefined);
     const ctx = createUiContext(setStatus);
@@ -83,13 +87,13 @@ describe("registerTokenSpeed", () => {
 
     // Act
     await fakePi.emit("message_start", { message: { role: "assistant" } }, ctx);
-    now = 250;
+    setSystemTime(new Date(1_250));
     await fakePi.emit(
       "message_update",
       { message: { role: "assistant" }, assistantMessageEvent: { type: "thinking_delta", delta: "plan" } },
       ctx,
     );
-    now = 500;
+    setSystemTime(new Date(1_500));
     await fakePi.emit("turn_end", {}, ctx);
 
     // Assert

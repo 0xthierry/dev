@@ -6,7 +6,7 @@ export interface RateLimitRetryOptions {
 const MILLISECONDS_PER_SECOND = 1_000;
 const MILLISECONDS_PER_MINUTE = 60_000;
 
-export function parseRetryAfterMs(headers: Headers, now = Date.now()): number | undefined {
+export function parseRetryAfterMs(headers: Headers): number | undefined {
   const value = headers.get("retry-after")?.trim();
   if (!value) return undefined;
 
@@ -15,7 +15,7 @@ export function parseRetryAfterMs(headers: Headers, now = Date.now()): number | 
 
   const dateMs = Date.parse(value);
   if (Number.isNaN(dateMs)) return undefined;
-  return Math.max(0, dateMs - now);
+  return Math.max(0, dateMs - Date.now());
 }
 
 export function parseRateLimitDelayFromText(text: string): number | undefined {
@@ -39,10 +39,10 @@ export function isRateLimitText(text: string): boolean {
 }
 
 export function rateLimitRetryDelayMs(
-  options: RateLimitRetryOptions & { headers?: Headers; text?: string; now?: number },
+  options: RateLimitRetryOptions & { headers?: Headers; text?: string },
 ): number | undefined {
   const delayMs =
-    (options.headers ? parseRetryAfterMs(options.headers, options.now) : undefined) ??
+    (options.headers ? parseRetryAfterMs(options.headers) : undefined) ??
     (options.text ? parseRateLimitDelayFromText(options.text) : undefined) ??
     options.defaultDelayMs;
   return delayMs <= options.maxDelayMs ? delayMs : undefined;

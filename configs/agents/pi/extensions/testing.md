@@ -130,7 +130,6 @@ function fakeRuntime(): MyRuntime {
   return {
     search: mock(async () => ({ answer: "ok", results: [] })),
     fetchContent: mock(async () => []),
-    now: mock(() => 123),
   };
 }
 

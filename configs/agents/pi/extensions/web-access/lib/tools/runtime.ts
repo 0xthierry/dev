@@ -6,7 +6,6 @@ export interface WebAccessRuntime {
   search: typeof search;
   fetchAllContent: typeof fetchAllContent;
   generateId: typeof generateId;
-  now: () => number;
 }
 
 export function createWebAccessRuntime(): WebAccessRuntime {
@@ -14,6 +13,5 @@ export function createWebAccessRuntime(): WebAccessRuntime {
     search,
     fetchAllContent,
     generateId,
-    now: Date.now,
   };
 }

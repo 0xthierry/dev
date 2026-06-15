@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -12,17 +12,21 @@ import {
   writeAgentInputArtifact,
 } from "./artifacts";
 
+afterEach(() => {
+  setSystemTime();
+});
+
 describe("agent run artifacts", () => {
   test("builds Nico-style artifact paths under the Pi agent directory by child session id", () => {
     // Arrange
     const agentDir = "/home/test/.pi/agent";
     const sessionId = "019e1882-8bc8-767c-a1e6-d7c9ebd3a574";
-    const now = new Date("2026-05-12T10:20:30.400Z");
+    const createdAt = new Date("2026-05-12T10:20:30.400Z");
     const projectKey = "--home-test-project--";
 
     // Act
     const dir = getAgentSessionArtifactDir(projectKey, sessionId, agentDir);
-    const paths = getAgentArtifactPaths({ projectKey, sessionId, agentName: "code/scout", agentDir, now });
+    const paths = getAgentArtifactPaths({ projectKey, sessionId, agentName: "code/scout", agentDir, createdAt });
 
     // Assert
     expect(dir).toBe(`${agentDir}/agent-sessions-artifacts/${projectKey}/${sessionId}/artifacts`);
@@ -32,19 +36,19 @@ describe("agent run artifacts", () => {
       jsonlPath: `${dir}/2026-05-12T10-20-30-400Z_code-scout.jsonl`,
       metadataPath: `${dir}/2026-05-12T10-20-30-400Z_code-scout_meta.json`,
     });
-    expect(getAgentOutputArtifactPath({ projectKey, sessionId, agentName: "code/scout", agentDir, now })).toBe(
+    expect(getAgentOutputArtifactPath({ projectKey, sessionId, agentName: "code/scout", agentDir, createdAt })).toBe(
       paths.outputPath,
     );
   });
 
   test("finalizes detailed child-authored output into the real child session artifact directory", async () => {
     // Arrange
+    setSystemTime(new Date("2026-05-12T10:20:30.400Z"));
     const agentDir = await mkdtemp(join(tmpdir(), "pi-agent-artifacts-"));
     const pendingPlan = createAgentArtifactPlan({
       cwd: "/home/test/project",
       agentName: "explorer",
       agentDir,
-      now: new Date("2026-05-12T10:20:30.400Z"),
     });
     await writeAgentInputArtifact(pendingPlan, "# Input\n\nTask details");
     await writeFile(pendingPlan.paths.outputPath, "Detailed child-authored report.", "utf8");
@@ -94,13 +98,13 @@ describe("agent run artifacts", () => {
 
   test("falls back to final assistant output when the child does not write the artifact", async () => {
     // Arrange
+    setSystemTime(new Date("2026-05-12T10:20:30.400Z"));
     const agentDir = await mkdtemp(join(tmpdir(), "pi-agent-artifacts-"));
     const plan = createAgentArtifactPlan({
       cwd: "/home/test/project",
       sessionId: "019e1882-8bc8-767c-a1e6-d7c9ebd3a574",
       agentName: "worker",
       agentDir,
-      now: new Date("2026-05-12T10:20:30.400Z"),
     });
     await writeAgentInputArtifact(plan, "# Input");
 

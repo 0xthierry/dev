@@ -23,7 +23,6 @@ export interface ChatGptProofConfigOptions {
   scriptUrls: string[];
   random: () => number;
   randomUUID: () => string;
-  now: () => Date;
   hardwareConcurrency?: number;
   screenWidth?: number;
   screenHeight?: number;
@@ -89,7 +88,7 @@ export function buildChatGptRequirementsToken(config: unknown[]): string {
 }
 
 export function buildChatGptProofConfig(options: ChatGptProofConfigOptions): unknown[] {
-  const now = options.now();
+  const now = new Date();
   const scriptUrls = options.scriptUrls.length > 0 ? options.scriptUrls : [DEFAULT_SCRIPT_URL];
   const hardwareConcurrency = options.hardwareConcurrency ?? 32;
   const scriptUrl = pick(scriptUrls, options.random);
@@ -141,12 +140,12 @@ export function generateChatGptProofToken(
   const difficulty = requirement.difficulty;
   if (typeof seed !== "string" || typeof difficulty !== "string") return undefined;
 
-  const started = options.now().getTime();
+  const started = Date.now();
   try {
     const config = buildChatGptProofConfig(options);
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       config[3] = attempt;
-      config[9] = options.now().getTime() - started;
+      config[9] = Date.now() - started;
       const answer = encodeJsonBase64(config);
       if (chatGptProofHash(`${seed}${answer}`).slice(0, difficulty.length) <= difficulty) {
         return `gAAAAAB${answer}~S`;

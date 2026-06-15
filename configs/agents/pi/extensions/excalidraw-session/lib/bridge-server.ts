@@ -58,7 +58,6 @@ export type BridgeServerOptions = {
   port?: number;
   allowedOrigins?: Set<string>;
   requestTimeoutMs?: number;
-  now?: () => number;
 };
 
 type PendingRequest = {
@@ -87,7 +86,6 @@ export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}):
   const port = options.port ?? DEFAULT_PORT;
   const allowedOrigins = options.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS;
   const requestTimeoutMs = options.requestTimeoutMs ?? 10_000;
-  const now = options.now ?? Date.now;
 
   let server: Server | undefined;
   let starting: Promise<void> | undefined;
@@ -243,7 +241,7 @@ export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}):
       );
     }
 
-    const id = `controller-${action}-${now()}-${Math.random().toString(36).slice(2)}`;
+    const id = `controller-${action}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         controllerPending.delete(id);
@@ -359,7 +357,7 @@ export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}):
     params: Record<string, unknown>,
     timeoutMs: number,
   ): Promise<unknown> {
-    const id = `${action}-${now()}-${Math.random().toString(36).slice(2)}`;
+    const id = `${action}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const payload = {
       type: "request",
       id,
@@ -460,7 +458,7 @@ export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}):
   function handleSocketMessage(socket: Socket, message: JsonObject): void {
     if (message.type === "controller_hello") {
       clients.delete(socket);
-      controllers.set(socket, { socket, connectedAt: now(), lastSeenAt: now() });
+      controllers.set(socket, { socket, connectedAt: Date.now(), lastSeenAt: Date.now() });
       return;
     }
 
@@ -475,7 +473,7 @@ export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}):
   async function handleControllerRequest(socket: Socket, message: JsonObject): Promise<void> {
     const controller = controllers.get(socket);
     if (!controller) return;
-    controller.lastSeenAt = now();
+    controller.lastSeenAt = Date.now();
     const id = stringValue(message.id);
     const action = stringValue(message.action);
     if (!id || !action) return;
@@ -512,18 +510,18 @@ export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}):
       if (!client) {
         client = {
           socket,
-          tabId: `pending-${now()}-${Math.random().toString(36).slice(2)}`,
+          tabId: `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`,
           focused: false,
           visible: false,
           apiReady: false,
-          connectedAt: now(),
-          lastSeenAt: now(),
+          connectedAt: Date.now(),
+          lastSeenAt: Date.now(),
           lastFocusedAt: 0,
         };
         clients.set(socket, client);
       }
       controllers.delete(socket);
-      client.lastSeenAt = now();
+      client.lastSeenAt = Date.now();
       client.tabId = stringValue(message.tabId) ?? client.tabId;
       client.token = stringValue(message.token) ?? client.token;
       client.url = stringValue(message.url) ?? client.url;
@@ -531,18 +529,18 @@ export function createExcalidrawBridgeServer(options: BridgeServerOptions = {}):
       client.focused = booleanValue(message.focused) ?? client.focused;
       client.visible = booleanValue(message.visible) ?? client.visible;
       client.apiReady = booleanValue(message.apiReady) ?? client.apiReady;
-      if (client.focused) client.lastFocusedAt = now();
+      if (client.focused) client.lastFocusedAt = Date.now();
       return;
     }
 
     if (!client) return;
-    client.lastSeenAt = now();
+    client.lastSeenAt = Date.now();
 
     if (message.type === "focus") {
       client.focused = booleanValue(message.focused) ?? client.focused;
       client.visible = booleanValue(message.visible) ?? client.visible;
       client.url = stringValue(message.url) ?? client.url;
-      if (client.focused) client.lastFocusedAt = now();
+      if (client.focused) client.lastFocusedAt = Date.now();
       return;
     }
 

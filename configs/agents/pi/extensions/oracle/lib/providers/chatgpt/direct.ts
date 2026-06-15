@@ -62,7 +62,6 @@ export interface ChatGptOracleTransport {
   getCookies: typeof getChatGptCookies;
   randomUUID: () => string;
   random: () => number;
-  now: () => Date;
   sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
 
@@ -97,7 +96,6 @@ export function createDefaultChatGptOracleTransport(timeoutMs: number): ChatGptO
     getCookies: getChatGptCookies,
     randomUUID: () => crypto.randomUUID(),
     random: () => Math.random(),
-    now: () => new Date(),
     sleep: (ms, signal) => sleep(ms, signal),
   };
 }
@@ -194,7 +192,6 @@ async function fetchFinalizedRequirements(
     scriptUrls: context.build.scriptUrls,
     random: transport.random,
     randomUUID: transport.randomUUID,
-    now: transport.now,
   };
   const p = buildChatGptRequirementsToken(buildChatGptProofConfig(proofOptions));
   const prepared = await postJson<ChatGptPreparedRequirements>(
@@ -237,7 +234,7 @@ async function sendConversationRequest(
     parentMessageId: conversationState?.currentNode,
     messageId: transport.randomUUID(),
     model: request.config.model,
-    now: transport.now(),
+    now: new Date(),
     projectId: request.config.projectId,
   });
   const response = await transport.fetch(CHATGPT_CONVERSATION_URL, {

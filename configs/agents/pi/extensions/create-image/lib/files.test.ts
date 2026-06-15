@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +7,7 @@ import { buildImageFileName, sanitizeFileStem, saveGeneratedImages } from "./fil
 let tempDir: string | undefined;
 
 afterEach(async () => {
+  setSystemTime();
   if (tempDir) await rm(tempDir, { recursive: true, force: true });
   tempDir = undefined;
 });
@@ -47,6 +48,7 @@ describe("buildImageFileName", () => {
 describe("saveGeneratedImages", () => {
   test("writes generated images and returns display paths", async () => {
     // Arrange
+    setSystemTime(new Date("2026-05-01T17:30:04Z"));
     tempDir = await mkdtemp(join(tmpdir(), "pi-create-image-files-"));
     const bytes = new Uint8Array([1, 2, 3]);
 
@@ -57,7 +59,6 @@ describe("saveGeneratedImages", () => {
       fileName: "demo.png",
       prompt: "ignored prompt",
       providerId: "nano-banana",
-      now: new Date("2026-05-01T17:30:04Z"),
     });
 
     // Assert

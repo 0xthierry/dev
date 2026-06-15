@@ -40,13 +40,13 @@ function isValidStoredData(data: unknown): data is StoredSearchData {
   return Array.isArray(value.urls) && value.urls.every(isExtractedContent);
 }
 
-export function restoreFromEntries(entries: Iterable<SessionEntryLike>, now = Date.now()): void {
+export function restoreFromEntries(entries: Iterable<SessionEntryLike>): void {
   clearResults();
 
   for (const entry of entries) {
     if (entry.type === "custom" && entry.customType === "web-access-results") {
       const data = entry.data;
-      if (isValidStoredData(data) && now - data.timestamp < CACHE_TTL_MS) {
+      if (isValidStoredData(data) && Date.now() - data.timestamp < CACHE_TTL_MS) {
         storeResult(data.id, data);
       }
     }

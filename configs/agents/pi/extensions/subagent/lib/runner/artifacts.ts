@@ -40,11 +40,10 @@ export function createAgentArtifactPlan(input: {
   sessionId?: string;
   agentName: string;
   agentDir?: string;
-  now?: Date;
 }): AgentArtifactPlan {
   const sessionId = input.sessionId?.trim() || `pending-${randomUUID()}`;
   const agentDir = input.agentDir ?? getAgentDir();
-  const createdAt = input.now ?? new Date();
+  const createdAt = new Date();
   const projectKey = encodeProjectCwd(input.cwd);
   return {
     agentDir,
@@ -53,7 +52,7 @@ export function createAgentArtifactPlan(input: {
     projectKey,
     sessionId,
     pending: !input.sessionId?.trim(),
-    paths: getAgentArtifactPaths({ projectKey, sessionId, agentName: input.agentName, agentDir, now: createdAt }),
+    paths: getAgentArtifactPaths({ projectKey, sessionId, agentName: input.agentName, agentDir, createdAt }),
   };
 }
 
@@ -66,10 +65,10 @@ export function getAgentArtifactPaths(input: {
   sessionId: string;
   agentName: string;
   agentDir?: string;
-  now?: Date;
+  createdAt: Date;
 }): AgentArtifactPaths {
   const dir = getAgentSessionArtifactDir(input.projectKey, input.sessionId, input.agentDir);
-  const stem = `${artifactTimestamp(input.now ?? new Date())}_${safeArtifactSegment(input.agentName)}`;
+  const stem = `${artifactTimestamp(input.createdAt)}_${safeArtifactSegment(input.agentName)}`;
   return {
     inputPath: join(dir, `${stem}_input.md`),
     outputPath: join(dir, `${stem}_output.md`),
@@ -83,7 +82,7 @@ export function getAgentOutputArtifactPath(input: {
   sessionId: string;
   agentName: string;
   agentDir?: string;
-  now?: Date;
+  createdAt: Date;
 }): string {
   return getAgentArtifactPaths(input).outputPath;
 }
@@ -110,7 +109,7 @@ export async function finalizeAgentRunArtifacts(
     sessionId,
     agentName: plan.agentName,
     agentDir: plan.agentDir,
-    now: plan.createdAt,
+    createdAt: plan.createdAt,
   });
 
   try {

@@ -8,7 +8,6 @@ export interface SaveGeneratedImagesOptions {
   fileName?: string;
   prompt: string;
   providerId: string;
-  now: Date;
 }
 
 export interface SavedImage {
@@ -28,6 +27,7 @@ export async function saveGeneratedImages(
   const outputDir = resolveOutputDir(options.cwd, options.outputDir);
   await mkdir(outputDir, { recursive: true });
 
+  const timestamp = new Date();
   const saved: SavedImage[] = [];
   for (let index = 0; index < images.length; index++) {
     const image = images[index];
@@ -35,7 +35,7 @@ export async function saveGeneratedImages(
       baseName: options.fileName,
       prompt: options.prompt,
       providerId: options.providerId,
-      now: options.now,
+      now: timestamp,
       index,
       total: images.length,
       extension: image.extension,

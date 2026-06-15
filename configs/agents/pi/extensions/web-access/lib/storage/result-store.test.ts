@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import type { StoredSearchData } from "../types";
 import { clearResults, deleteResult, generateId, getAllResults, getResult, storeResult } from "./result-store";
 import { restoreFromEntries } from "./session-entries";
 
 afterEach(() => {
+  setSystemTime();
   clearResults();
 });
 
@@ -42,7 +43,8 @@ describe("web-access storage", () => {
 
   test("restores valid fresh custom entries from the current session branch", () => {
     // Arrange
-    const now = Date.now();
+    const now = Date.parse("2026-05-01T00:00:00Z");
+    setSystemTime(new Date(now));
     const fresh: StoredSearchData = {
       id: "fresh",
       type: "fetch",
@@ -57,14 +59,11 @@ describe("web-access storage", () => {
     };
 
     // Act
-    restoreFromEntries(
-      [
-        { type: "custom", customType: "web-access-results", data: fresh },
-        { type: "custom", customType: "web-access-results", data: stale },
-        { type: "custom", customType: "other", data: { id: "ignored" } },
-      ],
-      now,
-    );
+    restoreFromEntries([
+      { type: "custom", customType: "web-access-results", data: fresh },
+      { type: "custom", customType: "web-access-results", data: stale },
+      { type: "custom", customType: "other", data: { id: "ignored" } },
+    ]);
 
     // Assert
     expect(getResult("fresh")).toEqual(fresh);

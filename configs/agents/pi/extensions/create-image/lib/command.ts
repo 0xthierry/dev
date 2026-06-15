@@ -55,7 +55,6 @@ export async function handleCreateImageCommand(
       fileName: parsed.args.fileName,
       prompt,
       providerId: provider.id,
-      now: runtime.now(),
     });
     publishCreateImageMessage(pi, formatCreateImageResult(result, saved), {
       ok: true,

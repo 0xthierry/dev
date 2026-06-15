@@ -1,8 +1,12 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { createFakePi } from "../../_shared/testing/fake-pi";
 import { registerAgentFeedback, registerAgentFeedbackExtension } from "./register";
 import type { AgentFeedbackRuntime } from "./runtime";
 import { AGENT_FEEDBACK_TOOL_NAME } from "./tool";
+
+afterEach(() => {
+  setSystemTime();
+});
 
 describe("registerAgentFeedbackExtension", () => {
   test("registers the agent feedback tool", () => {
@@ -20,9 +24,9 @@ describe("registerAgentFeedbackExtension", () => {
 describe("registerAgentFeedback", () => {
   test("wires the tool to the provided runtime", async () => {
     // Arrange
+    setSystemTime(new Date(2026, 4, 11, 9, 7, 30));
     const fakePi = createFakePi({ cwd: "/repo" });
     const runtime: AgentFeedbackRuntime = {
-      now: mock(() => new Date(2026, 4, 11, 9, 7, 30)),
       buildPath: mock(() => ({
         filePath: "/feedback/repo/agent_feedback.md",
         displayPath: "agent_feedback.md",

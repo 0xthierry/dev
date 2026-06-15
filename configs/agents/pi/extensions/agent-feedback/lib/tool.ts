@@ -90,7 +90,7 @@ export async function executeAgentFeedbackTool(
   const normalized = normalizeFeedbackInput(params);
   if (!normalized.ok) return errorResult(normalized.error);
 
-  const timestamp = formatLocalTimestamp(runtime.now());
+  const timestamp = formatLocalTimestamp(new Date());
   const entry = formatFeedbackEntry(normalized.feedback, timestamp);
   const path = runtime.buildPath(ctx.cwd);
 

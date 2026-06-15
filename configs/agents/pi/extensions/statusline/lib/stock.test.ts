@@ -1,10 +1,14 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import {
   createYahooStockQuoteProvider,
   filterQuoteByMaxPrice,
   parseYahooChartQuote,
   type StockQuoteConfig,
 } from "./stock";
+
+afterEach(() => {
+  setSystemTime();
+});
 
 const config: StockQuoteConfig = {
   enabled: true,
@@ -81,15 +85,15 @@ describe("filterQuoteByMaxPrice", () => {
 describe("createYahooStockQuoteProvider", () => {
   test("fetches and caches stock quotes below the threshold", async () => {
     // Arrange
-    let now = 1_000;
+    setSystemTime(new Date(1_000));
     const fetchImpl = mock(async () =>
       Response.json({ chart: { result: [{ meta: { regularMarketPrice: 49.5, currency: "BRL" } }] } }),
     );
-    const provider = createYahooStockQuoteProvider(config, fetchImpl, () => now);
+    const provider = createYahooStockQuoteProvider(config, fetchImpl);
 
     // Act
     const first = await provider.getQuote();
-    now += 10_000;
+    setSystemTime(new Date(11_000));
     const second = await provider.getQuote();
 
     // Assert

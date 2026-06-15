@@ -30,7 +30,6 @@ function runtime(): WebAccessRuntime {
     ),
     fetchAllContent: mock(async () => []),
     generateId: mock(() => "search-id"),
-    now: mock(() => 123),
   };
 }
 

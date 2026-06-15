@@ -17,7 +17,6 @@ function runtime(results: ExtractedContent[] = []): WebAccessRuntime {
     search: mock(async () => ({ answer: "", provider: "exa" as const, results: [] })),
     fetchAllContent: mock(async () => results),
     generateId: mock(() => "fetch-id"),
-    now: mock(() => 123),
   };
 }
 

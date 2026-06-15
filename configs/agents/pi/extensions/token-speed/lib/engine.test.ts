@@ -1,15 +1,19 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { TokenSpeedEngine } from "./engine";
+
+afterEach(() => {
+  setSystemTime();
+});
 
 describe("TokenSpeedEngine", () => {
   test("uses average TPS while the sliding window is still filling", () => {
     // Arrange
-    let now = 0;
-    const engine = new TokenSpeedEngine(() => now);
+    setSystemTime(new Date(1_000));
+    const engine = new TokenSpeedEngine();
     engine.start();
-    now = 100;
+    setSystemTime(new Date(1_100));
     engine.recordTokens(2);
-    now = 500;
+    setSystemTime(new Date(1_500));
 
     // Act
     const snapshot = engine.snapshot();
@@ -22,17 +26,17 @@ describe("TokenSpeedEngine", () => {
 
   test("calculates current TPS from the one-second sliding window", () => {
     // Arrange
-    let now = 0;
-    const engine = new TokenSpeedEngine(() => now);
+    setSystemTime(new Date(1_000));
+    const engine = new TokenSpeedEngine();
     engine.start();
     engine.recordTokens(1);
-    now = 600;
+    setSystemTime(new Date(1_600));
     engine.recordTokens(1);
-    now = 1_100;
+    setSystemTime(new Date(2_100));
     engine.recordTokens(1);
-    now = 1_500;
+    setSystemTime(new Date(2_500));
     engine.recordTokens(1);
-    now = 1_600;
+    setSystemTime(new Date(2_600));
 
     // Act
     const snapshot = engine.snapshot();
@@ -44,12 +48,12 @@ describe("TokenSpeedEngine", () => {
 
   test("returns final average TPS and stops streaming", () => {
     // Arrange
-    let now = 100;
-    const engine = new TokenSpeedEngine(() => now);
+    setSystemTime(new Date(1_100));
+    const engine = new TokenSpeedEngine();
     engine.start();
-    now = 200;
+    setSystemTime(new Date(1_200));
     engine.recordTokens(2);
-    now = 600;
+    setSystemTime(new Date(1_600));
 
     // Act
     const snapshot = engine.stop();
@@ -61,7 +65,8 @@ describe("TokenSpeedEngine", () => {
 
   test("ignores token records while idle", () => {
     // Arrange
-    const engine = new TokenSpeedEngine(() => 0);
+    setSystemTime(new Date(1));
+    const engine = new TokenSpeedEngine();
 
     // Act
     engine.recordTokens(3);

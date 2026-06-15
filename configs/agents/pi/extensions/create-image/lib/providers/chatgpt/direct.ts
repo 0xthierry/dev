@@ -49,7 +49,6 @@ export interface ChatGptDirectTransport {
   getCookies: (profile?: string) => Promise<{ cookies: CookieMap; browser: string } | null>;
   randomUUID: () => string;
   random: () => number;
-  now: () => Date;
   sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
   model: string;
   timeoutMs: number;
@@ -107,7 +106,6 @@ export function createDefaultChatGptDirectTransport(): ChatGptDirectTransport {
     getCookies: (profile) => getBrowserCookies({ hosts: CHATGPT_COOKIE_HOSTS, profile }),
     randomUUID: () => crypto.randomUUID(),
     random: () => Math.random(),
-    now: () => new Date(),
     sleep: (ms, signal) => sleep(ms, signal),
     model: process.env.PI_CREATE_IMAGE_CHATGPT_MODEL ?? process.env.PI_CHATGPT_WEB_MODEL ?? DEFAULT_CHATGPT_IMAGE_MODEL,
     timeoutMs: readPositiveIntegerEnv("PI_CREATE_IMAGE_CHATGPT_TIMEOUT_MS", DEFAULT_TIMEOUT_MS),
@@ -200,7 +198,6 @@ async function fetchFinalizedRequirements(
     scriptUrls: context.build.scriptUrls,
     random: transport.random,
     randomUUID: transport.randomUUID,
-    now: transport.now,
   };
   const p = buildChatGptRequirementsToken(buildChatGptProofConfig(proofOptions));
   const prepared = await postJson<ChatGptPreparedRequirements>(
@@ -240,7 +237,7 @@ async function sendConversationRequest(
     prompt,
     messageId: transport.randomUUID(),
     model: transport.model,
-    now: transport.now(),
+    now: new Date(),
   });
   const response = await transport.fetch(CHATGPT_CONVERSATION_URL, {
     method: "POST",

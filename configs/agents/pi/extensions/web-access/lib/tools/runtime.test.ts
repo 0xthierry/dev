@@ -16,6 +16,5 @@ describe("createWebAccessRuntime", () => {
     expect(runtime.search).toBe(expected.search);
     expect(runtime.fetchAllContent).toBe(expected.fetchAllContent);
     expect(runtime.generateId).toBe(expected.generateId);
-    expect(typeof runtime.now()).toBe("number");
   });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import type { AgentToolResult, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createFakePi } from "../../_shared/testing/fake-pi";
 import type { AgentFeedbackRuntime } from "./runtime";
@@ -10,6 +10,10 @@ import {
 } from "./tool";
 
 type ToolResult = AgentToolResult<AgentFeedbackToolDetails>;
+
+afterEach(() => {
+  setSystemTime();
+});
 
 describe("registerAgentFeedbackTool", () => {
   test("registers the agent_feedback tool with guidance", () => {
@@ -32,6 +36,7 @@ describe("registerAgentFeedbackTool", () => {
 
   test("writes structured feedback through the provided runtime", async () => {
     // Arrange
+    setSystemTime(new Date(2026, 4, 11, 9, 7, 30));
     const fakePi = createFakePi({ cwd: "/repo" });
     const runtime = fakeRuntime();
     registerAgentFeedbackTool(fakePi.pi, runtime);
@@ -131,7 +136,6 @@ function firstText(result: ToolResult): string | undefined {
 
 function fakeRuntime(): AgentFeedbackRuntime {
   return {
-    now: mock(() => new Date(2026, 4, 11, 9, 7, 30)),
     buildPath: mock(() => ({
       filePath: "/feedback/repo/agent_feedback.md",
       displayPath: "agent_feedback.md",

@@ -71,7 +71,6 @@ function transport(override?: RouteOverride): {
       })),
       randomUUID: mock(() => "uuid"),
       random: mock(() => 0),
-      now: mock(() => new Date("2026-05-01T12:00:00.000Z")),
       sleep,
       model: "gpt-5-5-thinking",
       timeoutMs: 30_000,

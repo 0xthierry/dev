@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import {
   buildChatGptCommonHeaders,
   buildChatGptConversationPayload,
@@ -11,6 +11,10 @@ import {
   generateChatGptProofToken,
   parseChatGptConversationStream,
 } from "./direct-protocol";
+
+afterEach(() => {
+  setSystemTime();
+});
 
 describe("extractChatGptBuildInfo", () => {
   test("reads build metadata and script URLs from ChatGPT HTML", () => {
@@ -44,14 +48,13 @@ describe("extractChatGptBuildInfo", () => {
 describe("ChatGPT Sentinel helpers", () => {
   test("builds cookie, requirements, proof, finalize, and common header values", () => {
     // Arrange
-    const now = new Date("2026-05-01T12:00:00.000Z");
+    setSystemTime(new Date("2026-05-01T12:00:00.000Z"));
     const proofOptions = {
       userAgent: "ua",
       clientVersion: "prod-build",
       scriptUrls: ["https://chatgpt.com/cdn/assets/app.js"],
       random: () => 0,
       randomUUID: () => "uuid",
-      now: () => now,
     };
 
     // Act

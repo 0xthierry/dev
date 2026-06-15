@@ -1,7 +1,6 @@
 import { TOKEN_TIMESTAMP_COMPACTION_THRESHOLD, TPS_WINDOW_MS } from "./constants";
 import type { TokenSpeedMeasurement } from "./types";
 
-export type Clock = () => number;
 export type TokenSpeedSnapshotMode = "current" | "average";
 
 export class TokenSpeedEngine {
@@ -13,7 +12,6 @@ export class TokenSpeedEngine {
   private windowStartIndex = 0;
 
   constructor(
-    private readonly now: Clock = Date.now,
     private readonly windowMs: number = TPS_WINDOW_MS,
     private readonly compactionThreshold: number = TOKEN_TIMESTAMP_COMPACTION_THRESHOLD,
   ) {}
@@ -27,7 +25,7 @@ export class TokenSpeedEngine {
   }
 
   get elapsedMs(): number {
-    return this.elapsedMsAt(this.now());
+    return this.elapsedMsAt(Date.now());
   }
 
   get elapsedSeconds(): number {
@@ -35,7 +33,7 @@ export class TokenSpeedEngine {
   }
 
   start(): void {
-    const timestamp = this.now();
+    const timestamp = Date.now();
     this.streaming = true;
     this.tokens = 0;
     this.startedAt = timestamp;
@@ -50,7 +48,7 @@ export class TokenSpeedEngine {
     const tokenCount = Math.floor(count);
     if (tokenCount <= 0) return;
 
-    const timestamp = this.now();
+    const timestamp = Date.now();
     this.tokens += tokenCount;
     for (let index = 0; index < tokenCount; index++) {
       this.tokenTimestamps.push(timestamp);
@@ -60,7 +58,7 @@ export class TokenSpeedEngine {
   }
 
   snapshot(mode: TokenSpeedSnapshotMode = "current"): TokenSpeedMeasurement {
-    const timestamp = this.now();
+    const timestamp = Date.now();
     const tps = mode === "average" ? this.averageTpsAt(timestamp) : this.currentTpsAt(timestamp);
 
     return {
@@ -71,7 +69,7 @@ export class TokenSpeedEngine {
   }
 
   stop(): TokenSpeedMeasurement {
-    if (this.streaming) this.endedAt = this.now();
+    if (this.streaming) this.endedAt = Date.now();
 
     const measurement = this.snapshot("average");
     this.streaming = false;

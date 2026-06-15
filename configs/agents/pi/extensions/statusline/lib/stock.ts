@@ -21,7 +21,6 @@ const YAHOO_CHART_ENDPOINT = "https://query1.finance.yahoo.com/v8/finance/chart"
 export function createYahooStockQuoteProvider(
   config: StockQuoteConfig,
   fetchImpl: FetchLike = globalThis.fetch,
-  now: () => number = Date.now,
 ): StockQuoteProvider {
   let cached: CachedQuote | undefined;
 
@@ -29,7 +28,7 @@ export function createYahooStockQuoteProvider(
     async getQuote(signal?: AbortSignal): Promise<StockQuote | null> {
       if (!config.enabled) return null;
 
-      const currentTime = now();
+      const currentTime = Date.now();
       if (cached && currentTime - cached.fetchedAt < config.ttlMs) return cached.quote;
 
       try {

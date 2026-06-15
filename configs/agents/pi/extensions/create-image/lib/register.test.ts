@@ -21,7 +21,6 @@ function runtime(): CreateImageRuntime {
     saveImages: mock(async () => [
       { path: "/tmp/image.jpg", displayPath: "image.jpg", mimeType: "image/jpeg", bytes: 1 },
     ]),
-    now: mock(() => new Date("2026-05-01T17:30:04Z")),
   };
 }
 
