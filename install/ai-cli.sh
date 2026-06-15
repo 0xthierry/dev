@@ -4,6 +4,10 @@ set -euo pipefail
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+AMQ_SOURCE_URL="https://github.com/avivsinai/agent-message-queue.git"
+AMQ_VERSION="v0.36.0"
+AMQ_COMMIT="2f800a3ff2cfd1d1d5a2bf51f6ee728b2d14b13c"
+
 install_npm_global_cli() {
   local name="$1"
   local package_name="$2"
@@ -130,6 +134,56 @@ install_agent_browser_binary() {
   run_cmd agent-browser install
 }
 
+install_amq_from_source() {
+  local source_dir="$HOME/.local/share/dev-setup/sources/agent-message-queue"
+  local install_dir="$HOME/.local/bin"
+  local go_bin=""
+  local mise_bin=""
+  local resolved_commit=""
+  local -a go_cmd=()
+
+  ensure_dir "$install_dir"
+  ensure_dir "$(dirname "$source_dir")"
+
+  if go_bin="$(command -v go 2>/dev/null)"; then
+    go_cmd=("$go_bin")
+  elif mise_bin="$(resolve_mise_bin 2>/dev/null)"; then
+    go_cmd=("$mise_bin" exec go -- go)
+  else
+    printf 'error: go is unavailable and mise is not installed; cannot build AMQ\n' >&2
+    return 1
+  fi
+
+  log_item "Installing AMQ from source @ $AMQ_VERSION ($AMQ_COMMIT)..."
+
+  if [[ ! -d "$source_dir/.git" ]]; then
+    run_cmd git clone "$AMQ_SOURCE_URL" "$source_dir"
+  fi
+
+  run_cmd git -C "$source_dir" fetch --tags --force origin
+
+  if (( ! ${DRY_RUN:-0} )); then
+    resolved_commit="$(git -C "$source_dir" rev-parse "$AMQ_VERSION^{commit}")"
+    if [[ "$resolved_commit" != "$AMQ_COMMIT" ]]; then
+      printf 'error: AMQ tag %s resolved to %s, expected pinned commit %s\n' "$AMQ_VERSION" "$resolved_commit" "$AMQ_COMMIT" >&2
+      return 1
+    fi
+  fi
+
+  run_cmd git -C "$source_dir" checkout --detach "$AMQ_COMMIT"
+  run_cmd git -C "$source_dir" reset --hard "$AMQ_COMMIT"
+
+  if (( ${DRY_RUN:-0} )); then
+    # shellcheck disable=SC2016 # $1/$@ are intentionally expanded by the inner bash.
+    dry_run_cmd bash -c 'cd "$1" && shift && AMQ_NO_UPDATE_CHECK=1 "$@"' _ "$source_dir" "${go_cmd[@]}" build -trimpath -ldflags "-s -w -X main.version=$AMQ_VERSION" -o "$install_dir/amq" ./cmd/amq
+  else
+    (
+      cd "$source_dir"
+      run_cmd env AMQ_NO_UPDATE_CHECK=1 "${go_cmd[@]}" build -trimpath -ldflags "-s -w -X main.version=$AMQ_VERSION" -o "$install_dir/amq" ./cmd/amq
+    )
+  fi
+}
+
 install_ai_clis() {
   log_section "AI Coding CLIs"
 
@@ -150,6 +204,9 @@ install_ai_clis() {
 
   # Agent Browser — npm package (crates.io lags behind)
   install_agent_browser_binary "0.27.1"
+
+  # Agent Message Queue — local file-based inter-agent bus, built from a pinned source tag+commit
+  install_amq_from_source
 
   # Linear CLI (schpet) — agent-friendly Linear.app CLI
   install_npm_global_cli "Linear CLI" "@schpet/linear-cli" "2.0.0"
