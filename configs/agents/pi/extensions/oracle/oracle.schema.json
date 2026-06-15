@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pi oracle extension configuration",
+  "description": "Configuration for configs/agents/pi/extensions/oracle, normally stored at ~/.pi/oracle.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional editor schema reference. From ~/.pi/oracle.json, use ./agent/extensions/oracle/oracle.schema.json."
+    },
+    "chatgpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "ChatGPT Web impersonation settings for the oracle tool.",
+      "properties": {
+        "browser": {
+          "type": "string",
+          "enum": ["Brave", "Chromium", "Chrome"],
+          "default": "Chrome",
+          "description": "Local browser whose cookies should be used for chatgpt.com. The model never chooses this in tool calls."
+        },
+        "profile": {
+          "type": "string",
+          "default": "Default",
+          "description": "Browser profile name signed into chatgpt.com."
+        },
+        "model": {
+          "type": "string",
+          "default": "gpt-5-5-pro",
+          "description": "ChatGPT Web model id used by the oracle. Defaults to GPT-5.5 Pro."
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^g-p-[A-Za-z0-9_-]+$",
+          "description": "Optional ChatGPT project id. When set, Oracle conversations are created inside this project."
+        },
+        "timeoutMs": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 1800000,
+          "description": "Overall timeout for a single oracle request."
+        },
+        "pollIntervalMs": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 3000,
+          "description": "Polling interval while waiting for the ChatGPT conversation answer."
+        }
+      }
+    }
+  }
+}

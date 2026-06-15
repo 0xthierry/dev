@@ -8,6 +8,7 @@
       "./desktop-notification",
       "./web-access",
       "./create-image",
+      "./oracle",
       "./agent-feedback",
       "./subagent",
       "./statusline",

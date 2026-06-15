@@ -41,6 +41,7 @@ Or install one extension at a time from a local checkout:
 pi install ./configs/agents/pi/extensions/desktop-notification
 pi install ./configs/agents/pi/extensions/web-access
 pi install ./configs/agents/pi/extensions/create-image
+pi install ./configs/agents/pi/extensions/oracle
 pi install ./configs/agents/pi/extensions/agent-feedback
 pi install ./configs/agents/pi/extensions/subagent
 pi install ./configs/agents/pi/extensions/statusline
@@ -62,6 +63,7 @@ For day-to-day use on Thierry's machines, `configs/agents/install.sh` symlinks t
 - [`desktop-notification`](./desktop-notification/README.md) — sends an OSC 777 desktop notification when an agent turn finishes.
 - [`web-access`](./web-access/README.md) — registers web search, content fetch, and stored-content retrieval tools.
 - [`create-image`](./create-image/README.md) — registers `/create-image` for prompt-to-image generation.
+- [`oracle`](./oracle/README.md) — registers `oracle` for ChatGPT Web / GPT-5.5 Pro state-of-the-art second opinions.
 - [`agent-feedback`](./agent-feedback/README.md) — registers `agent_feedback` for durable workflow feedback and verification blockers.
 - [`subagent`](./subagent/README.md) — registers a Claude-compatible `Agent` tool for foreground single and parallel child Pi subagents.
 - [`statusline`](./statusline/README.md) — appends clickable PR number, git change counts, and the Cloudflare BDR quote to Pi's existing footer.
