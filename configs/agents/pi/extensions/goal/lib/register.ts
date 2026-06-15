@@ -109,10 +109,13 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
   pi.registerTool({
     name: "get_goal",
     label: "Get Goal",
-    description: "Read the current Pi autonomous goal state, if any.",
-    promptSnippet: "Read the current Pi autonomous goal state",
+    description:
+      "Read the authoritative current Pi goal state. The user can create, pause, resume, clear, or replace the goal at any time, and those changes never appear in the conversation, so this tool — not your memory or an earlier turn — is the source of truth for whether a goal exists and what its status is.",
+    promptSnippet: "Read the authoritative current Pi goal state",
     promptGuidelines: [
-      "Use get_goal only when you need structured current goal state; goal context is already injected every model call.",
+      "Call get_goal before stating whether a goal exists or is active, paused, blocked, or complete. Never answer from memory or from the fact that you created one earlier.",
+      "Always call get_goal when the user asks about the goal, and when resuming, after compaction, or after any interruption.",
+      "The injected goal contract is a point-in-time snapshot. If the current turn has no injected goal context, do not assume the goal is still active — verify with get_goal.",
     ],
     parameters: Type.Object({}, { additionalProperties: false }),
     async execute() {
@@ -129,7 +132,10 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
     promptGuidelines: [
       "Use create_goal only when the user explicitly asks for autonomous, persistent, long-running, multi-turn work, or system/developer instructions explicitly authorize goal creation.",
       "Do not create goals for normal one-shot questions or ordinary code edits.",
-      "create_goal requires concrete success criteria, a verification plan, constraints, and expected evidence.",
+      "Before creating, call get_goal to confirm the live state. Only one unfinished goal can exist at a time, and the current state — not your memory of a goal you may have created earlier — decides whether creation is allowed.",
+      "Before creating a goal for work in this codebase, inspect the relevant source, tests, and docs first so the objective and verifier name the real file paths and the exact verification command, not generic 'locate the implementation' placeholders.",
+      "create_goal requires concrete success criteria, a verification plan, constraints, and expected evidence. Write a verifier that can actually fail and is observable outside this conversation — name the exact command, test, file, or artifact; criteria satisfied by stopping, intent, or partial/scaffold work are not acceptable.",
+      "Leave turnBudget unset unless the user explicitly asks for a turn limit. Do not invent a budget on your own.",
     ],
     parameters: Type.Object(
       {
@@ -145,7 +151,11 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
         autoContinue: Type.Optional(
           Type.Boolean({ description: "Whether Pi should continue automatically. Defaults to true." }),
         ),
-        turnBudget: Type.Optional(Type.Number({ description: "Optional positive turn budget. Defaults to 512." })),
+        turnBudget: Type.Optional(
+          Type.Number({
+            description: "Positive turn limit. Leave unset unless the user explicitly asks for one; defaults to 512.",
+          }),
+        ),
       },
       { additionalProperties: false },
     ),

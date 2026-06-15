@@ -128,6 +128,36 @@ describe("registerGoalExtension", () => {
     expect(fakePi.uiNotifications.at(-1)?.message).toContain("Audit attempts: 0");
   });
 
+  test("describes get_goal as the authoritative source of truth", () => {
+    // Arrange
+    const fakePi = createFakePi();
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+
+    // Act
+    const tool = fakePi.tools.get("get_goal");
+
+    // Assert
+    expect(tool?.description).toContain("source of truth");
+    expect(JSON.stringify(tool?.promptGuidelines)).toContain("Never answer from memory");
+    expect(JSON.stringify(tool?.promptGuidelines)).toContain("when the user asks about the goal");
+  });
+
+  test("tells create_goal to ground in the repo and write a falsifiable verifier", () => {
+    // Arrange
+    const fakePi = createFakePi();
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+
+    // Act
+    const tool = fakePi.tools.get("create_goal");
+    const guidelines = JSON.stringify(tool?.promptGuidelines);
+
+    // Assert
+    expect(guidelines).toContain("call get_goal to confirm the live state");
+    expect(guidelines).toContain("inspect the relevant source, tests, and docs first");
+    expect(guidelines).toContain("a verifier that can actually fail");
+    expect(guidelines).toContain("Leave turnBudget unset unless the user explicitly asks");
+  });
+
   test("injects goal context on model context events", async () => {
     // Arrange
     setSystemTime(new Date("2026-01-01T00:00:00.000Z"));

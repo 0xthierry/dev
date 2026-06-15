@@ -16,6 +16,30 @@ describe("goal prompts", () => {
     expect(result).toContain("independent auditor");
   });
 
+  test("warns that goal state is a snapshot and must be verified with get_goal", () => {
+    // Arrange
+    const goal = createGoalState(userObjectiveToCreationInput("finish migration until tests pass"), "g1");
+
+    // Act
+    const result = activeGoalContextPrompt(goal);
+
+    // Assert
+    expect(result).toContain("point-in-time snapshot");
+    expect(result).toContain("call get_goal");
+  });
+
+  test("post-compaction reminder tells the model to re-confirm with get_goal", () => {
+    // Arrange
+    const goal = createGoalState(userObjectiveToCreationInput("finish migration until tests pass"), "g1");
+
+    // Act
+    const result = activeGoalContextPrompt(goal, { postCompactionReminder: true });
+
+    // Assert
+    expect(result).toContain("POST-COMPACTION GOAL REMINDER");
+    expect(result).toContain("call get_goal to confirm the goal is still active");
+  });
+
   test("builds continuation prompt with audit rules", () => {
     // Arrange
     const goal = createGoalState(userObjectiveToCreationInput("finish migration until tests pass"), "g1");
