@@ -2,7 +2,7 @@
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.5",
   "transport": "auto",
-  "defaultThinkingLevel": "xhigh",
+  "defaultThinkingLevel": "high",
   "theme": "dark",
   "hideThinkingBlock": false,
   "quietStartup": false,
@@ -14,7 +14,7 @@
     "anthropicExtraUsage": true
   },
   "compaction": {
-    "enabled": false
+    "enabled": true
   },
   "extensions": [
     "!../../.agents/**",
