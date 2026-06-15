@@ -7,7 +7,7 @@ import {
 } from "../shared/errors";
 import { getResult } from "../storage/result-store";
 import { GET_SEARCH_CONTENT_PARAMETERS, MAX_INLINE_CONTENT } from "./definitions";
-import { errorResult, formatToolError } from "./errors";
+import { errorResult, failTool, formatToolError } from "./errors";
 import { formatSearchSummary } from "./render";
 
 export interface ContentRange {
@@ -54,11 +54,11 @@ export function registerGetSearchContentTool(pi: ExtensionAPI): void {
     parameters: GET_SEARCH_CONTENT_PARAMETERS,
     async execute(_toolCallId, params): Promise<AgentToolResult<Record<string, unknown>>> {
       const data = getResult(params.responseId);
-      if (!data) return errorResult(storedResultNotFoundError(params.responseId), { responseId: params.responseId });
+      if (!data) failTool(storedResultNotFoundError(params.responseId));
       if (data.type === "search" && data.queries) {
         const index = params.queryIndex ?? 0;
         const query = data.queries[index];
-        if (!query) return errorResult(queryIndexOutOfRangeError(params.responseId, index, data.queries.length));
+        if (!query) failTool(queryIndexOutOfRangeError(params.responseId, index, data.queries.length));
         if (query.error) {
           const error = query.errorDetails;
           return {
@@ -73,8 +73,7 @@ export function registerGetSearchContentTool(pi: ExtensionAPI): void {
       }
       if (data.type === "fetch" && data.urls) {
         const result = params.url ? data.urls.find((item) => item.url === params.url) : data.urls[params.urlIndex ?? 0];
-        if (!result)
-          return errorResult(storedUrlNotFoundError(params.responseId, params.url, params.urlIndex, data.urls.length));
+        if (!result) failTool(storedUrlNotFoundError(params.responseId, params.url, params.urlIndex, data.urls.length));
         if (result.error) return errorResult(result.errorDetails, { url: result.url });
         const range = sliceContentRange(result.content, params.offset, params.limit);
         const text = `# ${result.title}\n\n${range.text}${nextChunkHint(params, range)}`;
@@ -92,7 +91,7 @@ export function registerGetSearchContentTool(pi: ExtensionAPI): void {
           },
         };
       }
-      return errorResult(invalidStoredDataError(params.responseId, data.type));
+      failTool(invalidStoredDataError(params.responseId, data.type));
     },
   });
 }

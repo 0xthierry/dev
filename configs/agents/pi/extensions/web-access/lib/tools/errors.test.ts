@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { noFetchUrlError } from "../shared/errors";
-import { errorResult, formatToolError } from "./errors";
+import { errorResult, formatToolError, WebAccessToolError } from "./errors";
 
 describe("formatToolError", () => {
   test("uses the shared model-friendly error format", () => {
@@ -28,5 +28,20 @@ describe("errorResult", () => {
     // Assert
     expect((result.content[0] as { text?: string } | undefined)?.text).toContain("No URL provided");
     expect(result.details).toMatchObject({ responseId: "id", error });
+  });
+});
+
+describe("WebAccessToolError", () => {
+  test("carries the structured error and a model-friendly message", () => {
+    // Arrange
+    const error = noFetchUrlError({ hasUrl: false });
+
+    // Act
+    const thrown = new WebAccessToolError(error);
+
+    // Assert
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown.message).toContain("No URL provided");
+    expect(thrown.webAccessError).toBe(error);
   });
 });

@@ -14,3 +14,17 @@ export function errorResult(
     details: { ...details, error },
   };
 }
+
+export class WebAccessToolError extends Error {
+  readonly webAccessError: WebAccessError;
+
+  constructor(error: WebAccessError) {
+    super(formatToolError(error));
+    this.name = "WebAccessToolError";
+    this.webAccessError = error;
+  }
+}
+
+export function failTool(error: WebAccessError): never {
+  throw new WebAccessToolError(error);
+}

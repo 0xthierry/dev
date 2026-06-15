@@ -20,6 +20,20 @@ export type OracleToolError =
   | { code: "ABORTED"; message: string }
   | { code: "REQUEST_FAILED"; message: string };
 
+export class OracleRequestError extends Error {
+  readonly oracleError: OracleToolError;
+
+  constructor(error: OracleToolError) {
+    super(`oracle failed: ${error.message}`);
+    this.name = "OracleRequestError";
+    this.oracleError = error;
+  }
+}
+
+function failOracle(error: OracleToolError): never {
+  throw new OracleRequestError(error);
+}
+
 export interface OracleToolDetails {
   ok: boolean;
   providerId?: string;
@@ -36,7 +50,6 @@ export interface OracleToolDetails {
   answerBytes?: number;
   answerLines?: number;
   truncated?: boolean;
-  error?: OracleToolError;
 }
 
 export function registerOracleTool(pi: ExtensionAPI, runtime: OracleRuntime): void {
@@ -69,7 +82,7 @@ export function registerOracleTool(pi: ExtensionAPI, runtime: OracleRuntime): vo
     renderResult(result, { expanded }, theme) {
       const details = result.details;
       if (!details?.ok) {
-        const message = details?.error?.message ?? textContent(result) ?? "Oracle request failed.";
+        const message = textContent(result) ?? "Oracle request failed.";
         const expandedText = expanded ? `\n\n${message}` : "";
         return new Text(`${theme.fg("error", "✗")} oracle unavailable${expandedText}`, 0, 0);
       }
@@ -91,11 +104,11 @@ export async function executeOracleTool(
   ctx: ExtensionContext,
 ): Promise<AgentToolResult<OracleToolDetails>> {
   if (signal?.aborted) {
-    return errorResult({ code: "ABORTED", message: "oracle was aborted before the request was sent." });
+    failOracle({ code: "ABORTED", message: "oracle was aborted before the request was sent." });
   }
 
   const prompt = params.prompt.trim();
-  if (!prompt) return errorResult({ code: "EMPTY_PROMPT", message: "oracle.prompt must be a non-empty string." });
+  if (!prompt) failOracle({ code: "EMPTY_PROMPT", message: "oracle.prompt must be a non-empty string." });
 
   const context = params.context ?? "resume";
   const state = context === "resume" ? restoreOracleSessionState(ctx.sessionManager.getBranch()) : undefined;
@@ -104,7 +117,8 @@ export async function executeOracleTool(
     const answer = await runtime.ask({ prompt, signal, ...(state ? { state } : {}) });
     return successResult(answer, context);
   } catch (error) {
-    return errorResult({ code: "REQUEST_FAILED", message: oracleErrorMessage(error) });
+    if (error instanceof OracleRequestError) throw error;
+    failOracle({ code: "REQUEST_FAILED", message: oracleErrorMessage(error) });
   }
 }
 
@@ -138,13 +152,6 @@ function successResult(answer: OracleAnswer, context: "resume" | "fresh"): Agent
       answerLines: truncation.totalLines,
       truncated: truncation.truncated,
     },
-  };
-}
-
-function errorResult(error: OracleToolError): AgentToolResult<OracleToolDetails> {
-  return {
-    content: [{ type: "text", text: `oracle failed: ${error.message}` }],
-    details: { ok: false, error },
   };
 }
 

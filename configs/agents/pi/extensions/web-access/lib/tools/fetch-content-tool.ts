@@ -3,7 +3,7 @@ import { fetchFailedError, noFetchUrlError } from "../shared/errors";
 import { trimText } from "../shared/text";
 import type { ExtractedContentFailure } from "../types";
 import { FETCH_CONTENT_PARAMETERS, MAX_INLINE_CONTENT } from "./definitions";
-import { errorResult } from "./errors";
+import { failTool } from "./errors";
 import { stripImages } from "./render";
 import { storeAndPublish } from "./result-publisher";
 import type { WebAccessRuntime } from "./runtime";
@@ -26,8 +26,7 @@ export function registerFetchContentTool(pi: ExtensionAPI, runtime: WebAccessRun
     parameters: FETCH_CONTENT_PARAMETERS,
     async execute(_toolCallId, params, signal, onUpdate) {
       const urls = params.urls ?? (params.url ? [params.url] : []);
-      if (urls.length === 0)
-        return errorResult(noFetchUrlError({ hasUrl: Boolean(params.url), hasUrls: Boolean(params.urls) }));
+      if (urls.length === 0) failTool(noFetchUrlError({ hasUrl: Boolean(params.url), hasUrls: Boolean(params.urls) }));
       onUpdate?.({
         content: [{ type: "text", text: `Fetching ${urls.length} URL(s)...` }],
         details: { phase: "fetch", progress: 0 },
@@ -53,12 +52,7 @@ export function registerFetchContentTool(pi: ExtensionAPI, runtime: WebAccessRun
       if (urls.length === 1) {
         const result = results[0] ?? missingResult(urls[0] ?? DEFAULT_MISSING_URL);
         if (result.error) {
-          return errorResult(result.errorDetails, {
-            responseId,
-            urls,
-            urlCount: 1,
-            successful: 0,
-          });
+          failTool(result.errorDetails);
         }
         const trimmed = trimText(result.content, MAX_INLINE_CONTENT);
         const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [];

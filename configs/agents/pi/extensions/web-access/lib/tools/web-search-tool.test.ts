@@ -2,6 +2,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 import { createFakePi } from "../../../_shared/testing/fake-pi";
 import { clearResults } from "../storage/result-store";
 import type { SearchResponse } from "../types";
+import { WebAccessToolError } from "./errors";
 import type { WebAccessRuntime } from "./runtime";
 import { registerWebSearchTool } from "./web-search-tool";
 
@@ -56,18 +57,19 @@ describe("registerWebSearchTool", () => {
     expect(fake.appendedEntries).toHaveLength(1);
   });
 
-  test("returns a structured validation error when no query is provided", async () => {
+  test("throws a structured validation error when no query is provided", async () => {
     // Arrange
     const fake = createFakePi();
     const fakeRuntime = runtime();
     registerWebSearchTool(fake.pi, fakeRuntime);
 
     // Act
-    const result = (await fake.runTool("web_search", {})) as ToolResult;
+    const error = await fake.runTool("web_search", {}).catch((thrown) => thrown);
 
     // Assert
-    expect(result.content[0]?.text).toContain("No search query provided");
-    expect(result.details.error).toMatchObject({ code: "NO_QUERY_PROVIDED", retriable: false });
+    expect(error).toBeInstanceOf(WebAccessToolError);
+    expect((error as WebAccessToolError).message).toContain("No search query provided");
+    expect((error as WebAccessToolError).webAccessError).toMatchObject({ code: "NO_QUERY_PROVIDED", retriable: false });
     expect(fakeRuntime.search).not.toHaveBeenCalled();
   });
 

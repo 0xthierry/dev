@@ -3,6 +3,7 @@ import { createFakePi } from "../../../_shared/testing/fake-pi";
 import { fetchFailedError } from "../shared/errors";
 import { clearResults } from "../storage/result-store";
 import type { ExtractedContent } from "../types";
+import { WebAccessToolError } from "./errors";
 import { registerFetchContentTool } from "./fetch-content-tool";
 import type { WebAccessRuntime } from "./runtime";
 
@@ -65,22 +66,23 @@ describe("registerFetchContentTool", () => {
     expect(result.details).toMatchObject({ truncated: true, totalChars: 30_001 });
   });
 
-  test("returns a structured validation error when no URL is provided", async () => {
+  test("throws a structured validation error when no URL is provided", async () => {
     // Arrange
     const fake = createFakePi();
     const fakeRuntime = runtime();
     registerFetchContentTool(fake.pi, fakeRuntime);
 
     // Act
-    const result = (await fake.runTool("fetch_content", {})) as ToolResult;
+    const error = await fake.runTool("fetch_content", {}).catch((thrown) => thrown);
 
     // Assert
-    expect(result.content[0]?.text).toContain("No URL provided");
-    expect(result.details.error).toMatchObject({ code: "NO_URL_PROVIDED", retriable: false });
+    expect(error).toBeInstanceOf(WebAccessToolError);
+    expect((error as WebAccessToolError).message).toContain("No URL provided");
+    expect((error as WebAccessToolError).webAccessError).toMatchObject({ code: "NO_URL_PROVIDED", retriable: false });
     expect(fakeRuntime.fetchAllContent).not.toHaveBeenCalled();
   });
 
-  test("returns structured extraction errors", async () => {
+  test("throws structured extraction errors when a single URL fetch fails", async () => {
     // Arrange
     const fake = createFakePi();
     const errorDetails = fetchFailedError("https://example.com", "blocked");
@@ -90,11 +92,11 @@ describe("registerFetchContentTool", () => {
     registerFetchContentTool(fake.pi, fakeRuntime);
 
     // Act
-    const result = (await fake.runTool("fetch_content", { url: "https://example.com" })) as ToolResult;
+    const error = await fake.runTool("fetch_content", { url: "https://example.com" }).catch((thrown) => thrown);
 
     // Assert
-    expect(result.content[0]?.text).toContain("Content extraction failed");
-    expect(result.details.error).toBe(errorDetails);
-    expect(result.details).toMatchObject({ responseId: "fetch-id", successful: 0 });
+    expect(error).toBeInstanceOf(WebAccessToolError);
+    expect((error as WebAccessToolError).message).toContain("Content extraction failed");
+    expect((error as WebAccessToolError).webAccessError).toBe(errorDetails);
   });
 });

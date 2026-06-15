@@ -4,7 +4,7 @@ import { noSearchQueryError, searchAbortedError, searchFailedError, unknownCause
 import { trimText } from "../shared/text";
 import type { ExtractedContent, QueryResultData } from "../types";
 import { MAX_INLINE_CONTENT, WEB_SEARCH_PARAMETERS } from "./definitions";
-import { errorResult, formatToolError } from "./errors";
+import { failTool, formatToolError } from "./errors";
 import { normalizeQueryList, normalizeRecencyFilter } from "./params";
 import { formatSearchSummary, uniqueUrls } from "./render";
 import { storeAndPublish } from "./result-publisher";
@@ -26,9 +26,7 @@ export function registerWebSearchTool(pi: ExtensionAPI, runtime: WebAccessRuntim
     async execute(_toolCallId, params, signal, onUpdate) {
       const queryList = normalizeQueryList(params.queries ?? params.query);
       if (queryList.length === 0) {
-        return errorResult(
-          noSearchQueryError({ hasQuery: Boolean(params.query), hasQueries: Boolean(params.queries) }),
-        );
+        failTool(noSearchQueryError({ hasQuery: Boolean(params.query), hasQueries: Boolean(params.queries) }));
       }
 
       const searchTasks = queryList.map((query, index) =>

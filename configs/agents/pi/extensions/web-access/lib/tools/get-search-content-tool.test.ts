@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { createFakePi } from "../../../_shared/testing/fake-pi";
 import { fetchFailedError, searchFailedError } from "../shared/errors";
 import { clearResults, storeResult } from "../storage/result-store";
+import { WebAccessToolError } from "./errors";
 import { registerGetSearchContentTool, sliceContentRange } from "./get-search-content-tool";
 
 type ToolResult = {
@@ -32,17 +33,21 @@ describe("sliceContentRange", () => {
 });
 
 describe("registerGetSearchContentTool", () => {
-  test("returns a structured error for missing stored results", async () => {
+  test("throws a structured error for missing stored results", async () => {
     // Arrange
     const fake = createFakePi();
     registerGetSearchContentTool(fake.pi);
 
     // Act
-    const result = (await fake.runTool("get_search_content", { responseId: "missing" })) as ToolResult;
+    const error = await fake.runTool("get_search_content", { responseId: "missing" }).catch((thrown) => thrown);
 
     // Assert
-    expect(result.content[0]?.text).toContain("Stored result not found");
-    expect(result.details.error).toMatchObject({ code: "STORED_RESULT_NOT_FOUND", retriable: false });
+    expect(error).toBeInstanceOf(WebAccessToolError);
+    expect((error as WebAccessToolError).message).toContain("Stored result not found");
+    expect((error as WebAccessToolError).webAccessError).toMatchObject({
+      code: "STORED_RESULT_NOT_FOUND",
+      retriable: false,
+    });
   });
 
   test("retrieves stored search results by query index", async () => {

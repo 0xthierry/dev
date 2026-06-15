@@ -3,7 +3,13 @@ import type { AgentToolResult, ExtensionContext } from "@earendil-works/pi-codin
 import { createFakePi } from "../../_shared/testing/fake-pi";
 import type { OracleAnswer } from "./providers/chatgpt/direct";
 import type { OracleRuntime } from "./runtime";
-import { executeOracleTool, ORACLE_TOOL_NAME, type OracleToolDetails, registerOracleTool } from "./tool";
+import {
+  executeOracleTool,
+  ORACLE_TOOL_NAME,
+  OracleRequestError,
+  type OracleToolDetails,
+  registerOracleTool,
+} from "./tool";
 
 type ToolResult = AgentToolResult<OracleToolDetails>;
 
@@ -114,25 +120,26 @@ describe("executeOracleTool", () => {
     expect(runtime.ask).toHaveBeenCalledWith({ prompt: "new thread", signal: undefined });
   });
 
-  test("returns a validation error without calling the runtime for an empty prompt", async () => {
+  test("throws a validation error without calling the runtime for an empty prompt", async () => {
     // Arrange
     const fakePi = createFakePi();
     const runtime = fakeRuntime();
 
     // Act
-    const result = (await executeOracleTool(
+    const error = await executeOracleTool(
       runtime,
       { prompt: "   " },
       undefined,
       fakePi.createContext() as unknown as ExtensionContext,
-    )) as ToolResult;
+    ).catch((thrown) => thrown);
 
     // Assert
-    expect(result.details).toMatchObject({ ok: false, error: { code: "EMPTY_PROMPT" } });
+    expect(error).toBeInstanceOf(OracleRequestError);
+    expect((error as OracleRequestError).oracleError).toMatchObject({ code: "EMPTY_PROMPT" });
     expect(runtime.ask).not.toHaveBeenCalled();
   });
 
-  test("returns an aborted result without calling the runtime", async () => {
+  test("throws an aborted error without calling the runtime", async () => {
     // Arrange
     const fakePi = createFakePi();
     const runtime = fakeRuntime();
@@ -140,19 +147,20 @@ describe("executeOracleTool", () => {
     controller.abort();
 
     // Act
-    const result = (await executeOracleTool(
+    const error = await executeOracleTool(
       runtime,
       { prompt: "ask" },
       controller.signal,
       fakePi.createContext() as unknown as ExtensionContext,
-    )) as ToolResult;
+    ).catch((thrown) => thrown);
 
     // Assert
-    expect(result.details).toMatchObject({ ok: false, error: { code: "ABORTED" } });
+    expect(error).toBeInstanceOf(OracleRequestError);
+    expect((error as OracleRequestError).oracleError).toMatchObject({ code: "ABORTED" });
     expect(runtime.ask).not.toHaveBeenCalled();
   });
 
-  test("returns a request failure when ChatGPT Web fails", async () => {
+  test("throws a request failure when ChatGPT Web fails", async () => {
     // Arrange
     const fakePi = createFakePi();
     const runtime = fakeRuntime();
@@ -161,16 +169,17 @@ describe("executeOracleTool", () => {
     });
 
     // Act
-    const result = (await executeOracleTool(
+    const error = await executeOracleTool(
       runtime,
       { prompt: "ask" },
       undefined,
       fakePi.createContext() as unknown as ExtensionContext,
-    )) as ToolResult;
+    ).catch((thrown) => thrown);
 
     // Assert
-    expect(firstText(result)).toBe("oracle failed: ChatGPT Web cookies were not found.");
-    expect(result.details).toMatchObject({ ok: false, error: { code: "REQUEST_FAILED" } });
+    expect(error).toBeInstanceOf(OracleRequestError);
+    expect((error as OracleRequestError).message).toBe("oracle failed: ChatGPT Web cookies were not found.");
+    expect((error as OracleRequestError).oracleError).toMatchObject({ code: "REQUEST_FAILED" });
   });
 });
 
