@@ -55,4 +55,52 @@ describe("messagesToCodexResponseItems", () => {
       { type: "function_call_output", call_id: "call_1", output: "file contents" },
     ]);
   });
+
+  test("synthesizes an error output for an unmatched tool call", () => {
+    // Arrange
+    const messages: AgentMessage[] = [
+      {
+        role: "assistant",
+        api: "openai-codex-responses",
+        provider: "openai-codex",
+        model: "gpt-5.4-mini",
+        content: [
+          { type: "toolCall", id: "call_missing|fc_missing", name: "write", arguments: { path: "src/index.ts" } },
+        ],
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "error",
+        errorMessage: "WebSocket error",
+        timestamp: 2,
+      },
+      { role: "user", content: "continue", timestamp: 3 },
+    ];
+
+    // Act
+    const items = messagesToCodexResponseItems(messages);
+
+    // Assert
+    expect(items).toEqual([
+      {
+        type: "function_call",
+        id: "fc_missing",
+        call_id: "call_missing",
+        name: "write",
+        arguments: JSON.stringify({ path: "src/index.ts" }),
+      },
+      {
+        type: "function_call_output",
+        call_id: "call_missing",
+        output:
+          "Tool call did not complete because the assistant turn failed before Pi recorded tool output: WebSocket error",
+      },
+      { role: "user", content: "continue" },
+    ]);
+  });
 });

@@ -9,13 +9,14 @@ export function messagesToCodexResponseItems(messages: AgentMessage[]): JsonObje
 
 export function llmMessagesToCodexResponseItems(messages: Message[]): JsonObject[] {
   const items: JsonObject[] = [];
+  const completedToolCallIds = collectToolResultCallIds(messages);
   let messageIndex = 0;
 
   for (const message of messages) {
     if (message.role === "user") {
       items.push({ role: "user", content: toInputContent(message.content) });
     } else if (message.role === "assistant") {
-      items.push(...assistantToResponseItems(message, messageIndex));
+      items.push(...assistantToResponseItems(message, messageIndex, completedToolCallIds));
     } else if (message.role === "toolResult") {
       items.push(toolResultToResponseItem(message));
     }
@@ -25,7 +26,11 @@ export function llmMessagesToCodexResponseItems(messages: Message[]): JsonObject
   return items;
 }
 
-function assistantToResponseItems(message: AssistantMessage, messageIndex: number): JsonObject[] {
+function assistantToResponseItems(
+  message: AssistantMessage,
+  messageIndex: number,
+  completedToolCallIds: ReadonlySet<string>,
+): JsonObject[] {
   const items: JsonObject[] = [];
   let textBlockIndex = 0;
 
@@ -59,6 +64,9 @@ function assistantToResponseItems(message: AssistantMessage, messageIndex: numbe
         name: block.name,
         arguments: JSON.stringify(block.arguments),
       });
+      if (!completedToolCallIds.has(callId)) {
+        items.push(missingToolResultToResponseItem(callId, message));
+      }
     }
   }
 
@@ -66,7 +74,7 @@ function assistantToResponseItems(message: AssistantMessage, messageIndex: numbe
 }
 
 function toolResultToResponseItem(message: ToolResultMessage): JsonObject {
-  const [callId] = message.toolCallId.split("|");
+  const callId = toolResultCallId(message);
   const text = message.content
     .filter((content): content is TextContent => content.type === "text")
     .map((content) => content.text)
@@ -78,6 +86,36 @@ function toolResultToResponseItem(message: ToolResultMessage): JsonObject {
     call_id: callId,
     output: images.length === 0 ? (text.length > 0 ? text : "") : text.length > 0 ? text : "(see attached image)",
   };
+}
+
+function collectToolResultCallIds(messages: Message[]): Set<string> {
+  const callIds = new Set<string>();
+  for (const message of messages) {
+    if (message.role === "toolResult") callIds.add(toolResultCallId(message));
+  }
+  return callIds;
+}
+
+function toolResultCallId(message: ToolResultMessage): string {
+  const [callId] = message.toolCallId.split("|");
+  return callId;
+}
+
+function missingToolResultToResponseItem(callId: string, message: AssistantMessage): JsonObject {
+  return {
+    type: "function_call_output",
+    call_id: callId,
+    output: missingToolResultOutput(message),
+  };
+}
+
+function missingToolResultOutput(message: AssistantMessage): string {
+  const errorMessage = (message as { errorMessage?: unknown }).errorMessage;
+  if (typeof errorMessage === "string" && errorMessage.trim().length > 0) {
+    return `Tool call did not complete because the assistant turn failed before Pi recorded tool output: ${errorMessage.trim()}`;
+  }
+
+  return "Tool call did not complete because the assistant turn ended before Pi recorded tool output.";
 }
 
 function toInputContent(content: string | (TextContent | ImageContent)[]): string | JsonObject[] {
