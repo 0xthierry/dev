@@ -53,6 +53,23 @@ describe("createFakePi", () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  test("records registered flags and returns configured flag values", () => {
+    // Arrange
+    const fakePi = createFakePi({ flags: { demo: "enabled" } });
+    const pi = fakePi.pi as unknown as {
+      registerFlag: (name: string, flag: { description: string; type: string }) => void;
+      getFlag: (name: string) => unknown;
+    };
+
+    // Act
+    pi.registerFlag("demo", { description: "Demo flag", type: "string" });
+    const value = pi.getFlag("demo");
+
+    // Assert
+    expect(fakePi.registeredFlags.get("demo")).toEqual({ description: "Demo flag", type: "string" });
+    expect(value).toBe("enabled");
+  });
+
   test("runs registered tools with a fake context", async () => {
     // Arrange
     const fakePi = createFakePi({ cwd: "/tmp/project" });

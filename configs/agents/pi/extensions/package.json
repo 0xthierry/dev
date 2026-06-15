@@ -19,11 +19,13 @@
       "./nested-agents",
       "./project-rules",
       "./lsp",
+      "./fff",
       "./excalidraw-session",
       "./dynamic-workflow"
     ]
   },
   "dependencies": {
+    "@ff-labs/fff-node": "0.9.4",
     "@mozilla/readability": "0.6.0",
     "acorn": "8.16.0",
     "impit": "0.13.1",

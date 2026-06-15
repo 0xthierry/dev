@@ -52,6 +52,7 @@ pi install ./configs/agents/pi/extensions/codex-compaction
 pi install ./configs/agents/pi/extensions/nested-agents
 pi install ./configs/agents/pi/extensions/project-rules
 pi install ./configs/agents/pi/extensions/lsp
+pi install ./configs/agents/pi/extensions/fff
 pi install ./configs/agents/pi/extensions/excalidraw-session
 pi install ./configs/agents/pi/extensions/dynamic-workflow
 ```
@@ -76,6 +77,7 @@ For day-to-day use on Thierry's machines, `configs/agents/install.sh` symlinks t
 - [`nested-agents`](./nested-agents/README.md) — dynamically loads nested `AGENTS.md` / `CLAUDE.md` files when the agent touches files under those directories.
 - [`project-rules`](./project-rules/README.md) — loads `.pi/rules`, `.agents/rules`, and `.claude/rules` with cache-friendly activation.
 - [`lsp`](./lsp/README.md) — exposes configured Language Server Protocol diagnostics and source fixes to Pi tools.
+- [`fff`](./fff/README.md) — overrides `grep`, `find`, and `multi_grep` with FFF-backed search and autocomplete.
 - [`excalidraw-session`](./excalidraw-session/README.md) — exposes an always-on local Excalidraw bridge tool for the focused browser canvas.
 - [`dynamic-workflow`](./dynamic-workflow/README.md) — registers a deterministic JavaScript `workflow` tool for explicit fan-out/fan-in child Pi orchestration.
 

@@ -14,6 +14,7 @@ type ExecResult = {
 type FakePiOptions = {
   cwd?: string;
   ctx?: Record<string, unknown>;
+  flags?: Record<string, unknown>;
   exec?: (command: string, args?: string[], options?: Record<string, unknown>) => Promise<ExecResult>;
 };
 
@@ -45,6 +46,7 @@ export type FakePi = {
   tools: Map<string, FakeRegisteredTool>;
   handlers: Map<string, Handler[]>;
   activeTools: Set<string>;
+  registeredFlags: Map<string, unknown>;
   appendedEntries: Array<{ customType: string; data?: unknown }>;
   messageRenderers: Map<string, unknown>;
   sentMessages: Array<{ message: unknown; options?: unknown }>;
@@ -62,6 +64,7 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
   const tools = new Map<string, FakeRegisteredTool>();
   const handlers = new Map<string, Handler[]>();
   const activeTools = new Set<string>();
+  const registeredFlags = new Map<string, unknown>();
   const appendedEntries: FakePi["appendedEntries"] = [];
   const messageRenderers = new Map<string, unknown>();
   const sentMessages: FakePi["sentMessages"] = [];
@@ -112,6 +115,14 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
     registerTool(tool: FakeRegisteredTool) {
       tools.set(tool.name, tool);
       activeTools.add(tool.name);
+    },
+
+    registerFlag(name: string, flag: unknown) {
+      registeredFlags.set(name, flag);
+    },
+
+    getFlag(name: string) {
+      return options.flags?.[name];
     },
 
     appendEntry(customType: string, data?: unknown) {
@@ -189,6 +200,7 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
     tools,
     handlers,
     activeTools,
+    registeredFlags,
     appendedEntries,
     messageRenderers,
     sentMessages,

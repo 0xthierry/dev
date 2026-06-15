@@ -11,6 +11,8 @@ SHARED_ENV_VARS=(
   "OPENCODE_ENABLE_EXA=true"
   "NODE_OPTIONS=--max-old-space-size=16384 --localstorage-file=\$HOME/.node-localstorage"
   "PI_SKIP_VERSION_CHECK=1"
+  "FFF_FRECENCY_DB=\$HOME/.cache/pi/fff/frecency.sqlite"
+  "FFF_HISTORY_DB=\$HOME/.cache/pi/fff/history.sqlite"
 )
 
 write_env_file() {
@@ -22,6 +24,7 @@ write_env_file() {
 
   log_section "Environment"
   ensure_dir "$(dirname "$target")"
+  ensure_dir "$HOME/.cache/pi/fff"
 
   tmp="$(mktemp)"
   {
