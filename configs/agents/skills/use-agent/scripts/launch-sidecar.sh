@@ -124,11 +124,39 @@ open_in_ghostty_split_macos() {
   local run_text
   run_text="exec bash $(printf '%q' "$launcher")"
 
-  /usr/bin/osascript - "$run_text" <<'APPLESCRIPT'
+  # ⌘D splits whatever Ghostty window is focused, which may not be the one running
+  # the main. Raise the main's own window first (Ghostty titles it after the project,
+  # e.g. "π - <project>"), matched by the invoking directory's basename, so the split
+  # lands next to the main. If no window matches, fall back to the focused window.
+  local win_match
+  win_match="$2"
+
+  /usr/bin/osascript - "$run_text" "$win_match" <<'APPLESCRIPT'
 on run argv
   set runText to item 1 of argv
+  set winMatch to item 2 of argv
   tell application "Ghostty" to activate
-  delay 0.35
+  delay 0.25
+  if winMatch is not "" then
+    try
+      tell application "System Events" to tell process "Ghostty"
+        set matches to (every window whose name contains winMatch)
+        set chosen to missing value
+        -- Prefer the pi main's window (Ghostty titles it "π - <project>") over any
+        -- other window that merely mentions the project name.
+        repeat with w in matches
+          if name of w starts with "π" then set chosen to w
+        end repeat
+        if chosen is missing value and (count of matches) > 0 then set chosen to item 1 of matches
+        if chosen is not missing value then
+          perform action "AXRaise" of chosen
+          set frontmost to true
+          delay 0.25
+        end if
+      end tell
+    end try
+  end if
+  delay 0.2
   tell application "System Events" to keystroke "d" using command down
   delay 0.8
   set the clipboard to runText
@@ -265,7 +293,7 @@ COMMAND_TEXT="cd $(printf '%q' "$CWD") && exec $(quote_cmd "${SIDECAR_CMD[@]}")"
 
 OPENED=0
 if [[ "$(uname -s)" == "Darwin" ]]; then
-  if open_in_ghostty_split_macos "$COMMAND_TEXT"; then
+  if open_in_ghostty_split_macos "$COMMAND_TEXT" "$(basename "$CWD")"; then
     OPENED=1
   fi
 fi
