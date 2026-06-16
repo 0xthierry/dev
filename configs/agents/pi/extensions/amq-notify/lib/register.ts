@@ -48,11 +48,11 @@ export function registerAmqNotifyExtension(pi: ExtensionAPI): void {
     systemPrompt: `${event.systemPrompt}\n\n[amq-notify] ${WAIT_GUIDANCE}`,
   }));
 
-  // Own the push loop at PROCESS scope, not session scope. In pi, session_start and
-  // session_shutdown bracket each agent run — so starting the loop from session_start
-  // (behind a once-guard) and killing it from session_shutdown left the notifier dead
-  // after the first turn, and pi fell back to polling. We only track the latest
-  // ExtensionContext for isIdle(); the loop itself runs for the life of the process.
+  // Own the push loop at PROCESS scope, not session scope. pi fires session_start /
+  // session_shutdown around a session reload/resume (not per turn) — so starting the
+  // loop from session_start (behind a once-guard) and killing it from session_shutdown
+  // left the notifier dead after the first reload, and pi fell back to polling. We only
+  // track the latest ExtensionContext for isIdle(); the loop runs for the life of the process.
   let ctx: ExtensionContext | undefined;
   pi.on("session_start", (_event, c) => {
     ctx = c;
