@@ -29,22 +29,24 @@ The user explicitly asks for a second agent: "use claude as a sidecar", "get a s
 
 ## Launch
 
-Run the helper from the project root. It detects which harness you are, initializes AMQ, writes the worker's system prompt, and opens the worker in a Ghostty split:
+Run the helper script in this skill's own `scripts/` directory by its **absolute path** — a repo-relative path fails unless your cwd is the repo root:
 
 ```bash
-configs/agents/skills/use-agent/scripts/launch-sidecar.sh --topic "<kebab-topic>"
+# pi:
+~/.pi/agent/skills/use-agent/scripts/launch-sidecar.sh --topic "<kebab-topic>"
+# claude:
+~/.claude/skills/use-agent/scripts/launch-sidecar.sh --topic "<kebab-topic>"
 ```
 
-The helper starts the worker with this command — always `--dangerously-skip-permissions` for Claude, with the relationship carried in `--append-system-prompt`:
+It detects which harness you are, reuses your `AM_ROOT` if set (so the worker joins your session), writes the worker's system prompt, and opens the worker in a Ghostty split. Under the hood it launches the Claude worker like this (model-pinned, folder trust pre-accepted, worker protocol passed by file):
 
 ```bash
-amq coop exec --session use-agent-<topic> claude -- \
-  --dangerously-skip-permissions \
-  --name use-agent-<topic> \
-  --append-system-prompt "<worker protocol>"
+amq coop exec --root "$AM_ROOT" claude -- \
+  --model claude-opus-4-8 --effort xhigh --dangerously-skip-permissions \
+  --append-system-prompt-file <worker-prompt> "<kickoff>"
 ```
 
-`amq coop exec` sets `AM_ROOT=.agent-mail/use-agent-<topic>` and `AM_ME=claude` inside the worker, so the worker talks with bare `amq` commands.
+`amq coop exec` sets `AM_ROOT` and `AM_ME=claude` inside the worker, so the worker talks with bare `amq` commands.
 
 If the helper reports that Ghostty split automation was unavailable, tell the user and paste the printed command into a split yourself. Do not continue as if the worker were running.
 
@@ -54,14 +56,13 @@ AMQ is the only shared source of truth. Terminal scrollback and your private rea
 
 You (the main) are **not** inside `coop exec`, so set the queue location on each command. The session root is deterministic: `.agent-mail/use-agent-<topic>`.
 
-Send a message to the worker:
+Send a message to the worker (plain by default — it advises and won't change anything unless you tell it to):
 
 ```bash
 AM_ROOT=.agent-mail/use-agent-<topic> AM_ME=pi \
 amq send --to claude \
-  --subject "[REVIEW] auth refactor plan" \
-  --kind review_request \
-  --body $'Intent: review\n\n<your message>'
+  --subject "auth refactor plan" \
+  --body '<your message — e.g. here is the plan, what are the risks?>'
 ```
 
 Read what the worker has sent (non-blocking — prints whatever has arrived, as plain text):
@@ -82,9 +83,20 @@ Use `amq send --to <handle>` for every message, including replies. Do **not** us
 
 That is the whole surface you need: **send** to talk, **drain** to read, **monitor** to wait.
 
-### Receiving replies (you pull; the worker is pushed)
+### Receiving replies
 
-You run in your normal session, **not** under `coop exec`, so nothing auto-notifies you — you fetch the reply yourself:
+**If you are pi**, you have the `amq-notify` auto-notifier: do **not** poll. Send your request and **finish your turn** — the reply is delivered to you automatically as a new turn. Running `amq monitor`/`amq drain`/`sleep` to wait races with the notifier and wastes turns.
+
+Red-flag thoughts — if you catch yourself thinking any of these, stop: that thought *is* the signal to end your turn now.
+
+- "I shouldn't end my turn until the reply arrives" — backwards; **ending the turn is how you wait**. You'll be given a new turn when it lands.
+- "Let me run `amq monitor`/`amq drain`/`amq watch` to wait for it" — no; that races the notifier.
+- "I'll `sleep` until it comes" — no; sleeping only delays the push (you're busy, so it queues behind the sleep).
+- "Let me check whether it arrived yet" — no; you'll be told. Don't poll.
+
+Just send, say you're waiting, and stop. Waiting = doing nothing.
+
+**If you are claude** (no auto-notifier), you fetch the reply yourself:
 
 - **Check (non-blocking):** `amq drain --include-body` returns whatever has arrived, or nothing. Prefer this on your next step so you stay responsive.
 - **Wait (blocking):** `amq monitor --include-body` blocks until a message lands (or `--timeout`). Good for a deliberate "ask and wait now," but it holds your turn, so the pane looks busy meanwhile.
@@ -97,42 +109,46 @@ The worker sends **several messages** per request (a readiness ack, then the res
 
 **Artifacts and images travel by path, not inline.** AMQ bodies are text. The worker writes the file (you share a working directory) and sends its path; you read or open that path. Same for a screenshot, diff, or generated file — save it, send the path.
 
-## Say what you want: action vs. context
+## Asking the worker to act vs. think with you
 
-Every message must declare its intent so the worker knows whether to act or just listen. Put a tag in the subject and an `Intent:` line as the first line of the body.
+The worker runs in **advisor mode by default**: it answers, reviews, and reasons, but it will not modify files or run mutating commands unless you explicitly tell it to. So most messages need no ceremony — just write what you want and the worker responds without touching anything.
 
-| Intent | Subject tag | `--kind` | Worker does |
-|---|---|---|---|
-| action | `[ACTION]` | `todo` | Do the requested work. |
-| review | `[REVIEW]` | `review_request` | Critique / second opinion. Does not edit unless asked. |
-| question | `[QUESTION]` | `question` | Answer. |
-| context | `[CONTEXT]` | `status` | Absorb it. **Does not act.** |
-| done | `[DONE]` | `status` | Reports finished, with evidence. |
-| blocked | `[BLOCKED]` | `question` | Reports it needs input to continue. |
+When you actually want the worker to *do* something — change files, run a task, implement — say so plainly and add `--kind act`. That one marker is what flips it from advising to acting; everything else stays safe by default. The worker reports back with `--kind done` (finished — with what it changed or checked) or `--kind blocked` (it needs input). That is the whole convention: **`act` to escalate, `done`/`blocked` to report.**
 
-The load-bearing distinction is **action vs. context**. If you want the worker to do or change something, send `[ACTION]`, `[REVIEW]`, or `[QUESTION]`. If you are only sharing state — a user decision, a new constraint, what you just tried — send `[CONTEXT]`, and the worker must not start work from it. Be explicit every time; never leave the worker guessing whether a message is a request or background.
+```bash
+# Think with me (default — no marker): review, question, share context
+AM_ROOT=.agent-mail/use-agent-<topic> AM_ME=pi \
+amq send --to claude --subject "auth refactor plan" \
+  --body 'Here is the plan and where I am unsure: ... What are the risks?'
+
+# Do this (escalate to action)
+AM_ROOT=.agent-mail/use-agent-<topic> AM_ME=pi \
+amq send --to claude --kind act --subject "implement token refresh" \
+  --body 'Implement the refresh flow in src/auth.ts. You own that file; I will stay out of it. Done when the tests in auth.test.ts pass.'
+```
+
+If something might read like a request but isn't, say so ("FYI only, no action"). When you hand the worker action work, name the files it owns so you are never editing the same file at the same time.
 
 ## Brief before you ask (shared context)
 
-You are pair programming, so the worker needs your mental model before it can help. Before your first `[ACTION]` or `[REVIEW]`, send a `[CONTEXT]` briefing: the task, the decisions made so far, the relevant files, the constraints, and what you have already tried. Then keep it in sync — when the user decides something or you change direction, forward it as `[CONTEXT]`. A thin briefing produces thin help; include enough that the worker could act without seeing your screen.
+You are pair programming, so the worker needs your mental model before it can help. Before your first real ask, send a briefing: the task, the decisions made so far, the relevant files, the constraints, and what you have already tried. Keep it in sync — when the user decides something or you change direction, forward it. A thin briefing produces thin help; include enough that the worker could act without seeing your screen. No marker needed — a briefing is advisory, so the worker absorbs it and won't act on it.
 
 ```bash
 AM_ROOT=.agent-mail/use-agent-<topic> AM_ME=pi \
 amq send --to claude \
-  --subject "[CONTEXT] task briefing" \
-  --kind status \
-  --body $'Intent: context\n\nTask: <what we are doing>\nDecisions: <what the user chose>\nFiles: <paths that matter>\nTried: <what already failed>\nNo action needed yet.'
+  --subject "task briefing" \
+  --body $'Task: <what we are doing>\nDecisions: <what the user chose>\nFiles: <paths that matter>\nTried: <what already failed>'
 ```
 
 ## Common uses
 
-- **Second opinion on a plan** — `[REVIEW]` your plan plus the constraints and what you are unsure about; ask for risks and alternatives.
-- **Reviewer / auditor** — `[REVIEW]` a diff or a completion claim with the acceptance criteria and tests run; ask for approve/reject with evidence.
-- **Implementation help** — `[ACTION]` with explicit file ownership and success criteria; avoid editing the same files at the same time.
-- **Sounding board** — `[QUESTION]` a design tradeoff, and `[CONTEXT]` to keep the worker looped in on user decisions as they happen.
+- **Second opinion on a plan** — send your plan, the constraints, and what you are unsure about; ask for risks and alternatives. Default mode: it advises, doesn't edit.
+- **Reviewer / auditor** — send a diff or a completion claim with the acceptance criteria and tests run; ask for approve/reject with evidence.
+- **Implementation help** — `--kind act` with explicit file ownership and success criteria; avoid editing the same files at the same time.
+- **Sounding board** — ask about a design tradeoff, and keep the worker looped in on user decisions as they happen.
 
 ## Stop conditions
 
 - You own synthesis and the final user response; relay the worker's findings in your own words.
-- Do not claim the worker did or verified something unless its `[DONE]` message says what it checked.
+- Do not claim the worker did or verified something unless its `done` reply says what it checked.
 - The worker is a peer, not an oracle. Weigh its output; don't rubber-stamp it.

@@ -19,7 +19,8 @@
       "./lsp",
       "./fff",
       "./excalidraw-session",
-      "./goal"
+      "./goal",
+      "./amq-notify"
     ]
   },
   "dependencies": {

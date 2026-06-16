@@ -82,33 +82,27 @@ if something was not sent over AMQ, you do not know it. Your handle is ${sidecar
 main is ${main_handle}. AM_ROOT and AM_ME are already set, so use bare amq commands.
 
 You are notified automatically: a background waker types a short notice into THIS terminal when
-mail arrives (e.g. "AMQ: message from ${main_handle} - ... Drain with: amq drain --include-body").
-You are pushed, not polling — do NOT sit in an "amq monitor" loop. Each time such a notice
-appears, and once now at startup to catch anything already waiting:
-1. Run: amq drain --include-body   (read it as plain text; never pipe amq output through jq)
-2. Handle each message per its intent (below), then reply with an explicit send to ${main_handle}.
-On your first turn also send a brief readiness ping:
-   amq send --to ${main_handle} --subject "[DONE] ${sidecar_handle} ready" --kind status --body \$'Intent: done\n\n${sidecar_handle} worker ready.'
-If you ever suspect you missed a message, run "amq drain --include-body" once to catch up.
+mail arrives. You are pushed, not polling — do NOT sit in an "amq monitor" loop or run "sleep"
+to wait. To wait, simply finish your turn; you are given a turn automatically when mail arrives.
+Each time a notice appears, and once now at startup to catch anything already waiting, run:
+   amq drain --include-body      (read as plain text; never pipe amq output through jq)
+On your first turn, also send a brief "ready" message to ${main_handle}, then wait.
 
-Each message declares its intent in the subject tag and the first body line. Act accordingly:
-- [ACTION]   / kind=todo           / "Intent: action"   -> do the requested work.
-- [REVIEW]   / kind=review_request / "Intent: review"   -> critique or give a second opinion;
-                                                            do not change files unless asked.
-- [QUESTION] / kind=question       / "Intent: question" -> answer.
-- [CONTEXT]  / kind=status         / "Intent: context"  -> passive briefing, decision, or
-                                                            state. Absorb it; do NOT act on it.
+DEFAULT STANCE — advise, don't act. Treat every message as a request to think with the main,
+not to change things: answer, review, reason, flag risks, suggest. Do NOT modify files, run
+mutating or stateful commands, or start implementation UNLESS a message explicitly tells you to
+act — it will carry "--kind act" or plainly say so. If a message is ambiguous about whether to
+act, ask before doing anything. Never edit files the main is actively editing; before changing
+shared files, confirm you own them.
+   - plain message (no act marker) -> respond/advise only; leave the working tree untouched.
+   - --kind act                    -> do the requested work, then report what you did.
 
-The action-vs-context distinction is load-bearing: only do work when a message asks you to.
-If you are unsure whether a message wants action or is just context, ask before acting.
-
-Reply with an explicit send to the main (do NOT use amq reply):
-   amq send --to ${main_handle} --subject "Re: <subject>" --kind <status|review_response|answer> --body \$'Intent: <done|blocked|...>\n\n<your reply>'
-
-When the work is substantial, first send a short [DONE]/status acknowledgement with your plan,
-then send the result. Never claim completion without stating what you changed or checked. If
-you need input to continue, send [BLOCKED] with kind=question. The main owns final synthesis
-and all user-facing communication.
+Reply with an explicit send to the main (do NOT use amq reply — the main is not a coop
+participant, so reply cannot resolve it):
+   amq send --to ${main_handle} --subject "Re: <subject>" --body \$'<your reply>'
+Mark a reply "--kind done" when you have finished requested work (and state exactly what you
+changed or checked), or "--kind blocked" when you need input to continue. Never claim completion
+without saying what you did. The main owns final synthesis and all user-facing communication.
 EOF
 }
 
@@ -119,20 +113,29 @@ open_in_ghostty_split_macos() {
     return 1
   fi
 
-  /usr/bin/osascript - "$command_text" <<'APPLESCRIPT'
+  # Paste a SHORT launcher command, not the full ~280-char command. A long clipboard
+  # paste often has not finished landing when Return fires, leaving the split as a bare
+  # shell with the worker never started. Writing the command to a temp script and pasting
+  # "exec bash <file>" keeps the keystroke payload tiny and reliable.
+  local launcher
+  launcher="$(mktemp "${TMPDIR:-/tmp}/use-agent-launch.XXXXXX.sh")" || return 1
+  printf '%s\n' "$command_text" > "$launcher"
+  chmod +x "$launcher"
+  local run_text
+  run_text="exec bash $(printf '%q' "$launcher")"
+
+  /usr/bin/osascript - "$run_text" <<'APPLESCRIPT'
 on run argv
-  set commandText to item 1 of argv
+  set runText to item 1 of argv
   tell application "Ghostty" to activate
-  delay 0.2
-  tell application "System Events"
-    keystroke "d" using command down
-  end tell
   delay 0.35
-  set the clipboard to commandText
-  tell application "System Events"
-    keystroke "v" using command down
-    key code 36
-  end tell
+  tell application "System Events" to keystroke "d" using command down
+  delay 0.8
+  set the clipboard to runText
+  delay 0.25
+  tell application "System Events" to keystroke "v" using command down
+  delay 0.45
+  tell application "System Events" to key code 36
 end run
 APPLESCRIPT
 }
@@ -224,6 +227,16 @@ if [[ -z "$SESSION" ]]; then
   SESSION="use-agent-${TOPIC_SLUG}"
 fi
 
+# If the main session already has an AMQ binding (e.g. the amq-notify pi extension set
+# AM_ROOT to a per-process session), launch the worker into that same session so the
+# main is notified of replies. Otherwise use a topic-named session under the default root.
+if [[ -n "${AM_ROOT:-}" ]]; then
+  SESSION="$(basename "$AM_ROOT")"
+  SESSION_ARG=(--root "$AM_ROOT")
+else
+  SESSION_ARG=(--session "$SESSION")
+fi
+
 if [[ ! -d "$CWD" ]]; then
   err "cwd does not exist: $CWD"
   exit 1
@@ -239,13 +252,13 @@ write_sidecar_prompt "$PROMPT_FILE" "$MAIN_HANDLE" "$SIDECAR_HANDLE"
 # Interactive agents only act when given a turn. This initial message gives the worker its first
 # turn (drain anything already queued + announce readiness); afterward it idles and amq wake
 # pushes a turn for each new message.
-KICKOFF="You just started as the ${SIDECAR_HANDLE} worker. Run: amq drain --include-body  to handle anything already waiting, send a brief [DONE] readiness ping to ${MAIN_HANDLE}, then wait for notifications (do not loop on amq monitor)."
+KICKOFF="You just started as the ${SIDECAR_HANDLE} worker. Run: amq drain --include-body  to handle anything already waiting, send a brief 'ready' message to ${MAIN_HANDLE}, then wait for notifications (do not loop on amq monitor)."
 
 if [[ "$SIDECAR_HANDLE" == "claude" ]]; then
   ensure_claude_trusts_dir "$CWD"
-  SIDECAR_CMD=(amq coop exec --session "$SESSION" claude -- --name "use-agent-${TOPIC_SLUG}" --model claude-opus-4-8 --effort xhigh --dangerously-skip-permissions --append-system-prompt-file "$PROMPT_FILE" "$KICKOFF")
+  SIDECAR_CMD=(amq coop exec "${SESSION_ARG[@]}" claude -- --name "use-agent-${TOPIC_SLUG}" --model claude-opus-4-8 --effort xhigh --dangerously-skip-permissions --append-system-prompt-file "$PROMPT_FILE" "$KICKOFF")
 else
-  SIDECAR_CMD=(amq coop exec --session "$SESSION" pi -- --name "use-agent-${TOPIC_SLUG}" --model openai-codex/gpt-5.5 --thinking high --append-system-prompt "$PROMPT_FILE" "$KICKOFF")
+  SIDECAR_CMD=(amq coop exec "${SESSION_ARG[@]}" pi -- --name "use-agent-${TOPIC_SLUG}" --model openai-codex/gpt-5.5 --thinking high --append-system-prompt "$PROMPT_FILE" "$KICKOFF")
 fi
 
 COMMAND_TEXT="cd $(printf '%q' "$CWD") && exec $(quote_cmd "${SIDECAR_CMD[@]}")"
@@ -257,7 +270,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   fi
 fi
 
-ROOT_JSON="$(amq env --session "$SESSION" --me "$MAIN_HANDLE" --json)"
+ROOT_JSON="$(amq env "${SESSION_ARG[@]}" --me "$MAIN_HANDLE" --json)"
 ROOT="$(printf '%s' "$ROOT_JSON" | jq -r .root 2>/dev/null || true)"
 
 log "use-agent sidecar"
@@ -280,7 +293,7 @@ fi
 log ""
 log "Send messages with:"
 if [[ -n "$ROOT" && "$ROOT" != "null" ]]; then
-  log "  AM_ROOT=$(printf '%q' "$ROOT") AM_ME=$MAIN_HANDLE amq send --to $SIDECAR_HANDLE --subject '[REVIEW] <topic>' --kind review_request --body '<body>'"
+  log "  AM_ROOT=$(printf '%q' "$ROOT") AM_ME=$MAIN_HANDLE amq send --to $SIDECAR_HANDLE --subject '<topic>' --body '<ask>'   (add --kind act to have it change files)"
 else
-  log "  AM_ME=$MAIN_HANDLE amq send --session $SESSION --to $SIDECAR_HANDLE --subject '[REVIEW] <topic>' --kind review_request --body '<body>'"
+  log "  AM_ME=$MAIN_HANDLE amq send --session $SESSION --to $SIDECAR_HANDLE --subject '<topic>' --body '<ask>'   (add --kind act to have it change files)"
 fi
