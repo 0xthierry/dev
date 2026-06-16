@@ -1,5 +1,6 @@
 export const GOAL_STATE_ENTRY = "pi-goal-state";
 export const GOAL_CONTEXT_MESSAGE = "pi-goal-context";
+export const GOAL_STALL_MESSAGE = "pi-goal-stall";
 export const GOAL_EVENT_MESSAGE = "pi-goal-event";
 export const GOAL_AUDIT_MESSAGE = "pi-goal-audit";
 

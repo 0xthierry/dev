@@ -27,11 +27,14 @@ describe("goal progress guards", () => {
     expect(results).toEqual([false, false]);
   });
 
-  test("counts only file mutations as substantive progress", () => {
+  test("counts state-changing tools as substantive progress", () => {
     // Arrange
     const calls = [
       ["edit", { path: "src/index.ts" }],
       ["write", { path: "src/new.ts", content: "x" }],
+      ["bash", { command: "bun install --frozen-lockfile" }],
+      ["agent", { prompt: "fix the tests" }],
+      ["excalidraw_canvas", { action: "add_elements", elements: [] }],
       ["read", { path: "src/index.ts" }],
       ["grep", { query: "foo" }],
       ["bash", { command: "bun run test" }],
@@ -42,7 +45,7 @@ describe("goal progress guards", () => {
     const results = calls.map(([tool, input]) => isSubstantiveProgressToolCall(tool, input));
 
     // Assert
-    expect(results).toEqual([true, true, false, false, false, false]);
+    expect(results).toEqual([true, true, true, true, true, false, false, false, false]);
   });
 
   test("blocks mutating tools after lifecycle stop", () => {

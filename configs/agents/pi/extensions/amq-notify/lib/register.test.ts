@@ -11,6 +11,9 @@ const { registerAmqNotifyExtension } = await import("./register");
 
 type Handler = (event: unknown, ctx: unknown) => unknown;
 type Entry = { type: string; customType?: string; data?: unknown };
+type ExecCall = { command: string; args: string[]; options: Record<string, unknown> };
+
+type SentMessage = { text: string; options?: unknown };
 
 // A session store whose custom entries persist across extension instances — this is
 // how pi carries state across a /reload (rebind) or a stop+resume (new process).
@@ -21,10 +24,11 @@ function makeSession() {
 
 // One extension instance bound to a (possibly shared) session, modelling pi's
 // per-session rebinding: each reload/resume re-runs the factory with a fresh `pi`.
-function makeInstance(session: ReturnType<typeof makeSession>) {
+function makeInstance(session: ReturnType<typeof makeSession>, options: { idle?: boolean } = {}) {
   const handlers: Record<string, Handler> = {};
-  const sent: string[] = [];
-  let parked = false;
+  const sent: SentMessage[] = [];
+  const execCalls: ExecCall[] = [];
+  let monitorCalls = 0;
   const pi = {
     on(event: string, handler: Handler) {
       handlers[event] = handler;
@@ -32,35 +36,63 @@ function makeInstance(session: ReturnType<typeof makeSession>) {
     appendEntry(customType: string, data: unknown) {
       session.entries.push({ type: "custom", customType, data });
     },
-    async exec() {
-      if (parked) return new Promise(() => {});
-      await new Promise((r) => setTimeout(r, 1));
-      return { stdout: "[AMQ] 1 message(s) for pi:\n\n- From: tester", code: 0 };
+    async exec(command: string, args: string[] = [], execOptions: Record<string, unknown> = {}) {
+      execCalls.push({ command, args, options: execOptions });
+      await new Promise((resolve) => setTimeout(resolve, 1));
+
+      if (args[0] === "monitor") {
+        monitorCalls += 1;
+        if (monitorCalls === 1) {
+          return {
+            stdout: JSON.stringify({
+              event: "messages",
+              mode: "peek",
+              me: "pi",
+              count: 1,
+              drained: [{ id: "msg-1", from: "tester", thread: "p2p/tester__pi", body: "hello" }],
+            }),
+            stderr: "",
+            code: 0,
+          };
+        }
+
+        return {
+          stdout: JSON.stringify({ event: "timeout", mode: "peek", me: "pi", count: 0, drained: [] }),
+          stderr: "monitor timed out",
+          code: 4,
+        };
+      }
+
+      return { stdout: "", stderr: "", code: 0 };
     },
-    sendUserMessage(text: string) {
-      sent.push(text);
+    sendUserMessage(text: string, sendOptions?: unknown) {
+      sent.push({ text, options: sendOptions });
     },
   };
-  const ctx = { cwd: "/tmp/amq-notify-test", isIdle: () => true, sessionManager: session.sessionManager };
+  const ctx = {
+    cwd: "/tmp/amq-notify-test",
+    isIdle: () => options.idle ?? true,
+    sessionManager: session.sessionManager,
+  };
   return {
+    execCalls,
     sent,
     // biome-ignore lint/suspicious/noExplicitAny: minimal ExtensionAPI mock
     register: () => registerAmqNotifyExtension(pi as any),
     start: (reason: string) => handlers.session_start?.({ type: "session_start", reason }, ctx),
+    beforeAgentStart: (systemPrompt: string) => handlers.before_agent_start?.({ systemPrompt }, ctx),
     shutdown: () => handlers.session_shutdown?.({ type: "session_shutdown", reason: "reload" }, ctx),
-    park: () => {
-      parked = true;
-    },
   };
 }
 
-const tick = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const tick = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function bindingEntries(session: ReturnType<typeof makeSession>) {
-  return session.entries.filter((e) => e.customType === "amq-notify-binding");
+  return session.entries.filter((entry) => entry.customType === "amq-notify-binding");
 }
 
 test("a rebound instance (reload/resume) reuses the persisted room and keeps delivering", async () => {
+  // Arrange
   const prev = {
     root: process.env.AM_ROOT,
     me: process.env.AM_ME,
@@ -72,32 +104,27 @@ test("a rebound instance (reload/resume) reuses the persisted room and keeps del
 
   try {
     const session = makeSession();
-
-    // First start: mints a room, persists it, and delivers.
     const a = makeInstance(session);
     a.register();
+
+    // Act
     a.start("startup");
     await tick(25);
     const rootA = process.env.AM_ROOT;
-    expect(rootA).toBeTruthy();
-    expect(a.sent.length).toBeGreaterThan(0);
-    expect(bindingEntries(session).length).toBe(1);
-
-    // Reload/resume: tear down A, re-run the factory as a fresh instance B against
-    // the SAME persisted session.
     a.shutdown();
-    a.park();
-
     const b = makeInstance(session);
     b.register();
     b.start("reload");
     await tick(25);
 
-    expect(process.env.AM_ROOT).toBe(rootA); // reconnected to the same room
-    expect(b.sent.length).toBeGreaterThan(0); // the rebound instance keeps delivering
-    expect(bindingEntries(session).length).toBe(1); // did not mint a second room
-
-    b.park();
+    // Assert
+    expect(rootA).toBeTruthy();
+    expect(a.sent.length).toBe(1);
+    expect(process.env.AM_ROOT).toBe(rootA);
+    expect(b.sent.length).toBe(1);
+    expect(bindingEntries(session).length).toBe(1);
+    expect(b.execCalls.some((call) => call.args[0] === "read" && call.args.includes("msg-1"))).toBe(true);
+    b.shutdown();
   } finally {
     if (prev.root !== undefined) process.env.AM_ROOT = prev.root;
     else delete process.env.AM_ROOT;
@@ -109,20 +136,77 @@ test("a rebound instance (reload/resume) reuses the persisted room and keeps del
 });
 
 test("a coop-exec worker (inherited AM_ROOT) stays out of the way", async () => {
+  // Arrange
   const prev = { root: process.env.AM_ROOT, role: process.env.AMQ_NOTIFY_ROLE };
-  process.env.AM_ROOT = "/tmp/coop-session"; // as if set by `amq coop exec`
+  process.env.AM_ROOT = "/tmp/coop-session";
   delete process.env.AMQ_NOTIFY_ROLE;
 
   try {
     const session = makeSession();
-    const w = makeInstance(session);
-    w.register();
-    w.start("startup");
+    const worker = makeInstance(session);
+
+    // Act
+    worker.register();
+    worker.start("startup");
     await tick(10);
-    expect(w.sent.length).toBe(0); // no push loop
-    expect(bindingEntries(session).length).toBe(0); // did not mint a room
-    expect(process.env.AM_ROOT).toBe("/tmp/coop-session"); // left untouched
-    w.park();
+
+    // Assert
+    expect(worker.sent.length).toBe(0);
+    expect(bindingEntries(session).length).toBe(0);
+    expect(process.env.AM_ROOT).toBe("/tmp/coop-session");
+  } finally {
+    if (prev.root !== undefined) process.env.AM_ROOT = prev.root;
+    else delete process.env.AM_ROOT;
+    if (prev.role !== undefined) process.env.AMQ_NOTIFY_ROLE = prev.role;
+    else delete process.env.AMQ_NOTIFY_ROLE;
+  }
+});
+
+test("busy sessions steer incoming AMQ notices into the active agent turn", async () => {
+  // Arrange
+  const prev = { root: process.env.AM_ROOT, role: process.env.AMQ_NOTIFY_ROLE };
+  delete process.env.AM_ROOT;
+  delete process.env.AMQ_NOTIFY_ROLE;
+
+  try {
+    const session = makeSession();
+    const instance = makeInstance(session, { idle: false });
+    instance.register();
+
+    // Act
+    instance.start("startup");
+    await tick(25);
+
+    // Assert
+    expect(instance.sent).toHaveLength(1);
+    expect(instance.sent[0]?.options).toEqual({ deliverAs: "steer" });
+    instance.shutdown();
+  } finally {
+    if (prev.root !== undefined) process.env.AM_ROOT = prev.root;
+    else delete process.env.AM_ROOT;
+    if (prev.role !== undefined) process.env.AMQ_NOTIFY_ROLE = prev.role;
+    else delete process.env.AMQ_NOTIFY_ROLE;
+  }
+});
+
+test("adds stable wait guidance to the system prompt", () => {
+  // Arrange
+  const prev = { root: process.env.AM_ROOT, role: process.env.AMQ_NOTIFY_ROLE };
+  delete process.env.AM_ROOT;
+  delete process.env.AMQ_NOTIFY_ROLE;
+  const session = makeSession();
+  const instance = makeInstance(session);
+
+  try {
+    instance.register();
+
+    // Act
+    const result = instance.beforeAgentStart("base prompt") as { systemPrompt: string };
+
+    // Assert
+    expect(result.systemPrompt).toContain("base prompt");
+    expect(result.systemPrompt).toContain("[amq-notify]");
+    expect(result.systemPrompt).toContain("do NOT run `amq monitor`");
   } finally {
     if (prev.root !== undefined) process.env.AM_ROOT = prev.root;
     else delete process.env.AM_ROOT;

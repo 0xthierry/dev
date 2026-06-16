@@ -7,6 +7,7 @@ import {
   validateGoalAmendment,
   validateGoalCreation,
   validateUpdateGoalBlocked,
+  validateUpdateGoalPaused,
 } from "./policy";
 
 describe("goal policy", () => {
@@ -36,7 +37,7 @@ describe("goal policy", () => {
     expect(result.ok).toBe(false);
   });
 
-  test("requires repeated blocked turns before blocked status", () => {
+  test("accepts blocked status when the external impasse is evidenced", () => {
     // Arrange
     const goal = createGoalState(userObjectiveToCreationInput("finish migration until tests pass"), "g1");
 
@@ -49,7 +50,7 @@ describe("goal policy", () => {
     });
 
     // Assert
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
   });
 
   test("marks active goal limited when turn limit is reached", () => {
@@ -94,6 +95,28 @@ describe("goal policy", () => {
 
     // Assert
     expect(result.status).toBe("active");
+  });
+
+  test("accepts a pause request with a question for the user", () => {
+    // Arrange
+    const goal = createGoalState(userObjectiveToCreationInput("finish migration until tests pass"), "g1");
+
+    // Act
+    const result = validateUpdateGoalPaused(goal, "Which database should I target, SQLite or Postgres?");
+
+    // Assert
+    expect(result.ok).toBe(true);
+  });
+
+  test("rejects a pause request with no question", () => {
+    // Arrange
+    const goal = createGoalState(userObjectiveToCreationInput("finish migration until tests pass"), "g1");
+
+    // Act
+    const result = validateUpdateGoalPaused(goal, "   ");
+
+    // Assert
+    expect(result.ok).toBe(false);
   });
 
   test("accepts an amendment that keeps a verifiable stopping condition", () => {

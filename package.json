@@ -21,7 +21,8 @@
       "./configs/agents/pi/extensions/lsp",
       "./configs/agents/pi/extensions/fff",
       "./configs/agents/pi/extensions/excalidraw-session",
-      "./configs/agents/pi/extensions/goal"
+      "./configs/agents/pi/extensions/goal",
+      "./configs/agents/pi/extensions/amq-notify"
     ],
     "prompts": [
       "./configs/agents/pi/prompts"

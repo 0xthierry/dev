@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createFakePi } from "../../_shared/testing/fake-pi";
+import { STALL_REFLECT_TURNS } from "./policy";
 import { type GoalRuntime, registerGoalExtension } from "./register";
 import type { GoalAuditorRunInput, GoalAuditorRunResult } from "./types";
 
@@ -31,9 +32,25 @@ describe("registerGoalExtension", () => {
 
     // Assert
     expect(fakePi.appendedEntries.at(-1)?.customType).toBe("pi-goal-state");
-    expect(fakePi.sentMessages.some((message) => JSON.stringify(message).includes("Continue concrete work"))).toBe(
-      true,
+    const continuation = fakePi.sentMessages.find((message) =>
+      JSON.stringify(message).includes("Continue concrete work"),
     );
+    expect(continuation).toBeDefined();
+    expect(JSON.stringify(continuation)).not.toContain("finish migration until tests pass");
+  });
+
+  test("rejects slash-created vague goals", async () => {
+    // Arrange
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fakePi = createFakePi({ ctx: { hasUI: true } });
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+
+    // Act
+    await fakePi.runCommand("goal", "fix it");
+
+    // Assert
+    expect(fakePi.appendedEntries).toHaveLength(0);
+    expect(fakePi.uiNotifications.at(-1)?.message).toContain("Goal rejected");
   });
 
   test("rejects model-created vague goals", async () => {
@@ -75,6 +92,7 @@ describe("registerGoalExtension", () => {
     expect(runtime.runAuditor).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(result)).toContain("Goal audit rejected");
     expect(JSON.stringify(fakePi.appendedEntries.at(-1))).toContain("disapproved");
+    expect(fakePi.sentMessages.some((message) => JSON.stringify(message).includes("pi-goal-audit"))).toBe(false);
   });
 
   test("blocks mutating tool calls after update_goal appears in a turn", async () => {
@@ -179,6 +197,91 @@ describe("registerGoalExtension", () => {
     expect(amended).toContain('"status":"active"');
   });
 
+  test("pauses the goal to ask the user through update_goal", async () => {
+    // Arrange
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fakePi = createFakePi();
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+    await fakePi.runCommand("goal", "finish migration until tests pass");
+
+    // Act
+    const result = await fakePi.runTool("update_goal", {
+      status: "paused",
+      summary: "Which database should I target, SQLite or Postgres?",
+    });
+
+    // Assert
+    expect(JSON.stringify(result)).toContain("Which database should I target");
+    const paused = JSON.stringify(fakePi.appendedEntries.at(-1));
+    expect(paused).toContain('"status":"paused"');
+    expect(paused).toContain('"autoContinue":false');
+  });
+
+  test("tells the model to stop when get_goal reveals a paused goal", async () => {
+    // Arrange
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fakePi = createFakePi();
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+    await fakePi.runCommand("goal", "finish migration until tests pass");
+    await fakePi.runTool("update_goal", {
+      status: "paused",
+      summary: "Which database should I target, SQLite or Postgres?",
+    });
+
+    // Act
+    const result = await fakePi.runTool("get_goal");
+
+    // Assert
+    expect(JSON.stringify(result)).toContain("PAUSED GOAL STOP");
+    expect(JSON.stringify(result)).toContain("If the user explicitly asked you to update the paused goal state itself");
+    expect(JSON.stringify(result)).toContain("do real introspection");
+    expect(JSON.stringify(result)).toContain("reconstruct the causal chain from concrete session events");
+    expect(JSON.stringify(result)).toContain("separate known causes from guesses");
+    expect(JSON.stringify(result)).toContain("suggest the next task only as a proposal");
+  });
+
+  test("blocks mutating work while the goal is paused", async () => {
+    // Arrange
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fakePi = createFakePi();
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+    await fakePi.runCommand("goal", "finish migration until tests pass");
+    await fakePi.runTool("update_goal", {
+      status: "paused",
+      summary: "Which database should I target, SQLite or Postgres?",
+    });
+
+    // Act
+    const result = await fakePi.emit("tool_call", { toolName: "bash", input: { command: "docker compose up" } });
+
+    // Assert
+    expect(result).toEqual([
+      {
+        block: true,
+        reason:
+          "The current goal is paused. Stop goal work now: do not run more tools or commands. Report the pause reason honestly, explain what led to it, ask the user for direction, and wait for /goal resume.",
+      },
+    ]);
+  });
+
+  test("allows goal lifecycle updates while the goal is paused", async () => {
+    // Arrange
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fakePi = createFakePi();
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+    await fakePi.runCommand("goal", "finish migration until tests pass");
+    await fakePi.runTool("update_goal", {
+      status: "paused",
+      summary: "Which database should I target, SQLite or Postgres?",
+    });
+
+    // Act
+    const result = await fakePi.emit("tool_call", { toolName: "update_goal", input: { status: "complete" } });
+
+    // Assert
+    expect(result).toEqual([]);
+  });
+
   test("auto-pauses the goal after a run of turns with no file change", async () => {
     // Arrange
     setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
@@ -210,6 +313,26 @@ describe("registerGoalExtension", () => {
 
     // Assert
     expect(JSON.stringify(fakePi.appendedEntries.at(-1))).toContain('"stallTurns":0');
+  });
+
+  test("injects a stall reflection into context once the goal stalls", async () => {
+    // Arrange
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fakePi = createFakePi();
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+    await fakePi.runCommand("goal", "finish migration until tests pass");
+
+    // Act
+    const beforeStall = await fakePi.emit("context", { messages: [] });
+    for (let turn = 0; turn < STALL_REFLECT_TURNS; turn += 1) {
+      await fakePi.emit("turn_end", { message: {} });
+    }
+    const afterStall = await fakePi.emit("context", { messages: [] });
+
+    // Assert
+    expect(JSON.stringify(beforeStall)).not.toContain("STALL CHECK");
+    expect(JSON.stringify(afterStall)).toContain("STALL CHECK");
+    expect(JSON.stringify(afterStall)).toContain("pi-goal-stall");
   });
 
   test("injects goal context on model context events", async () => {

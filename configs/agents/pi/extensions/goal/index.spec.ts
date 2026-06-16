@@ -28,6 +28,8 @@ describe("goal extension E2E", () => {
     const notifyEvent = await harness.waitForEvent(isNoGoalNotifyEvent, 30_000);
     const auditorResponse = await harness.request({ type: "prompt", message: "/goal auditor" });
     const auditorEvent = await harness.waitForEvent(isAuditorStatusNotifyEvent, 30_000);
+    const vagueGoalResponse = await harness.request({ type: "prompt", message: "/goal fix it" });
+    const rejectedGoalEvent = await harness.waitForEvent(isGoalRejectedNotifyEvent, 30_000);
 
     // Assert
     expect(commandNames(commandsResponse)).toContain("goal");
@@ -36,6 +38,8 @@ describe("goal extension E2E", () => {
     expect(auditorResponse.success).toBe(true);
     expect(auditorEvent.message).toContain("Goal auditor: mandatory");
     expect(auditorEvent.message).toContain("Latest audit: none");
+    expect(vagueGoalResponse.success).toBe(true);
+    expect(rejectedGoalEvent.message).toContain("Goal rejected");
     expect(harness.stderr()).toBe("");
   }, 60_000);
 });
@@ -62,5 +66,14 @@ function isAuditorStatusNotifyEvent(event: JsonObject): boolean {
     event.method === "notify" &&
     typeof event.message === "string" &&
     event.message.includes("Goal auditor: mandatory")
+  );
+}
+
+function isGoalRejectedNotifyEvent(event: JsonObject): boolean {
+  return (
+    event.type === "extension_ui_request" &&
+    event.method === "notify" &&
+    typeof event.message === "string" &&
+    event.message.includes("Goal rejected")
   );
 }

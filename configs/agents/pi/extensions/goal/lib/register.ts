@@ -16,20 +16,23 @@ import {
   applyTurnLimit,
   isRunnable,
   STALL_PAUSE_TURNS,
+  STALL_REFLECT_TURNS,
   STALL_WARN_TURNS,
   validateGoalAmendment,
   validateGoalCreation,
   validateUpdateGoalBlocked,
   validateUpdateGoalComplete,
+  validateUpdateGoalPaused,
 } from "./policy";
 import { isMeaningfulProgressToolCall, isSubstantiveProgressToolCall, shouldBlockAfterStop } from "./progress";
-import { activeGoalContextPrompt, continuationPrompt } from "./prompts";
+import { activeGoalContextPrompt, continuationPrompt, pausedGoalToolNotice, stallReflectionPrompt } from "./prompts";
 import { latestGoalFromEntries, stateEntry } from "./store";
+import { truncateToolText } from "./tool-output";
 import {
   type CompletionClaim,
-  GOAL_AUDIT_MESSAGE,
   GOAL_CONTEXT_MESSAGE,
   GOAL_EVENT_MESSAGE,
+  GOAL_STALL_MESSAGE,
   GOAL_STATE_ENTRY,
   type GoalAuditorRunInput,
   type GoalAuditorRunResult,
@@ -56,7 +59,7 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
   let goal: GoalState | null = null;
   let meaningfulProgressThisTurn = false;
   let meaningfulProgressSinceAgentStart = false;
-  let fileMutationThisTurn = false;
+  let substantiveProgressThisTurn = false;
   let lifecycleToolSeenThisTurn = false;
   let continuationQueued = false;
   let continuationTimer: ReturnType<typeof setTimeout> | null = null;
@@ -130,7 +133,9 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
     ],
     parameters: Type.Object({}, { additionalProperties: false }),
     async execute() {
-      return { content: [{ type: "text", text: JSON.stringify({ goal }, null, 2) }], details: { goal } };
+      const serialized = JSON.stringify({ goal }, null, 2);
+      const text = truncateToolText(serialized, "Goal state") + (isPausedGoal(goal) ? pausedGoalToolNotice(goal) : "");
+      return { content: [{ type: "text", text }], details: { goal } };
     },
   });
 
@@ -195,18 +200,22 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
     name: "update_goal",
     label: "Update Goal",
     description:
-      "Submit a completion claim for mandatory audit, mark the current goal genuinely blocked, or amend the goal contract to reflect a changed user/developer requirement. Only complete, blocked, and amend are accepted.",
-    promptSnippet: "Update a Pi goal as complete, blocked, or amend its contract",
+      "Submit a completion claim for mandatory audit, mark the current goal genuinely blocked, pause it to ask the user, or amend the goal contract to reflect a changed user/developer requirement. Only complete, blocked, paused, and amend are accepted.",
+    promptSnippet: "Update a Pi goal as complete, blocked, paused, or amend its contract",
     promptGuidelines: [
       "Use update_goal with status=complete only when the current goal is actually achieved and evidence is ready for independent audit.",
       "Completion is not terminal until the independent auditor returns exactly <approved/>.",
-      "Use update_goal with status=blocked only for a genuine impasse, not because work is hard, slow, uncertain, or incomplete.",
+      "Use update_goal with status=blocked only for a genuine external impasse, not because work is hard, slow, uncertain, or incomplete.",
+      "Use update_goal with status=paused when you need a decision or information from the user, or you cannot identify a concrete next action — put your question in the summary. This halts the autonomous loop so the user actually sees your question; asking while the goal is active is futile because it auto-continues and loops past you. Pause and ask instead of guessing or re-inspecting.",
       "Use update_goal with status=amend when the user or a developer instruction changes a requirement (e.g. a threshold, scope, or constraint) so the persistent contract stops contradicting the live instruction. Provide only the fields that changed and a summary citing the instruction. Amend to reflect the new requirement, never to narrow scope around partial work or to make completion easier.",
     ],
     parameters: Type.Object(
       {
-        status: StringEnum(["complete", "blocked", "amend"] as const),
-        summary: Type.String({ description: "Completion claim summary, blocked summary, or amend reason." }),
+        status: StringEnum(["complete", "blocked", "paused", "amend"] as const),
+        summary: Type.String({
+          description:
+            "Completion claim summary, blocked summary, the question for the user when pausing, or amend reason.",
+        }),
         evidenceRefs: Type.Optional(
           Type.Array(Type.String(), { description: "Concrete evidence references inspected or blocker evidence." }),
         ),
@@ -256,6 +265,37 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
         const next = amendGoalState(goal, merged, params.summary);
         persist(ctx, next);
         return { content: [{ type: "text", text: `Goal amended.\n\n${goalSummary(next)}` }], details: { goal: next } };
+      }
+
+      if (params.status === "paused") {
+        const validation = validateUpdateGoalPaused(goal, params.summary);
+        if (!validation.ok)
+          return {
+            content: [{ type: "text", text: `update_goal paused rejected: ${validation.message}` }],
+            details: { goal },
+          };
+        if (!goal) throw new Error("Goal disappeared during pause validation.");
+        const now = new Date().toISOString();
+        const next: GoalState = {
+          ...goal,
+          status: "paused",
+          autoContinue: false,
+          updatedAt: now,
+          lastUpdate: `Paused to ask the user: ${params.summary.trim()}`,
+          suggestedUserAction: params.suggestedUserAction?.trim() ?? goal.suggestedUserAction,
+        };
+        persist(ctx, next);
+        lifecycleToolSeenThisTurn = true;
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Goal paused; the autonomous loop is stopped. Ask the user this now and wait — it resumes only when they run /goal resume:\n\n${params.summary.trim()}`,
+            },
+          ],
+          details: { goal: next },
+          terminate: true,
+        };
       }
 
       if (params.status === "blocked") {
@@ -312,12 +352,7 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
         evidenceRefs: claim.evidenceRefs,
       };
       persist(ctx, auditTarget);
-      pi.sendMessage({
-        customType: GOAL_AUDIT_MESSAGE,
-        content: `Starting independent goal audit for ${auditTarget.id}.`,
-        display: true,
-        details: { phase: "started", goalId: auditTarget.id },
-      });
+      notify(ctx, `Starting independent goal audit for ${auditTarget.id}.`, "info");
       const auditor = await runtime.runAuditor(ctx, {
         goal: auditTarget,
         completionClaim: claim,
@@ -346,16 +381,16 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
           auditResults: [...auditedCurrent.auditResults, auditResult],
         };
         persist(ctx, next);
-        pi.sendMessage({
-          customType: GOAL_AUDIT_MESSAGE,
-          content: auditResult.report,
-          display: true,
-          details: { phase: "rejected", goalId: next.id, verdict },
-        });
+        notify(ctx, `Goal audit rejected for ${next.id}. Goal remains unfinished.`, "warning");
         lifecycleToolSeenThisTurn = true;
         return {
-          content: [{ type: "text", text: `Goal audit rejected. Goal remains unfinished.\n\n${auditResult.report}` }],
-          details: { goal: next },
+          content: [
+            {
+              type: "text",
+              text: `Goal audit rejected. Goal remains unfinished.\n\n${truncateToolText(auditResult.report, "Audit report")}`,
+            },
+          ],
+          details: { goal: next, auditResult },
           terminate: true,
         };
       }
@@ -371,16 +406,19 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
         auditResults: [...auditedCurrent.auditResults, auditResult],
       };
       persist(ctx, next);
-      pi.sendMessage({
-        customType: GOAL_AUDIT_MESSAGE,
-        content: auditResult.report,
-        display: true,
-        details: { phase: "approved", goalId: next.id, verdict },
-      });
+      notify(ctx, `Goal audit approved for ${next.id}.`, "info");
       lifecycleToolSeenThisTurn = true;
       return {
-        content: [{ type: "text", text: `Goal complete after auditor approval.\n\n${goalSummary(next)}` }],
-        details: { goal: next },
+        content: [
+          {
+            type: "text",
+            text: `Goal complete after auditor approval.\n\n${goalSummary(next)}\n\nAudit report:\n${truncateToolText(
+              auditResult.report,
+              "Audit report",
+            )}`,
+          },
+        ],
+        details: { goal: next, auditResult },
         terminate: true,
       };
     },
@@ -467,6 +505,11 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
       }
       if (command.kind === "create") {
         const input = userObjectiveToCreationInput(command.objective);
+        const validation = validateGoalCreation(input, goal);
+        if (!validation.ok) {
+          notify(ctx, `Goal rejected: ${validation.message}`, "warning");
+          return;
+        }
         const next = createGoalState(input);
         persist(ctx, next);
         notify(ctx, `Goal created.\n\n${formatGoalDetails(next)}`, "info");
@@ -502,16 +545,28 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
     if (!goal || goal.status === "complete") return;
     const prompt = activeGoalContextPrompt(goal, { postCompactionReminder: postCompactionReminderPending });
     postCompactionReminderPending = false;
+    const stalling = goal.status === "active" && goal.stallTurns >= STALL_REFLECT_TURNS;
     return {
       messages: [
         ...event.messages,
         {
-          role: "custom",
+          role: "custom" as const,
           customType: GOAL_CONTEXT_MESSAGE,
           content: prompt,
           display: false,
           timestamp: Date.now(),
         },
+        ...(stalling
+          ? [
+              {
+                role: "custom" as const,
+                customType: GOAL_STALL_MESSAGE,
+                content: stallReflectionPrompt(goal),
+                display: false,
+                timestamp: Date.now(),
+              },
+            ]
+          : []),
       ],
     };
   });
@@ -522,11 +577,19 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
 
   pi.on("turn_start", () => {
     meaningfulProgressThisTurn = false;
-    fileMutationThisTurn = false;
+    substantiveProgressThisTurn = false;
     lifecycleToolSeenThisTurn = false;
   });
 
   pi.on("tool_call", (event) => {
+    if (isPausedGoal(goal) && event.toolName !== "update_goal" && shouldBlockAfterStop(event.toolName)) {
+      return {
+        block: true,
+        reason:
+          "The current goal is paused. Stop goal work now: do not run more tools or commands. Report the pause reason honestly, explain what led to it, ask the user for direction, and wait for /goal resume.",
+      };
+    }
+
     if (
       (lifecycleToolSeenThisTurn || event.toolName === "update_goal") &&
       event.toolName !== "update_goal" &&
@@ -543,7 +606,7 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
       meaningfulProgressThisTurn = true;
       meaningfulProgressSinceAgentStart = true;
     }
-    if (isSubstantiveProgressToolCall(event.toolName, event.input)) fileMutationThisTurn = true;
+    if (isSubstantiveProgressToolCall(event.toolName, event.input)) substantiveProgressThisTurn = true;
   });
 
   pi.on("turn_end", (event, ctx) => {
@@ -553,7 +616,7 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
     const tokens = tokenDeltaFromUsage(messageWithUsage.usage);
     const blockedCount = meaningfulProgressThisTurn ? 0 : goal.consecutiveBlockedTurns + 1;
     const progressedAt = meaningfulProgressThisTurn ? now : goal.lastProgressAt;
-    const stallTurns = fileMutationThisTurn ? 0 : goal.stallTurns + 1;
+    const stallTurns = substantiveProgressThisTurn ? 0 : goal.stallTurns + 1;
     const accounted = applyStallLimit(
       applyTurnLimit(
         {
@@ -573,13 +636,13 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
     if (accounted.status === "paused" && stallTurns >= STALL_PAUSE_TURNS) {
       notify(
         ctx,
-        `Goal auto-paused: ${stallTurns} turns without a file change — likely stuck re-inspecting instead of editing. Give direction, then /goal resume.`,
+        `Goal auto-paused: ${stallTurns} turns without substantive state change — likely stuck re-inspecting instead of acting. Give direction, then /goal resume.`,
         "warning",
       );
     } else if (accounted.status === "active" && stallTurns === STALL_WARN_TURNS) {
       notify(
         ctx,
-        `Goal has run ${stallTurns} turns with no file change. If it is looping on inspection, redirect it or /goal pause.`,
+        `Goal has run ${stallTurns} turns with no substantive state change. If it is looping on inspection, redirect it or /goal pause.`,
         "warning",
       );
     }
@@ -605,4 +668,8 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
     if (goal) persist(ctx, goal);
     clearContinuationTimer();
   });
+}
+
+function isPausedGoal(goal: GoalState | null): goal is GoalState {
+  return goal?.status === "paused" || goal?.status === "paused_for_failed_audit";
 }

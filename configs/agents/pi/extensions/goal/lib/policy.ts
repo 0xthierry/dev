@@ -6,8 +6,9 @@ const VAGUE_OBJECTIVES = new Set(["help", "do it", "fix it", "make it better", "
 const STOPPING_WORDS =
   /\b(done|complete|until|verified|passes?|success|criteria|finish|delivered|implemented|fixed|working|tests?|build|lint|typecheck|accepted)\b/i;
 
+export const STALL_REFLECT_TURNS = 4;
 export const STALL_WARN_TURNS = 8;
-export const STALL_PAUSE_TURNS = 20;
+export const STALL_PAUSE_TURNS = 16;
 
 export function validateGoalCreation(input: GoalCreationInput, existing: GoalState | null): PolicyResult {
   if (existing && isUnfinished(existing)) {
@@ -58,6 +59,14 @@ function validateGoalContract(input: GoalCreationInput): PolicyResult {
   return { ok: true };
 }
 
+export function validateUpdateGoalPaused(goal: GoalState | null, summary: string | undefined): PolicyResult {
+  if (!goal) return { ok: false, message: "No goal is set." };
+  if (goal.status !== "active")
+    return { ok: false, message: `Goal is ${goal.status}; pause only applies to active goals.` };
+  if (!summary?.trim()) return { ok: false, message: "Pausing requires a summary of what you need from the user." };
+  return { ok: true };
+}
+
 export function validateUpdateGoalComplete(goal: GoalState | null, summary: string | undefined): PolicyResult {
   if (!goal) return { ok: false, message: "No goal is set." };
   if (!isCompletable(goal))
@@ -80,13 +89,6 @@ export function validateUpdateGoalBlocked(args: {
     return { ok: false, message: "Blocked status requires a suggested user action." };
   if (!args.evidenceRefs?.some((value) => value.trim()))
     return { ok: false, message: "Blocked status requires evidence references." };
-  if (args.goal.consecutiveBlockedTurns < 2) {
-    return {
-      ok: false,
-      message:
-        "Blocked status is allowed only after the same blocker repeats for at least three consecutive goal turns.",
-    };
-  }
   return { ok: true };
 }
 
@@ -125,7 +127,7 @@ export function applyStallLimit(goal: GoalState, nowIso: string): GoalState {
     status: "paused",
     autoContinue: false,
     updatedAt: nowIso,
-    lastUpdate: `Auto-paused after ${goal.stallTurns} turns without a file change.`,
+    lastUpdate: `Auto-paused after ${goal.stallTurns} turns without substantive state change.`,
   };
 }
 

@@ -9,12 +9,3 @@ export function buildNotice(drainOutput: string): string {
       "do not run `amq monitor`/`amq drain`/`sleep`.",
   ].join("\n");
 }
-
-const EMPTY_MONITOR_MARKERS = ["No new messages", "No messages to drain", "No messages available"];
-
-/** True when an `amq monitor` run produced no actual message (timed out or empty). */
-export function isEmptyMonitorOutput(out: string): boolean {
-  const trimmed = out.trim();
-  if (trimmed === "") return true;
-  return EMPTY_MONITOR_MARKERS.some((m) => trimmed.startsWith(m));
-}
