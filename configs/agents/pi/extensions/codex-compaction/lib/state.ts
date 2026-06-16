@@ -22,11 +22,44 @@ export function latestActiveCodexCompaction(entries: SessionEntry[]): ActiveCode
 }
 
 export function isInvalidated(entries: SessionEntry[], sentinel: string): boolean {
+  if (hasExplicitInvalidation(entries, sentinel)) return true;
+
+  const compactionIndex = entries.findIndex(
+    (entry) => isCodexCompactionEntry(entry) && entry.details?.codexCompaction.sentinel === sentinel,
+  );
+  if (compactionIndex === -1) return false;
+
+  return entries.slice(compactionIndex + 1).some(isCodexCompactionRejectedMessage);
+}
+
+function hasExplicitInvalidation(entries: SessionEntry[], sentinel: string): boolean {
   return entries.some((entry) => {
     if (entry.type !== "custom" || entry.customType !== CODEX_COMPACTION_CUSTOM_INVALIDATION) return false;
     const data = entry.data as Partial<CodexCompactionInvalidation> | undefined;
     return data?.sentinel === sentinel;
   });
+}
+
+function isCodexCompactionRejectedMessage(entry: SessionEntry): boolean {
+  if (entry.type !== "message") return false;
+
+  const message = entry.message as
+    | { role?: unknown; api?: unknown; stopReason?: unknown; errorMessage?: unknown }
+    | undefined;
+  if (message?.role !== "assistant" || message.api !== "openai-codex-responses" || message.stopReason !== "error") {
+    return false;
+  }
+
+  return isCompactionProtocolError(message.errorMessage);
+}
+
+function isCompactionProtocolError(errorMessage: unknown): boolean {
+  if (typeof errorMessage !== "string") return false;
+
+  return (
+    errorMessage.includes("invalid_request_error") &&
+    errorMessage.includes("No tool call found for function call output")
+  );
 }
 
 export function isCodexCompactionEntry(entry: SessionEntry): entry is CompactionEntry<CodexCompactionDetails> {

@@ -56,6 +56,35 @@ describe("messagesToCodexResponseItems", () => {
     ]);
   });
 
+  test("repairs an orphan tool result with a recovered function call", () => {
+    // Arrange
+    const messages: AgentMessage[] = [
+      {
+        role: "toolResult",
+        toolCallId: "call_orphan|fc_orphan",
+        toolName: "bash",
+        content: [{ type: "text", text: "late command output" }],
+        isError: false,
+        timestamp: 1,
+      },
+    ];
+
+    // Act
+    const items = messagesToCodexResponseItems(messages);
+
+    // Assert
+    expect(items).toEqual([
+      {
+        type: "function_call",
+        id: "fc_orphan",
+        call_id: "call_orphan",
+        name: "bash",
+        arguments: "{}",
+      },
+      { type: "function_call_output", call_id: "call_orphan", output: "late command output" },
+    ]);
+  });
+
   test("synthesizes an error output for an unmatched tool call", () => {
     // Arrange
     const messages: AgentMessage[] = [

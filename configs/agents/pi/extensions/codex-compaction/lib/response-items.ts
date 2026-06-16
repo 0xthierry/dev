@@ -10,14 +10,23 @@ export function messagesToCodexResponseItems(messages: AgentMessage[]): JsonObje
 export function llmMessagesToCodexResponseItems(messages: Message[]): JsonObject[] {
   const items: JsonObject[] = [];
   const completedToolCallIds = collectToolResultCallIds(messages);
+  const emittedToolCallIds = new Set<string>();
   let messageIndex = 0;
 
   for (const message of messages) {
     if (message.role === "user") {
       items.push({ role: "user", content: toInputContent(message.content) });
     } else if (message.role === "assistant") {
-      items.push(...assistantToResponseItems(message, messageIndex, completedToolCallIds));
+      const assistantItems = assistantToResponseItems(message, messageIndex, completedToolCallIds);
+      for (const item of assistantItems) trackFunctionCall(item, emittedToolCallIds);
+      items.push(...assistantItems);
     } else if (message.role === "toolResult") {
+      const callId = toolResultCallId(message);
+      if (!emittedToolCallIds.has(callId)) {
+        const recoveredCall = recoveredFunctionCallForToolResult(message);
+        trackFunctionCall(recoveredCall, emittedToolCallIds);
+        items.push(recoveredCall);
+      }
       items.push(toolResultToResponseItem(message));
     }
     messageIndex += 1;
@@ -99,6 +108,25 @@ function collectToolResultCallIds(messages: Message[]): Set<string> {
 function toolResultCallId(message: ToolResultMessage): string {
   const [callId] = message.toolCallId.split("|");
   return callId;
+}
+
+function toolResultItemId(message: ToolResultMessage): string {
+  const [, itemId] = message.toolCallId.split("|");
+  return itemId && itemId.length > 0 ? itemId : `fc_pi_recovered_${toolResultCallId(message)}`;
+}
+
+function recoveredFunctionCallForToolResult(message: ToolResultMessage): JsonObject {
+  return {
+    type: "function_call",
+    id: toolResultItemId(message),
+    call_id: toolResultCallId(message),
+    name: message.toolName,
+    arguments: "{}",
+  };
+}
+
+function trackFunctionCall(item: JsonObject, callIds: Set<string>): void {
+  if (item.type === "function_call" && typeof item.call_id === "string") callIds.add(item.call_id);
 }
 
 function missingToolResultToResponseItem(callId: string, message: AssistantMessage): JsonObject {
