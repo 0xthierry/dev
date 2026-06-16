@@ -2,7 +2,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ExtensionAPI, SessionBeforeCompactEvent } from "@earendil-works/pi-coding-agent";
 import { fetchCodexCompaction } from "./codex-client";
 import { extractChatGptAccountId, isCodexResponsesModel } from "./model";
-import { injectCodexCompactionIntoPayload } from "./payload";
+import { injectCodexCompactionIntoPayload, repairOrphanCodexToolOutputs } from "./payload";
 import { messagesToCodexResponseItems } from "./response-items";
 import { isInvalidated, latestActiveCodexCompaction } from "./state";
 import {
@@ -85,14 +85,15 @@ export function registerCodexCompactionExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("before_provider_request", (event, ctx) => {
-    const result = injectCodexCompactionIntoPayload(event.payload, ctx.model, ctx.sessionManager.getBranch());
+    const branch = ctx.sessionManager.getBranch();
+    const repaired = repairOrphanCodexToolOutputs(event.payload, branch);
+    const result = injectCodexCompactionIntoPayload(event.payload, ctx.model, branch);
     if (result.injected) {
-      const active = latestActiveCodexCompaction(ctx.sessionManager.getBranch());
+      const active = latestActiveCodexCompaction(branch);
       pendingInjected.push({ sentinel: result.sentinel, compactionEntryId: active?.entry.id });
-      return event.payload;
     }
 
-    return undefined;
+    return repaired || result.injected ? event.payload : undefined;
   });
 
   pi.on("after_provider_response", (event) => {

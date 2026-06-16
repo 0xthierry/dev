@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import { injectCodexCompactionIntoPayload } from "./payload";
+import { injectCodexCompactionIntoPayload, repairOrphanCodexToolOutputs } from "./payload";
 import { CODEX_COMPACTION_DETAILS_VERSION, type CodexCompactionDetails } from "./types";
 
 const model = {
@@ -40,6 +40,41 @@ function compactionEntry(): SessionEntry {
     details,
   };
 }
+
+describe("repairOrphanCodexToolOutputs", () => {
+  test("inserts a recovered function call before an orphan output", () => {
+    // Arrange
+    const payload: { input: Record<string, unknown>[] } = {
+      input: [{ type: "function_call_output", call_id: "call_orphan", output: "late output" }],
+    };
+    const branch: SessionEntry[] = [
+      {
+        type: "message",
+        id: "tool-result",
+        parentId: "cmp-entry",
+        timestamp: new Date(1).toISOString(),
+        message: {
+          role: "toolResult",
+          toolCallId: "call_orphan|fc_orphan",
+          toolName: "bash",
+          content: [{ type: "text", text: "late output" }],
+          isError: false,
+          timestamp: 1,
+        },
+      } as SessionEntry,
+    ];
+
+    // Act
+    const repaired = repairOrphanCodexToolOutputs(payload, branch);
+
+    // Assert
+    expect(repaired).toBe(true);
+    expect(payload.input).toEqual([
+      { type: "function_call", id: "fc_orphan", call_id: "call_orphan", name: "bash", arguments: "{}" },
+      { type: "function_call_output", call_id: "call_orphan", output: "late output" },
+    ]);
+  });
+});
 
 describe("injectCodexCompactionIntoPayload", () => {
   test("replaces the sentinel summary item with the Codex compaction item", () => {
