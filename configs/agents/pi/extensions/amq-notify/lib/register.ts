@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { appendFileSync, existsSync } from "node:fs";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { buildNotice, isEmptyMonitorOutput } from "./notice";
 import { resolveBinding } from "./session";
@@ -16,6 +16,17 @@ const WAIT_GUIDANCE =
   "that is exactly the cue to end your turn now; ending the turn IS how you wait. Keep using " +
   "`amq send` to send.";
 
+// Opt-in trace (set AMQ_NOTIFY_DEBUG=/path) so a notifier that silently stops can be diagnosed.
+function dbg(msg: string): void {
+  const path = process.env.AMQ_NOTIFY_DEBUG;
+  if (!path) return;
+  try {
+    appendFileSync(path, `${new Date().toISOString()} ${msg}\n`);
+  } catch {
+    // best-effort only
+  }
+}
+
 export function registerAmqNotifyExtension(pi: ExtensionAPI): void {
   const binding = resolveBinding(process.env, process.cwd(), () => randomUUID().slice(0, 8));
 
@@ -24,6 +35,7 @@ export function registerAmqNotifyExtension(pi: ExtensionAPI): void {
   // command pi runs now inherit AM_ROOT/AM_ME with no prefixing.
   process.env.AM_ROOT = binding.root;
   process.env.AM_ME = binding.me;
+  dbg(`register me=${binding.me} root=${binding.root} derived=${binding.derived}`);
 
   // Only pi-as-main needs this push loop. A coop-exec worker (inherited binding)
   // is already notified by amq wake; draining here too would steal its messages.
@@ -36,32 +48,38 @@ export function registerAmqNotifyExtension(pi: ExtensionAPI): void {
     systemPrompt: `${event.systemPrompt}\n\n[amq-notify] ${WAIT_GUIDANCE}`,
   }));
 
-  let stopped = false;
-  let started = false;
+  // Own the push loop at PROCESS scope, not session scope. In pi, session_start and
+  // session_shutdown bracket each agent run — so starting the loop from session_start
+  // (behind a once-guard) and killing it from session_shutdown left the notifier dead
+  // after the first turn, and pi fell back to polling. We only track the latest
+  // ExtensionContext for isIdle(); the loop itself runs for the life of the process.
+  let ctx: ExtensionContext | undefined;
+  pi.on("session_start", (_event, c) => {
+    ctx = c;
+    dbg("session_start");
+  });
   pi.on("session_shutdown", () => {
-    stopped = true;
+    dbg("session_shutdown (push loop keeps running)");
   });
-  pi.on("session_start", (_event, ctx) => {
-    if (started) return;
-    started = true;
-    void watchInbox(pi, ctx, binding.root, binding.me, () => stopped);
-  });
+
+  dbg("starting watchInbox");
+  void watchInbox(pi, () => ctx, binding.root, binding.me);
 }
 
 async function watchInbox(
   pi: ExtensionAPI,
-  ctx: ExtensionContext,
+  getCtx: () => ExtensionContext | undefined,
   root: string,
   me: string,
-  isStopped: () => boolean,
 ): Promise<void> {
-  // Lazy: create/watch nothing until the session exists (the skill makes it when it
+  // Lazy: watch nothing until the session root exists (the skill makes it when it
   // launches a worker), so plain pi stays clutter-free in unrelated repos.
-  while (!isStopped() && !existsSync(root)) {
+  while (!existsSync(root)) {
     await delay(POLL_MS);
   }
+  dbg(`root exists; monitoring root=${root} me=${me}`);
 
-  while (!isStopped()) {
+  for (;;) {
     let out = "";
     let code = 0;
     try {
@@ -72,21 +90,23 @@ async function watchInbox(
       );
       out = result.stdout ?? "";
       code = result.code ?? 0;
-    } catch {
+    } catch (err) {
+      dbg(`monitor exec error: ${String(err)}`);
       await delay(POLL_MS);
       continue;
     }
-    if (isStopped()) return;
     // monitor exits non-zero on timeout; that and empty output just mean "nothing yet".
     if (isEmptyMonitorOutput(out)) {
       if (code !== 0) await delay(POLL_MS);
       continue;
     }
-    const deliver = ctx.isIdle?.() ? undefined : { deliverAs: "followUp" as const };
+    dbg("message(s) drained; injecting as a turn");
+    const deliver = getCtx()?.isIdle?.() ? undefined : { deliverAs: "followUp" as const };
     try {
       pi.sendUserMessage(buildNotice(out), deliver);
-    } catch {
+    } catch (err) {
       // Agent busy/aborted — the next monitor pass re-delivers anything still queued.
+      dbg(`sendUserMessage error: ${String(err)}`);
     }
   }
 }
