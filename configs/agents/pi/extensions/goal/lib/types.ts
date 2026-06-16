@@ -55,6 +55,7 @@ export type GoalState = {
   suggestedUserAction: string | null;
   evidenceRefs: string[];
   consecutiveBlockedTurns: number;
+  stallTurns: number;
 };
 
 export type GoalCreationInput = {
@@ -65,6 +66,14 @@ export type GoalCreationInput = {
   evidenceSurface: string[];
   autoContinue: boolean;
   turnBudget?: number | null;
+};
+
+export type GoalAmendmentInput = {
+  objective?: string;
+  successCriteria?: string[];
+  verificationPlan?: string[];
+  constraints?: string[];
+  evidenceSurface?: string[];
 };
 
 export type GoalStateEntry = {

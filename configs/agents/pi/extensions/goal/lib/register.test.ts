@@ -158,6 +158,60 @@ describe("registerGoalExtension", () => {
     expect(guidelines).toContain("Leave turnBudget unset unless the user explicitly asks");
   });
 
+  test("amends the goal contract through update_goal", async () => {
+    // Arrange
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fakePi = createFakePi();
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+    await fakePi.runCommand("goal", "finish migration until tests pass");
+
+    // Act
+    const result = await fakePi.runTool("update_goal", {
+      status: "amend",
+      summary: "user lowered coverage to 70%",
+      successCriteria: ["Coverage threshold is 70% and the test command passes."],
+    });
+
+    // Assert
+    expect(JSON.stringify(result)).toContain("Goal amended");
+    const amended = JSON.stringify(fakePi.appendedEntries.at(-1));
+    expect(amended).toContain("Coverage threshold is 70%");
+    expect(amended).toContain('"status":"active"');
+  });
+
+  test("auto-pauses the goal after a run of turns with no file change", async () => {
+    // Arrange
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fakePi = createFakePi({ ctx: { hasUI: true } });
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+    await fakePi.runCommand("goal", "finish migration until tests pass");
+
+    // Act
+    for (let turn = 0; turn < 20; turn += 1) {
+      await fakePi.emit("turn_end", { message: {} });
+    }
+
+    // Assert
+    expect(JSON.stringify(fakePi.appendedEntries)).toContain('"status":"paused"');
+    expect(fakePi.uiNotifications.some((n) => n.message.includes("auto-paused"))).toBe(true);
+  });
+
+  test("resets the stall counter when a file is edited", async () => {
+    // Arrange
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const fakePi = createFakePi();
+    registerGoalExtension(fakePi.pi, fakeRuntime());
+    await fakePi.runCommand("goal", "finish migration until tests pass");
+    await fakePi.emit("turn_start");
+    await fakePi.emit("tool_call", { toolName: "edit", input: { path: "src/index.ts" } });
+
+    // Act
+    await fakePi.emit("turn_end", { message: {} });
+
+    // Assert
+    expect(JSON.stringify(fakePi.appendedEntries.at(-1))).toContain('"stallTurns":0');
+  });
+
   test("injects goal context on model context events", async () => {
     // Arrange
     setSystemTime(new Date("2026-01-01T00:00:00.000Z"));

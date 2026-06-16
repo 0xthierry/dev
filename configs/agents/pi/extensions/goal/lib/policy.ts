@@ -6,6 +6,9 @@ const VAGUE_OBJECTIVES = new Set(["help", "do it", "fix it", "make it better", "
 const STOPPING_WORDS =
   /\b(done|complete|until|verified|passes?|success|criteria|finish|delivered|implemented|fixed|working|tests?|build|lint|typecheck|accepted)\b/i;
 
+export const STALL_WARN_TURNS = 8;
+export const STALL_PAUSE_TURNS = 20;
+
 export function validateGoalCreation(input: GoalCreationInput, existing: GoalState | null): PolicyResult {
   if (existing && isUnfinished(existing)) {
     return {
@@ -15,6 +18,23 @@ export function validateGoalCreation(input: GoalCreationInput, existing: GoalSta
     };
   }
 
+  const contract = validateGoalContract(input);
+  if (!contract.ok) return contract;
+  if (input.turnBudget != null && (!Number.isFinite(input.turnBudget) || input.turnBudget <= 0)) {
+    return { ok: false, message: "Turn budget must be a positive number when provided." };
+  }
+  return { ok: true };
+}
+
+export function validateGoalAmendment(goal: GoalState | null, merged: GoalCreationInput, reason: string): PolicyResult {
+  if (!goal) return { ok: false, message: "No goal is set." };
+  if (goal.status !== "active" && goal.status !== "paused")
+    return { ok: false, message: `Goal is ${goal.status}; amend only applies to active or paused goals.` };
+  if (!reason.trim()) return { ok: false, message: "amend requires a summary citing the instruction that changed." };
+  return validateGoalContract(merged);
+}
+
+function validateGoalContract(input: GoalCreationInput): PolicyResult {
   const objective = input.objective.trim();
   if (!objective) return { ok: false, message: "Goal objective must not be empty." };
   if (objective.length > 4_000) return { ok: false, message: "Goal objective must be at most 4000 characters." };
@@ -25,19 +45,15 @@ export function validateGoalCreation(input: GoalCreationInput, existing: GoalSta
     };
   }
   if (!hasUsableList(input.successCriteria))
-    return { ok: false, message: "create_goal requires at least one success criterion." };
-  if (!hasUsableList(input.verificationPlan))
-    return { ok: false, message: "create_goal requires a verification plan." };
+    return { ok: false, message: "Goal requires at least one success criterion." };
+  if (!hasUsableList(input.verificationPlan)) return { ok: false, message: "Goal requires a verification plan." };
   if (!hasUsableList(input.evidenceSurface))
-    return { ok: false, message: "create_goal requires expected evidence references or evidence surface." };
+    return { ok: false, message: "Goal requires expected evidence references or evidence surface." };
   if (!hasStoppingCondition(objective, input.successCriteria, input.verificationPlan)) {
     return {
       ok: false,
       message: "Goal lacks a verifiable stopping condition. Add explicit success criteria or verification steps.",
     };
-  }
-  if (input.turnBudget != null && (!Number.isFinite(input.turnBudget) || input.turnBudget <= 0)) {
-    return { ok: false, message: "Turn budget must be a positive number when provided." };
   }
   return { ok: true };
 }
@@ -99,6 +115,17 @@ export function applyTurnLimit(goal: GoalState, nowIso: string): GoalState {
     autoContinue: false,
     updatedAt: nowIso,
     lastUpdate: "Turn limit reached.",
+  };
+}
+
+export function applyStallLimit(goal: GoalState, nowIso: string): GoalState {
+  if (goal.status !== "active" || goal.stallTurns < STALL_PAUSE_TURNS) return goal;
+  return {
+    ...goal,
+    status: "paused",
+    autoContinue: false,
+    updatedAt: nowIso,
+    lastUpdate: `Auto-paused after ${goal.stallTurns} turns without a file change.`,
   };
 }
 

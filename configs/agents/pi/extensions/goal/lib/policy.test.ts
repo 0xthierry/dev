@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { createGoalState, userObjectiveToCreationInput } from "./goal-state";
-import { applyTurnLimit, validateGoalCreation, validateUpdateGoalBlocked } from "./policy";
+import { createGoalState, mergeAmendment, userObjectiveToCreationInput } from "./goal-state";
+import {
+  applyStallLimit,
+  applyTurnLimit,
+  STALL_PAUSE_TURNS,
+  validateGoalAmendment,
+  validateGoalCreation,
+  validateUpdateGoalBlocked,
+} from "./policy";
 
 describe("goal policy", () => {
   test("rejects vague goal creation", () => {
@@ -58,5 +65,72 @@ describe("goal policy", () => {
     // Assert
     expect(result.status).toBe("budget_limited");
     expect(result.autoContinue).toBe(false);
+  });
+
+  test("auto-pauses an active goal after the stall limit", () => {
+    // Arrange
+    const goal = {
+      ...createGoalState(userObjectiveToCreationInput("finish migration until tests pass"), "g1"),
+      stallTurns: STALL_PAUSE_TURNS,
+    };
+
+    // Act
+    const result = applyStallLimit(goal, "2026-01-01T00:00:01.000Z");
+
+    // Assert
+    expect(result.status).toBe("paused");
+    expect(result.autoContinue).toBe(false);
+  });
+
+  test("leaves a goal active below the stall limit", () => {
+    // Arrange
+    const goal = {
+      ...createGoalState(userObjectiveToCreationInput("finish migration until tests pass"), "g1"),
+      stallTurns: STALL_PAUSE_TURNS - 1,
+    };
+
+    // Act
+    const result = applyStallLimit(goal, "2026-01-01T00:00:01.000Z");
+
+    // Assert
+    expect(result.status).toBe("active");
+  });
+
+  test("accepts an amendment that keeps a verifiable stopping condition", () => {
+    // Arrange
+    const goal = createGoalState(userObjectiveToCreationInput("finish migration until tests pass"), "g1");
+    const merged = mergeAmendment(goal, {
+      successCriteria: ["Coverage threshold is 70% and the test command passes."],
+    });
+
+    // Act
+    const result = validateGoalAmendment(goal, merged, "user lowered coverage to 70%");
+
+    // Assert
+    expect(result.ok).toBe(true);
+  });
+
+  test("rejects an amendment that guts the success criteria", () => {
+    // Arrange
+    const goal = createGoalState(userObjectiveToCreationInput("finish migration until tests pass"), "g1");
+    const merged = mergeAmendment(goal, { successCriteria: ["ok"] });
+
+    // Act
+    const result = validateGoalAmendment(goal, merged, "lower the bar");
+
+    // Assert
+    expect(result.ok).toBe(false);
+  });
+
+  test("rejects an amendment with no reason", () => {
+    // Arrange
+    const goal = createGoalState(userObjectiveToCreationInput("finish migration until tests pass"), "g1");
+    const merged = mergeAmendment(goal, {});
+
+    // Act
+    const result = validateGoalAmendment(goal, merged, "   ");
+
+    // Assert
+    expect(result.ok).toBe(false);
   });
 });

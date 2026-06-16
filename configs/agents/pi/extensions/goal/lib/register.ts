@@ -4,15 +4,25 @@ import { Type } from "typebox";
 import { tokenDeltaFromUsage } from "./accounting";
 import { runGoalCompletionAuditor } from "./auditor";
 import { GOAL_COMMAND_COMPLETIONS, parseGoalCommand } from "./command";
-import { createGoalState, goalSummary, userObjectiveToCreationInput } from "./goal-state";
 import {
+  amendGoalState,
+  createGoalState,
+  goalSummary,
+  mergeAmendment,
+  userObjectiveToCreationInput,
+} from "./goal-state";
+import {
+  applyStallLimit,
   applyTurnLimit,
   isRunnable,
+  STALL_PAUSE_TURNS,
+  STALL_WARN_TURNS,
+  validateGoalAmendment,
   validateGoalCreation,
   validateUpdateGoalBlocked,
   validateUpdateGoalComplete,
 } from "./policy";
-import { isMeaningfulProgressToolCall, shouldBlockAfterStop } from "./progress";
+import { isMeaningfulProgressToolCall, isSubstantiveProgressToolCall, shouldBlockAfterStop } from "./progress";
 import { activeGoalContextPrompt, continuationPrompt } from "./prompts";
 import { latestGoalFromEntries, stateEntry } from "./store";
 import {
@@ -46,6 +56,7 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
   let goal: GoalState | null = null;
   let meaningfulProgressThisTurn = false;
   let meaningfulProgressSinceAgentStart = false;
+  let fileMutationThisTurn = false;
   let lifecycleToolSeenThisTurn = false;
   let continuationQueued = false;
   let continuationTimer: ReturnType<typeof setTimeout> | null = null;
@@ -184,27 +195,69 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
     name: "update_goal",
     label: "Update Goal",
     description:
-      "Submit a completion claim for mandatory audit, or mark the current goal genuinely blocked. Only complete and blocked are accepted.",
-    promptSnippet: "Update a Pi goal as complete or blocked",
+      "Submit a completion claim for mandatory audit, mark the current goal genuinely blocked, or amend the goal contract to reflect a changed user/developer requirement. Only complete, blocked, and amend are accepted.",
+    promptSnippet: "Update a Pi goal as complete, blocked, or amend its contract",
     promptGuidelines: [
       "Use update_goal with status=complete only when the current goal is actually achieved and evidence is ready for independent audit.",
       "Completion is not terminal until the independent auditor returns exactly <approved/>.",
       "Use update_goal with status=blocked only for a genuine impasse, not because work is hard, slow, uncertain, or incomplete.",
+      "Use update_goal with status=amend when the user or a developer instruction changes a requirement (e.g. a threshold, scope, or constraint) so the persistent contract stops contradicting the live instruction. Provide only the fields that changed and a summary citing the instruction. Amend to reflect the new requirement, never to narrow scope around partial work or to make completion easier.",
     ],
     parameters: Type.Object(
       {
-        status: StringEnum(["complete", "blocked"] as const),
-        summary: Type.String({ description: "Completion claim summary, or blocked summary." }),
+        status: StringEnum(["complete", "blocked", "amend"] as const),
+        summary: Type.String({ description: "Completion claim summary, blocked summary, or amend reason." }),
         evidenceRefs: Type.Optional(
           Type.Array(Type.String(), { description: "Concrete evidence references inspected or blocker evidence." }),
         ),
         blockedReason: Type.Optional(Type.String({ description: "Required when status=blocked." })),
         suggestedUserAction: Type.Optional(Type.String({ description: "Required when status=blocked." })),
+        objective: Type.Optional(Type.String({ description: "Replacement objective when status=amend." })),
+        successCriteria: Type.Optional(
+          Type.Array(Type.String(), { description: "Replacement success criteria when status=amend." }),
+        ),
+        verificationPlan: Type.Optional(
+          Type.Array(Type.String(), { description: "Replacement verification plan when status=amend." }),
+        ),
+        constraints: Type.Optional(
+          Type.Array(Type.String(), { description: "Replacement constraints when status=amend." }),
+        ),
+        evidenceSurface: Type.Optional(
+          Type.Array(Type.String(), { description: "Replacement expected evidence when status=amend." }),
+        ),
       },
       { additionalProperties: false },
     ),
     executionMode: "sequential",
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      if (params.status === "amend") {
+        const merged = goal
+          ? mergeAmendment(goal, {
+              objective: params.objective,
+              successCriteria: params.successCriteria,
+              verificationPlan: params.verificationPlan,
+              constraints: params.constraints,
+              evidenceSurface: params.evidenceSurface,
+            })
+          : null;
+        const validation = merged
+          ? validateGoalAmendment(goal, merged, params.summary)
+          : { ok: false as const, message: "No goal is set." };
+        if (!validation.ok || !merged || !goal)
+          return {
+            content: [
+              {
+                type: "text",
+                text: `update_goal amend rejected: ${validation.ok ? "No goal is set." : validation.message}`,
+              },
+            ],
+            details: { goal },
+          };
+        const next = amendGoalState(goal, merged, params.summary);
+        persist(ctx, next);
+        return { content: [{ type: "text", text: `Goal amended.\n\n${goalSummary(next)}` }], details: { goal: next } };
+      }
+
       if (params.status === "blocked") {
         const validation = validateUpdateGoalBlocked({
           goal,
@@ -393,6 +446,7 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
           updatedAt: new Date().toISOString(),
           lastUpdate: "Resumed by user.",
           consecutiveBlockedTurns: 0,
+          stallTurns: 0,
         };
         persist(ctx, next);
         notify(ctx, `Goal resumed.\n\n${formatGoalDetails(next)}`, "info");
@@ -468,6 +522,7 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
 
   pi.on("turn_start", () => {
     meaningfulProgressThisTurn = false;
+    fileMutationThisTurn = false;
     lifecycleToolSeenThisTurn = false;
   });
 
@@ -488,6 +543,7 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
       meaningfulProgressThisTurn = true;
       meaningfulProgressSinceAgentStart = true;
     }
+    if (isSubstantiveProgressToolCall(event.toolName, event.input)) fileMutationThisTurn = true;
   });
 
   pi.on("turn_end", (event, ctx) => {
@@ -497,18 +553,36 @@ export function registerGoalExtension(pi: ExtensionAPI, runtime: GoalRuntime = c
     const tokens = tokenDeltaFromUsage(messageWithUsage.usage);
     const blockedCount = meaningfulProgressThisTurn ? 0 : goal.consecutiveBlockedTurns + 1;
     const progressedAt = meaningfulProgressThisTurn ? now : goal.lastProgressAt;
-    const accounted = applyTurnLimit(
-      {
-        ...goal,
-        tokensUsed: goal.tokensUsed + tokens,
-        turnsUsed: goal.turnsUsed + 1,
-        consecutiveBlockedTurns: blockedCount,
-        lastProgressAt: progressedAt,
-        updatedAt: now,
-      },
+    const stallTurns = fileMutationThisTurn ? 0 : goal.stallTurns + 1;
+    const accounted = applyStallLimit(
+      applyTurnLimit(
+        {
+          ...goal,
+          tokensUsed: goal.tokensUsed + tokens,
+          turnsUsed: goal.turnsUsed + 1,
+          consecutiveBlockedTurns: blockedCount,
+          lastProgressAt: progressedAt,
+          stallTurns,
+          updatedAt: now,
+        },
+        now,
+      ),
       now,
     );
     persist(ctx, accounted);
+    if (accounted.status === "paused" && stallTurns >= STALL_PAUSE_TURNS) {
+      notify(
+        ctx,
+        `Goal auto-paused: ${stallTurns} turns without a file change — likely stuck re-inspecting instead of editing. Give direction, then /goal resume.`,
+        "warning",
+      );
+    } else if (accounted.status === "active" && stallTurns === STALL_WARN_TURNS) {
+      notify(
+        ctx,
+        `Goal has run ${stallTurns} turns with no file change. If it is looping on inspection, redirect it or /goal pause.`,
+        "warning",
+      );
+    }
   });
 
   pi.on("agent_end", (_event, ctx) => {

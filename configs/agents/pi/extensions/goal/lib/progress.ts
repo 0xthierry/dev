@@ -15,6 +15,7 @@ const MEANINGFUL_PROGRESS_TOOLS = new Set([
 
 const READ_ONLY_TOOLS = new Set(["get_goal", "read", "grep", "find", "multi_grep", "ls", "lsp_diagnostics"]);
 const MUTATING_TOOLS = new Set(["bash", "edit", "write", "lsp_fix"]);
+const FILE_MUTATION_TOOLS = new Set(["edit", "write", "lsp_fix"]);
 
 export function isMeaningfulProgressToolCall(toolName: string, input: unknown): boolean {
   if (!MEANINGFUL_PROGRESS_TOOLS.has(toolName)) return false;
@@ -28,6 +29,11 @@ export function isMeaningfulProgressToolCall(toolName: string, input: unknown): 
     if (/^\s*echo\b/.test(command)) return false;
   }
   return true;
+}
+
+export function isSubstantiveProgressToolCall(toolName: string, input: unknown): boolean {
+  if (!FILE_MUTATION_TOOLS.has(toolName)) return false;
+  return isMeaningfulProgressToolCall(toolName, input);
 }
 
 export function shouldBlockAfterStop(toolName: string): boolean {

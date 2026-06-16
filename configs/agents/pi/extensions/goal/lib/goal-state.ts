@@ -1,4 +1,4 @@
-import type { GoalCreationInput, GoalState } from "./types";
+import type { GoalAmendmentInput, GoalCreationInput, GoalState } from "./types";
 
 export const DEFAULT_TURN_BUDGET = 512;
 
@@ -31,6 +31,36 @@ export function createGoalState(input: GoalCreationInput, id = newGoalId(new Dat
     suggestedUserAction: null,
     evidenceRefs: [],
     consecutiveBlockedTurns: 0,
+    stallTurns: 0,
+  };
+}
+
+export function mergeAmendment(goal: GoalState, patch: GoalAmendmentInput): GoalCreationInput {
+  return {
+    objective: (patch.objective ?? goal.objective).trim(),
+    successCriteria: patch.successCriteria ? cleanList(patch.successCriteria) : goal.successCriteria,
+    verificationPlan: patch.verificationPlan ? cleanList(patch.verificationPlan) : goal.verificationPlan,
+    constraints: patch.constraints ? cleanList(patch.constraints) : goal.constraints,
+    evidenceSurface: patch.evidenceSurface ? cleanList(patch.evidenceSurface) : goal.evidenceSurface,
+    autoContinue: goal.autoContinue,
+    turnBudget: goal.turnBudget,
+  };
+}
+
+export function amendGoalState(goal: GoalState, merged: GoalCreationInput, reason: string): GoalState {
+  const now = new Date().toISOString();
+  return {
+    ...goal,
+    objective: merged.objective,
+    canonicalText: buildCanonicalGoalText(merged),
+    successCriteria: cleanList(merged.successCriteria),
+    verificationPlan: cleanList(merged.verificationPlan),
+    constraints: cleanList(merged.constraints),
+    evidenceSurface: cleanList(merged.evidenceSurface),
+    updatedAt: now,
+    lastUpdate: `Goal amended: ${reason.trim()}`,
+    consecutiveBlockedTurns: 0,
+    stallTurns: 0,
   };
 }
 
@@ -123,6 +153,7 @@ export function normalizeGoalState(value: unknown): GoalState | null {
     suggestedUserAction: nullableString(raw.suggestedUserAction),
     evidenceRefs: cleanList(raw.evidenceRefs),
     consecutiveBlockedTurns: nonNegativeInteger(raw.consecutiveBlockedTurns),
+    stallTurns: nonNegativeInteger(raw.stallTurns),
   };
 }
 
