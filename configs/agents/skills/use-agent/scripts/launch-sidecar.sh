@@ -118,7 +118,7 @@ open_in_ghostty_split_macos() {
   # shell with the worker never started. Writing the command to a temp script and pasting
   # "exec bash <file>" keeps the keystroke payload tiny and reliable.
   local launcher
-  launcher="$(mktemp "${TMPDIR:-/tmp}/use-agent-launch.XXXXXX.sh")" || return 1
+  launcher="$(mktemp "${TMPDIR:-/tmp}/use-agent-launch.XXXXXX")" || return 1
   printf '%s\n' "$command_text" > "$launcher"
   chmod +x "$launcher"
   local run_text
