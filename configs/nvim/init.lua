@@ -1120,11 +1120,11 @@ require('lazy').setup({
   },
   { -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
-    branch = 'main',
+    branch = 'master',
     lazy = false,
     build = ':TSUpdate',
-    config = function()
-      local ensure_installed = {
+    opts = {
+      ensure_installed = {
         -- core
         'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc',
         -- web / TS stack (vtsls, vue_ls, tailwindcss)
@@ -1137,21 +1137,15 @@ require('lazy').setup({
         'rust',
         -- ops
         'dockerfile', 'helm', 'gitcommit', 'gitignore', 'regex',
-      }
-      require('nvim-treesitter').install(ensure_installed)
+      },
+      highlight = { enable = true },
+      indent = { enable = true },
+    },
+    config = function(_, opts)
+      require('nvim-treesitter.configs').setup(opts)
 
       -- jsonc has no dedicated tree-sitter grammar; reuse the json parser
       vim.treesitter.language.register('json', 'jsonc')
-
-      vim.api.nvim_create_autocmd('FileType', {
-        group = vim.api.nvim_create_augroup('kickstart-treesitter-start', { clear = true }),
-        callback = function(ev)
-          local lang = vim.treesitter.language.get_lang(vim.bo[ev.buf].filetype)
-          if lang and pcall(vim.treesitter.start, ev.buf, lang) then
-            vim.bo[ev.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
-          end
-        end,
-      })
     end,
   },
 

@@ -19,7 +19,12 @@ apply_voxtype() {
   local config_dst="$HOME/.config/voxtype/config.toml"
   local backup_path=""
 
-  ensure_dir "$HOME/.config/voxtype"
+  if [[ "${SETUP_HOST:-}" == "macbook" ]]; then
+    config_src="$REPO_ROOT/configs/voxtype/macos.toml"
+    config_dst="$HOME/Library/Application Support/voxtype/config.toml"
+  fi
+
+  ensure_dir "$(dirname "$config_dst")"
 
   if [[ -f "$config_dst" ]] && cmp -s "$config_src" "$config_dst"; then
     log_item "voxtype config: already up to date"

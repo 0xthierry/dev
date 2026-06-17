@@ -25,6 +25,8 @@ COMMON_PACMAN_PACKAGES=(
   inxi
   github-cli
   make
+  cmake
+  pkgconf
   shellcheck
   actionlint
   gitleaks
@@ -90,6 +92,8 @@ COMMON_BREW_FORMULAE=(
   gh
   infisical/get-cli/infisical
   make
+  cmake
+  pkgconf
   shellcheck
   actionlint
   gitleaks

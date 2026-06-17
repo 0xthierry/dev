@@ -1,0 +1,44 @@
+# Voxtype Configuration
+# Managed by this repo; deployed to ~/Library/Application Support/voxtype/config.toml on macbook.
+# macOS uses Voxtype's native global hotkey listener; grant Microphone and
+# Input Monitoring permissions to Voxtype.app when macOS prompts.
+
+# Required for `voxtype record toggle` and `voxtype status`.
+state_file = "auto"
+
+# Built from pinned source with Parakeet support by install/hosts/macbook.sh.
+engine = "parakeet"
+
+[hotkey]
+# Fn / Globe is Voxtype's macOS default. Change to "RIGHTALT" for Right Option.
+enabled = true
+key = "FN"
+modifiers = []
+mode = "push_to_talk"
+
+[audio]
+device = "default"
+sample_rate = 16000
+max_duration_secs = 60
+
+# Avoids macOS audio-output permission/dialog quirks for feedback sounds.
+[audio.feedback]
+enabled = false
+
+[parakeet]
+# Quantized TDT model: fast and small, with punctuation/capitalization.
+model = "parakeet-tdt-0.6b-v3-int8"
+model_type = "tdt"
+# Keep loaded for low-latency dictation. Set true if RAM/battery matters more.
+on_demand_loading = false
+
+[output]
+# Uses Voxtype's native macOS CGEvent text output instead of Linux paste keys.
+mode = "type"
+fallback_to_clipboard = true
+type_delay_ms = 1
+
+[output.notification]
+on_recording_start = false
+on_recording_stop = false
+on_transcription = false
