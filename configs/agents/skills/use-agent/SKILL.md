@@ -1,6 +1,6 @@
 ---
 name: use-agent
-description: Use only when the user explicitly asks to pair with a second agent harness — launch a sidecar, get a second opinion from another agent, have one harness drive another, or review work with another agent over AMQ. Never invoke proactively.
+description: Use only when the user explicitly allows or asks for this skill to be invoked to pair with a second agent harness — launch a sidecar, get a second opinion from another agent, have one harness drive another, or review work with another agent over AMQ. Otherwise, never invoke it.
 ---
 
 # Use Agent
