@@ -9,12 +9,12 @@ const MONITOR_TIMEOUT = "25s";
 const EXEC_TIMEOUT_MS = 30_000;
 
 const WAIT_GUIDANCE =
-  "Incoming AMQ messages are delivered to you automatically as new turns. To wait for a reply, " +
-  "just finish your turn — do NOT run `amq monitor`, `amq drain`, `amq watch`, or `sleep` to poll " +
-  "(it races with the notifier and wastes turns). If you catch yourself thinking \"I shouldn't end " +
-  'my turn until the reply comes", "let me wait for it", or "let me check if it arrived yet" — ' +
-  "that is exactly the cue to end your turn now; ending the turn IS how you wait. Keep using " +
-  "`amq send` to send.";
+  "Incoming AMQ messages are delivered to you automatically as new turns. By default, to wait for " +
+  "a reply, just finish your turn — do not run `amq monitor`, `amq drain`, `amq watch`, `sleep`, " +
+  "or `.agent-mail` filesystem probes to poll. If the user explicitly asks/orders you to manually " +
+  "check AMQ, obey with exactly one bounded AMQ command (`amq drain --include-body` to check now, " +
+  "or a short-timeout `amq monitor --include-body` only if they asked to wait), report the result, " +
+  "then stop. Do not substitute filesystem probes for an AMQ check. Keep using `amq send` to send.";
 
 // Opt-in trace (set AMQ_NOTIFY_DEBUG=/path) so a notifier that silently stops can be diagnosed.
 function dbg(msg: string): void {

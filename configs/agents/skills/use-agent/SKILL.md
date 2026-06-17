@@ -85,16 +85,23 @@ That is the whole surface you need: **send** to talk, **drain** to read, **monit
 
 ### Receiving replies
 
-**If you are pi**, you have the `amq-notify` auto-notifier: do **not** poll. Send your request and **finish your turn** — the reply is delivered to you automatically as a new turn. Running `amq monitor`/`amq drain`/`sleep` to wait races with the notifier and wastes turns.
+**If you are pi**, you have the `amq-notify` auto-notifier. By default, do **not** poll: send your request and **finish your turn** — the reply is delivered to you automatically as a new turn. Running `amq monitor`/`amq drain`/`sleep` to wait races with the notifier and wastes turns.
 
-Red-flag thoughts — if you catch yourself thinking any of these, stop: that thought *is* the signal to end your turn now.
+User override: if the user explicitly asks/orders you to manually check AMQ, obey. Run exactly one bounded AMQ command, report the result, then stop:
+
+- **Check now:** `amq drain --include-body`
+- **Wait briefly only if requested:** `amq monitor --include-body --timeout <short bounded timeout>`
+
+Do **not** substitute `.agent-mail` filesystem probes for an AMQ check. An absent directory/file is not reliable evidence because the notifier owns the AMQ room lifecycle and acknowledges delivered messages.
+
+Red-flag thoughts — if you catch yourself thinking any of these, stop: that thought *is* the signal to end your turn now, unless the user has explicitly asked for one manual check.
 
 - "I shouldn't end my turn until the reply arrives" — backwards; **ending the turn is how you wait**. You'll be given a new turn when it lands.
-- "Let me run `amq monitor`/`amq drain`/`amq watch` to wait for it" — no; that races the notifier.
+- "Let me run `amq monitor`/`amq drain`/`amq watch` to wait for it" — no by default; only do one bounded AMQ command when the user explicitly asks/orders it.
 - "I'll `sleep` until it comes" — no; sleeping only delays the push (you're busy, so it queues behind the sleep).
-- "Let me check whether it arrived yet" — no; you'll be told. Don't poll.
+- "Let me check whether it arrived yet" — no by default; yes with exactly one bounded AMQ command if the user explicitly asks. Do not use filesystem probes under `.agent-mail` as a substitute.
 
-Just send, say you're waiting, and stop. Waiting = doing nothing.
+Default waiting = doing nothing. User-requested manual checking = one bounded AMQ command.
 
 **If you are claude** (no auto-notifier), you fetch the reply yourself:
 

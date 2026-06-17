@@ -206,7 +206,9 @@ test("adds stable wait guidance to the system prompt", () => {
     // Assert
     expect(result.systemPrompt).toContain("base prompt");
     expect(result.systemPrompt).toContain("[amq-notify]");
-    expect(result.systemPrompt).toContain("do NOT run `amq monitor`");
+    expect(result.systemPrompt).toContain("By default");
+    expect(result.systemPrompt).toContain("If the user explicitly asks/orders you to manually check AMQ, obey");
+    expect(result.systemPrompt).toContain("Do not substitute filesystem probes for an AMQ check");
   } finally {
     if (prev.root !== undefined) process.env.AM_ROOT = prev.root;
     else delete process.env.AM_ROOT;

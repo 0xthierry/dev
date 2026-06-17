@@ -13,6 +13,8 @@ describe("buildNotice", () => {
     expect(notice).toContain("📬 AMQ");
     expect(notice).toContain("From: claude");
     expect(notice).toContain("relay it to the user");
+    expect(notice).toContain("If the user explicitly asks for a manual AMQ check, obey");
+    expect(notice).toContain("do not substitute `.agent-mail` filesystem probes");
     expect(notice).not.toContain("Reply with");
   });
 });
