@@ -1,15 +1,1 @@
-{
-  "PreToolUse": [
-    {
-      "matcher": "Bash|Write|Edit|MultiEdit",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "mise exec -- bun ~/.agents/hooks/guards/index.ts",
-          "timeout": 3000,
-          "statusMessage": "Checking safety guards"
-        }
-      ]
-    }
-  ]
-}
+{}
