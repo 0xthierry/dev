@@ -3,6 +3,7 @@ config-file = ?"~/.config/omarchy/current/theme/ghostty.conf"
 font-family = "CaskaydiaMono Nerd Font"
 font-style = Regular
 font-size = 9
+clipboard-read = allow
 clipboard-write = allow
 background-opacity = 1
 

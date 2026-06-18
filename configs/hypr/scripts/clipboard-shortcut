@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "usage: clipboard-shortcut copy|paste|cut" >&2
+  exit 2
+}
+
+action="${1:-}"
+[[ "$action" == "copy" || "$action" == "paste" || "$action" == "cut" ]] || usage
+
+active_class="$(hyprctl activewindow -j | jq -r '.class // .initialClass // ""')"
+
+is_terminal=0
+case "$active_class" in
+  com.mitchellh.ghostty|kitty|Alacritty|org.wezfurlong.wezterm)
+    is_terminal=1
+    ;;
+esac
+
+# Use Hyprland's native sendshortcut instead of wtype. wtype injects keyboard
+# events while the physical Super key may still be held, so apps like Slack can
+# receive Super+Ctrl+C instead of plain Ctrl+C.
+if (( is_terminal )); then
+  case "$action" in
+    copy) hyprctl dispatch sendshortcut 'CTRL SHIFT,C,activewindow' ;;
+    paste) hyprctl dispatch sendshortcut 'CTRL SHIFT,V,activewindow' ;;
+    cut) hyprctl dispatch sendshortcut 'CTRL,X,activewindow' ;;
+  esac
+else
+  case "$action" in
+    copy) hyprctl dispatch sendshortcut 'CTRL,C,activewindow' ;;
+    paste) hyprctl dispatch sendshortcut 'CTRL,V,activewindow' ;;
+    cut) hyprctl dispatch sendshortcut 'CTRL,X,activewindow' ;;
+  esac
+fi
