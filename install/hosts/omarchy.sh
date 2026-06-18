@@ -136,6 +136,37 @@ setup_shared_machine_state() {
   apply_shared_machine_state
 }
 
+configure_legacy_tiocsti() {
+  local sysctl_name="dev.tty.legacy_tiocsti"
+  local sysctl_proc="/proc/sys/dev/tty/legacy_tiocsti"
+  local sysctl_conf="/etc/sysctl.d/99-dev-setup-legacy-tiocsti.conf"
+  local desired_line="${sysctl_name} = 1"
+
+  log_section "Legacy TIOCSTI"
+
+  if [[ ! -e "$sysctl_proc" ]] && (( ! ${DRY_RUN:-0} )); then
+    log_item "${sysctl_name}: unsupported by this kernel, skipping"
+    return 0
+  fi
+
+  log_item "Enabling ${sysctl_name} for AMQ terminal wake injection"
+
+  if (( ${DRY_RUN:-0} )); then
+    dry_run_cmd sudo install -Dm644 /dev/stdin "$sysctl_conf" <<< "$desired_line"
+    dry_run_cmd sudo sysctl -w "${sysctl_name}=1"
+    return 0
+  fi
+
+  if [[ -f "$sysctl_conf" ]] && grep -Fxq "$desired_line" "$sysctl_conf"; then
+    log_item "Sysctl config: already configured"
+  else
+    printf '%s\n' "$desired_line" | sudo install -Dm644 /dev/stdin "$sysctl_conf"
+    log_item "Sysctl config: $sysctl_conf"
+  fi
+
+  run_cmd sudo sysctl -w "${sysctl_name}=1"
+}
+
 set_default_browser_brave() {
   log_section "Default Browser"
 
@@ -227,6 +258,7 @@ configure_voxtype() {
 setup_host_machine_state() {
   log_section "Host Machine State"
   configure_keyboard
+  configure_legacy_tiocsti
   set_default_browser_brave
   apply_host_configs
   configure_voxtype
