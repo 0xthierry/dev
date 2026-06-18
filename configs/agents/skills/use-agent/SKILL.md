@@ -38,7 +38,7 @@ Run the helper script in this skill's own `scripts/` directory by its **absolute
 ~/.claude/skills/use-agent/scripts/launch-sidecar.sh --topic "<kebab-topic>"
 ```
 
-It detects which harness you are, reuses your `AM_ROOT` if set (so the worker joins your session), writes the worker's system prompt, and opens the worker in a Ghostty split. Under the hood it launches the Claude worker like this (model-pinned, folder trust pre-accepted, worker protocol passed by file):
+It detects which harness you are, reuses your `AM_ROOT` if set (so the worker joins your session), writes the worker's system prompt, and opens the worker in a Ghostty split on macOS or Omarchy/Hyprland when possible. Under the hood it launches the Claude worker like this (model-pinned, folder trust pre-accepted, worker protocol passed by file):
 
 ```bash
 amq coop exec --root "$AM_ROOT" claude -- \
@@ -48,7 +48,7 @@ amq coop exec --root "$AM_ROOT" claude -- \
 
 `amq coop exec` sets `AM_ROOT` and `AM_ME=claude` inside the worker, so the worker talks with bare `amq` commands.
 
-If the helper reports that Ghostty split automation was unavailable, tell the user and paste the printed command into a split yourself. Do not continue as if the worker were running.
+If the helper reports that Ghostty split automation was unavailable, tell the user and paste the printed command into a split yourself. Do not continue as if the worker were running. On Omarchy/Hyprland the helper expects `hyprctl`, `wl-copy`, `wtype`, and Ghostty's default `Ctrl+Shift+O` split / `Ctrl+Shift+V` paste bindings.
 
 ## The communication layer
 

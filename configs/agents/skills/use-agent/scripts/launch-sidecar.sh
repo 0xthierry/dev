@@ -10,8 +10,8 @@ Launch the opposite harness as a visible AMQ sidecar:
   from claude -> pi
 
 The script initializes AMQ, writes a sidecar prompt, and opens the command in a
-Ghostty split on macOS when possible. If split automation is unavailable, it
-prints the command to paste manually.
+Ghostty split on macOS or Hyprland/Omarchy when possible. If split automation is
+unavailable, it prints the command to paste manually.
 EOF
 }
 
@@ -106,6 +106,16 @@ without saying what you did. The main owns final synthesis and all user-facing c
 EOF
 }
 
+write_launcher_script() {
+  local command_text="$1"
+  local launcher
+
+  launcher="$(mktemp "${TMPDIR:-/tmp}/use-agent-launch.XXXXXX")" || return 1
+  printf '%s\n' "$command_text" > "$launcher"
+  chmod +x "$launcher"
+  printf '%s\n' "$launcher"
+}
+
 open_in_ghostty_split_macos() {
   local command_text="$1"
 
@@ -118,9 +128,7 @@ open_in_ghostty_split_macos() {
   # shell with the worker never started. Writing the command to a temp script and pasting
   # "exec bash <file>" keeps the keystroke payload tiny and reliable.
   local launcher
-  launcher="$(mktemp "${TMPDIR:-/tmp}/use-agent-launch.XXXXXX")" || return 1
-  printf '%s\n' "$command_text" > "$launcher"
-  chmod +x "$launcher"
+  launcher="$(write_launcher_script "$command_text")" || return 1
   local run_text
   run_text="exec bash $(printf '%q' "$launcher")"
 
@@ -166,6 +174,60 @@ on run argv
   tell application "System Events" to key code 36
 end run
 APPLESCRIPT
+}
+
+open_in_ghostty_split_hyprland() {
+  local command_text="$1"
+  local win_match="$2"
+
+  if ! command -v hyprctl >/dev/null 2>&1 || \
+    ! command -v jq >/dev/null 2>&1 || \
+    ! command -v wl-copy >/dev/null 2>&1 || \
+    ! command -v wtype >/dev/null 2>&1; then
+    return 1
+  fi
+
+  if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    return 1
+  fi
+
+  local launcher
+  launcher="$(write_launcher_script "$command_text")" || return 1
+  local run_text
+  run_text="exec bash $(printf '%q' "$launcher")"
+
+  local window_address
+  window_address="$(hyprctl clients -j 2>/dev/null | jq -r --arg m "$win_match" '
+    [ .[] | select(
+      .class == "com.mitchellh.ghostty" or
+      .initialClass == "com.mitchellh.ghostty" or
+      .class == "ghostty" or
+      .initialClass == "ghostty"
+    ) ] as $ghostty
+    | (
+        ($ghostty | map(select(((.title // "") | startswith("π")) and ((.title // "") | contains($m)))) | .[0].address) //
+        ($ghostty | map(select((.title // "") | contains($m))) | .[0].address) //
+        ($ghostty | .[0].address) //
+        ""
+      )
+  ')"
+
+  if [[ -z "$window_address" || "$window_address" == "null" ]]; then
+    return 1
+  fi
+
+  hyprctl dispatch focuswindow "address:$window_address" >/dev/null || return 1
+  sleep 0.2
+
+  # Omarchy/Ghostty binds Ctrl+Shift+O to split right and Ctrl+Shift+V to paste.
+  # Keep the pasted payload short and paste a launcher script path rather than the
+  # full worker command, mirroring the macOS reliability workaround above.
+  wl-copy --type text/plain "$run_text" || return 1
+  wtype -M ctrl -M shift -k o -m shift -m ctrl || return 1
+  sleep 0.8
+  wtype -M ctrl -M shift -k v -m shift -m ctrl || return 1
+  sleep 0.2
+  wtype -k Return || return 1
 }
 
 # Claude Code shows a one-time "trust this folder" dialog per directory, separate
@@ -292,11 +354,18 @@ fi
 COMMAND_TEXT="cd $(printf '%q' "$CWD") && exec $(quote_cmd "${SIDECAR_CMD[@]}")"
 
 OPENED=0
-if [[ "$(uname -s)" == "Darwin" ]]; then
-  if open_in_ghostty_split_macos "$COMMAND_TEXT" "$(basename "$CWD")"; then
-    OPENED=1
-  fi
-fi
+case "$(uname -s)" in
+  Darwin)
+    if open_in_ghostty_split_macos "$COMMAND_TEXT" "$(basename "$CWD")"; then
+      OPENED=1
+    fi
+    ;;
+  Linux)
+    if open_in_ghostty_split_hyprland "$COMMAND_TEXT" "$(basename "$CWD")"; then
+      OPENED=1
+    fi
+    ;;
+esac
 
 ROOT_JSON="$(amq env "${SESSION_ARG[@]}" --me "$MAIN_HANDLE" --json)"
 ROOT="$(printf '%s' "$ROOT_JSON" | jq -r .root 2>/dev/null || true)"
