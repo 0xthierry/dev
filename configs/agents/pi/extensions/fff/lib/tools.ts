@@ -237,23 +237,24 @@ function registerFindTool(
       const result = search.value;
       const formatted = formatFindOutput(result, effectiveLimit, pattern);
       let output = formatted.output;
-      const shownSoFar = pageIndex * effectiveLimit + result.items.length;
-      const hasMore = result.items.length >= effectiveLimit && result.totalMatched > shownSoFar;
+      const shownSoFar = pageIndex * effectiveLimit + formatted.shownCount;
+      const hasMore = formatted.shownCount > 0 && result.totalMatched > shownSoFar;
       const notices: string[] = [];
 
       if (formatted.weak && formatted.shownCount > 0) {
         notices.push(
-          `Query "${pattern}" produced weak scattered fuzzy matches. Output capped at ${formatted.shownCount}/${result.totalMatched}.`,
+          `Query "${pattern}" produced weak scattered fuzzy matches. Output capped at ${formatted.shownCount}/${result.totalMatched}`,
         );
       }
 
-      if (!formatted.weak && hasMore) {
+      if (hasMore) {
         const remaining = result.totalMatched - shownSoFar;
+        const pageSize = formatted.weak ? formatted.shownCount : effectiveLimit;
         const cursor = cursorStore.storeFind({
           query,
           pattern,
-          pageSize: effectiveLimit,
-          nextPageIndex: pageIndex + 1,
+          pageSize,
+          nextPageIndex: Math.floor(shownSoFar / pageSize),
         });
         notices.push(`${remaining} more match${remaining === 1 ? "" : "es"} available. cursor="${cursor}" to continue`);
       }

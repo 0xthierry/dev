@@ -160,6 +160,38 @@ describe("registerFffTools", () => {
     expect(JSON.stringify(result)).not.toContain("AND-combined");
   });
 
+  test("find provides a cursor for capped weak fuzzy results", async () => {
+    // Arrange
+    const fakePi = createFakePi({ cwd: "/tmp/workspace" });
+    const finder = createFinder();
+    finder.fileSearch = mock((_query: string, options: { pageIndex: number; pageSize: number }) => ({
+      ok: true as const,
+      value:
+        options.pageIndex === 0
+          ? weakSearchResult(
+              Array.from({ length: 16 }, (_, index) => `src/file-${index}.ts`),
+              16,
+            )
+          : weakSearchResult(
+              Array.from({ length: 5 }, (_, index) => `src/file-${index + 5}.ts`),
+              16,
+            ),
+    }));
+    registerFffTools(fakePi.pi, createRuntime(finder), createCursorStore(), () => "/tmp/workspace");
+
+    // Act
+    const firstPage = await fakePi.runTool("find", { pattern: "needle" });
+    await fakePi.runTool("find", { pattern: "ignored", cursor: "fff_f1" });
+
+    // Assert
+    const firstPageText = JSON.stringify(firstPage);
+    expect(firstPageText).toContain("weak scattered fuzzy matches");
+    expect(firstPageText).toContain("Output capped at 5/16");
+    expect(firstPageText).toContain("fff_f1");
+    expect(finder.fileSearch).toHaveBeenNthCalledWith(1, "needle", { pageIndex: 0, pageSize: 30 });
+    expect(finder.fileSearch).toHaveBeenNthCalledWith(2, "needle", { pageIndex: 1, pageSize: 5 });
+  });
+
   test("multi_grep hints at AND semantics when multiple positive constraints return nothing", async () => {
     // Arrange
     const fakePi = createFakePi({ cwd: "/tmp/workspace" });
@@ -283,6 +315,14 @@ function grepMatch(overrides: Partial<GrepResult["items"][number]> = {}): GrepRe
 }
 
 function searchResult(paths: string[], totalMatched: number): SearchResult {
+  return searchResultWithScore(paths, totalMatched, 100);
+}
+
+function weakSearchResult(paths: string[], totalMatched: number): SearchResult {
+  return searchResultWithScore(paths, totalMatched, 1);
+}
+
+function searchResultWithScore(paths: string[], totalMatched: number, totalScore: number): SearchResult {
   return {
     items: paths.map((relativePath) => ({
       relativePath,
@@ -295,8 +335,8 @@ function searchResult(paths: string[], totalMatched: number): SearchResult {
       gitStatus: "clean",
     })),
     scores: paths.map(() => ({
-      total: 100,
-      baseScore: 100,
+      total: totalScore,
+      baseScore: totalScore,
       filenameBonus: 0,
       specialFilenameBonus: 0,
       frecencyBoost: 0,
