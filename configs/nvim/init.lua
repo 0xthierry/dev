@@ -251,6 +251,22 @@ rtp:prepend(lazypath)
 --    :Lazy update
 --
 -- NOTE: Here is where you install your plugins.
+local treesitter_install_dir = vim.fn.stdpath 'data' .. '/site'
+local treesitter_parsers = {
+  -- core
+  'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc',
+  -- web / TS stack (vtsls, vue_ls, tailwindcss)
+  'typescript', 'tsx', 'javascript', 'jsdoc', 'vue', 'css', 'scss',
+  -- data formats (jsonls, yamlls) — jsonc has no dedicated parser, registered as json below
+  'json', 'yaml', 'toml',
+  -- go (gopls)
+  'go', 'gomod', 'gosum', 'gowork',
+  -- rust
+  'rust',
+  -- ops
+  'dockerfile', 'helm', 'gitcommit', 'gitignore', 'regex',
+}
+
 require('lazy').setup({
   -- NOTE: Plugins can be added with a link (or for a github repo: 'owner/repo' link).
   'NMAC427/guess-indent.nvim', -- Detect tabstop and shiftwidth automatically
@@ -1120,32 +1136,36 @@ require('lazy').setup({
   },
   { -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
-    branch = 'master',
+    branch = 'main',
     lazy = false,
-    build = ':TSUpdate',
+    build = function()
+      local treesitter = require 'nvim-treesitter'
+      treesitter.setup { install_dir = treesitter_install_dir }
+      treesitter.install(treesitter_parsers):wait(300000)
+    end,
     opts = {
-      ensure_installed = {
-        -- core
-        'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc',
-        -- web / TS stack (vtsls, vue_ls, tailwindcss)
-        'typescript', 'tsx', 'javascript', 'jsdoc', 'vue', 'css', 'scss',
-        -- data formats (jsonls, yamlls) — jsonc has no dedicated parser, registered as json below
-        'json', 'yaml', 'toml',
-        -- go (gopls)
-        'go', 'gomod', 'gosum', 'gowork',
-        -- rust
-        'rust',
-        -- ops
-        'dockerfile', 'helm', 'gitcommit', 'gitignore', 'regex',
-      },
-      highlight = { enable = true },
-      indent = { enable = true },
+      install_dir = treesitter_install_dir,
     },
     config = function(_, opts)
-      require('nvim-treesitter.configs').setup(opts)
+      require('nvim-treesitter').setup { install_dir = opts.install_dir }
 
       -- jsonc has no dedicated tree-sitter grammar; reuse the json parser
       vim.treesitter.language.register('json', 'jsonc')
+
+      local group = vim.api.nvim_create_augroup('kickstart-treesitter', { clear = true })
+      vim.api.nvim_create_autocmd('FileType', {
+        group = group,
+        callback = function(args)
+          if vim.bo[args.buf].filetype == '' then
+            return
+          end
+
+          local ok = pcall(vim.treesitter.start, args.buf)
+          if ok then
+            vim.bo[args.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+          end
+        end,
+      })
     end,
   },
 
