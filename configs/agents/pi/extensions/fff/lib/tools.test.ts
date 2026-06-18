@@ -134,6 +134,64 @@ describe("registerFffTools", () => {
     expect(finder.fileSearch).toHaveBeenCalledWith("src", { pageIndex: 1, pageSize: 2 });
   });
 
+  test("find hints at AND semantics when a multi-word query returns nothing", async () => {
+    // Arrange
+    const fakePi = createFakePi({ cwd: "/tmp/workspace" });
+    const finder = createFinder({ fileSearchResult: searchResult([], 0) });
+    registerFffTools(fakePi.pi, createRuntime(finder), createCursorStore(), () => "/tmp/workspace");
+
+    // Act
+    const result = await fakePi.runTool("find", { pattern: "nvim tmux ghostty" });
+
+    // Assert
+    expect(JSON.stringify(result)).toContain("AND-combined");
+  });
+
+  test("find does not hint when a single-word query returns nothing", async () => {
+    // Arrange
+    const fakePi = createFakePi({ cwd: "/tmp/workspace" });
+    const finder = createFinder({ fileSearchResult: searchResult([], 0) });
+    registerFffTools(fakePi.pi, createRuntime(finder), createCursorStore(), () => "/tmp/workspace");
+
+    // Act
+    const result = await fakePi.runTool("find", { pattern: "nvim" });
+
+    // Assert
+    expect(JSON.stringify(result)).not.toContain("AND-combined");
+  });
+
+  test("multi_grep hints at AND semantics when multiple positive constraints return nothing", async () => {
+    // Arrange
+    const fakePi = createFakePi({ cwd: "/tmp/workspace" });
+    const finder = createFinder();
+    registerFffTools(fakePi.pi, createRuntime(finder), createCursorStore(), () => "/tmp/workspace");
+
+    // Act
+    const result = await fakePi.runTool("multi_grep", {
+      patterns: ["clipboard"],
+      constraints: "configs/** install/** *.sh",
+    });
+
+    // Assert
+    expect(JSON.stringify(result)).toContain("AND-combined");
+  });
+
+  test("multi_grep does not hint for a single brace-glob constraint", async () => {
+    // Arrange
+    const fakePi = createFakePi({ cwd: "/tmp/workspace" });
+    const finder = createFinder();
+    registerFffTools(fakePi.pi, createRuntime(finder), createCursorStore(), () => "/tmp/workspace");
+
+    // Act
+    const result = await fakePi.runTool("multi_grep", {
+      patterns: ["clipboard"],
+      constraints: "{configs,install}/**",
+    });
+
+    // Assert
+    expect(JSON.stringify(result)).not.toContain("AND-combined");
+  });
+
   test("multi_grep passes patterns and constraints to FFF", async () => {
     // Arrange
     const fakePi = createFakePi({ cwd: "/tmp/workspace" });
