@@ -16,6 +16,9 @@
   "compaction": {
     "enabled": true
   },
+  "packages": [
+    "npm:@plannotator/pi-extension@0.21.0"
+  ],
   "extensions": [
     "!../../.agents/**",
     "!../../.claude/**",
