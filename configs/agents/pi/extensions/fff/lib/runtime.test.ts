@@ -8,8 +8,7 @@ describe("createFffRuntime", () => {
     const finder = createFakeFinder();
     const createFinder = mock((_options: InitOptions) => ({ ok: true as const, value: finder }));
     const runtime = createFffRuntime({
-      frecencyDbPath: "/tmp/frecency",
-      historyDbPath: "/tmp/history",
+      resolveDbPaths: () => ({ frecencyDbPath: "/tmp/frecency", historyDbPath: "/tmp/history" }),
       enableFsRootScanning: true,
       waitForScanMs: 123,
       createFinder,

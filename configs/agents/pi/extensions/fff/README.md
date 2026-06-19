@@ -13,10 +13,21 @@ Pi extension that overrides Pi's built-in `grep`, `find`, and `multi_grep` tools
 
 There is intentionally no mode switch: this repository's convention is to install this extension as the overriding implementation.
 
+## Frecency and history storage
+
+By default, frecency and query history are scoped per project under:
+
+```text
+~/.cache/pi/fff/projects/<project-name>-<hash>/frecency.sqlite
+~/.cache/pi/fff/projects/<project-name>-<hash>/history.sqlite
+```
+
+The project root is the nearest parent containing `.git`; outside Git repositories, the current working directory is used. This keeps useful ranking shared between Pi sessions in the same repository without making unrelated projects contend on one global LMDB reader table.
+
 ## Flags and env
 
-- `--fff-frecency-db` / `FFF_FRECENCY_DB` — frecency database path.
-- `--fff-history-db` / `FFF_HISTORY_DB` — query history database path.
+- `--fff-frecency-db` / `FFF_FRECENCY_DB` — override the frecency database path.
+- `--fff-history-db` / `FFF_HISTORY_DB` — override the query history database path.
 - `--fff-enable-root-scan` / `FFF_ENABLE_ROOT_SCAN=1` — allow indexing `/`.
 
 ## Install

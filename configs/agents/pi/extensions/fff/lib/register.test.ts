@@ -100,10 +100,10 @@ describe("readRuntimeOptions", () => {
     const options = readRuntimeOptions(fakePi.pi);
 
     // Assert
-    expect(options).toMatchObject({
+    expect(options.enableFsRootScanning).toBe(true);
+    expect(options.resolveDbPaths?.("/tmp/workspace")).toEqual({
       frecencyDbPath: "/flag/frecency",
       historyDbPath: "/flag/history",
-      enableFsRootScanning: true,
     });
   });
 });

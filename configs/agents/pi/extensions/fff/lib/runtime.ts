@@ -1,12 +1,12 @@
 import type { FileFinderApi, InitOptions, Result } from "@ff-labs/fff-node";
 import { FileFinder } from "@ff-labs/fff-node";
+import type { FffDbPathResolver } from "./db-paths";
 import type { FffFinder, FffRuntime } from "./types";
 
 const DEFAULT_SCAN_WAIT_MS = 15_000;
 
 export type FffRuntimeOptions = {
-  frecencyDbPath?: string;
-  historyDbPath?: string;
+  resolveDbPaths?: FffDbPathResolver;
   enableFsRootScanning: boolean;
   waitForScanMs?: number;
   createFinder?: (options: InitOptions) => Result<FileFinderApi>;
@@ -26,10 +26,11 @@ export function createFffRuntime(options: FffRuntimeOptions): FffRuntime {
     finderPromise = (async () => {
       destroy();
 
+      const dbPaths = options.resolveDbPaths?.(cwd) ?? {};
       const result = createFinder({
         basePath: cwd,
-        frecencyDbPath: options.frecencyDbPath,
-        historyDbPath: options.historyDbPath,
+        frecencyDbPath: dbPaths.frecencyDbPath,
+        historyDbPath: dbPaths.historyDbPath,
         aiMode: true,
         enableHomeDirScanning: true,
         enableFsRootScanning: options.enableFsRootScanning,

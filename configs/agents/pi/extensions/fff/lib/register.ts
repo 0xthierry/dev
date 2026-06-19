@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createFffAutocompleteProviderFactory } from "./autocomplete";
 import { registerFffCommands, sendNotice } from "./commands";
+import { createFffDbPathResolver } from "./db-paths";
 import { createCursorStore } from "./pagination";
 import { createFffRuntime, type FffRuntimeOptions } from "./runtime";
 import { registerFffTools } from "./tools";
@@ -47,20 +48,22 @@ export function registerFff(pi: ExtensionAPI, runtime: FffRuntime): void {
 
 export function readRuntimeOptions(pi: ExtensionAPI): FffRuntimeOptions {
   return {
-    frecencyDbPath: flagString(pi, FFF_FRECENCY_DB_FLAG) ?? process.env.FFF_FRECENCY_DB,
-    historyDbPath: flagString(pi, FFF_HISTORY_DB_FLAG) ?? process.env.FFF_HISTORY_DB,
+    resolveDbPaths: createFffDbPathResolver({
+      frecencyDbPathOverride: flagString(pi, FFF_FRECENCY_DB_FLAG) ?? process.env.FFF_FRECENCY_DB,
+      historyDbPathOverride: flagString(pi, FFF_HISTORY_DB_FLAG) ?? process.env.FFF_HISTORY_DB,
+    }),
     enableFsRootScanning: flagBool(pi, FFF_ENABLE_ROOT_SCAN_FLAG) ?? envBool("FFF_ENABLE_ROOT_SCAN"),
   };
 }
 
 function registerFffFlags(pi: ExtensionAPI): void {
   pi.registerFlag(FFF_FRECENCY_DB_FLAG, {
-    description: "Path to the FFF frecency database (overrides FFF_FRECENCY_DB).",
+    description: "Path to the FFF frecency database (overrides the project-scoped default and FFF_FRECENCY_DB).",
     type: "string",
   });
 
   pi.registerFlag(FFF_HISTORY_DB_FLAG, {
-    description: "Path to the FFF query-history database (overrides FFF_HISTORY_DB).",
+    description: "Path to the FFF query-history database (overrides the project-scoped default and FFF_HISTORY_DB).",
     type: "string",
   });
 
