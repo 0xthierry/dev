@@ -5,7 +5,7 @@ export const OracleParamsSchema = Type.Object(
   {
     prompt: Type.String({
       description:
-        "Self-contained prompt for the Oracle, which cannot see your repo, files, terminal, or this conversation. Paste the actual code, exact errors, constraints, what you have already tried, and the specific output you want back.",
+        "Self-contained prompt for the Oracle, which cannot see your repo, files, terminal, or this conversation. Paste the actual code, exact errors, constraints, and what you have already tried. Include your own proposed solution or leading hypothesis and ask the Oracle to challenge or confirm it, rather than asking it to solve the problem from scratch, and state the specific output you want back.",
     }),
     context: Type.Optional(
       StringEnum(["resume", "fresh"] as const, {

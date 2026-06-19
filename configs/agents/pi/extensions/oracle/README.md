@@ -16,11 +16,11 @@ To the agent, the tool is simply **the Oracle**. The agent-facing prompts never 
 
 ## When the agent should consult it
 
-The tool prompt tells the agent to consult the Oracle when it is stuck, blocked, or low-confidence on hard reasoning, debugging, architecture, or review; when it wants an independent second opinion on a risky change; or whenever the user explicitly asks for the Oracle or a second opinion. It is told **not** to use the Oracle for routine work it can do confidently, because the Oracle is slow (answers can take minutes) and deliberate.
+The tool prompt tells the agent to consult the Oracle on hard reasoning, debugging, architecture, or review; when it wants an independent second opinion on a risky change; or whenever the user explicitly asks for the Oracle or a second opinion. Crucially, the agent is told to **do its own reasoning first and arrive at a concrete proposed fix or decision**, then bring that to the Oracle to challenge, refine, or confirm — the Oracle reviews the agent's thinking, it does not replace it. Reaching for the Oracle the moment something looks tricky, before proposing a solution, is called out as the wrong reflex. It is also told **not** to use the Oracle for routine work it can do confidently, because the Oracle is slow (answers can take minutes) and deliberate.
 
 ## How the agent should prompt it
 
-The Oracle is **blind and stateless** — it cannot see the repo, files, terminal, diffs, or the Pi conversation; it knows only what is in the prompt. The tool prompt therefore tells the agent to send a self-contained prompt: the actual code (full functions or files, not summaries), exact errors and stack traces, constraints, versions and environment, what it already tried, the goal and success criteria, and the precise output it wants back. The agent is told never to send secrets, credentials, tokens, or sensitive data.
+The Oracle is **blind and stateless** — it cannot see the repo, files, terminal, diffs, or the Pi conversation; it knows only what is in the prompt. The tool prompt therefore tells the agent to send a self-contained prompt: the actual code (full functions or files, not summaries), exact errors and stack traces, constraints, versions and environment, what it already tried, **its own proposed solution and reasoning**, the goal and success criteria, and the precise output it wants back (e.g. a critique of its proposed fix). The agent is told never to send secrets, credentials, tokens, or sensitive data.
 
 ## Parameters and conversation behavior
 

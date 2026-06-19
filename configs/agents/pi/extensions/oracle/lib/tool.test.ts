@@ -27,7 +27,7 @@ describe("registerOracleTool", () => {
     expect(tool?.description).toContain("state-of-the-art intelligence");
     expect(tool?.description).toContain("blind and stateless");
     expect(tool?.promptGuidelines).toContain(
-      "oracle: The Oracle is a separate, state-of-the-art intelligence. Consult it when you are stuck, blocked, or low-confidence on hard reasoning, debugging, architecture, or review — or whenever the user asks for the Oracle or a second opinion.",
+      "oracle: The Oracle is a separate, state-of-the-art intelligence. Consult it for hard reasoning, debugging, architecture, or review — or whenever the user asks for the Oracle or a second opinion. First do your own reasoning and propose a concrete fix or decision, then bring that to the Oracle to challenge or confirm; do not offload the decision the moment something looks tricky.",
     );
     expect(JSON.stringify(tool?.parameters)).toContain("prompt");
     expect(JSON.stringify(tool?.parameters)).toContain("context");
