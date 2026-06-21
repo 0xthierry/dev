@@ -25,7 +25,7 @@ An implementation plan was implemented and a user has follow-on feedback - it mi
    - find the commit that marks the end of implementation
    - read and understand and commits since then - the content of what changed
    - understand what phases of the plan were already implemented - the user might be giving you feedback in the middle of a plan implementation
-   - **If the user wants to implement an unstarted phase**: use `Agent` tool with `subagent_type: "rpi:implementer-agent"` — don't implement phases inline. Example prompt when no plan exists:
+   - **If the user wants to implement an unstarted phase**: use `Agent` tool with `subagent_type: "implementer-agent"` — don't implement phases inline. Example prompt when no plan exists:
      <example_subagent_prompt>
      Implement Phase [N] from the structure outline at [outline path]
      
@@ -58,12 +58,9 @@ An implementation plan was implemented and a user has follow-on feedback - it mi
 
 
 <guidance>
-## Cloud Permalinks
+## Artifact Paths
 
-When you write or edit documents in .tasks/, a cloud permalink is automatically provided in the hook response.
-- The permalink appears as `additionalContext` after Write/Edit/MultiEdit/Read operations
-- Use this permalink in your final output for easy navigation
-- Example format: `http(s)://{DOMAIN}/artifacts/{artifactId}`
+When you write or edit documents in `.tasks/`, include the generated local file path in your final response. If the tool output includes additional artifact metadata, you may include it as well.
 
 ## Markdown Formatting
 

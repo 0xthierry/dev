@@ -97,7 +97,7 @@ These are intended to be **illustrative**. Not all work lends itself to this typ
 
 `Read({SKILLBASE}/references/structure_outline_final_answer.md)`
 
-4. Respond following the template exactly. Do not include a summary or other information. Include cloud permalinks if available.
+4. Respond following the template exactly. Do not include a summary or other information. Include artifact paths if available.
 
 ## Work with the user to iterate on the design
 
@@ -110,12 +110,9 @@ These are intended to be **illustrative**. Not all work lends itself to this typ
    - Update the structure according to the user's feedback
 
 <guidance>
-## Cloud Permalinks
+## Artifact Paths
 
-When you write or edit documents in .tasks/, a cloud permalink is automatically provided in the hook response.
-- The permalink appears as `additionalContext` after Write/Edit/MultiEdit/Read operations
-- Use this permalink in your final output for easy navigation
-- Example format: `http(s)://{DOMAIN}/artifacts/{artifactId}`
+When you write or edit documents in `.tasks/`, include the generated local file path in your final response. If the tool output includes additional artifact metadata, you may include it as well.
 
 ## Markdown Formatting
 

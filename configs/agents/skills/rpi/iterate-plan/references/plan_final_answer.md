@@ -1,12 +1,12 @@
 ## Next Steps
 
-The plan has been created. When you're ready to proceed to implementation, you can click the button below or create a new session with the following command:
+The plan has been created. When you're ready to proceed to implementation, you can click the following skill command:
 
 ```text
-/rpi:implement-plan
+/skill:implement-plan
 ```
 
 ---
 
-You can view the full artifact in the right sidebar, or on the web [here](cloud permalink from the hook)
+You can view the full artifact at the generated local file path.
 

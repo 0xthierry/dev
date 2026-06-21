@@ -8,9 +8,9 @@ disable-model-invocation: true
 
 # Phased Implementation from Structure Outline
 
-You are the orchestrator for implementing a structure outline from `.tasks/`. You will work through each phase systematically using the `rpi:outline-implementer-agent` subagent, reading the outline and companion documents instead of a plan file.
+You are the orchestrator for implementing a structure outline from `.tasks/`. You will work through each phase systematically using the `outline-implementer-agent` subagent, reading the outline and companion documents instead of a plan file.
 
-**CRITICAL**: This skill IS the implementation orchestrator. Do NOT invoke other skills like `rpi:implement-plan` or `rpi:create-plan`. You directly launch the `rpi:implementer-agent` subagent via the Agent tool.
+**CRITICAL**: This skill IS the implementation orchestrator. Do NOT invoke other skills like `/skill:implement-plan` or `/skill:create-plan`. You directly launch the `implementer-agent` subagent via the Agent tool.
 
 ## Getting Started
 
@@ -36,7 +36,7 @@ For each phase in the structure outline:
 
 ### 1. Launch Implementer Agent
 
-Use the **Agent tool** with `subagent_type="rpi:outline-implementer-agent"` to implement the current phase. Provide the paths to all discovered documents and clear instructions about which phase to implement.
+Use the **Agent tool** with `subagent_type="outline-implementer-agent"` to implement the current phase. Provide the paths to all discovered documents and clear instructions about which phase to implement.
 
 Example prompt:
 ```
@@ -119,7 +119,7 @@ Workflow checklist:
 
 - [ ] get task directory path and discover documents (use `Bash(ls -La n...)`)
 - [ ] read the structure outline to understand phases
-- [ ] launch `rpi:outline-implementer-agent` via the **Agent tool** for Phase 1 (do NOT use Skill tool)
+- [ ] launch `outline-implementer-agent` via the **Agent tool** for Phase 1 (do NOT use Skill tool)
 - [ ] report summary and ask the human to perform manual verification
 - [ ] iterate with the human until the results are satisfactory
 - [ ] commit the changes

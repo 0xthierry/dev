@@ -133,7 +133,7 @@ If the user asks to "continue working through questions" or "keep grilling" or s
 
 7. **When the user says they're done or the design is fully fleshed out**, read the final output template:
    `Read({SKILLBASE}/references/tdd_final_answer_resolved.md)`
-   - Respond following the selected template exactly. Do not include a summary or other information. Include cloud permalinks if available.
+   - Respond following the selected template exactly. Do not include a summary or other information. Include artifact paths if available.
 
 ## Document Precedence
 
@@ -151,7 +151,7 @@ Diagrams are how you communicate architecture visually. Use them liberally when 
 **Creating diagrams:**
 - Use mermaid syntax directly in markdown
 - Keep diagrams focused on the decision at hand
-- For diagrams or concepts too complex for Mermaid or plain text, get creative with a one-off HTML artifact displayed inline with ```task-artifact syntax
+- For diagrams or concepts too complex for Mermaid or plain text, get creative with a one-off HTML artifact referenced by local file path
 - Common diagram types:
   - `flowchart` for control flow and data flow
   - `sequenceDiagram` for component interactions
@@ -182,10 +182,8 @@ Use HTML artifacts when a concept is too complex for Mermaid or plain text, espe
 - Keep each artifact focused on the decision at hand
 - Use realistic labels, not lorem ipsum
 
-**Displaying HTML artifacts inline:**
-```task-artifact
-.tasks/{task-slug}/diagram-{description}.html
-```
+**Referencing HTML artifacts:**
+Reference the generated file path in the TDD, for example: `.tasks/{task-slug}/diagram-{description}.html`
 </guidance>
 
 <guidance>
@@ -274,12 +272,9 @@ If no PRD exists:
 </guidance>
 
 <guidance>
-## Cloud Permalinks
+## Artifact Paths
 
-When you write or edit documents in .tasks/, a cloud permalink is automatically provided in the hook response.
-- The permalink appears as `additionalContext` after Write/Edit/MultiEdit/Read operations
-- Use this permalink in your final output for easy navigation
-- Example format: `http(s)://{DOMAIN}/artifacts/{artifactId}`
+When you write or edit documents in `.tasks/`, include the generated local file path in your final response. If the tool output includes additional artifact metadata, you may include it as well.
 
 ## Markdown Formatting
 

@@ -76,10 +76,7 @@ This is the one question category that does not need to be tailored to the speci
 </guidance>
 
 <guidance>
-## Cloud Permalinks
+## Artifact Paths
 
-When you write or edit documents in .tasks/, a cloud permalink is automatically provided in the hook response.
-- The permalink appears as `additionalContext` after Write/Edit/MultiEdit/Read operations
-- Use this permalink in your final output for easy navigation
-- Example format: `http(s)://{DOMAIN}/artifacts/{artifactId}`
+When you write or edit documents in `.tasks/`, include the generated local file path in your final response. If the tool output includes additional artifact metadata, you may include it as well.
 </guidance>

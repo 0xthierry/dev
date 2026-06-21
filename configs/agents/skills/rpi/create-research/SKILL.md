@@ -61,7 +61,7 @@ Then wait for the user's research query.
 
    **For web research and researching libraries & dependencies (if applicable):**
    - Use the **web-search-researcher** agent for external documentation and resources
-   - You _may_ see a humanlayer library researcher tool. If you do, you should use this to answer any research questions about dependencies and libraries that are in scope for the research. If the tool is not present, do not mention it.
+   - You _may_ see a library researcher tool. If you do, you should use this to answer any research questions about dependencies and libraries that are in scope for the research. If the tool is not present, do not mention it.
    - IF you use web-research agents, instruct them to return LINKS with their findings, and please INCLUDE those links in your final report
 
    The key is to use these agents intelligently:
@@ -101,8 +101,8 @@ Then wait for the user's research query.
 
    - Write the document to `.tasks/TASKNAME/NN-research-DESCRIPTION.md`
 
-7. **Note cloud permalinks:**
-   Cloud permalinks are automatically provided when you write artifacts. Include them in your final output.
+7. **Note artifact paths:**
+   Artifact paths are automatically provided when you write artifacts. Include them in your final output.
 
    For code references in the synclayer repo (if on main or pushed):
    - Get repo info: `gh repo view --json owner,name`
@@ -112,7 +112,7 @@ Then wait for the user's research query.
 8. **Respond to the user according to the template**
    - Read the final output template:
    `Read({SKILLBASE}/references/research_final_answer.md)`
-   - Respond following the template exactly, include cloud permalinks if you have them.
+   - Respond following the template exactly, include artifact paths if you have them.
 
 9. **Handle follow-up questions:**
    - If the user has follow-up questions, append to the same research document
@@ -202,12 +202,9 @@ There are N open questions that you should review, you can
 ```
 </important>
 
-## Cloud Permalinks
+## Artifact Paths
 
-When you write or edit documents in .tasks/, a cloud permalink is automatically provided in the hook response.
-- The permalink appears as `additionalContext` after Write/Edit/MultiEdit/Read operations
-- Use this permalink in your final output for easy navigation
-- Example format: `http(s)://{DOMAIN}/artifacts/{artifactId}`
+When you write or edit documents in `.tasks/`, include the generated local file path in your final response. If the tool output includes additional artifact metadata, you may include it as well.
 
 ## Markdown Formatting
 

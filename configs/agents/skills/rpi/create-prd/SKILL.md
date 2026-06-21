@@ -69,7 +69,7 @@ Write the doc to `.tasks/ENG-XXXX-description/NN-prd-DESCRIPTION.md` (next zero-
 
 Then respond immediately by opening the foundation with the **first question** - at most one short orienting line, then the question. Quote the actual "Problem to Solve" content you drafted so the user reacts to the exact wording, not a summary. For example:
 
-> I've started the PRD - you can view it in the right sidebar. First question: does this **Problem to Solve** sound right?
+> I've started the PRD - you can view it at the generated file path. First question: does this **Problem to Solve** sound right?
 >
 > > ...your statement of the problem...
 >
@@ -112,7 +112,7 @@ Now grill the solution. **Ask exactly one question per message, walking down eac
 
 For each decision: present a single decision with options and your recommendation (for UI questions, show the options as mockups - "Option A vs Option B" with an inline mockup for each) -> wait for the answer -> re-work the **Solution Details** so it absorbs the decision, keeping it one coherent spec. Reach for a mockup or diagram whenever it captures the decision best.
 
-When an answer reshapes the work, touch every affected section in the same pass: refine **Proposed Solution** if the high-level approach changed, move ruled-out paths into **Out of Scope**, and keep mockups in sync with the prose. If the user requests changes to a mockup, pause the question flow, iterate on the mockup until they approve it, then resume. When a mockup is approved, embed it in the document with a `task-artifact` block if it isn't already there.
+When an answer reshapes the work, touch every affected section in the same pass: refine **Proposed Solution** if the high-level approach changed, move ruled-out paths into **Out of Scope**, and keep mockups in sync with the prose. If the user requests changes to a mockup, pause the question flow, iterate on the mockup until they approve it, then resume. When a mockup is approved, reference its generated file path in the document if it is not already there.
 
 **Stay in product space.** Only ask product questions. If a question is really about schemas, storage, or implementation architecture, note it under a "Deferred to TDD" section and move on.
 </instructions>
@@ -126,10 +126,7 @@ Mockups are how you communicate visually - use them liberally when discussing UI
 - Follow the **user's product** design system (colors, fonts, components) found in Step 1; use realistic labels, not lorem ipsum
 - Keep each mockup focused on the decision at hand
 
-Display inline:
-```task-artifact
-.tasks/{task-slug}/mockup-{description}.html
-```
+Reference the generated file path in the PRD, for example: `.tasks/{task-slug}/mockup-{description}.html`
 
 Update mockups as decisions evolve; the final PRD should embed the "winning" versions.
 </guidance>
@@ -151,7 +148,7 @@ Wait for the user's approval and incorporate any fixes they raise.
 <step index="6" name="wrap-up">
 
 <instructions>
-When the solution is approved, read the final answer template and follow it exactly (it points to the next step - the TDD): `Read({SKILLBASE}/references/prd_final_answer_resolved.md)`. Include cloud permalinks if available.
+When the solution is approved, read the final answer template and follow it exactly (it points to the next step - the TDD): `Read({SKILLBASE}/references/prd_final_answer_resolved.md)`. Include artifact paths if available.
 </instructions>
 
 </step>

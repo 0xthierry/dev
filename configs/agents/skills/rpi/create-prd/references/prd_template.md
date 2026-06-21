@@ -53,9 +53,7 @@ sha: [result of git rev-parse HEAD]
 [if appropriate, mermaid diagram of logic flow or user workflow or business process that demonstrates the "Proposed Solution"]
 
 [if appropriate, inline html mockup]
-```task-artifact
-.tasks/{task-slug}/mockup-{description}.html
-```
+Artifact path: `.tasks/{task-slug}/mockup-{description}.html`
 
 [Explanation of mockup and any behavioral notes]
 

@@ -15,4 +15,4 @@ We should resolve all design questions in the document before proceeding to the 
 
 ---
 
-You can view the full artifact in the right sidebar, or share with your teammates on the web [here](cloud permalink from the hook)
+You can view the full artifact at the generated local file path.

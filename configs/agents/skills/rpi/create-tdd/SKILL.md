@@ -134,24 +134,22 @@ PUT /api/resources/:slug
   response: { resource: Resource }
 ```
 
-**Data contracts** when a schema is part of the cross-component agreement:
-```sql
-CREATE TABLE artifact_sync_status (
-  artifact_id   UUID PRIMARY KEY REFERENCES artifacts(id),
-  content_hash  TEXT NOT NULL,
-  cloud_permalink TEXT
-);
+**Data contracts** when a file format, API payload, or other persisted shape is part of the cross-component agreement:
+```json
+{
+  "id": "resource-id",
+  "status": "ready",
+  "updatedAt": "2026-06-19T00:00:00Z"
+}
 ```
-If the codebase uses an ORM or a schema-definition library, the equivalent ORM-specific definition may be clearer than raw SQL - use whatever form matches the project.
+Use whatever representation matches the project, such as JSON, YAML, TypeScript types, Rust structs, or another concrete file/API shape.
 
 ## HTML artifacts for complex concepts
 
-When a concept is too complex for Mermaid or plain text - combining data flow, structure, annotations, or side-by-side comparisons - write a focused HTML artifact and display it inline:
+When a concept is too complex for Mermaid or plain text - combining data flow, structure, annotations, or side-by-side comparisons - write a focused HTML artifact and reference its local file path:
 - Write to `.tasks/{task-slug}/diagram-{description}.html`
 - Keep each artifact focused on the decision at hand; use realistic labels, not lorem ipsum
-```task-artifact
-.tasks/{task-slug}/diagram-{description}.html
-```
+Artifact path: `.tasks/{task-slug}/diagram-{description}.html`
 
 **If you are writing an HTML artifact, read `{SKILLBASE}/references/artifact_template.html` and follow it.** Copy its `<style>` block and build your content in the body using its prose elements and utility classes (`.card`, `.badge*`, `.stat*`, `.ba`). The artifact must follow the template so it matches this application, not the codebase the TDD is about.
 </guidance>
@@ -260,13 +258,10 @@ resolveTarget(items: Item[], cursor: Cursor) -> ItemId | null
 
 **Pseudocode** for complex algorithms or logic - english-y, not a programming language:
 ```text
-on(artifactSave)
-  if artifact.unchanged(oldHash)
-    return cached permalink
-  else
-    objectStore.upload(artifact.content)
-    update local cache with new hash and permalink
-    return fresh permalink
+on(resourceSave)
+  write updated content to disk
+  update the local index with the new file path and timestamp
+  return the generated local path
 ```
 
 ## HTML artifacts for complex concepts
@@ -291,7 +286,7 @@ Wait for the user's approval and incorporate any fixes.
 <step index="7" name="wrap-up">
 
 <instructions>
-When both phases are approved, read the final answer template and follow it exactly (it points to the next step - the structure outline): `Read({SKILLBASE}/references/tdd_final_answer_resolved.md)`. Include cloud permalinks if available.
+When both phases are approved, read the final answer template and follow it exactly (it points to the next step - the structure outline): `Read({SKILLBASE}/references/tdd_final_answer_resolved.md)`. Include artifact paths if available.
 </instructions>
 
 </step>

@@ -9,4 +9,4 @@ To create a PR, use your normal pull request workflow for this repository.
 
 ---
 
-You can view the structure outline here: [NN-structure-outline-DESCRIPTION.md](cloud permalink from hook)
+You can view the structure outline at the generated local file path.

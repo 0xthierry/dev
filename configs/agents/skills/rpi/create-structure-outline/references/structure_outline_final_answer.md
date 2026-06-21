@@ -12,12 +12,12 @@ You can also ask me to add more detail, code snippets, pseudo-code, or mermaid d
 You can use the sharing & commenting features to collaborate with your teammates on this document - I can read, reply to and/or resolve comments whenever you're ready.
 
 
-Once you're happy with the approach, you can use the button below to proceed to the planning phase, or create a new session with the following command: `/rpi:create-plan`
+Once you're happy with the approach, proceed to the planning phase with the following skill command: `/skill:create-plan`
 
 ```text
-/rpi:create-plan
+/skill:create-plan
 ```
 
 ---
 
-You can view the full artifact in the right sidebar, or on the web [here](cloud permalink from the hook)
+You can view the full artifact at the generated local file path.

@@ -57,7 +57,7 @@ Bash(git rev-parse --git-dir)
 
 </condition>
 
-8. Respond following the selected template exactly. Do not include a summary or other information. Include cloud permalinks if available.
+8. Respond following the selected template exactly. Do not include a summary or other information. Include artifact paths if available.
 
 ## Plan Writing Guidelines
 
@@ -76,12 +76,9 @@ The plan is the final authority. Follow the structure outline and design decisio
 the original ticket when they differ.
 
 <guidance>
-## Cloud Permalinks
+## Artifact Paths
 
-When you write or edit documents in .tasks/, a cloud permalink is automatically provided in the hook response.
-- The permalink appears as `additionalContext` after Write/Edit/MultiEdit/Read operations
-- Use this permalink in your final output for easy navigation
-- Example format: `http(s)://{DOMAIN}/artifacts/{artifactId}`
+When you write or edit documents in `.tasks/`, include the generated local file path in your final response. If the tool output includes additional artifact metadata, you may include it as well.
 
 ## Markdown Formatting
 

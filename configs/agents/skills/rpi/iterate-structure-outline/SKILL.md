@@ -54,7 +54,7 @@ Then wait for the user's feedback before proceeding.
    - **codebase-analyzer**: Deep-dive on specific implementations
    - **codebase-pattern-finder**: Find more examples of patterns
    - **web-search-researcher**: Research external best practices
-   - You _may_ see a humanlayer library researcher tool. If you do, you should use this to answer any research questions about dependencies and libraries.  If the tool is not present, do not mention it.
+   - You _may_ see a library researcher tool. If you do, you should use this to answer any research questions about dependencies and libraries.  If the tool is not present, do not mention it.
 
    Do not run agents in the background - FOREGROUND AGENTS ONLY.
 
@@ -98,7 +98,7 @@ These are intended to be **illustrative**. Not all work lends itself to this typ
 7. **Update the user**
    - Read the final output template:
    `Read({SKILLBASE}/references/structure_outline_final_answer.md)`
-   - Respond following the template exactly. Do not include a summary or other information. Include cloud permalinks if available.
+   - Respond following the template exactly. Do not include a summary or other information. Include artifact paths if available.
 
 ## Document Precedence
 
@@ -106,12 +106,9 @@ When documents conflict, the most recent document wins:
 **structure outline > TDD > PRD > design discussion > research > ticket**
 
 <guidance>
-## Cloud Permalinks
+## Artifact Paths
 
-When you write or edit documents in .tasks/, a cloud permalink is automatically provided in the hook response.
-- The permalink appears as `additionalContext` after Write/Edit/MultiEdit/Read operations
-- Use this permalink in your final output for easy navigation
-- Example format: `http(s)://{DOMAIN}/artifacts/{artifactId}`
+When you write or edit documents in `.tasks/`, include the generated local file path in your final response. If the tool output includes additional artifact metadata, you may include it as well.
 
 ## Markdown Formatting
 

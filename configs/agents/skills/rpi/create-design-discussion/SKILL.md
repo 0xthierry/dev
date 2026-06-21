@@ -95,19 +95,16 @@ You are now in the Design Discussion phase. Based on the research findings and t
 
 `Read({SKILLBASE}/references/design_discussion_final_answer.md)`
 
-If hook context says all design questions have been resolved, read the resolved template instead:
+If all design questions have been resolved, read the resolved template instead:
 
 `Read({SKILLBASE}/references/design_discussion_final_answer_resolved.md)`
 
-7. Respond following the selected template exactly. Do not include a summary or other information. Include cloud permalinks if available.
+7. Respond following the selected template exactly. Do not include a summary or other information. Include artifact paths if available.
 
 <guidance>
-## Cloud Permalinks
+## Artifact Paths
 
-When you write or edit documents in .tasks/, a cloud permalink is automatically provided in the hook response.
-- The permalink appears as `additionalContext` after Write/Edit/MultiEdit/Read operations
-- Use this permalink in your final output for easy navigation
-- Example format: `http(s)://{DOMAIN}/artifacts/{artifactId}`
+When you write or edit documents in `.tasks/`, include the generated local file path in your final response. If the tool output includes additional artifact metadata, you may include it as well.
 
 ## Markdown Formatting
 

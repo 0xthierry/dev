@@ -101,7 +101,7 @@ If the user asks to "continue working through questions" or "keep grilling" or s
 
 5. **Update mockups** (if feedback involves visual changes):
    - Update the HTML mockup files to reflect the feedback
-   - Re-embed updated mockups in the PRD using ```task-artifact blocks
+   - Update the PRD to reference the updated mockup file paths
    - If feedback introduces entirely new UI elements, create new mockup files
 
 6. **Stop and ask what's next**:
@@ -132,7 +132,7 @@ If the user asks to "continue working through questions" or "keep grilling" or s
 
 7. **When the user says they're done or the solution is fully fleshed out**, read the final output template:
    `Read({SKILLBASE}/references/prd_final_answer_resolved.md)`
-   - Respond following the selected template exactly. Do not include a summary or other information. Include cloud permalinks if available.
+   - Respond following the selected template exactly. Do not include a summary or other information. Include artifact paths if available.
 
 ## Document Precedence
 
@@ -154,20 +154,15 @@ Mockups are how you communicate visually. Use them liberally when discussing UI.
 - Use realistic labels, not lorem ipsum
 
 **Displaying mockups inline:**
-```task-artifact
-.tasks/{task-slug}/mockup-{description}.html
-```
+Artifact path: `.tasks/{task-slug}/mockup-{description}.html`
 
 **Iterating:** Update mockups as decisions evolve. The final PRD should embed the "winning" versions.
 </guidance>
 
 <guidance>
-## Cloud Permalinks
+## Artifact Paths
 
-When you write or edit documents in .tasks/, a cloud permalink is automatically provided in the hook response.
-- The permalink appears as `additionalContext` after Write/Edit/MultiEdit/Read operations
-- Use this permalink in your final output for easy navigation
-- Example format: `http(s)://{DOMAIN}/artifacts/{artifactId}`
+When you write or edit documents in `.tasks/`, include the generated local file path in your final response. If the tool output includes additional artifact metadata, you may include it as well.
 
 ## Markdown Formatting
 

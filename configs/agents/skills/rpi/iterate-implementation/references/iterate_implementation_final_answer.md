@@ -9,4 +9,4 @@ To create a PR, use your normal pull request workflow for this repository.
 
 ---
 
-You can view the plan here: [NN-plan-DESCRIPTION.md](cloud permalink from hook)
+You can view the plan at the generated local file path.
