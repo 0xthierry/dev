@@ -7,7 +7,7 @@ import { findAgentSessionFileById, getProjectAgentSessionDir } from "../sessions
 import type { AgentSessionRecord } from "../sessions/registry";
 import { findAgentSessionRecord, restoreAgentSessionRecords } from "../sessions/registry";
 import type { PiThinkingLevel } from "../thinking";
-import { type PlannedAgentTask, planAgentInvocation } from "./params";
+import { MAX_PARALLEL_AGENT_TASKS, type PlannedAgentTask, planAgentInvocation } from "./params";
 import { renderAgentToolCall, renderAgentToolResult } from "./render";
 import { type AgentParams, AgentParamsSchema } from "./schemas";
 
@@ -18,7 +18,8 @@ export interface AgentToolDetails {
   results: AgentRunResult[];
 }
 
-const PARALLEL_CONCURRENCY = 4;
+// Keep accepted batch size and actual child process concurrency aligned so tasks do not queue below the documented limit.
+const PARALLEL_CONCURRENCY = MAX_PARALLEL_AGENT_TASKS;
 
 interface ResolvedAgentTask {
   kind: PlannedAgentTask["kind"];

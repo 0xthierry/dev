@@ -254,13 +254,20 @@ describe("executeAgentTool", () => {
     expect(text).toContain("## reviewer\nreviewer completed: Review files");
   });
 
-  test("continues queued parallel tasks after every worker sees a failure", async () => {
+  test("runs fifteen parallel tasks concurrently and isolates failures", async () => {
     // Arrange
     const fakePi = createFakePi();
     const agents = Array.from({ length: 15 }, (_, index) => agent(`agent-${index}`));
+    let activeRuns = 0;
+    let peakActiveRuns = 0;
     const runtime: SubagentRuntime = {
       discoverAgents: mock(async () => ({ agentsDir: "/agents", agentDirs: ["/agents"], agents })),
       runAgent: mock(async (request) => {
+        activeRuns += 1;
+        peakActiveRuns = Math.max(peakActiveRuns, activeRuns);
+        await Promise.resolve();
+        activeRuns -= 1;
+
         const index = Number(request.agent.name.replace("agent-", ""));
         if (index < 4) throw new Error(`${request.agent.name} crashed`);
         return resultFor(request.agent.name, request.task);
@@ -281,6 +288,7 @@ describe("executeAgentTool", () => {
 
     // Assert
     const text = result.content[0]?.type === "text" ? result.content[0].text : "";
+    expect(peakActiveRuns).toBe(15);
     expect(runtime.runAgent).toHaveBeenCalledTimes(15);
     expect(result.details?.ok).toBe(false);
     expect(result.details?.results.filter((agentResult) => agentResult.ok)).toHaveLength(11);
