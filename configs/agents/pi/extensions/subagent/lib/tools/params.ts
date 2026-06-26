@@ -28,7 +28,7 @@ export type AgentExecutionPlan =
 
 export type AgentPlanResult = { ok: true; plan: AgentExecutionPlan } | { ok: false; error: string };
 
-export const MAX_PARALLEL_AGENT_TASKS = 8;
+export const MAX_PARALLEL_AGENT_TASKS = 15;
 
 export function planAgentInvocation(params: AgentParams): AgentPlanResult {
   const single = readSingleTask(params);

@@ -164,6 +164,22 @@ describe("planAgentInvocation", () => {
     expect(result).toEqual({ ok: false, error: "Provide exactly one agent mode: subagent_type + prompt, or tasks[]." });
   });
 
+  test("allows fifteen parallel tasks", () => {
+    // Arrange
+    const tasks = Array.from({ length: 15 }, (_, index) => ({
+      subagent_type: `agent-${index}`,
+      prompt: "Work",
+    }));
+
+    // Act
+    const result = planAgentInvocation({ tasks });
+
+    // Assert
+    expect(MAX_PARALLEL_AGENT_TASKS).toBe(15);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.plan.tasks).toHaveLength(15);
+  });
+
   test("rejects oversized parallel batches", () => {
     // Arrange
     const tasks = Array.from({ length: MAX_PARALLEL_AGENT_TASKS + 1 }, (_, index) => ({

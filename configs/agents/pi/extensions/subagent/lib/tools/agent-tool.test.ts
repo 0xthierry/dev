@@ -257,7 +257,7 @@ describe("executeAgentTool", () => {
   test("continues queued parallel tasks after every worker sees a failure", async () => {
     // Arrange
     const fakePi = createFakePi();
-    const agents = Array.from({ length: 8 }, (_, index) => agent(`agent-${index}`));
+    const agents = Array.from({ length: 15 }, (_, index) => agent(`agent-${index}`));
     const runtime: SubagentRuntime = {
       discoverAgents: mock(async () => ({ agentsDir: "/agents", agentDirs: ["/agents"], agents })),
       runAgent: mock(async (request) => {
@@ -281,11 +281,11 @@ describe("executeAgentTool", () => {
 
     // Assert
     const text = result.content[0]?.type === "text" ? result.content[0].text : "";
-    expect(runtime.runAgent).toHaveBeenCalledTimes(8);
+    expect(runtime.runAgent).toHaveBeenCalledTimes(15);
     expect(result.details?.ok).toBe(false);
-    expect(result.details?.results.filter((agentResult) => agentResult.ok)).toHaveLength(4);
-    expect(text).toContain("Parallel agents completed: 4/8 succeeded");
-    expect(text).toContain("## agent-7\nagent-7 completed: Task for agent-7");
+    expect(result.details?.results.filter((agentResult) => agentResult.ok)).toHaveLength(11);
+    expect(text).toContain("Parallel agents completed: 11/15 succeeded");
+    expect(text).toContain("## agent-14\nagent-14 completed: Task for agent-14");
   });
 
   test("returns a helpful error for unknown agents", async () => {

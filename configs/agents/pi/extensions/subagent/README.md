@@ -71,7 +71,7 @@ Parallel independent tasks:
 }
 ```
 
-Prompt children with a compact contract: goal, context/evidence, success criteria, hard constraints, validation, expected output, and stop rules. Use parallel tasks only for independent work; do not hand off urgent blocking work when the parent session's next step depends on it. In parallel mode, top-level `effort` is the default for tasks that omit `effort`; a task-level value overrides it.
+Prompt children with a compact contract: goal, context/evidence, success criteria, hard constraints, validation, expected output, and stop rules. Use parallel tasks only for independent work; do not hand off urgent blocking work when the parent session's next step depends on it. A parallel call may include up to 15 tasks. In parallel mode, top-level `effort` is the default for tasks that omit `effort`; a task-level value overrides it.
 
 Context modes:
 
