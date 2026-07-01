@@ -1,13 +1,7 @@
-import { expect, mock, test } from "bun:test";
-
-// watchInbox gates on existsSync(root); force it true so the monitor loop runs
-// immediately without a real room directory.
-mock.module("node:fs", () => ({
-  existsSync: () => true,
-  appendFileSync: () => {},
-}));
-
-const { registerAmqNotifyExtension } = await import("./register");
+import { afterEach, expect, test } from "bun:test";
+import { mkdirSync, rmSync } from "node:fs";
+import { BINDING_ENTRY } from "./binding";
+import { registerAmqNotifyExtension } from "./register";
 
 type Handler = (event: unknown, ctx: unknown) => unknown;
 type Entry = { type: string; customType?: string; data?: unknown };
@@ -15,11 +9,21 @@ type ExecCall = { command: string; args: string[]; options: Record<string, unkno
 
 type SentMessage = { text: string; options?: unknown };
 
+const TEST_CWD = "/tmp/amq-notify-test";
+
+afterEach(() => {
+  rmSync(TEST_CWD, { recursive: true, force: true });
+});
+
 // A session store whose custom entries persist across extension instances — this is
 // how pi carries state across a /reload (rebind) or a stop+resume (new process).
 function makeSession() {
   const entries: Entry[] = [];
   return { entries, sessionManager: { getEntries: () => entries } };
+}
+
+function isBindingData(data: unknown): data is { root: string } {
+  return typeof data === "object" && data !== null && "root" in data && typeof data.root === "string";
 }
 
 // One extension instance bound to a (possibly shared) session, modelling pi's
@@ -35,6 +39,7 @@ function makeInstance(session: ReturnType<typeof makeSession>, options: { idle?:
     },
     appendEntry(customType: string, data: unknown) {
       session.entries.push({ type: "custom", customType, data });
+      if (customType === BINDING_ENTRY && isBindingData(data)) mkdirSync(data.root, { recursive: true });
     },
     async exec(command: string, args: string[] = [], execOptions: Record<string, unknown> = {}) {
       execCalls.push({ command, args, options: execOptions });
@@ -70,7 +75,7 @@ function makeInstance(session: ReturnType<typeof makeSession>, options: { idle?:
     },
   };
   const ctx = {
-    cwd: "/tmp/amq-notify-test",
+    cwd: TEST_CWD,
     isIdle: () => options.idle ?? true,
     sessionManager: session.sessionManager,
   };
