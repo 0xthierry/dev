@@ -29,3 +29,7 @@ history.jsonl
 *~
 .idea/
 .vscode/
+
+# Agent Message Queue
+.agent-mail/
+.amqrc
