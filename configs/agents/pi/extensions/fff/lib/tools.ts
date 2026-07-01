@@ -11,9 +11,11 @@ const DEFAULT_FIND_LIMIT = 30;
 const MAX_MATCHES_PER_FILE = 50;
 
 const FIND_AND_HINT =
-  "0 results. find terms are AND-combined — 'a b' needs both words in one path. Search one concept per call, or scope alternatives with a brace glob like '{a,b}/**'.";
+  "find terms are AND-combined — 'a b' needs both words in one path. Search one concept per call, or scope alternatives with a brace glob like '{a,b}/**'";
 const MULTI_GREP_AND_HINT =
   "0 results. constraints are AND-combined — multiple positive globs need a file under all of them. To allow any of several dirs/extensions use a brace glob like '{configs,install}/**' or '*.{sh,ts}'.";
+const COMMON_IGNORED_PATH_SEGMENTS = ["node_modules", ".next", "dist", "build", "target", "vendor"];
+const UNAMBIGUOUS_IGNORED_PATTERN_SEGMENTS = new Set(["node_modules", ".next"]);
 
 const PathDescription =
   "Repo-relative path constraint. Directory prefix (src/ or src/foo/), bare filename with extension (main.rs), or glob (*.ts, src/**/*.cc, {src,lib}/**). Applied to the full repo-relative path.";
@@ -39,7 +41,7 @@ export const GrepParameters = Type.Object({
 export const FindParameters = Type.Object({
   pattern: Type.String({
     description:
-      "Fuzzy path search and glob search. Frecency-ranked, git-aware. Multi-word = AND: every word must appear in the SAME path (order-independent), so use extra words to pin down ONE file (e.g. 'auth middleware'), NEVER to look for several different files at once. Searching unrelated concepts together (e.g. 'nvim tmux ghostty') matches only paths containing all of them — usually nothing; run one find per concept instead. Prefer this over ls/find/bash as the first exploration step whenever the user names a single concept, feature, or symbol — it surfaces the relevant files in one call. Only use ls/read on a directory when you specifically need the alphabetical layout of an unknown repo, or when a search returned nothing.",
+      "Fuzzy path search and glob search. Frecency-ranked, git-aware/ignore-aware. Multi-word = AND: every word must appear in the SAME path (order-independent), so use extra words to pin down ONE file (e.g. 'auth middleware'), NEVER to look for several different files at once. Searching unrelated concepts together (e.g. 'nvim tmux ghostty') matches only paths containing all of them — usually nothing; run one find per concept instead. Prefer this over ls/find/bash as the first exploration step whenever the user names a single concept, feature, or symbol — it surfaces the relevant files in one call. Only use ls/read on a directory when you specifically need the alphabetical layout of an unknown repo, or when a search returned nothing. Use bash find for raw filesystem lookup in ignored/generated directories such as node_modules.",
   }),
   path: Type.Optional(Type.String({ description: PathDescription })),
   exclude: Type.Optional(Type.Union([Type.String(), Type.Array(Type.String())], { description: ExcludeDescription })),
@@ -208,7 +210,7 @@ function registerFindTool(
   pi.registerTool({
     name: "find",
     label: "find",
-    description: `Fuzzy path search and glob search. Matches against the whole repo-relative path, not just the filename. Frecency-ranked, git-aware. Multi-word = AND (every word must match the same path; one concept per call). Default limit ${DEFAULT_FIND_LIMIT}.`,
+    description: `Fuzzy path search and glob search. Matches against the whole repo-relative path, not just the filename. Frecency-ranked, git-aware/ignore-aware. Multi-word = AND (every word must match the same path; one concept per call). Default limit ${DEFAULT_FIND_LIMIT}.`,
     promptSnippet: "Find files by path or glob",
     promptGuidelines: [
       "Matches the WHOLE path, not just the filename — `profile` hits `chrome/browser/profiles/x.cc` too.",
@@ -216,6 +218,7 @@ function registerFindTool(
       "Use for paths, not content. Use grep for content.",
       "For exact path matches use a glob in `path` — e.g. path: '**/profile.h' for exact filename, or path: 'src/**/profile.h' scoped to a subtree. Bare patterns are fuzzy.",
       "To list everything inside a directory, pass path: 'dir/**' with an empty or wildcard pattern instead of using pattern alone.",
+      "This is git-aware/ignore-aware: ignored/generated dirs such as node_modules may be absent; use bash find for raw filesystem lookup there.",
       "Use exclude: 'test/,*.min.js' to cut noise in large repos.",
     ],
     parameters: FindParameters,
@@ -259,8 +262,8 @@ function registerFindTool(
         notices.push(`${remaining} more match${remaining === 1 ? "" : "es"} available. cursor="${cursor}" to continue`);
       }
 
-      if (result.totalMatched === 0 && !params.cursor && whitespaceTermCount(pattern) >= 2) {
-        notices.push(FIND_AND_HINT);
+      if (result.totalMatched === 0 && !params.cursor) {
+        notices.push(...findNoResultNotices(params, pattern));
       }
 
       if (notices.length > 0) output += `\n\n[${notices.join(". ")}]`;
@@ -361,6 +364,51 @@ function registerMultiGrepTool(
 
 function hasRegexSyntax(pattern: string): boolean {
   return pattern !== pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function findNoResultNotices(params: FindParams, pattern: string): string[] {
+  const notices: string[] = [];
+  const ignoredSegment = findIgnoredPathSegment(params.path, pattern);
+
+  if (ignoredSegment) notices.push(formatIgnoredPathHint(ignoredSegment));
+  if (whitespaceTermCount(pattern) >= 2) notices.push(FIND_AND_HINT);
+
+  return notices;
+}
+
+function formatIgnoredPathHint(segment: string): string {
+  return `This search is git-aware/ignore-aware; ignored directories such as ${segment} are usually absent from the FFF index. Use bash find for raw filesystem lookup in dependency/generated trees`;
+}
+
+function findIgnoredPathSegment(pathConstraint: string | undefined, pattern: string): string | null {
+  const pathSegment = firstMentionedIgnoredPathSegment(pathConstraint, () => true);
+  if (pathSegment) return pathSegment;
+
+  const patternLooksPathLike = /[\\/{}*?]/.test(pattern);
+  return firstMentionedIgnoredPathSegment(
+    pattern,
+    (segment) => patternLooksPathLike || UNAMBIGUOUS_IGNORED_PATTERN_SEGMENTS.has(segment),
+  );
+}
+
+function firstMentionedIgnoredPathSegment(
+  value: string | undefined,
+  shouldConsiderSegment: (segment: string) => boolean,
+): string | null {
+  if (!value) return null;
+
+  for (const segment of COMMON_IGNORED_PATH_SEGMENTS) {
+    if (shouldConsiderSegment(segment) && containsPathSegment(value, segment)) return segment;
+  }
+
+  return null;
+}
+
+function containsPathSegment(value: string, segment: string): boolean {
+  return value
+    .split(/[\\/\s,{}]+/)
+    .filter(Boolean)
+    .some((part) => part === segment);
 }
 
 function whitespaceTermCount(value: string | undefined): number {

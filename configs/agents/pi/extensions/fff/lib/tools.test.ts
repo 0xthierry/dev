@@ -147,17 +147,34 @@ describe("registerFffTools", () => {
     expect(JSON.stringify(result)).toContain("AND-combined");
   });
 
-  test("find does not hint when a single-word query returns nothing", async () => {
+  test("find explains ignored directory misses when a node_modules path returns nothing", async () => {
     // Arrange
     const fakePi = createFakePi({ cwd: "/tmp/workspace" });
     const finder = createFinder({ fileSearchResult: searchResult([], 0) });
     registerFffTools(fakePi.pi, createRuntime(finder), createCursorStore(), () => "/tmp/workspace");
 
     // Act
-    const result = await fakePi.runTool("find", { pattern: "nvim" });
+    const result = await fakePi.runTool("find", { pattern: "e2b", path: "**/node_modules/**" });
+
+    // Assert
+    const text = JSON.stringify(result);
+    expect(text).toContain("git-aware/ignore-aware");
+    expect(text).toContain("node_modules");
+    expect(text).toContain("bash find");
+  });
+
+  test("find does not hint when an ambiguous single-word query returns nothing", async () => {
+    // Arrange
+    const fakePi = createFakePi({ cwd: "/tmp/workspace" });
+    const finder = createFinder({ fileSearchResult: searchResult([], 0) });
+    registerFffTools(fakePi.pi, createRuntime(finder), createCursorStore(), () => "/tmp/workspace");
+
+    // Act
+    const result = await fakePi.runTool("find", { pattern: "build" });
 
     // Assert
     expect(JSON.stringify(result)).not.toContain("AND-combined");
+    expect(JSON.stringify(result)).not.toContain("git-aware/ignore-aware");
   });
 
   test("find provides a cursor for capped weak fuzzy results", async () => {

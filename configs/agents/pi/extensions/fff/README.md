@@ -5,7 +5,7 @@ Pi extension that overrides Pi's built-in `grep`, `find`, and `multi_grep` tools
 ## What it does
 
 - `grep` — FFF content search with smart-case, regex auto-detection, fuzzy fallback, frecency ordering, context, excludes, and cursor pagination.
-- `find` — FFF fuzzy path search over whole repo-relative paths with frecency/git-aware ranking and cursor pagination.
+- `find` — FFF fuzzy path search over whole repo-relative paths with frecency/git-aware/ignore-aware ranking and cursor pagination; ignored/generated dirs such as `node_modules` may require raw `bash find`.
 - `multi_grep` — FFF multi-pattern literal OR search via Aho-Corasick.
 - `@` autocomplete — FFF-backed file/directory suggestions in interactive Pi sessions.
 - `/fff-health` — show picker, git, frecency, query tracker, and scan status.
