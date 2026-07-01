@@ -57,8 +57,12 @@ Options:
 
 - `--topic <topic>` — names the AMQ session (`codex-worker-<topic>`) and the split. One topic
   per workstream.
-- `--resume` — relaunch the worker continuing its previous Pi conversation (after a crash or a
-  closed split), so it keeps the context it already built.
+- `--handle <name>` — the worker's AMQ handle (default `pi`). Launch several workers with the
+  **same topic** and distinct handles to form a named team in one shared session.
+- `--resume` — relaunch the worker continuing the most recent Pi conversation in that
+  directory (after a crash or a closed split), so it keeps the context it already built.
+  Caution: with several workers in one directory, "most recent" may be a different worker's
+  conversation — prefer a fresh spawn when in doubt.
 - `--cwd <dir>` — working directory for the worker (defaults to yours).
 
 The script initializes AMQ, writes the worker's system prompt, and opens the worker in a
@@ -153,8 +157,46 @@ the file (you share a working directory) and sends its path.
    - **Launch another** — an independent workstream exists: launch a second worker with a
      different `--topic` (separate session, separate split). Never let two workers own the
      same files.
+   - **Form a team** — the task benefits from separated roles: launch named workers in one
+     shared session (see below).
 6. **Keep it briefed.** When the user decides something or you change direction, forward it.
    If something might read like an order but is not, say so ("FYI only, no action").
+
+## Named workers and teams
+
+Two ways to run multiple workers:
+
+- **Independent streams** — different `--topic` per worker. Separate sessions, separate
+  splits, both under the default handle `pi`. Right for unrelated tasks; each has its own
+  `AM_ROOT` and cannot see the other.
+- **Named team, one session** — same `--topic`, distinct `--handle` per worker:
+
+  ```bash
+  ~/.claude/skills/use-codex-as-worker/scripts/launch-worker.sh --topic auth --handle implementer
+  ~/.claude/skills/use-codex-as-worker/scripts/launch-worker.sh --topic auth --handle reviewer
+  ```
+
+  One shared `AM_ROOT` (`.agent-mail/codex-worker-auth`), one split per worker, and you
+  address each by name: `amq send --to implementer --kind todo ...`,
+  `amq send --to reviewer --kind todo ...`. A single `amq monitor` covers the whole team —
+  every report lands in your one inbox, tagged `From:` with the sender's handle.
+
+The canonical team is **implementer + reviewer**: dispatch the build task to the implementer;
+when its `DONE:` arrives, dispatch a review task to the reviewer (the diff or file list, the
+acceptance criteria, and "report PASS or FAIL with findings"). An independent model reviewing
+is real signal, but it does not replace your own validation — you arbitrate: send confirmed
+findings back to the implementer as a fix `todo`, discard false positives yourself.
+
+Workers in one session can also message each other (`amq send --to <handle>`), but they are
+prompted to do so only when a message explicitly directs it — by default everything routes
+through you, so you never lose track of state. Direct worker-to-worker handoffs are for
+mechanical relays (e.g. "send your findings list to implementer as an FYI"), never for
+decisions.
+
+Handles are yours to choose (`implementer`, `reviewer`, `tester`, `docs`, …) — anything except
+`claude`, which is the orchestrator. Each split's Pi session is named `codex-<handle>-<topic>`
+so you can tell them apart on screen. File ownership discipline still applies: two workers
+must never own the same files at the same time — a reviewer reads, it does not edit.
 
 ## Ownership and stop conditions
 

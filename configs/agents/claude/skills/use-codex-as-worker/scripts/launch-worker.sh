@@ -8,7 +8,7 @@ WORKER_HANDLE="pi"
 
 usage() {
   cat <<'EOF'
-Usage: launch-worker.sh [--topic TOPIC] [--session SESSION] [--cwd DIR] [--resume]
+Usage: launch-worker.sh [--topic TOPIC] [--handle NAME] [--session SESSION] [--cwd DIR] [--resume]
 
 Launch a Pi (openai-codex/gpt-5.5, xhigh) implementation worker as a visible AMQ
 sidecar for a Claude orchestrator session.
@@ -19,9 +19,14 @@ unavailable, it prints the command to paste manually.
 
 Options:
   --topic TOPIC      Name for this workstream; session becomes codex-worker-<topic>.
+  --handle NAME      AMQ handle for this worker (default: pi). Launch several workers
+                     with the same --topic and distinct handles (e.g. implementer,
+                     reviewer) to form a named team in one shared session.
   --session SESSION  Override the derived AMQ session name.
   --cwd DIR          Working directory for the worker (default: current directory).
-  --resume           Continue the worker's previous Pi conversation in this directory.
+  --resume           Continue the most recent Pi conversation in this directory.
+                     Caution with multiple workers per directory: the most recent
+                     conversation may belong to a different worker.
 EOF
 }
 
@@ -77,6 +82,11 @@ to wait. To wait, simply finish your turn; you are given a turn automatically wh
 Each time a notice appears, and once now at startup to catch anything already waiting, run:
    amq drain --include-body      (read as plain text; never pipe amq output through jq)
 On your first turn, also send a brief "ready" message to ${MAIN_HANDLE}, then wait.
+
+Other named workers may share this session. Messages from them follow the same rules as
+messages from the orchestrator, except only the orchestrator can order implementation work.
+Send to another worker (amq send --to <their handle>) only when a message explicitly directs
+you to; otherwise all your reports go to ${MAIN_HANDLE}.
 
 HOW TO TREAT MESSAGES
 - "Kind: todo" -> an implementation order. Do the work exactly as specified: stay inside the
@@ -237,6 +247,10 @@ while [[ $# -gt 0 ]]; do
       CWD="${2:-}"
       shift 2
       ;;
+    --handle)
+      WORKER_HANDLE="${2:-}"
+      shift 2
+      ;;
     --resume)
       RESUME=1
       shift
@@ -261,6 +275,12 @@ fi
 if ! command -v pi >/dev/null 2>&1; then
   err "pi is not installed or not in PATH"
   exit 1
+fi
+
+WORKER_HANDLE="$(slugify "$WORKER_HANDLE")"
+if [[ -z "$WORKER_HANDLE" || "$WORKER_HANDLE" == "$MAIN_HANDLE" ]]; then
+  err "--handle must be a non-empty name other than '$MAIN_HANDLE'"
+  exit 2
 fi
 
 TOPIC_SLUG="$(slugify "$TOPIC")"
@@ -295,12 +315,12 @@ write_worker_prompt "$PROMPT_FILE"
 # amq wake pushes a turn for each new message.
 KICKOFF="You just started as the ${WORKER_HANDLE} implementation worker for a ${MAIN_HANDLE} orchestrator. Run: amq drain --include-body  to handle anything already waiting, send a brief 'ready' message to ${MAIN_HANDLE}, then wait for notifications (do not loop on amq monitor)."
 
-PI_ARGS=(--name "codex-worker-${TOPIC_SLUG}" --model "$WORKER_MODEL" --thinking "$WORKER_THINKING" --append-system-prompt "$PROMPT_FILE")
+PI_ARGS=(--name "codex-${WORKER_HANDLE}-${TOPIC_SLUG}" --model "$WORKER_MODEL" --thinking "$WORKER_THINKING" --append-system-prompt "$PROMPT_FILE")
 if (( RESUME )); then
   PI_ARGS+=(--continue)
 fi
 
-WORKER_CMD=(amq coop exec "${SESSION_ARG[@]}" pi -- "${PI_ARGS[@]}" "$KICKOFF")
+WORKER_CMD=(amq coop exec "${SESSION_ARG[@]}" --me "$WORKER_HANDLE" pi -- "${PI_ARGS[@]}" "$KICKOFF")
 
 COMMAND_TEXT="cd $(printf '%q' "$CWD") && exec $(quote_cmd "${WORKER_CMD[@]}")"
 
