@@ -90,6 +90,7 @@ COMMON_BREW_FORMULAE=(
   procs
   fastfetch
   gh
+  googleworkspace-cli
   infisical/get-cli/infisical
   make
   cmake
