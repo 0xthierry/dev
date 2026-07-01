@@ -10,6 +10,7 @@ SKIPPED_COUNT=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_AGENTS_DIR="$SCRIPT_DIR/agents"
 SOURCE_SKILLS_DIR="$SCRIPT_DIR/skills"
+SOURCE_CLAUDE_SKILLS_DIR="$SCRIPT_DIR/claude/skills"
 SOURCE_HOOKS_DIR="$SCRIPT_DIR/hooks"
 SOURCE_BIN_DIR="$SCRIPT_DIR/bin"
 SOURCE_CODEX_CONFIG="$SCRIPT_DIR/codex-config.toml"
@@ -348,6 +349,7 @@ prune_broken_skill_links() {
 
 force_link_skill_entries() {
   local target_root="$1"
+  local source_skills_dir="${2:-$SOURCE_SKILLS_DIR}"
   local target_skills_dir="$target_root/skills"
   local source_path=""
   local target_path=""
@@ -359,7 +361,7 @@ force_link_skill_entries() {
     name="$(basename "$source_path")"
     target_path="$target_skills_dir/$name"
     force_link_path "$source_path" "$target_path" "skill $name"
-  done < <(find "$SOURCE_SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*' -print0)
+  done < <(find "$source_skills_dir" -mindepth 1 -maxdepth 1 -type d ! -name '.*' -print0)
 
   prune_broken_skill_links "$target_skills_dir"
 }
@@ -521,6 +523,8 @@ install_claude_target() {
   local claude_hooks_json="$SOURCE_HOOKS_DIR/claude-hooks.json"
 
   install_target "$target_root" "$HOME/.claude"
+  # Claude-only skills (not shared with ~/.agents, ~/.codex, or ~/.pi)
+  force_link_skill_entries "$target_root" "$SOURCE_CLAUDE_SKILLS_DIR"
   # Symlink hooks directory
   if [[ -d "$SOURCE_HOOKS_DIR" ]]; then
     force_link_path "$SOURCE_HOOKS_DIR" "$target_root/hooks" "claude hooks"
@@ -581,6 +585,11 @@ main() {
 
   if [[ ! -d "$SOURCE_SKILLS_DIR" ]]; then
     warn "Missing source skills directory: $SOURCE_SKILLS_DIR"
+    exit 1
+  fi
+
+  if [[ ! -d "$SOURCE_CLAUDE_SKILLS_DIR" ]]; then
+    warn "Missing source Claude skills directory: $SOURCE_CLAUDE_SKILLS_DIR"
     exit 1
   fi
 
