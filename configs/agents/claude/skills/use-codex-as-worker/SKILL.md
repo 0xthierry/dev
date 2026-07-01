@@ -179,7 +179,9 @@ Two ways to run multiple workers:
   One shared `AM_ROOT` (`.agent-mail/codex-worker-auth`), one split per worker, and you
   address each by name: `amq send --to implementer --kind todo ...`,
   `amq send --to reviewer --kind todo ...`. A single `amq monitor` covers the whole team —
-  every report lands in your one inbox, tagged `From:` with the sender's handle.
+  every report lands in your one inbox, tagged `From:` with the sender's handle. Send one
+  message per recipient: multi-recipient sends (`--to a,b`) are rejected unless you also pass
+  `--thread`, and per-worker messages should differ anyway.
 
 The canonical team is **implementer + reviewer**: dispatch the build task to the implementer;
 when its `DONE:` arrives, dispatch a review task to the reviewer (the diff or file list, the
