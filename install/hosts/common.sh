@@ -22,6 +22,7 @@ source "$REPO_ROOT/install/hooks.sh"
 HOST_ENV_VARS=()
 # shellcheck disable=SC2034
 HOST_SSH_CONFIG_LINES=()
+HOST_SSH_INCLUDE_LINES=()
 HOST_WORK_DIRS=()
 HOST_CONFIG_TARGETS=()
 # shellcheck disable=SC2034

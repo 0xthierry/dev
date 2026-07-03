@@ -8,6 +8,10 @@ HOST_ENV_VARS=(
 )
 
 # shellcheck disable=SC2034
+HOST_SSH_INCLUDE_LINES=(
+  "Include ~/dev/configs/linux/ssh.conf"
+)
+
 HOST_WORK_DIRS=(
   "$HOME/Work/Sideprojects"
   "$HOME/Work/Meistrari"

@@ -13,6 +13,10 @@ write_ssh_config() {
   local tmp_fragment=""
   local tmp_include=""
   local line=""
+  local include_line=""
+  local include_added=0
+  local include_config_exists=0
+  local -a include_lines=("Include ~/.ssh/config.d/*.conf")
 
   log_section "SSH Configuration"
   ensure_dir "$ssh_dir"
@@ -35,18 +39,40 @@ write_ssh_config() {
   write_if_changed "$tmp_fragment" "$fragment_path"
   log_item "SSH fragment: $fragment_path"
 
-  if [[ -f "$include_path" ]] && grep -Fq 'Include ~/.ssh/config.d/*.conf' "$include_path"; then
-    log_item "SSH include: already configured"
-    return 0
+  if declare -p HOST_SSH_INCLUDE_LINES >/dev/null 2>&1; then
+    # Older Bash versions can treat empty arrays as unbound under nounset.
+    set +u
+    for include_line in "${HOST_SSH_INCLUDE_LINES[@]}"; do
+      include_lines+=("$include_line")
+    done
+    set -u
   fi
 
   tmp_include="$(mktemp)"
   if [[ -f "$include_path" ]]; then
     cat "$include_path" > "$tmp_include"
-    printf '\n' >> "$tmp_include"
+    include_config_exists=1
   fi
 
-  printf 'Include ~/.ssh/config.d/*.conf\n' >> "$tmp_include"
-  write_if_changed "$tmp_include" "$include_path"
-  log_item "SSH include: $include_path"
+  for include_line in "${include_lines[@]}"; do
+    if [[ -f "$include_path" ]] && grep -Fxq "$include_line" "$include_path"; then
+      log_item "SSH include: already configured ($include_line)"
+      continue
+    fi
+
+    if (( include_added == 0 && include_config_exists )); then
+      printf '\n' >> "$tmp_include"
+    fi
+
+    printf '%s\n' "$include_line" >> "$tmp_include"
+    include_added=1
+    log_item "SSH include: adding $include_line"
+  done
+
+  if (( include_added )); then
+    write_if_changed "$tmp_include" "$include_path"
+    log_item "SSH include: $include_path"
+  else
+    rm -f "$tmp_include"
+  fi
 }
