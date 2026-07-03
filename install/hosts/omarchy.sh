@@ -13,6 +13,7 @@ HOST_CONFIG_TARGETS=(
   ghostty
   herdr
   agents
+  moshi
   cameractrls
   brave
 )

@@ -27,6 +27,8 @@ The two layers don't validate each other. **Most recurring bug:** config deploye
 |---|---|---|
 | `configs/nvim/` | `~/.config/nvim` | symlink |
 | `configs/hypr/` | `~/.config/hypr` | symlink (omarchy only) |
+| `configs/herdr/config.toml` | `~/.config/herdr/config.toml` | symlink |
+| Moshi host integration | `~/.local/bin/herdr`, `moshi-hook` user service, mosh firewall rule | `install/moshi.sh` |
 | `configs/shell/` | sourced via `~/.zshrc` / `~/.zshenv` | written by `install/shell.sh` |
 | `configs/agents/` | `~/.agents/`, `~/.claude/`, `~/.codex/`, `~/.pi/agent/` | special installer |
 
@@ -49,6 +51,7 @@ Names differ between Homebrew and pacman (`tree-sitter-cli` vs `tree-sitter`, `m
 |---|---|
 | Add shared CLI tool | `install/packages/common.sh` |
 | Add tool config | `configs/cli/` plus `install/tools.sh` if needed |
+| Add Moshi/Herdr host setup | `install/moshi.sh`, `configs/agents/pi/extensions/moshi-hooks.ts`, and the host's `HOST_CONFIG_TARGETS` |
 | Add shell behavior | `configs/shell/` plus `install/shell.sh` |
 | Add shared env var | `install/env.sh` |
 | Add host-specific env, SSH, or configs | `install/hosts/{host}.sh` |

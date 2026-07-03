@@ -16,6 +16,7 @@ source "$REPO_ROOT/install/docker.sh"
 source "$REPO_ROOT/install/ghidra-tools.sh"
 source "$REPO_ROOT/install/neovim.sh"
 source "$REPO_ROOT/install/tools.sh"
+source "$REPO_ROOT/install/moshi.sh"
 source "$REPO_ROOT/install/dependencies.sh"
 source "$REPO_ROOT/install/hooks.sh"
 
@@ -115,6 +116,9 @@ apply_host_configs() {
         ;;
       herdr)
         apply_herdr
+        ;;
+      moshi)
+        apply_moshi
         ;;
       raycast)
         apply_raycast

@@ -42,6 +42,7 @@ COMMON_PACMAN_PACKAGES=(
   dive
   gum
   socat
+  mosh
   unzip
   less
   ripgrep
@@ -110,6 +111,7 @@ COMMON_BREW_FORMULAE=(
   lazydocker
   gum
   socat
+  mosh
   unzip
   ripgrep
   fd
