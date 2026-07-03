@@ -27,7 +27,6 @@ keybind = super+control+shift+alt+arrow_down=resize_split:down,100
 keybind = super+control+shift+alt+arrow_up=resize_split:up,100
 keybind = super+control+shift+alt+arrow_left=resize_split:left,100
 keybind = super+control+shift+alt+arrow_right=resize_split:right,100
-keybind = shift+enter=text:\x1b\r
 keybind = ctrl+shift+alt+h=goto_split:left
 keybind = ctrl+shift+alt+j=goto_split:down
 keybind = ctrl+shift+alt+k=goto_split:up
