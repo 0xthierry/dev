@@ -11,6 +11,7 @@ HOST_CONFIG_TARGETS=(
   hypr
   voxtype
   ghostty
+  herdr
   agents
   cameractrls
   brave

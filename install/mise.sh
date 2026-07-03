@@ -23,6 +23,7 @@ java = "temurin-17.0.19+10"
 dotnet = "8.0.420"
 zig = "latest"
 aws = "latest"
+herdr = "0.7.0"
 
 [settings]
 experimental = false

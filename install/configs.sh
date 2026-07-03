@@ -46,6 +46,11 @@ apply_ghostty() {
   safe_link_path "$REPO_ROOT/configs/ghostty/config" "$HOME/.config/ghostty/config" "ghostty config"
 }
 
+apply_herdr() {
+  ensure_dir "$HOME/.config/herdr"
+  safe_link_path "$REPO_ROOT/configs/herdr/config.toml" "$HOME/.config/herdr/config.toml" "herdr config"
+}
+
 apply_raycast() {
   ensure_dir "$HOME/.config/raycast"
   safe_link_path "$REPO_ROOT/configs/raycast/script-commands" "$HOME/.config/raycast/script-commands" "raycast script commands"

@@ -112,6 +112,9 @@ apply_host_configs() {
       ghostty)
         apply_ghostty
         ;;
+      herdr)
+        apply_herdr
+        ;;
       raycast)
         apply_raycast
         ;;

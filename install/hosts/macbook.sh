@@ -18,6 +18,7 @@ HOST_CONFIG_TARGETS=(
   nvim
   voxtype
   ghostty
+  herdr
   raycast
   agents
 )
