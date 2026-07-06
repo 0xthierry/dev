@@ -17,7 +17,7 @@
     "enabled": true
   },
   "packages": [
-    "npm:@plannotator/pi-extension@0.21.0"
+    "npm:@plannotator/pi-extension@0.22.0"
   ],
   "extensions": [
     "!../../.agents/**",
