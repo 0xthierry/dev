@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WORKER_MODEL="openai-codex/gpt-5.5"
+WORKER_MODEL="openai-codex/gpt-5.6-sol"
 WORKER_THINKING="xhigh"
 MAIN_HANDLE="claude"
 WORKER_HANDLE="pi"
@@ -10,7 +10,7 @@ usage() {
   cat <<'EOF'
 Usage: launch-worker.sh [--topic TOPIC] [--handle NAME] [--session SESSION] [--cwd DIR] [--resume]
 
-Launch a Pi (openai-codex/gpt-5.5, xhigh) implementation worker as a visible AMQ
+Launch a Pi (openai-codex/gpt-5.6-sol, xhigh) implementation worker as a visible AMQ
 sidecar for a Claude orchestrator session.
 
 The script initializes AMQ, writes the worker's system prompt, and opens the command

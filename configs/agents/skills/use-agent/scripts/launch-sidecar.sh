@@ -348,7 +348,7 @@ if [[ "$SIDECAR_HANDLE" == "claude" ]]; then
   ensure_claude_trusts_dir "$CWD"
   SIDECAR_CMD=(amq coop exec "${SESSION_ARG[@]}" claude -- --name "use-agent-${TOPIC_SLUG}" --model claude-opus-4-8 --effort xhigh --dangerously-skip-permissions --append-system-prompt-file "$PROMPT_FILE" "$KICKOFF")
 else
-  SIDECAR_CMD=(amq coop exec "${SESSION_ARG[@]}" pi -- --name "use-agent-${TOPIC_SLUG}" --model openai-codex/gpt-5.5 --thinking high --append-system-prompt "$PROMPT_FILE" "$KICKOFF")
+  SIDECAR_CMD=(amq coop exec "${SESSION_ARG[@]}" pi -- --name "use-agent-${TOPIC_SLUG}" --model openai-codex/gpt-5.6-sol --thinking high --append-system-prompt "$PROMPT_FILE" "$KICKOFF")
 fi
 
 COMMAND_TEXT="cd $(printf '%q' "$CWD") && exec $(quote_cmd "${SIDECAR_CMD[@]}")"

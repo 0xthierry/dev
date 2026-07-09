@@ -1,13 +1,13 @@
 ---
 name: use-codex-as-worker
-description: Use only when the user explicitly asks or allows delegating implementation to a Codex worker — launch Pi running openai-codex/gpt-5.5 (xhigh) as a visible sidecar implementer that this session orchestrates over AMQ. Write exact task specs, dispatch with --kind todo, validate the results yourself, then iterate, resume, respawn, or launch another worker. Never invoke on your own initiative.
+description: Use only when the user explicitly asks or allows delegating implementation to a Codex worker — launch Pi running openai-codex/gpt-5.6-sol (xhigh) as a visible sidecar implementer that this session orchestrates over AMQ. Write exact task specs, dispatch with --kind todo, validate the results yourself, then iterate, resume, respawn, or launch another worker. Never invoke on your own initiative.
 ---
 
 # Use Codex As Worker
 
 Delegate implementation to a cheaper harness while you stay in charge. You (Claude, the
 flagship model) are the **orchestrator**: you own the plan, write exact task specs, judge the
-results, and speak to the user. The **worker** is Pi running `openai-codex/gpt-5.5` at `xhigh`
+results, and speak to the user. The **worker** is Pi running `openai-codex/gpt-5.6-sol` at `xhigh`
 thinking — a capable implementer that builds precisely what you tell it, runs in a Ghostty
 split the user can watch or take over, and coordinates with you over AMQ, a local file-based
 message queue.
@@ -25,7 +25,7 @@ The relationship is orchestrator/implementer and it must be unambiguous to both 
 - **Orchestrator (main)** — the Claude session running this skill. Owns the task, the design
   decisions, the review, and the user relationship. Briefs the worker, dispatches tasks,
   validates every result, decides what ships.
-- **Worker (implementer)** — the Pi/gpt-5.5 sidecar you launch. Implements exactly what a task
+- **Worker (implementer)** — the Pi/GPT-5.6 Sol sidecar you launch. Implements exactly what a task
   message specifies, verifies its own work, and reports back. It acts only on explicit `todo`
   orders; otherwise it answers and waits. It never talks to the user.
 
@@ -70,7 +70,7 @@ Ghostty split on macOS or Omarchy/Hyprland when possible. Under the hood it laun
 
 ```bash
 amq coop exec --session codex-worker-<topic> pi -- \
-  --name codex-worker-<topic> --model openai-codex/gpt-5.5 --thinking xhigh \
+  --name codex-worker-<topic> --model openai-codex/gpt-5.6-sol --thinking xhigh \
   --append-system-prompt <worker-prompt> "<kickoff>"
 ```
 
