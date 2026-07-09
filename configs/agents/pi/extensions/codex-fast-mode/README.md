@@ -8,7 +8,7 @@ The extension listens for Pi's `before_provider_request` event and adds:
 { "service_tier": "priority" }
 ```
 
-to Codex-shaped requests for supported Fast mode models (`gpt-5.5` and `gpt-5.4`).
+to Codex-shaped requests for supported Fast mode models (`gpt-5.4`, `gpt-5.5`, and the `gpt-5.6` family: `gpt-5.6`, `gpt-5.6-sol`, `gpt-5.6-terra`, and `gpt-5.6-luna`).
 
 Codex CLI persists this setting as `service_tier = "fast"`, but the ChatGPT Codex responses backend expects the request-time value `priority`. The payload matcher is intentionally narrow so OpenAI API-key traffic is not accidentally moved to Priority processing.
 

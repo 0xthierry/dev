@@ -48,3 +48,18 @@ Blocker:
 Suggested fix:
 Repair/reinstall shellcheck or its runtime dependencies in the environment, or make the setup hook report a clearer dependency-repair hint.
 
+## 2026-07-09 16:22 — verification_blocker
+
+Summary: Full Pi extension lint is blocked by pre-existing formatting issues in generated moshi-hooks.ts.
+
+Impact: Could not use `bun run lint:pi-extensions` as a clean whole-suite verifier for the GPT-5.6 fast-mode/compaction changes; had to validate changed files with targeted Biome check instead.
+
+Attempted:
+Ran `bun run lint:pi-extensions`; then ran `bunx biome check` on the changed codex-fast-mode and codex-compaction files.
+
+Blocker:
+`bun run lint:pi-extensions` reports formatting/import issues in `configs/agents/pi/extensions/moshi-hooks.ts`, which was not touched by this change and is marked auto-generated.
+
+Suggested fix:
+Either format/exclude the generated moshi hook file or add a generated-file lint exemption so full extension lint reflects current task changes.
+

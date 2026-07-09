@@ -2,28 +2,19 @@ import { describe, expect, test } from "bun:test";
 import { applyCodexFastMode } from "./payload";
 
 describe("applyCodexFastMode", () => {
-  test("sets priority service tier on eligible GPT-5.5 Codex payloads", () => {
-    // Arrange
-    const payload = codexPayload({ model: "gpt-5.5" });
+  for (const model of ["gpt-5.4", "gpt-5.5", "gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] as const) {
+    test(`sets priority service tier on eligible ${model} Codex payloads`, () => {
+      // Arrange
+      const payload = codexPayload({ model });
 
-    // Act
-    const result = applyCodexFastMode(payload);
+      // Act
+      const result = applyCodexFastMode(payload);
 
-    // Assert
-    expect(result).toEqual({ ...payload, service_tier: "priority" });
-    expect(payload).not.toHaveProperty("service_tier");
-  });
-
-  test("sets priority service tier on eligible GPT-5.4 Codex payloads", () => {
-    // Arrange
-    const payload = codexPayload({ model: "gpt-5.4" });
-
-    // Act
-    const result = applyCodexFastMode(payload);
-
-    // Assert
-    expect(result).toEqual({ ...payload, service_tier: "priority" });
-  });
+      // Assert
+      expect(result).toEqual({ ...payload, service_tier: "priority" });
+      expect(payload).not.toHaveProperty("service_tier");
+    });
+  }
 
   test("leaves already-priority payloads unchanged", () => {
     // Arrange
@@ -50,7 +41,7 @@ describe("applyCodexFastMode", () => {
   test("does not change non-Codex OpenAI responses payloads", () => {
     // Arrange
     const payload = {
-      model: "gpt-5.5",
+      model: "gpt-5.6-sol",
       input: [],
       stream: true,
       store: false,
@@ -77,7 +68,7 @@ describe("applyCodexFastMode", () => {
 
 function codexPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    model: "gpt-5.5",
+    model: "gpt-5.6-sol",
     store: false,
     stream: true,
     instructions: "You are a helpful assistant.",

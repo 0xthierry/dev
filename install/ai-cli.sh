@@ -202,7 +202,7 @@ install_ai_clis() {
   install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.45.2"
 
   # Pi Coding Agent (Earendil Works) — minimal terminal coding harness
-  install_pi_coding_agent_cli "0.80.3"
+  install_pi_coding_agent_cli "0.80.5"
 
   # Agent Slack (Stably) — standalone binary
   install_agent_slack_binary "0.9.3"

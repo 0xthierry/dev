@@ -1,6 +1,6 @@
 # codex-compaction
 
-Uses Codex native opaque compaction for `/compact` when the active model uses Pi's `openai-codex-responses` API.
+Uses Codex native opaque compaction for `/compact` when the active model uses Pi's `openai-codex-responses` API, including GPT-5.5 and GPT-5.6-family Codex models.
 
 The extension intercepts `session_before_compact`, calls the Codex Responses backend with a `compaction_trigger`, and stores the returned opaque `compaction` item in the Pi compaction entry. Later Codex requests replace the deterministic placeholder summary with that opaque item in `before_provider_request`.
 

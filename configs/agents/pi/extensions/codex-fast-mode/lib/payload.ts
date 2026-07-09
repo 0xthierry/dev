@@ -1,5 +1,12 @@
 const CODEX_FAST_MODE_SERVICE_TIER = "priority";
-const CODEX_FAST_MODE_MODELS = new Set(["gpt-5.4", "gpt-5.5"]);
+const CODEX_FAST_MODE_MODELS = new Set([
+  "gpt-5.4",
+  "gpt-5.5",
+  "gpt-5.6",
+  "gpt-5.6-sol",
+  "gpt-5.6-terra",
+  "gpt-5.6-luna",
+]);
 
 type JsonObject = Record<string, unknown>;
 

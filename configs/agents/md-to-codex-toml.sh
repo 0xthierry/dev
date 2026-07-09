@@ -14,7 +14,7 @@
 set -euo pipefail
 
 SKIP_AGENTS=(oracle)
-CODEX_MODEL="gpt-5.5"
+CODEX_MODEL="gpt-5.6-sol"
 
 usage() {
   printf 'Usage: %s <source_agents_dir> <target_agents_dir>\n' "$(basename "$0")" >&2

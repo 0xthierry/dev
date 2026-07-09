@@ -73,7 +73,7 @@ function streamSimple(model: Model<Api>, _context: Context, options?: SimpleStre
 
 function buildCodexPayload(sessionId: string | undefined): Record<string, unknown> {
   return {
-    model: "gpt-5.5",
+    model: "gpt-5.6-sol",
     store: false,
     stream: true,
     instructions: "You are a helpful assistant.",

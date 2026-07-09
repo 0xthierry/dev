@@ -7,7 +7,7 @@ describe("registerCodexFastModeExtension", () => {
     // Arrange
     const fakePi = createFakePi();
     const payload = {
-      model: "gpt-5.5",
+      model: "gpt-5.6-sol",
       store: false,
       stream: true,
       instructions: "You are a helpful assistant.",

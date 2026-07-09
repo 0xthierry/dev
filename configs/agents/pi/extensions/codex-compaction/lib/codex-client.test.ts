@@ -5,7 +5,7 @@ import type { CodexModel } from "./types";
 const originalFetch = globalThis.fetch;
 
 const model = {
-  id: "gpt-5.4-mini",
+  id: "gpt-5.6-sol",
   provider: "openai-codex",
   api: "openai-codex-responses",
   baseUrl: "https://chatgpt.com/backend-api",
@@ -36,6 +36,7 @@ describe("codex client", () => {
     });
 
     // Assert
+    expect(body.model).toBe("gpt-5.6-sol");
     expect(body.input).toEqual([...input, { type: "compaction_trigger" }]);
     expect(body.tools).toEqual([
       { type: "function", name: "read", description: "Read files", parameters: {}, strict: false },

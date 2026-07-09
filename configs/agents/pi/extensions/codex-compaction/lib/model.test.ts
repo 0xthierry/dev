@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { codexReasoningEffort, extractChatGptAccountId, resolveCodexResponsesUrl } from "./model";
+import {
+  codexReasoningEffort,
+  extractChatGptAccountId,
+  isCodexResponsesModel,
+  resolveCodexResponsesUrl,
+} from "./model";
 import type { CodexModel } from "./types";
 
 const model = {
@@ -11,6 +16,22 @@ const model = {
 } as CodexModel;
 
 describe("codex model helpers", () => {
+  test("recognizes GPT-5.5 and GPT-5.6 Codex response models", () => {
+    // Arrange
+    const models = [
+      { id: "gpt-5.5", provider: "openai-codex", api: "openai-codex-responses" },
+      { id: "gpt-5.6-sol", provider: "openai-codex", api: "openai-codex-responses" },
+      { id: "gpt-5.6-terra", provider: "openai-codex", api: "openai-codex-responses" },
+      { id: "gpt-5.6-luna", provider: "openai-codex", api: "openai-codex-responses" },
+    ] as CodexModel[];
+
+    // Act
+    const supported = models.map(isCodexResponsesModel);
+
+    // Assert
+    expect(supported).toEqual([true, true, true, true]);
+  });
+
   test("maps unsupported minimal reasoning to the model's configured effort", () => {
     // Arrange
     const thinkingLevel = "minimal";

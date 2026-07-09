@@ -43,7 +43,7 @@ function compactionEntry(): SessionEntry {
         sentinel,
         provider: "openai-codex",
         api: "openai-codex-responses",
-        modelId: "gpt-5.5",
+        modelId: "gpt-5.6-sol",
         item: { type: "compaction", encrypted_content: "enc", id: "cmp_1" },
       },
     },
@@ -60,7 +60,7 @@ function codexProtocolErrorEntry(): SessionEntry {
       role: "assistant",
       api: "openai-codex-responses",
       provider: "openai-codex",
-      model: "gpt-5.5",
+      model: "gpt-5.6-sol",
       content: [],
       usage: {
         input: 0,

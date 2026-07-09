@@ -7,7 +7,11 @@ describe("codex-compaction live contract", () => {
   test("Codex backend returns an opaque compaction item for a compaction trigger", async () => {
     // Arrange
     const registry = ModelRegistry.create(AuthStorage.create());
-    const model = registry.find("openai-codex", "gpt-5.4-mini") ?? registry.getAll().find(isCodexResponsesModel);
+    const model =
+      registry.find("openai-codex", "gpt-5.6-sol") ??
+      registry.find("openai-codex", "gpt-5.5") ??
+      registry.find("openai-codex", "gpt-5.4-mini") ??
+      registry.getAll().find(isCodexResponsesModel);
     if (!isCodexResponsesModel(model)) throw new Error("No openai-codex model is available");
 
     const auth = await registry.getApiKeyAndHeaders(model);
