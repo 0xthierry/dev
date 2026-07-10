@@ -32,7 +32,7 @@ effort: medium
 Agent system prompt goes here.
 ```
 
-Optional `effort` frontmatter sets the default child Pi thinking level for that agent. Supported values are `off`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Agents without `effort` inherit the parent session's current thinking level. Built-in agents have pinned effort values listed above. A tool call can pass `effort` to override both the agent definition and parent thinking level for that run.
+Optional `effort` frontmatter sets the default child Pi thinking level for that agent. Supported values are `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`. Agents without `effort` inherit the parent session's current thinking level. Built-in agents have pinned effort values listed above. A tool call can pass `effort` to override both the agent definition and parent thinking level for that run.
 
 The child `pi` process loads Pi context files and skills through normal Pi discovery. A stable child-boundary prompt is prepended before the agent body so child sessions know the parent owns orchestration and that they must not run more subagents.
 

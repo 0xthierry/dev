@@ -63,3 +63,18 @@ Blocker:
 Suggested fix:
 Either format/exclude the generated moshi hook file or add a generated-file lint exemption so full extension lint reflects current task changes.
 
+## 2026-07-10 15:45 — verification_blocker
+
+Summary: Repository-wide Pi extension lint is blocked by an unformatted generated Moshi hook file.
+
+Impact: `bun run lint:pi-extensions` cannot provide a clean repository-wide signal for unrelated extension changes, even though the changed files pass targeted Biome checks.
+
+Attempted:
+Ran the documented full lint command, then validated the changed subagent files directly with `bunx biome check`.
+
+Blocker:
+`configs/agents/pi/extensions/moshi-hooks.ts` is generated outside Biome formatting conventions and was already present unchanged before this task.
+
+Suggested fix:
+Either format the generator output to repository Biome conventions or exclude this generated file from the extension lint scope.
+
