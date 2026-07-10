@@ -95,6 +95,14 @@ install_claude_code_binary() {
   run_cmd bash -c 'curl -fsSL https://claude.ai/install.sh | bash -s -- "$0"' "$version"
 }
 
+install_plannotator_binary() {
+  local version="$1"
+  log_item "Installing Plannotator @ $version..."
+  # Install only the pinned binary; repo-owned agent config supplies hooks and skills.
+  # shellcheck disable=SC2016  # $0 is intentionally expanded by the inner bash, not the outer one
+  run_cmd bash -c 'curl -fsSL https://plannotator.ai/install.sh | bash -s -- --version "$0" --minimal' "$version"
+}
+
 install_agent_slack_binary() {
   local version="$1"
   log_item "Installing Agent Slack @ $version..."
@@ -203,6 +211,9 @@ install_ai_clis() {
 
   # Pi Coding Agent (Earendil Works) — minimal terminal coding harness
   install_pi_coding_agent_cli "0.80.6"
+
+  # Plannotator — plan and code review UI; hooks and skills are deployed from this repo
+  install_plannotator_binary "v0.23.0"
 
   # Agent Slack (Stably) — standalone binary
   install_agent_slack_binary "0.9.3"

@@ -23,6 +23,7 @@ SOURCE_PI_WEB_SEARCH_CONFIG="$SOURCE_PI_DIR/web-search.json"
 SOURCE_PI_PROMPTS_DIR="$SOURCE_PI_DIR/prompts"
 SOURCE_PI_EXTENSIONS_DIR="$SOURCE_PI_DIR/extensions"
 SOURCE_PI_APPEND_SYSTEM="$SOURCE_PI_DIR/APPEND_SYSTEM.md"
+SOURCE_PLANNOTATOR_SKILLS_DIR="$SCRIPT_DIR/plannotator/skills"
 SOURCE_STATUSLINE="$SCRIPT_DIR/statusline.ts"
 SOURCE_DEV_INSTRUCTIONS="$SCRIPT_DIR/developer-instructions.txt"
 
@@ -456,6 +457,45 @@ render_codex_config() {
   ((LINKED_COUNT += 1))
 }
 
+render_codex_hooks() {
+  local target_path="$1"
+  local label="codex hooks.json"
+  local plannotator_bin="$HOME/.local/bin/plannotator"
+  local rendered=""
+
+  if [[ ! -f "$SOURCE_CODEX_HOOKS" ]]; then
+    warn "Missing source file for $label: $SOURCE_CODEX_HOOKS"
+    ((SKIPPED_COUNT += 1))
+    return 0
+  fi
+
+  rendered="$(awk -v replacement="$plannotator_bin" '
+    {
+      line = $0
+      marker = "{{PLANNOTATOR_BIN}}"
+      while ((position = index(line, marker)) > 0) {
+        line = substr(line, 1, position - 1) replacement substr(line, position + length(marker))
+      }
+      print line
+    }
+  ' "$SOURCE_CODEX_HOOKS")"
+
+  if [[ -f "$target_path" ]] && [[ "$(cat "$target_path")" == "$rendered" ]]; then
+    log "skip: $label already up to date"
+    ((SKIPPED_COUNT += 1))
+    return 0
+  fi
+
+  if (( DRY_RUN )); then
+    log "[dry-run] render $label with Plannotator binary path"
+    return 0
+  fi
+
+  printf '%s\n' "$rendered" > "$target_path"
+  log "rendered: $label"
+  ((LINKED_COUNT += 1))
+}
+
 install_codex_target() {
   local target_root="$1"
 
@@ -463,11 +503,9 @@ install_codex_target() {
   log "Installing into ~/.codex ($target_root)"
   generate_codex_agent_tomls "$target_root"
   force_link_skill_entries "$target_root"
+  force_link_skill_entries "$target_root" "$SOURCE_PLANNOTATOR_SKILLS_DIR"
   render_codex_config "$target_root/config.toml"
-  # Install hooks.json for Codex
-  if [[ -f "$SOURCE_CODEX_HOOKS" ]]; then
-    copy_file_if_needed "$SOURCE_CODEX_HOOKS" "$target_root/hooks.json" "codex hooks.json"
-  fi
+  render_codex_hooks "$target_root/hooks.json"
 }
 
 sync_claude_settings() {
@@ -523,6 +561,7 @@ install_claude_target() {
   local claude_hooks_json="$SOURCE_HOOKS_DIR/claude-hooks.json"
 
   install_target "$target_root" "$HOME/.claude"
+  force_link_skill_entries "$target_root" "$SOURCE_PLANNOTATOR_SKILLS_DIR"
   # Claude-only skills (not shared with ~/.agents, ~/.codex, or ~/.pi)
   force_link_skill_entries "$target_root" "$SOURCE_CLAUDE_SKILLS_DIR"
   # Symlink hooks directory
