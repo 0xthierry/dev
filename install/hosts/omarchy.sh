@@ -24,12 +24,23 @@ HOST_PACMAN_PACKAGES=(
   cameractrls
   dbeaver
   discord
+  edk2-ovmf
+  fuse2
   ghostty
+  hicolor-icon-theme
+  libnotify
+  libsecret
+  libxkbfile
+  libxss
   obsidian
+  qemu-system-x86
+  socat
   steam
   tailscale
   telegram-desktop
+  virtiofsd
   wtype
+  xdg-utils
   xorg-setxkbmap
 )
 
@@ -130,7 +141,8 @@ setup_host_packages() {
   setup_shared_cli_packages
   install_voxtype_package
   install_zed_linux
-  log_item "Skipping unsupported Omarchy apps: ChatGPT, Claude desktop, Codex.app, Rectangle"
+  install_ai_desktop_apps_linux
+  log_item "Skipping unsupported Omarchy apps: ChatGPT desktop, Codex.app, Conductor, Rectangle"
 }
 
 setup_shared_machine_state() {

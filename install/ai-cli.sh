@@ -121,8 +121,74 @@ install_notion_cli_binary() {
 }
 
 install_factory_cli_binary() {
+  if check_installed droid; then
+    log_item "Factory CLI (droid): installed"
+    return 0
+  fi
+
   log_item "Installing Factory CLI (droid)..."
   run_cmd bash -c 'curl -fsSL https://app.factory.ai/cli | sh'
+}
+
+resolve_cursor_agent_bin() {
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    if [[ -x /opt/homebrew/bin/cursor-agent ]]; then
+      printf '%s\n' /opt/homebrew/bin/cursor-agent
+      return 0
+    fi
+
+    if [[ -x /usr/local/bin/cursor-agent ]]; then
+      printf '%s\n' /usr/local/bin/cursor-agent
+      return 0
+    fi
+  fi
+
+  if command -v cursor-agent >/dev/null 2>&1; then
+    command -v cursor-agent
+    return 0
+  fi
+
+  return 1
+}
+
+restore_cursor_agent_alias() {
+  local cursor_agent_bin=""
+
+  cursor_agent_bin="$(resolve_cursor_agent_bin 2>/dev/null)" || return 0
+  ensure_dir "$HOME/.local/bin"
+  run_cmd ln -sf "$cursor_agent_bin" "$HOME/.local/bin/agent"
+}
+
+install_cursor_agent_cli_binary() {
+  local cursor_agent_bin=""
+
+  if cursor_agent_bin="$(resolve_cursor_agent_bin 2>/dev/null)"; then
+    log_item "Cursor Agent CLI: installed"
+    if [[ "$(uname -s)" == "Darwin" && "$cursor_agent_bin" == /opt/homebrew/bin/cursor-agent && -L "$HOME/.local/bin/cursor-agent" ]]; then
+      run_cmd rm -f "$HOME/.local/bin/cursor-agent"
+    fi
+    restore_cursor_agent_alias
+    return 0
+  fi
+
+  log_item "Installing Cursor Agent CLI..."
+  run_cmd bash -c 'curl https://cursor.com/install -fsS | bash'
+  restore_cursor_agent_alias
+}
+
+install_grok_cli_binary() {
+  if check_installed grok || [[ -x "$HOME/.grok/bin/grok" ]]; then
+    log_item "Grok CLI: installed"
+    restore_cursor_agent_alias
+    return 0
+  fi
+
+  log_item "Installing Grok CLI..."
+  run_cmd bash -c 'curl -fsSL https://x.ai/cli/install.sh | bash'
+
+  # Cursor and Grok both claim a generic `agent` alias. Keep the explicit
+  # binaries (`cursor-agent`, `grok`) and let Cursor own `agent` when present.
+  restore_cursor_agent_alias
 }
 
 install_agent_browser_binary() {
@@ -232,6 +298,12 @@ install_ai_clis() {
 
   # Factory CLI — `droid` binary
   install_factory_cli_binary
+
+  # Cursor Agent CLI — `cursor-agent` binary
+  install_cursor_agent_cli_binary
+
+  # Grok CLI — xAI's `grok` binary
+  install_grok_cli_binary
 
   # Railway CLI — deploy/manage Railway projects
   install_npm_global_cli "Railway CLI" "@railway/cli" "5.5.0"

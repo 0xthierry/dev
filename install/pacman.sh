@@ -18,7 +18,6 @@ AUR_PACKAGES=(
   ollama-rocm
   slack-desktop
   beekeeper-studio-bin
-  cursor-bin
   google-chrome
   kavita-bin
   proton-ge-custom-bin
