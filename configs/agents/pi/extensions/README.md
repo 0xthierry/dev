@@ -39,6 +39,7 @@ Or install one extension at a time from a local checkout:
 
 ```bash
 pi install ./configs/agents/pi/extensions/desktop-notification
+pi install ./configs/agents/pi/extensions/personality
 pi install ./configs/agents/pi/extensions/web-access
 pi install ./configs/agents/pi/extensions/create-image
 pi install ./configs/agents/pi/extensions/oracle
@@ -62,6 +63,7 @@ For day-to-day use on Thierry's machines, `configs/agents/install.sh` symlinks t
 ## Extensions
 
 - [`desktop-notification`](./desktop-notification/README.md) — sends an OSC 777 desktop notification when an agent turn finishes.
+- [`personality`](./personality/README.md) — appends a pragmatic engineering personality prompt for all OpenAI models.
 - [`web-access`](./web-access/README.md) — registers web search, content fetch, and stored-content retrieval tools.
 - [`create-image`](./create-image/README.md) — registers `/create-image` for prompt-to-image generation.
 - [`oracle`](./oracle/README.md) — registers `oracle` for ChatGPT Web / GPT-5.5 Pro state-of-the-art second opinions.

@@ -4,6 +4,7 @@ node_modules/
 generated-images/
 
 # Sensitive/generated local artifacts
+agent_feedback.md
 *.rayconfig
 .env
 .env.*
