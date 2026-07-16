@@ -34,7 +34,6 @@ HOST_BREW_CASKS=(
   claude
   conductor
   cursor
-  cursor-cli
   dbeaver-community
   devin-desktop
   discord

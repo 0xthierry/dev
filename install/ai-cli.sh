@@ -5,8 +5,8 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 AMQ_SOURCE_URL="https://github.com/avivsinai/agent-message-queue.git"
-AMQ_VERSION="v0.36.0"
-AMQ_COMMIT="2f800a3ff2cfd1d1d5a2bf51f6ee728b2d14b13c"
+AMQ_VERSION="v0.43.1"
+AMQ_COMMIT="fb365f533e67521c87ae263cc276eb10eb85e983"
 
 install_npm_global_cli() {
   local name="$1"
@@ -121,12 +121,7 @@ install_notion_cli_binary() {
 }
 
 install_factory_cli_binary() {
-  if check_installed droid; then
-    log_item "Factory CLI (droid): installed"
-    return 0
-  fi
-
-  log_item "Installing Factory CLI (droid)..."
+  log_item "Installing/updating Factory CLI (droid)..."
   run_cmd bash -c 'curl -fsSL https://app.factory.ai/cli | sh'
 }
 
@@ -159,35 +154,142 @@ restore_cursor_agent_alias() {
   run_cmd ln -sf "$cursor_agent_bin" "$HOME/.local/bin/agent"
 }
 
-install_cursor_agent_cli_binary() {
-  local cursor_agent_bin=""
-
-  if cursor_agent_bin="$(resolve_cursor_agent_bin 2>/dev/null)"; then
-    log_item "Cursor Agent CLI: installed"
-    if [[ "$(uname -s)" == "Darwin" && "$cursor_agent_bin" == /opt/homebrew/bin/cursor-agent && -L "$HOME/.local/bin/cursor-agent" ]]; then
-      run_cmd rm -f "$HOME/.local/bin/cursor-agent"
-    fi
-    restore_cursor_agent_alias
+resolve_brew_bin_for_ai_cli() {
+  if command -v brew >/dev/null 2>&1; then
+    command -v brew
     return 0
   fi
 
-  log_item "Installing Cursor Agent CLI..."
+  if [[ -x /opt/homebrew/bin/brew ]]; then
+    printf '%s\n' /opt/homebrew/bin/brew
+    return 0
+  fi
+
+  if [[ -x /usr/local/bin/brew ]]; then
+    printf '%s\n' /usr/local/bin/brew
+    return 0
+  fi
+
+  return 1
+}
+
+migrate_cursor_cli_from_homebrew() {
+  local brew_bin=""
+
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    return 0
+  fi
+
+  if ! brew_bin="$(resolve_brew_bin_for_ai_cli 2>/dev/null)"; then
+    return 0
+  fi
+
+  if ! "$brew_bin" list --cask --versions cursor-cli >/dev/null 2>&1; then
+    return 0
+  fi
+
+  log_item "Migrating Cursor Agent CLI from Homebrew to the official installer..."
+  run_cmd "$brew_bin" uninstall --cask cursor-cli
+}
+
+install_cursor_agent_cli_binary() {
+  migrate_cursor_cli_from_homebrew
+  log_item "Installing/updating Cursor Agent CLI..."
   run_cmd bash -c 'curl https://cursor.com/install -fsS | bash'
   restore_cursor_agent_alias
 }
 
-install_grok_cli_binary() {
-  if check_installed grok || [[ -x "$HOME/.grok/bin/grok" ]]; then
-    log_item "Grok CLI: installed"
-    restore_cursor_agent_alias
+grok_owned_symlink() {
+  local path="$1"
+  local resolved_target=""
+
+  [[ -L "$path" ]] || return 1
+  resolved_target="$(resolve_symlink_target "$path")"
+  [[ "$resolved_target" == "$HOME/.grok/"* ]]
+}
+
+remove_grok_owned_symlink() {
+  local path="$1"
+
+  if ! grok_owned_symlink "$path"; then
     return 0
   fi
 
-  log_item "Installing Grok CLI..."
-  run_cmd bash -c 'curl -fsSL https://x.ai/cli/install.sh | bash'
+  log_item "Removing Grok CLI symlink: $path"
+  run_cmd rm -f "$path"
+}
 
-  # Cursor and Grok both claim a generic `agent` alias. Keep the explicit
-  # binaries (`cursor-agent`, `grok`) and let Cursor own `agent` when present.
+remove_grok_shell_block() {
+  local shell_file="$1"
+
+  if [[ ! -f "$shell_file" ]] || ! grep -q '# >>> grok installer >>>' "$shell_file"; then
+    return 0
+  fi
+
+  log_item "Removing Grok CLI shell configuration: $shell_file"
+  # shellcheck disable=SC2016 # $1/$tmp are intentionally expanded by the inner bash.
+  run_cmd bash -c '
+    file="$1"
+    tmp="${file}.dev-setup-grok.$$"
+    trap '\''rm -f "$tmp"'\'' EXIT
+    awk '\''
+      /# >>> grok installer >>>/ { skip=1; next }
+      /# <<< grok installer <<</ { skip=0; next }
+      !skip { print }
+    '\'' "$file" > "$tmp"
+    cat "$tmp" > "$file"
+  ' _ "$shell_file"
+}
+
+uninstall_grok_npm_package() {
+  local npm_bin=""
+  local mise_bin=""
+  local -a npm_cmd=()
+
+  if npm_bin="$(command -v npm 2>/dev/null)"; then
+    npm_cmd=("$npm_bin")
+  elif mise_bin="$(resolve_mise_bin 2>/dev/null)"; then
+    npm_cmd=("$mise_bin" exec node -- npm)
+  else
+    return 0
+  fi
+
+  if (( ${DRY_RUN:-0} )); then
+    dry_run_cmd "${npm_cmd[@]}" uninstall -g @xai-official/grok
+    return 0
+  fi
+
+  if "${npm_cmd[@]}" list -g --depth=0 @xai-official/grok >/dev/null 2>&1; then
+    log_item "Uninstalling Grok CLI npm package..."
+    run_cmd "${npm_cmd[@]}" uninstall -g @xai-official/grok
+  fi
+}
+
+uninstall_grok_cli() {
+  local artifact=""
+  local shell_file=""
+
+  log_item "Ensuring Grok CLI is uninstalled..."
+
+  for artifact in "$HOME/.local/bin/grok" "$HOME/.local/bin/agent" /usr/local/bin/grok /usr/local/bin/agent; do
+    remove_grok_owned_symlink "$artifact"
+  done
+
+  for artifact in "$HOME/.grok/bin" "$HOME/.grok/downloads" "$HOME/.grok/completions"; do
+    if [[ -e "$artifact" || -L "$artifact" ]]; then
+      log_item "Removing Grok CLI artifact: $artifact"
+      run_cmd rm -rf "$artifact"
+    fi
+  done
+
+  for shell_file in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.config/fish/config.fish"; do
+    remove_grok_shell_block "$shell_file"
+  done
+
+  uninstall_grok_npm_package
+
+  # Preserve ~/.grok user state (auth, config, sessions), and return the generic
+  # `agent` alias to Cursor when Cursor is already present.
   restore_cursor_agent_alias
 }
 
@@ -267,25 +369,25 @@ install_ai_clis() {
   log_section "AI Coding CLIs"
 
   # Claude Code (Anthropic) — standalone binary, not npm
-  install_claude_code_binary "2.1.210"
+  install_claude_code_binary "2.1.211"
 
   # Codex (OpenAI)
-  install_npm_global_cli "Codex CLI" "@openai/codex" "0.144.4"
+  install_npm_global_cli "Codex CLI" "@openai/codex" "0.144.5"
 
   # Gemini CLI (Google)
   install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.50.0"
 
   # Pi Coding Agent (Earendil Works) — minimal terminal coding harness
-  install_pi_coding_agent_cli "0.80.7"
+  install_pi_coding_agent_cli "0.80.8"
 
   # Plannotator — plan and code review UI; hooks and skills are deployed from this repo
-  install_plannotator_binary "v0.23.0"
+  install_plannotator_binary "v0.23.1"
 
   # Agent Slack (Stably) — standalone binary
   install_agent_slack_binary "0.9.3"
 
   # Agent Browser — npm package (crates.io lags behind)
-  install_agent_browser_binary "0.27.1"
+  install_agent_browser_binary "0.32.1"
 
   # Agent Message Queue — local file-based inter-agent bus, built from a pinned source tag+commit
   install_amq_from_source
@@ -294,19 +396,21 @@ install_ai_clis() {
   install_npm_global_cli "Linear CLI" "@schpet/linear-cli" "2.0.0"
 
   # Notion CLI (makenotion) — `ntn` binary, pairs with notion-cli skill
-  install_notion_cli_binary "v0.16.0"
+  install_notion_cli_binary "v0.19.0"
 
   # Factory CLI — `droid` binary
   install_factory_cli_binary
 
-  # Cursor Agent CLI — `cursor-agent` binary
+  # Grok CLI is no longer part of this setup. Remove installer-managed artifacts
+  # on every host while preserving authentication, config, and session data.
+  uninstall_grok_cli
+
+  # Cursor Agent CLI — `cursor-agent` binary; installed after Grok cleanup so
+  # Cursor owns the generic `agent` alias.
   install_cursor_agent_cli_binary
 
-  # Grok CLI — xAI's `grok` binary
-  install_grok_cli_binary
-
   # Railway CLI — deploy/manage Railway projects
-  install_npm_global_cli "Railway CLI" "@railway/cli" "5.5.0"
+  install_npm_global_cli "Railway CLI" "@railway/cli" "5.26.2"
 }
 
 # Run if executed directly

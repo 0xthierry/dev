@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { fetchCodexCompaction } from "./lib/codex-client";
 import { extractChatGptAccountId, isCodexResponsesModel } from "./lib/model";
 
 describe("codex-compaction live contract", () => {
   test("Codex backend returns an opaque compaction item for a compaction trigger", async () => {
     // Arrange
-    const registry = ModelRegistry.create(AuthStorage.create());
+    const registry = new ModelRegistry(await ModelRuntime.create());
     const model =
       registry.find("openai-codex", "gpt-5.6-sol") ??
       registry.find("openai-codex", "gpt-5.5") ??

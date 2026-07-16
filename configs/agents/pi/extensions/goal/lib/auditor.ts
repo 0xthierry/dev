@@ -2,6 +2,7 @@ import {
   createAgentSession,
   createExtensionRuntime,
   type ExtensionContext,
+  ModelRuntime,
   type ResourceLoader,
   SessionManager,
   SettingsManager,
@@ -21,10 +22,11 @@ export async function runGoalCompletionAuditor(
 ): Promise<GoalAuditorRunResult> {
   const outputParts: string[] = [];
   try {
+    const modelRuntime = await createAuditorModelRuntime(ctx);
     const { session } = await createAgentSession({
       cwd: ctx.cwd,
       model: ctx.model,
-      modelRegistry: ctx.modelRegistry,
+      modelRuntime,
       resourceLoader: makeAuditorResourceLoader(),
       sessionManager: SessionManager.inMemory(ctx.cwd),
       settingsManager: SettingsManager.inMemory({ compaction: { enabled: false } }),
@@ -57,6 +59,20 @@ export async function runGoalCompletionAuditor(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+async function createAuditorModelRuntime(ctx: ExtensionContext): Promise<ModelRuntime> {
+  const runtime = await ModelRuntime.create();
+  const model = ctx.model;
+  if (!model) return runtime;
+
+  const providerConfig = ctx.modelRegistry.getRegisteredProviderConfig(model.provider);
+  if (providerConfig) runtime.registerProvider(model.provider, providerConfig);
+
+  const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+  if (auth.ok && auth.apiKey) await runtime.setRuntimeApiKey(model.provider, auth.apiKey);
+
+  return runtime;
 }
 
 function makeAuditorResourceLoader(): ResourceLoader {
