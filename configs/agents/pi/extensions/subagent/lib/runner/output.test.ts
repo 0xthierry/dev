@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
-  AGENT_ARTIFACT_OUTPUT_PREVIEW_MAX_LINES,
   AGENT_OUTPUT_PREVIEW_MAX_BYTES,
+  AGENT_OUTPUT_PREVIEW_MAX_LINES,
   prepareAgentOutput,
   textFromContentParts,
 } from "./output";
@@ -31,7 +31,7 @@ describe("prepareAgentOutput", () => {
     expect(result.text.length).toBeLessThan(output.length);
   });
 
-  test("keeps parent-visible artifact output compact", () => {
+  test("truncates oversized artifact-backed output and tells the parent where to read the rest", () => {
     // Arrange
     const output = "x".repeat(AGENT_OUTPUT_PREVIEW_MAX_BYTES * 3);
 
@@ -42,21 +42,39 @@ describe("prepareAgentOutput", () => {
     expect(result.truncated).toBe(true);
     expect(result.text.length).toBeLessThan(output.length);
     expect(result.text).toContain("Output preview truncated");
+    expect(result.text).toContain("Read the full report at: /agent/artifacts/output.md");
+    expect(result.text).not.toContain("Detailed subagent output saved to:");
+  });
+
+  test("keeps a typical full report inline for artifact-backed output", () => {
+    // Arrange
+    const output = Array.from({ length: AGENT_OUTPUT_PREVIEW_MAX_LINES - 1 }, (_, index) => `line ${index + 1}`).join(
+      "\n",
+    );
+
+    // Act
+    const result = prepareAgentOutput(output, "/agent/artifacts/output.md");
+
+    // Assert
+    expect(result.truncated).toBe(false);
+    expect(result.text).toContain(`line ${AGENT_OUTPUT_PREVIEW_MAX_LINES - 1}`);
     expect(result.text).toContain("Detailed subagent output saved to: /agent/artifacts/output.md");
   });
 
-  test("uses a very small preview for artifact-backed output", () => {
+  test("truncates reports past the line budget", () => {
     // Arrange
-    const output = Array.from({ length: 100 }, (_, index) => `line ${index + 1}`).join("\n");
+    const output = Array.from({ length: AGENT_OUTPUT_PREVIEW_MAX_LINES + 50 }, (_, index) => `line ${index + 1}`).join(
+      "\n",
+    );
 
     // Act
     const result = prepareAgentOutput(output, "/agent/artifacts/output.md");
 
     // Assert
     expect(result.truncated).toBe(true);
-    expect(result.text.split("\n").length).toBeLessThanOrEqual(AGENT_ARTIFACT_OUTPUT_PREVIEW_MAX_LINES + 4);
+    expect(result.text.split("\n").length).toBeLessThanOrEqual(AGENT_OUTPUT_PREVIEW_MAX_LINES + 4);
     expect(result.text).toContain("Output preview truncated");
-    expect(result.text).toContain("Detailed subagent output saved to: /agent/artifacts/output.md");
+    expect(result.text).toContain("Read the full report at: /agent/artifacts/output.md");
   });
 
   test("appends artifact paths to short output", () => {

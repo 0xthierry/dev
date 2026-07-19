@@ -7,6 +7,7 @@ import {
   finalizeAgentRunArtifacts,
   writeAgentInputArtifact,
 } from "./artifacts";
+import { synthesizeCrashHandoff } from "./handoff";
 import { type AgentRunRequest, buildChildInvocation } from "./invocation";
 import { applyChildJsonEvent, type ChildAgentEventState, createChildAgentEventState } from "./json-events";
 import { writeAgentPromptFile } from "./prompt-file";
@@ -35,10 +36,7 @@ export async function runChildPiAgent(
   const promptFile = await writeAgentPromptFile(request.agent);
 
   try {
-    const invocation = buildChildInvocation(
-      { ...request, outputArtifactPath: artifactPlan.paths.outputPath },
-      promptFile.filePath,
-    );
+    const invocation = buildChildInvocation(request, promptFile.filePath);
     const state = createChildAgentEventState();
     let stderr = "";
     let stdoutBuffer = "";
@@ -130,9 +128,18 @@ export async function runChildPiAgent(
     await jsonlWriteChain;
     const finalExitCode = aborted ? 1 : exitCode;
     const sessionFile = await resolveChildSessionFile(request, state);
+    const fallbackOutput = state.finalOutput.trim()
+      ? state.finalOutput
+      : synthesizeCrashHandoff({
+          agentName: request.agent.name,
+          state,
+          exitCode: finalExitCode,
+          stderr,
+          sessionFile,
+        });
     const artifacts = await finalizeAgentRunArtifacts(artifactPlan, {
       sessionId: state.sessionId ?? request.resumeAgentId,
-      fallbackOutput: rawChildOutput(state, stderr),
+      fallbackOutput,
       jsonlLines,
       metadata: buildAgentArtifactMetadata(
         request,
@@ -144,7 +151,7 @@ export async function runChildPiAgent(
         jsonlArtifactError,
       ),
     });
-    const resultState = artifacts.ok ? { ...state, finalOutput: artifacts.output } : state;
+    const resultState = { ...state, finalOutput: artifacts.ok ? artifacts.output : fallbackOutput };
     const result = buildAgentRunResult(
       request,
       resultState,
@@ -207,10 +214,6 @@ function buildAgentArtifactMetadata(
     artifactSetupError,
     jsonlArtifactError,
   };
-}
-
-function rawChildOutput(state: ChildAgentEventState, stderr: string): string {
-  return state.finalOutput || state.errorMessage || stderr.trim();
 }
 
 async function resolveChildSessionFile(

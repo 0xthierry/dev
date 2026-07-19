@@ -1,9 +1,7 @@
 import { formatSize, truncateTail } from "@earendil-works/pi-coding-agent";
 
-export const AGENT_OUTPUT_PREVIEW_MAX_BYTES = 4 * 1024;
-export const AGENT_OUTPUT_PREVIEW_MAX_LINES = 80;
-export const AGENT_ARTIFACT_OUTPUT_PREVIEW_MAX_BYTES = 1200;
-export const AGENT_ARTIFACT_OUTPUT_PREVIEW_MAX_LINES = 12;
+export const AGENT_OUTPUT_PREVIEW_MAX_BYTES = 40 * 1024;
+export const AGENT_OUTPUT_PREVIEW_MAX_LINES = 360;
 
 export interface PreparedOutput {
   text: string;
@@ -12,8 +10,8 @@ export interface PreparedOutput {
 
 export function prepareAgentOutput(text: string, artifactPath?: string, artifactError?: string): PreparedOutput {
   const truncation = truncateTail(text, {
-    maxBytes: artifactPath ? AGENT_ARTIFACT_OUTPUT_PREVIEW_MAX_BYTES : AGENT_OUTPUT_PREVIEW_MAX_BYTES,
-    maxLines: artifactPath ? AGENT_ARTIFACT_OUTPUT_PREVIEW_MAX_LINES : AGENT_OUTPUT_PREVIEW_MAX_LINES,
+    maxBytes: AGENT_OUTPUT_PREVIEW_MAX_BYTES,
+    maxLines: AGENT_OUTPUT_PREVIEW_MAX_LINES,
   });
   const notices = outputNotices(truncation, artifactPath, artifactError);
   if (!truncation.truncated && notices.length === 0) return { text: truncation.content, truncated: false };
@@ -29,12 +27,12 @@ function outputNotices(
   const notices: string[] = [];
   if (truncation.truncated) {
     notices.push(
-      `[Output preview truncated: ${truncation.outputLines} of ${truncation.totalLines} lines (${formatSize(
+      `[Output preview truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines (${formatSize(
         truncation.outputBytes,
-      )} of ${formatSize(truncation.totalBytes)}).]`,
+      )} of ${formatSize(truncation.totalBytes)}).${artifactPath ? ` Read the full report at: ${artifactPath}` : ""}]`,
     );
   }
-  if (artifactPath) notices.push(`Detailed subagent output saved to: ${artifactPath}`);
+  if (artifactPath && !truncation.truncated) notices.push(`Detailed subagent output saved to: ${artifactPath}`);
   if (artifactError) notices.push(`Detailed subagent output artifact could not be saved: ${artifactError}`);
   return notices;
 }

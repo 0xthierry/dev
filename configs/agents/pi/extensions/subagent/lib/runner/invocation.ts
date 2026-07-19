@@ -26,7 +26,6 @@ export interface AgentRunRequest {
   thinking?: PiThinkingLevel;
   resumeAgentId?: string;
   resumeSessionFile?: string;
-  outputArtifactPath?: string;
 }
 
 export interface ChildInvocation {
@@ -75,19 +74,15 @@ export function buildChildInvocation(request: AgentRunRequest, promptPath: strin
 }
 
 function formatChildTask(request: AgentRunRequest): string {
-  if (!request.outputArtifactPath) return `Task: ${request.task}`;
   return [
     `Task: ${request.task}`,
     "",
     "---",
-    "Output artifact:",
-    `Write your detailed handoff report to: ${request.outputArtifactPath}`,
-    "This artifact is the authoritative result for the parent session. Do not make it terse just to save parent context.",
-    "Create the artifact early with a report skeleton before your first repository search or read, then update it incrementally after every major investigation phase; do not wait until the final turn to write all findings.",
-    "Use the artifact as your durable working handoff: preserve concrete file paths, functions/types, data flow, evidence, commands checked, and gaps there while keeping chat responses short.",
-    "Before changing phases, write the current findings to the artifact so a context failure still leaves a useful handoff.",
-    "You may write this artifact even when your role is otherwise read-only; do not modify repository files unless the task explicitly allows it.",
-    "After writing the final artifact update, keep your final chat response brief and mention the artifact path.",
+    "Handoff:",
+    "Your final message is your complete handoff report for the parent session; the harness persists it automatically as your output artifact.",
+    "Include everything the parent needs: findings, concrete file paths, functions/types, data flow, evidence, commands run, and gaps. Do not make it terse to save parent context.",
+    "Do not write progress notes, report skeletons, or handoff files to disk; the harness already streams your full transcript to durable storage, and an interrupted run still yields a reconstructed handoff.",
+    "Do not modify repository files unless the task explicitly calls for it.",
   ].join("\n");
 }
 

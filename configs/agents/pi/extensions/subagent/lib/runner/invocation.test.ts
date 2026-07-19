@@ -76,7 +76,7 @@ describe("buildChildInvocation", () => {
       expect(invocation.args).toContain("--model");
       expect(invocation.args).toContain("openai/gpt-5.5");
       expect(invocation.args).toContain("--thinking");
-      expect(invocation.args.at(-1)).toBe("Task: Review diff");
+      expect(invocation.args.at(-1)).toContain("Task: Review diff");
       expect(invocation.env[CHILD_DEPTH_ENV]).toBe("1");
     } finally {
       delete process.env[CHILD_NO_EXTENSIONS_ENV];
@@ -107,7 +107,7 @@ describe("buildChildInvocation", () => {
     expect(invocation.args).not.toContain("--no-session");
   });
 
-  test("adds detailed output artifact instructions when an output path is provided", () => {
+  test("instructs the child to hand off through its final message, not disk writes", () => {
     // Arrange
     const request = {
       agent: agent("reviewer"),
@@ -115,7 +115,6 @@ describe("buildChildInvocation", () => {
       context: "fresh" as const,
       cwd: "/repo",
       agentSessionDir: "/agent-sessions/--repo--",
-      outputArtifactPath: "/artifacts/reviewer_output.md",
     };
 
     // Act
@@ -124,13 +123,11 @@ describe("buildChildInvocation", () => {
     // Assert
     const taskArg = invocation.args.at(-1) ?? "";
     expect(taskArg).toContain("Task: Review diff");
-    expect(taskArg).toContain("Write your detailed handoff report to: /artifacts/reviewer_output.md");
-    expect(taskArg).toContain("Do not make it terse just to save parent context");
-    expect(taskArg).toContain(
-      "Create the artifact early with a report skeleton before your first repository search or read",
-    );
-    expect(taskArg).toContain("update it incrementally after every major investigation phase");
-    expect(taskArg).toContain("Before changing phases, write the current findings to the artifact");
+    expect(taskArg).toContain("Your final message is your complete handoff report");
+    expect(taskArg).toContain("Do not make it terse to save parent context");
+    expect(taskArg).toContain("Do not write progress notes, report skeletons, or handoff files to disk");
+    expect(taskArg).not.toContain("Write your detailed handoff report to:");
+    expect(taskArg).not.toContain("update it incrementally");
   });
 
   test("builds a resumed child Pi invocation", () => {
