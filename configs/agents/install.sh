@@ -23,6 +23,7 @@ SOURCE_PI_WEB_SEARCH_CONFIG="$SOURCE_PI_DIR/web-search.json"
 SOURCE_PI_PROMPTS_DIR="$SOURCE_PI_DIR/prompts"
 SOURCE_PI_EXTENSIONS_DIR="$SOURCE_PI_DIR/extensions"
 SOURCE_PI_APPEND_SYSTEM="$SOURCE_PI_DIR/APPEND_SYSTEM.md"
+SOURCE_PI_MODELS="$SOURCE_PI_DIR/models.json"
 SOURCE_PLANNOTATOR_SKILLS_DIR="$SCRIPT_DIR/plannotator/skills"
 SOURCE_STATUSLINE="$SCRIPT_DIR/statusline.ts"
 SOURCE_DEV_INSTRUCTIONS="$SCRIPT_DIR/developer-instructions.txt"
@@ -585,6 +586,7 @@ install_pi_target() {
   copy_file_if_needed "$SOURCE_PI_SETTINGS" "$target_root/settings.json" "pi settings.json"
   copy_file_if_needed "$SOURCE_PI_WEB_SEARCH_CONFIG" "$HOME/.pi/web-search.json" "pi web-search.json"
   force_link_path "$SOURCE_PI_APPEND_SYSTEM" "$target_root/APPEND_SYSTEM.md" "pi APPEND_SYSTEM.md"
+  force_link_path "$SOURCE_PI_MODELS" "$target_root/models.json" "pi models.json"
   force_link_path "$SOURCE_AGENTS_DIR" "$target_root/agents" "pi agents"
   force_link_pi_skill_entries "$target_root"
   force_link_path "$SOURCE_PI_PROMPTS_DIR" "$target_root/prompts" "pi prompts"
@@ -679,6 +681,11 @@ main() {
 
   if [[ ! -f "$SOURCE_PI_APPEND_SYSTEM" ]]; then
     warn "Missing source Pi append-system file: $SOURCE_PI_APPEND_SYSTEM"
+    exit 1
+  fi
+
+  if [[ ! -f "$SOURCE_PI_MODELS" ]]; then
+    warn "Missing source Pi models file: $SOURCE_PI_MODELS"
     exit 1
   fi
 
