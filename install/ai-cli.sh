@@ -369,25 +369,25 @@ install_ai_clis() {
   log_section "AI Coding CLIs"
 
   # Claude Code (Anthropic) — standalone binary, not npm
-  install_claude_code_binary "2.1.211"
+  install_claude_code_binary "2.1.215"
 
   # Codex (OpenAI)
-  install_npm_global_cli "Codex CLI" "@openai/codex" "0.144.5"
+  install_npm_global_cli "Codex CLI" "@openai/codex" "0.144.6"
 
   # Gemini CLI (Google)
-  install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.50.0"
+  install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.51.0"
 
   # Pi Coding Agent (Earendil Works) — minimal terminal coding harness
-  install_pi_coding_agent_cli "0.80.8"
+  install_pi_coding_agent_cli "0.80.10"
 
   # Plannotator — plan and code review UI; hooks and skills are deployed from this repo
-  install_plannotator_binary "v0.23.1"
+  install_plannotator_binary "v0.24.1"
 
   # Agent Slack (Stably) — standalone binary
   install_agent_slack_binary "0.9.3"
 
   # Agent Browser — npm package (crates.io lags behind)
-  install_agent_browser_binary "0.32.1"
+  install_agent_browser_binary "0.32.3"
 
   # Agent Message Queue — local file-based inter-agent bus, built from a pinned source tag+commit
   install_amq_from_source
@@ -410,7 +410,7 @@ install_ai_clis() {
   install_cursor_agent_cli_binary
 
   # Railway CLI — deploy/manage Railway projects
-  install_npm_global_cli "Railway CLI" "@railway/cli" "5.26.2"
+  install_npm_global_cli "Railway CLI" "@railway/cli" "5.27.1"
 }
 
 # Run if executed directly

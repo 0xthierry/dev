@@ -19,7 +19,7 @@
     "enabled": true
   },
   "packages": [
-    "npm:@plannotator/pi-extension@0.23.0"
+    "npm:@plannotator/pi-extension@0.24.1"
   ],
   "extensions": [
     "-extensions/codex-fast-mode",
