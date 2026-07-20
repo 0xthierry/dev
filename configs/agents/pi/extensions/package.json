@@ -15,6 +15,7 @@
       "./statusline",
       "./token-speed",
       "./codex-fast-mode",
+      "./codex-detailed-reasoning",
       "./codex-compaction",
       "./nested-agents",
       "./lsp",
