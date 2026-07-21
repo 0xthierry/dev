@@ -5,8 +5,8 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 AMQ_SOURCE_URL="https://github.com/avivsinai/agent-message-queue.git"
-AMQ_VERSION="v0.43.1"
-AMQ_COMMIT="fb365f533e67521c87ae263cc276eb10eb85e983"
+AMQ_VERSION="v0.45.0"
+AMQ_COMMIT="e50379a1c3d2719b4eb03cd0180aa9938a30238d"
 
 install_npm_global_cli() {
   local name="$1"
@@ -369,16 +369,16 @@ install_ai_clis() {
   log_section "AI Coding CLIs"
 
   # Claude Code (Anthropic) — standalone binary, not npm
-  install_claude_code_binary "2.1.215"
+  install_claude_code_binary "2.1.216"
 
   # Codex (OpenAI)
-  install_npm_global_cli "Codex CLI" "@openai/codex" "0.144.6"
+  install_npm_global_cli "Codex CLI" "@openai/codex" "0.145.0"
 
   # Gemini CLI (Google)
   install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.51.0"
 
   # Pi Coding Agent (Earendil Works) — minimal terminal coding harness
-  install_pi_coding_agent_cli "0.80.10"
+  install_pi_coding_agent_cli "0.81.1"
 
   # Plannotator — plan and code review UI; hooks and skills are deployed from this repo
   install_plannotator_binary "v0.24.1"
