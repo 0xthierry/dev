@@ -4,11 +4,13 @@ import { delimiter, relative, resolve, sep } from "node:path";
 import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { parsePiThinkingLevel } from "../thinking";
 import { BUILTIN_AGENTS } from "./builtins";
+import { applyAgentOverrideConfig, loadAgentOverrideConfig } from "./config";
 import type { AgentDefinition, AgentDiscoveryResult } from "./types";
 
 export interface AgentDiscoveryOptions {
   agentsDir?: string;
   cwd?: string;
+  projectTrusted?: boolean;
 }
 
 interface AgentFrontmatter extends Record<string, unknown> {
@@ -19,10 +21,16 @@ interface AgentFrontmatter extends Record<string, unknown> {
 
 export async function discoverAgents(options: AgentDiscoveryOptions = {}): Promise<AgentDiscoveryResult> {
   const discovery = await discoverUserAgents(options);
+  const mergedAgents = mergeBuiltInAgents(discovery.agents);
+  const config =
+    options.cwd && options.projectTrusted
+      ? await loadAgentOverrideConfig(findProjectRoot(resolve(options.cwd)))
+      : undefined;
+
   return {
     agentsDir: discovery.agentsDir,
     agentDirs: discovery.agentDirs,
-    agents: mergeBuiltInAgents(discovery.agents),
+    agents: config ? applyAgentOverrideConfig(mergedAgents, config) : mergedAgents,
   };
 }
 

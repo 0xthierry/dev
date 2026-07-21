@@ -12,6 +12,7 @@ import {
   FAUX_TOOL_CALLS_ENV,
 } from "../_shared/testing/faux-provider-extension";
 import { type PiRpcHarness, startPiRpcHarness } from "../_shared/testing/pi-rpc-harness";
+import { SUBAGENT_CONFIG_FILE_NAME } from "./lib/agents/config";
 import { CHILD_EXTENSIONS_ENV, CHILD_NO_EXTENSIONS_ENV, CHILD_UNSET_ENV } from "./lib/runner/invocation";
 import { createSubagentRuntime } from "./lib/runtime";
 import type { AgentToolDetails } from "./lib/tools/agent-tool";
@@ -38,7 +39,9 @@ describe("subagent extension E2E", () => {
     // Arrange
     tempDir = await mkdtemp(join(tmpdir(), "pi-subagent-e2e-"));
     const piAgentDir = join(tempDir, "pi-agent");
+    const projectRoot = join(tempDir, "repo");
     await mkdir(join(piAgentDir, "agents"), { recursive: true });
+    await mkdir(join(projectRoot, ".git"), { recursive: true });
     await writeFile(
       join(piAgentDir, "agents", "echo-agent.md"),
       [
@@ -50,15 +53,18 @@ describe("subagent extension E2E", () => {
       ].join("\n"),
       "utf8",
     );
+    await writeSubagentConfig(join(projectRoot, SUBAGENT_CONFIG_FILE_NAME), "low");
 
     harness = await startPiRpcHarness({
-      extensionPath,
+      cwd: projectRoot,
+      extensionPath: resolve(extensionPath),
       args: [
+        "--approve",
         "--no-extensions",
         "--no-skills",
         "--no-context-files",
         "-e",
-        fauxProviderExtensionPath,
+        resolve(fauxProviderExtensionPath),
         "--tools",
         "agent",
         "--provider",
@@ -77,7 +83,7 @@ describe("subagent extension E2E", () => {
             arguments: {
               subagent_type: "echo-agent",
               prompt: "Return the deterministic child response.",
-              effort: "low",
+              effort: "max",
             },
           },
         ]),
@@ -123,11 +129,13 @@ describe("subagent extension E2E", () => {
     expect(harness.stderr()).toBe("");
   }, 120_000);
 
-  test("resumes a saved child Pi session by agent_id", async () => {
+  test("applies repo overrides to new and resumed child sessions", async () => {
     // Arrange
     tempDir = await mkdtemp(join(tmpdir(), "pi-subagent-resume-e2e-"));
     const piAgentDir = join(tempDir, "pi-agent");
+    const projectRoot = join(tempDir, "repo");
     await mkdir(join(piAgentDir, "agents"), { recursive: true });
+    await mkdir(join(projectRoot, ".git"), { recursive: true });
     await writeFile(
       join(piAgentDir, "agents", "echo-agent.md"),
       [
@@ -139,13 +147,16 @@ describe("subagent extension E2E", () => {
       ].join("\n"),
       "utf8",
     );
+    const configPath = join(projectRoot, SUBAGENT_CONFIG_FILE_NAME);
+    await writeSubagentConfig(configPath, "high");
 
     const fakePi = createFakePi();
     const runtime = createSubagentRuntime();
     let branchEntries: unknown[] = [];
     const ctx = fakePi.createContext({
-      cwd: process.cwd(),
-      model: { provider: FAUX_PROVIDER_NAME, id: FAUX_MODEL_ID },
+      cwd: projectRoot,
+      model: { provider: "missing-parent-provider", id: "missing-parent-model" },
+      isProjectTrusted: () => true,
       sessionManager: {
         getSessionFile: () => undefined,
         getBranch: () => branchEntries,
@@ -160,7 +171,7 @@ describe("subagent extension E2E", () => {
       const first = await executeAgentTool(
         fakePi.pi,
         runtime,
-        { subagent_type: "echo-agent", prompt: "Start the child session." },
+        { subagent_type: "echo-agent", prompt: "Start the child session.", effort: "max" },
         undefined,
         undefined,
         ctx,
@@ -168,10 +179,11 @@ describe("subagent extension E2E", () => {
       const firstRun = first.details?.results[0];
       branchEntries = [agentToolResultEntry(first.details)];
       process.env[FAUX_RESPONSE_TEXT_ENV] = "Second child response.";
+      await writeSubagentConfig(configPath, "medium");
       const second = await executeAgentTool(
         fakePi.pi,
         runtime,
-        { agent_id: firstRun?.agentId, prompt: "Continue the child session." },
+        { agent_id: firstRun?.agentId, prompt: "Continue the child session.", effort: "max" },
         undefined,
         undefined,
         ctx,
@@ -180,6 +192,8 @@ describe("subagent extension E2E", () => {
       // Assert
       expect(firstRun?.agentId).toBeTruthy();
       expect(firstRun?.sessionFile).toBeTruthy();
+      expect(firstRun?.model).toBe(FAUX_MODEL_ID);
+      expect(firstRun?.thinking).toBe("high");
       expect(second.content[0]?.type === "text" ? second.content[0].text : "").toContain(
         `agent_id: ${firstRun?.agentId}`,
       );
@@ -190,6 +204,8 @@ describe("subagent extension E2E", () => {
         agentId: firstRun?.agentId,
         sessionFile: firstRun?.sessionFile,
         context: "resume",
+        model: FAUX_MODEL_ID,
+        thinking: "medium",
       });
       expect(second.details?.results[0].outputArtifactPath).toBeTruthy();
       expect(await readFile(second.details?.results[0].outputArtifactPath ?? "", "utf8")).toContain(
@@ -203,6 +219,23 @@ describe("subagent extension E2E", () => {
     }
   }, 120_000);
 });
+
+async function writeSubagentConfig(configPath: string, effort: "low" | "medium" | "high"): Promise<void> {
+  await writeFile(
+    configPath,
+    JSON.stringify({
+      agents: {
+        "echo-agent": {
+          provider: FAUX_PROVIDER_NAME,
+          model: FAUX_MODEL_ID,
+          effort,
+          allowEffortOverride: false,
+        },
+      },
+    }),
+    "utf8",
+  );
+}
 
 function isAgentToolEnd(event: JsonObject): boolean {
   return event.type === "tool_execution_end" && event.toolName === "agent";

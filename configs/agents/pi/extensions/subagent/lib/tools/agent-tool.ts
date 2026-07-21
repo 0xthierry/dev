@@ -41,7 +41,8 @@ export function registerAgentTool(pi: ExtensionAPI, runtime: SubagentRuntime): v
       "Spawn or resume a subagent for a well-scoped task.",
       "Use subagent_type + prompt to start one task, agent_id + prompt to resume, or tasks[] for independent parallel tasks.",
       "Configured and built-in agents are listed in the system prompt when available.",
-      "Child agents inherit the current model and thinking level by default unless the tool call or agent definition sets effort.",
+      "A trusted repo can override each agent's provider, model, and effort with pi-subagent.json, and may lock effort against tool-call overrides.",
+      "Otherwise, child agents inherit the current model and thinking level unless the tool call or agent definition sets effort.",
     ].join(" "),
     promptSnippet: "Spawn or resume a focused child subagent for a well-scoped task.",
     promptGuidelines: [
@@ -77,7 +78,10 @@ export async function executeAgentTool(
   onUpdate: ((partial: AgentToolResult<AgentToolDetails>) => void) | undefined,
   ctx: ExtensionContext,
 ): Promise<AgentToolResult<AgentToolDetails>> {
-  const discovery = await runtime.discoverAgents({ cwd: ctx.cwd });
+  const discovery = await runtime.discoverAgents({
+    cwd: ctx.cwd,
+    projectTrusted: ctx.isProjectTrusted(),
+  });
   const planResult = planAgentInvocation(params);
   if (!planResult.ok) return errorResult(planResult.error, "single", discovery.agentsDir, []);
 
@@ -170,7 +174,7 @@ function resolveStartTask(
       prompt: task.prompt,
       context: task.context,
       agentDefinition,
-      thinking: task.effort ?? agentDefinition.effort ?? parentThinking,
+      thinking: resolveAgentThinking(task.effort, agentDefinition, parentThinking),
     },
   };
 }
@@ -241,10 +245,19 @@ function resolveResumeTaskFromRecord(
       prompt: task.prompt,
       context: "resume",
       agentDefinition,
-      thinking: task.effort ?? agentDefinition.effort ?? parentThinking,
+      thinking: resolveAgentThinking(task.effort, agentDefinition, parentThinking),
       resumeSessionFile: record.sessionFile,
     },
   };
+}
+
+function resolveAgentThinking(
+  requestedEffort: PiThinkingLevel | undefined,
+  agent: AgentDefinition,
+  parentThinking: PiThinkingLevel,
+): PiThinkingLevel {
+  if (agent.allowEffortOverride === false) return agent.effort ?? parentThinking;
+  return requestedEffort ?? agent.effort ?? parentThinking;
 }
 
 function unknownAgentMessage(agentName: string, agents: AgentDefinition[]): string {

@@ -13,7 +13,10 @@ export function registerSubagentTools(pi: ExtensionAPI, runtime: SubagentRuntime
   registerAgentTool(pi, runtime);
 
   pi.on("before_agent_start", async (event, ctx) => {
-    const discovery = await runtime.discoverAgents({ cwd: ctx.cwd });
+    const discovery = await runtime.discoverAgents({
+      cwd: ctx.cwd,
+      projectTrusted: ctx.isProjectTrusted(),
+    });
     const section = buildAgentPromptSection(discovery.agents, discovery.agentsDir);
     return { systemPrompt: appendAgentPromptSection(event.systemPrompt, section) };
   });

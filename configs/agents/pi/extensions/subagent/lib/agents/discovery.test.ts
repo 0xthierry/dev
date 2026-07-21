@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SUBAGENT_CONFIG_FILE_NAME } from "./config";
 import { discoverAgents, discoverUserAgents } from "./discovery";
 
 describe("discoverUserAgents", () => {
@@ -157,6 +158,85 @@ describe("discoverAgents", () => {
       const scout = result.agents.find((agent) => agent.name === "scout");
       expect(scout).toMatchObject({ source: "user", description: "Custom scout", systemPrompt: "Custom body" });
       expect(result.agents.map((agent) => agent.name)).toEqual(["scout", "worker"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("applies trusted git-root config overrides after agent discovery", async () => {
+    // Arrange
+    const dir = await mkdtemp(join(tmpdir(), "pi-agent-discovery-"));
+    const repo = join(dir, "repo");
+    const cwd = join(repo, "apps", "web");
+    const globalAgentsDir = join(dir, "global-agents");
+    await mkdir(join(repo, ".git"), { recursive: true });
+    await mkdir(cwd, { recursive: true });
+    await mkdir(globalAgentsDir, { recursive: true });
+    await writeFile(
+      join(globalAgentsDir, "reviewer.md"),
+      "---\nname: reviewer\ndescription: Reviews code\neffort: low\n---\nReview body",
+      "utf8",
+    );
+    await writeFile(
+      join(repo, SUBAGENT_CONFIG_FILE_NAME),
+      JSON.stringify({
+        agents: {
+          reviewer: {
+            provider: "anthropic",
+            model: "claude-sonnet",
+            effort: "high",
+            allowEffortOverride: false,
+          },
+          scout: { provider: "google", model: "gemini-flash" },
+        },
+      }),
+      "utf8",
+    );
+
+    try {
+      // Act
+      const result = await discoverAgents({ agentsDir: globalAgentsDir, cwd, projectTrusted: true });
+
+      // Assert
+      expect(result.agents.find((agent) => agent.name === "reviewer")).toMatchObject({
+        source: "user",
+        model: { provider: "anthropic", id: "claude-sonnet" },
+        effort: "high",
+        allowEffortOverride: false,
+      });
+      expect(result.agents.find((agent) => agent.name === "scout")).toMatchObject({
+        source: "builtin",
+        model: { provider: "google", id: "gemini-flash" },
+        effort: "low",
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("ignores repo config when the project is not trusted", async () => {
+    // Arrange
+    const dir = await mkdtemp(join(tmpdir(), "pi-agent-discovery-"));
+    const repo = join(dir, "repo");
+    const globalAgentsDir = join(dir, "global-agents");
+    await mkdir(join(repo, ".git"), { recursive: true });
+    await mkdir(globalAgentsDir, { recursive: true });
+    await writeFile(
+      join(repo, SUBAGENT_CONFIG_FILE_NAME),
+      JSON.stringify({ agents: { scout: { provider: "google", model: "gemini-flash", effort: "max" } } }),
+      "utf8",
+    );
+
+    try {
+      // Act
+      const result = await discoverAgents({ agentsDir: globalAgentsDir, cwd: repo, projectTrusted: false });
+
+      // Assert
+      expect(result.agents.find((agent) => agent.name === "scout")).toMatchObject({
+        source: "builtin",
+        effort: "low",
+      });
+      expect(result.agents.find((agent) => agent.name === "scout")?.model).toBeUndefined();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

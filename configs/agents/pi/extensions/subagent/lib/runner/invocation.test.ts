@@ -42,6 +42,25 @@ describe("buildAgentRunRequest", () => {
     });
     expect(request.agentSessionDir).toContain("agent-sessions");
   });
+
+  test("uses the agent model selection before the parent model", () => {
+    // Arrange
+    const ctx = {
+      cwd: "/repo",
+      model: { provider: "parent-provider", id: "parent-model" },
+      sessionManager: { getSessionFile: () => undefined },
+    } as unknown as ExtensionContext;
+    const reviewer = {
+      ...agent("reviewer"),
+      model: { provider: "override-provider", id: "override-model" },
+    };
+
+    // Act
+    const request = buildAgentRunRequest(ctx, { agent: reviewer, task: "Review", context: "fresh" }, "medium");
+
+    // Assert
+    expect(request.modelRef).toBe("override-provider/override-model");
+  });
 });
 
 describe("buildChildInvocation", () => {

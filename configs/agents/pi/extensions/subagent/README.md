@@ -36,6 +36,32 @@ Optional `effort` frontmatter sets the default child Pi thinking level for that 
 
 The child `pi` process loads Pi context files and skills through normal Pi discovery. A stable child-boundary prompt is prepended before the agent body so child sessions know the parent owns orchestration and that they must not run more subagents.
 
+## Repo model and effort overrides
+
+A trusted repository can optionally add `pi-subagent.json` at its git root to choose the provider, model, and default effort for any discovered or built-in agent without copying its Markdown definition:
+
+```json
+{
+  "agents": {
+    "scout": {
+      "provider": "google",
+      "model": "gemini-3-flash-preview",
+      "effort": "low",
+      "allowEffortOverride": false
+    },
+    "worker": {
+      "provider": "openai-codex",
+      "model": "gpt-5.4",
+      "effort": "xhigh"
+    }
+  }
+}
+```
+
+Agent names must exactly match discovered agents. `provider` and `model` must be specified together; `effort` may be specified by itself. `allowEffortOverride` defaults to `true`. Set it to `false` to make the configured `effort` authoritative for that agent; a locked entry must define `effort`. Missing files preserve the existing behavior. Invalid JSON, unknown fields or agents, incomplete provider/model pairs, and unsupported effort values produce configuration errors instead of silently using another model.
+
+Overrides are read on each invocation, including resumed child sessions, so edits apply without reloading Pi. Model precedence is repo config, then the parent model. For unlocked agents, effort precedence is tool-call `effort`, repo config, agent frontmatter or built-in default, then the parent thinking level. For locked agents, configured `effort` wins over the tool call. Untrusted projects do not load `pi-subagent.json`.
+
 ## Tool usage
 
 Single task:

@@ -51,7 +51,7 @@ describe("executeAgentTool", () => {
     // Assert
     expect(result.content[0]).toEqual({ type: "text", text: "reviewer completed: Review this diff" });
     expect(result.details).toMatchObject({ ok: true, mode: "single", agentsDir: "/agents" });
-    expect(runtime.discoverAgents).toHaveBeenCalledWith({ cwd: "/repo" });
+    expect(runtime.discoverAgents).toHaveBeenCalledWith({ cwd: "/repo", projectTrusted: false });
     expect(runtime.runAgent).toHaveBeenCalledTimes(1);
     expect(runtime.runAgent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -61,6 +61,36 @@ describe("executeAgentTool", () => {
         modelRef: "test-provider/test-model",
         thinking: "medium",
       }),
+      undefined,
+      expect.any(Function),
+    );
+  });
+
+  test("uses an agent model override before the parent model", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const reviewer: AgentDefinition = {
+      ...agent("reviewer"),
+      model: { provider: "override-provider", id: "override-model" },
+    };
+    const runtime = fakeRuntime([reviewer]);
+    const ctx = fakePi.createContext({
+      model: { provider: "parent-provider", id: "parent-model" },
+    }) as unknown as ExtensionContext;
+
+    // Act
+    await executeAgentTool(
+      fakePi.pi,
+      runtime,
+      { subagent_type: "reviewer", prompt: "Review this diff" },
+      undefined,
+      undefined,
+      ctx,
+    );
+
+    // Assert
+    expect(runtime.runAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: reviewer, modelRef: "override-provider/override-model" }),
       undefined,
       expect.any(Function),
     );
@@ -114,6 +144,34 @@ describe("executeAgentTool", () => {
       expect.any(Function),
     );
     expect(result.details?.results[0].thinking).toBe("low");
+  });
+
+  test("uses locked agent effort instead of the tool call effort", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const reviewer: AgentDefinition = {
+      ...agent("reviewer", "medium"),
+      allowEffortOverride: false,
+    };
+    const runtime = fakeRuntime([reviewer]);
+
+    // Act
+    const result = await executeAgentTool(
+      fakePi.pi,
+      runtime,
+      { subagent_type: "reviewer", prompt: "Review this diff", effort: "max" },
+      undefined,
+      undefined,
+      fakePi.createContext() as unknown as ExtensionContext,
+    );
+
+    // Assert
+    expect(runtime.runAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: reviewer, thinking: "medium" }),
+      undefined,
+      expect.any(Function),
+    );
+    expect(result.details?.results[0].thinking).toBe("medium");
   });
 
   test("resumes a prior child agent session by agent_id", async () => {

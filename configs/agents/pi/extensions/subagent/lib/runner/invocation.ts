@@ -43,7 +43,11 @@ export function buildAgentRunRequest(
     cwd: ctx.cwd,
     agentSessionDir: getProjectAgentSessionDir(ctx.cwd),
     parentSessionFile: ctx.sessionManager.getSessionFile() ?? undefined,
-    modelRef: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined,
+    modelRef: task.agent.model
+      ? `${task.agent.model.provider}/${task.agent.model.id}`
+      : ctx.model
+        ? `${ctx.model.provider}/${ctx.model.id}`
+        : undefined,
     thinking,
   };
 }
