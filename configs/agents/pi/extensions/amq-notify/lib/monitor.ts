@@ -10,18 +10,44 @@ export interface AmqMonitorMessage {
   body?: string;
 }
 
+interface MonitorCommandResult {
+  stdout: string;
+  stderr: string;
+  code: number;
+}
+
 interface AmqMonitorJson {
   event?: string;
   count?: number;
   drained?: unknown[];
 }
 
-export type MonitorPayload =
+type ParsedMonitorPayload =
   | { kind: "empty" }
   | { kind: "messages"; ids: string[]; text: string }
   | { kind: "invalid"; reason: string };
 
-export function parseMonitorPayload(stdout: string, me: string): MonitorPayload {
+type MonitorPayload =
+  | { kind: "empty" }
+  | { kind: "messages"; ids: string[]; text: string }
+  | { kind: "failure"; reason: string };
+
+export function parseMonitorResult(result: MonitorCommandResult, me: string): MonitorPayload {
+  const payload = parseMonitorPayload(result.stdout, me);
+  if (payload.kind === "messages") return payload;
+
+  if (result.code !== 0 && result.code !== 4) {
+    return {
+      kind: "failure",
+      reason: result.stderr.trim() || `amq monitor exited with code ${result.code}`,
+    };
+  }
+
+  if (payload.kind === "invalid") return { kind: "failure", reason: payload.reason };
+  return payload;
+}
+
+function parseMonitorPayload(stdout: string, me: string): ParsedMonitorPayload {
   const trimmed = stdout.trim();
   if (trimmed === "") return { kind: "empty" };
 

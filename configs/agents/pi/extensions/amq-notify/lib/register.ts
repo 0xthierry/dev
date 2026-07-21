@@ -1,7 +1,7 @@
 import { appendFileSync, existsSync } from "node:fs";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { resolveBinding } from "./binding";
-import { parseMonitorPayload } from "./monitor";
+import { parseMonitorResult } from "./monitor";
 import { buildNotice } from "./notice";
 
 const POLL_MS = 1500;
@@ -61,8 +61,8 @@ export function registerAmqNotifyExtension(pi: ExtensionAPI): void {
     if (started) return;
     started = true;
     const binding = resolveBinding(pi, ctx, event.reason);
-    // pi's bash tool inherits these, so the use-agent skill and the bare `amq`
-    // commands pi runs all bind to the same room.
+    // pi's bash tool inherits these, so Herdr workers launched through the
+    // use-agent skill and bare `amq` commands all bind to the same room.
     process.env.AM_ROOT = binding.root;
     process.env.AM_ME = binding.me;
     dbg(`session_start reason=${event.reason} root=${binding.root} me=${binding.me}`);
@@ -93,8 +93,10 @@ async function watchInbox(
   if (isStopped()) return;
   dbg(`monitoring root=${root} me=${me}`);
 
+  let reportedFailure: string | undefined;
   while (!isStopped()) {
-    let out = "";
+    let stdout = "";
+    let stderr = "";
     let code = 0;
     try {
       const result = await pi.exec(
@@ -102,7 +104,8 @@ async function watchInbox(
         ["monitor", "--me", me, "--root", root, "--include-body", "--json", "--peek", "--timeout", MONITOR_TIMEOUT],
         { timeout: EXEC_TIMEOUT_MS, signal },
       );
-      out = result.stdout ?? "";
+      stdout = result.stdout ?? "";
+      stderr = result.stderr ?? "";
       code = result.code ?? 0;
     } catch (err) {
       dbg(`monitor exec error: ${String(err)}`);
@@ -111,18 +114,24 @@ async function watchInbox(
     }
     if (isStopped()) return;
 
-    // monitor exits non-zero on timeout; empty payloads just mean "nothing yet".
-    const payload = parseMonitorPayload(out, me);
+    const payload = parseMonitorResult({ stdout, stderr, code }, me);
     if (payload.kind === "empty") {
+      reportedFailure = undefined;
       if (code !== 0) await delay(POLL_MS, signal);
       continue;
     }
-    if (payload.kind === "invalid") {
+    if (payload.kind === "failure") {
       dbg(payload.reason);
+      if (reportedFailure !== payload.reason) {
+        const ctx = getCtx();
+        if (ctx?.hasUI) ctx.ui.notify(`AMQ notifier cannot monitor ${me}: ${payload.reason}; retrying`, "error");
+        reportedFailure = payload.reason;
+      }
       await delay(POLL_MS, signal);
       continue;
     }
 
+    reportedFailure = undefined;
     dbg("message(s) peeked; injecting as a turn");
     const deliver = getCtx()?.isIdle?.() ? undefined : { deliverAs: "steer" as const };
     try {

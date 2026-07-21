@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseMonitorPayload } from "./monitor";
+import { parseMonitorResult } from "./monitor";
 
 const messageJson = JSON.stringify({
   event: "messages",
@@ -21,13 +21,13 @@ const messageJson = JSON.stringify({
   ],
 });
 
-describe("parseMonitorPayload", () => {
+describe("parseMonitorResult", () => {
   test("formats peeked JSON messages and exposes their ids for acknowledgement", () => {
     // Arrange
-    const stdout = messageJson;
+    const result = { stdout: messageJson, stderr: "", code: 0 };
 
     // Act
-    const payload = parseMonitorPayload(stdout, "pi");
+    const payload = parseMonitorResult(result, "pi");
 
     // Assert
     expect(payload).toEqual({
@@ -51,10 +51,14 @@ describe("parseMonitorPayload", () => {
 
   test("treats monitor timeouts as empty", () => {
     // Arrange
-    const stdout = JSON.stringify({ event: "timeout", mode: "peek", me: "pi", count: 0, drained: [] });
+    const result = {
+      stdout: JSON.stringify({ event: "timeout", mode: "peek", me: "pi", count: 0, drained: [] }),
+      stderr: "monitor timed out",
+      code: 4,
+    };
 
     // Act
-    const payload = parseMonitorPayload(stdout, "pi");
+    const payload = parseMonitorResult(result, "pi");
 
     // Assert
     expect(payload).toEqual({ kind: "empty" });
@@ -62,12 +66,33 @@ describe("parseMonitorPayload", () => {
 
   test("reports invalid non-empty monitor output", () => {
     // Arrange
-    const outputs = ["not-json", JSON.stringify({ count: 1, drained: [{}] })];
+    const results = [
+      { stdout: "not-json", stderr: "", code: 0 },
+      { stdout: JSON.stringify({ count: 1, drained: [{}] }), stderr: "", code: 0 },
+    ];
 
     // Act
-    const payloads = outputs.map((stdout) => parseMonitorPayload(stdout, "pi"));
+    const payloads = results.map((result) => parseMonitorResult(result, "pi"));
 
     // Assert
-    expect(payloads.map((payload) => payload.kind)).toEqual(["invalid", "invalid"]);
+    expect(payloads.map((payload) => payload.kind)).toEqual(["failure", "failure"]);
+  });
+
+  test("reports command failures from stderr instead of treating them as an empty inbox", () => {
+    // Arrange
+    const result = {
+      stdout: "",
+      stderr: 'mailbox for "pi" is missing at root /tmp/amq',
+      code: 3,
+    };
+
+    // Act
+    const payload = parseMonitorResult(result, "pi");
+
+    // Assert
+    expect(payload).toEqual({
+      kind: "failure",
+      reason: 'mailbox for "pi" is missing at root /tmp/amq',
+    });
   });
 });

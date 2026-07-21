@@ -28,9 +28,13 @@ function isBindingData(data: unknown): data is { root: string } {
 
 // One extension instance bound to a (possibly shared) session, modelling pi's
 // per-session rebinding: each reload/resume re-runs the factory with a fresh `pi`.
-function makeInstance(session: ReturnType<typeof makeSession>, options: { idle?: boolean } = {}) {
+function makeInstance(
+  session: ReturnType<typeof makeSession>,
+  options: { idle?: boolean; monitorFailure?: { stderr: string; code: number } } = {},
+) {
   const handlers: Record<string, Handler> = {};
   const sent: SentMessage[] = [];
+  const notifications: Array<{ message: string; level: string }> = [];
   const execCalls: ExecCall[] = [];
   let monitorCalls = 0;
   const pi = {
@@ -47,6 +51,9 @@ function makeInstance(session: ReturnType<typeof makeSession>, options: { idle?:
 
       if (args[0] === "monitor") {
         monitorCalls += 1;
+        if (options.monitorFailure) {
+          return { stdout: "", ...options.monitorFailure };
+        }
         if (monitorCalls === 1) {
           return {
             stdout: JSON.stringify({
@@ -76,11 +83,18 @@ function makeInstance(session: ReturnType<typeof makeSession>, options: { idle?:
   };
   const ctx = {
     cwd: TEST_CWD,
+    hasUI: true,
     isIdle: () => options.idle ?? true,
     sessionManager: session.sessionManager,
+    ui: {
+      notify(message: string, level: string) {
+        notifications.push({ message, level });
+      },
+    },
   };
   return {
     execCalls,
+    notifications,
     sent,
     // biome-ignore lint/suspicious/noExplicitAny: minimal ExtensionAPI mock
     register: () => registerAmqNotifyExtension(pi as any),
@@ -185,6 +199,42 @@ test("busy sessions steer incoming AMQ notices into the active agent turn", asyn
     // Assert
     expect(instance.sent).toHaveLength(1);
     expect(instance.sent[0]?.options).toEqual({ deliverAs: "steer" });
+    instance.shutdown();
+  } finally {
+    if (prev.root !== undefined) process.env.AM_ROOT = prev.root;
+    else delete process.env.AM_ROOT;
+    if (prev.role !== undefined) process.env.AMQ_NOTIFY_ROLE = prev.role;
+    else delete process.env.AMQ_NOTIFY_ROLE;
+  }
+});
+
+test("surfaces a monitor configuration failure instead of silently retrying", async () => {
+  // Arrange
+  const prev = { root: process.env.AM_ROOT, role: process.env.AMQ_NOTIFY_ROLE };
+  delete process.env.AM_ROOT;
+  delete process.env.AMQ_NOTIFY_ROLE;
+
+  try {
+    const session = makeSession();
+    const instance = makeInstance(session, {
+      monitorFailure: {
+        stderr: 'mailbox for "pi" is missing at root /tmp/amq',
+        code: 3,
+      },
+    });
+    instance.register();
+
+    // Act
+    instance.start("startup");
+    await tick(25);
+
+    // Assert
+    expect(instance.notifications).toEqual([
+      {
+        message: 'AMQ notifier cannot monitor pi: mailbox for "pi" is missing at root /tmp/amq; retrying',
+        level: "error",
+      },
+    ]);
     instance.shutdown();
   } finally {
     if (prev.root !== undefined) process.env.AM_ROOT = prev.root;

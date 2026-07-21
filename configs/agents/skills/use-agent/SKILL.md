@@ -1,161 +1,283 @@
 ---
 name: use-agent
-description: Use only when the user explicitly allows or asks for this skill to be invoked to pair with a second agent harness — launch a sidecar, get a second opinion from another agent, have one harness drive another, or review work with another agent over AMQ. Otherwise, never invoke it.
+description: Use only when the user explicitly allows or asks for this skill to pair with another agent harness over Herdr and AMQ. Teaches model discovery and visible worker launches for Claude, Codex, Pi, Cursor Agent, Agy, and future agent CLIs. Otherwise, never invoke it.
 ---
 
 # Use Agent
 
-Pair two agent harnesses on one task. The **main** session launches the other harness as a visible **worker** sidecar, and they coordinate over AMQ, a local file-based message queue. You are the main: you own the plan, the synthesis, and every word the user sees. The worker assists — reviews, second opinions, implementation help, audits — and never talks to the user directly.
+Launch another agent harness as a visible **worker** in Herdr and coordinate through AMQ. This skill is a launch protocol, not a launcher implementation: Herdr owns the pane, AMQ owns communication, and the chosen agent CLI owns its model and permissions.
 
-Only run this skill when the user explicitly asks to involve another agent.
+Only use this skill when the user explicitly asks to involve another agent.
 
 ## Roles
 
-The relationship is master/worker and it must be unambiguous to both sides.
+- **Main** — owns the task, user relationship, synthesis, and final decisions.
+- **Worker** — advises or acts as the request requires and reports back over AMQ. Message kind and labels classify work; they do not gate authorization.
 
-- **Main (master)** — the session running this skill. Owns the task, the user relationship, and final decisions. Briefs the worker, sends requests, and decides what to do with the results.
-- **Worker (sidecar)** — the harness you launch. Runs in a Ghostty split so the user can watch or take over. Acts only on explicit requests; otherwise it waits.
+AMQ is the only shared source of truth. Terminal output is visible evidence, but a worker response is not received by the main until the worker sends it through AMQ.
 
-Default pairing: **Pi launches Claude Code.** Whoever runs the skill is the main; the launched harness is the worker. The launch sets the roles, and the worker's appended system prompt states them back, so neither side is confused about who leads.
+## Launch stack
 
-## When to use
+Every worker uses the same composition:
 
-The user explicitly asks for a second agent: "use claude as a sidecar", "get a second opinion from the other agent", "have claude review this with me", "pair with claude on this plan".
-
-## When not to use
-
-- The user did not ask to involve another agent — never launch a sidecar on your own initiative.
-- A one-shot, headless subtask is enough — use the Agent tool for that. Use this skill only when the user wants a **persistent, visible peer** they can also take over.
-
-## Launch
-
-Run the helper script in this skill's own `scripts/` directory by its **absolute path** — a repo-relative path fails unless your cwd is the repo root:
-
-```bash
-# pi:
-~/.pi/agent/skills/use-agent/scripts/launch-sidecar.sh --topic "<kebab-topic>"
-# claude:
-~/.claude/skills/use-agent/scripts/launch-sidecar.sh --topic "<kebab-topic>"
+```text
+herdr agent start ... -- amq coop exec ... <agent-cli> -- <agent-flags> <worker-prompt>
 ```
 
-It detects which harness you are, reuses your `AM_ROOT` if set (so the worker joins your session), writes the worker's system prompt, and opens the worker in a Ghostty split on macOS or Omarchy/Hyprland when possible. Under the hood it launches the Claude worker like this (model-pinned, folder trust pre-accepted, worker protocol passed by file):
+- `herdr agent start` creates the visible pane and owns only pane lifecycle.
+- `amq coop exec` sets `AM_ROOT` and `AM_ME`, starts push notifications, then replaces itself with the agent process.
+- The agent CLI receives its own real model, effort, permission, and initial-prompt flags.
+
+Do not use `herdr agent send`, `herdr pane send-*`, or a Herdr injector for worker communication. Do not add a shell launcher. Run the composition directly so new agent CLIs require only another documented recipe.
+
+## AMQ delivery contract
+
+AMQ owns notification, consumption, receipts, and replies:
+
+1. `amq coop exec --require-wake` must establish a native wake process before the agent starts.
+2. `amq wake` submits an AMQ notice to the idle agent; the notice itself does not consume mail.
+3. The agent runs `amq drain --include-body`, which records the drained receipt.
+4. The agent responds with `amq send`; the main receives it through AMQ.
+
+Ordinary interactive workers do not need hooks. They need a real TTY, a unique mailbox handle, a working native wake, and cleared authentication/permission prompts. If `--require-wake` fails, do not launch a worker with degraded delivery and do not add an unverified hook as a workaround. Diagnose with `amq doctor --ops` and relaunch after fixing the wake boundary.
+
+AMQ's native terminal injection can activate a focused modal prompt. Use each CLI's documented non-interactive trust/permission flags, authenticate before launch, and validate the real harness end to end. A hook is justified only for a separately documented harness limitation, such as Claude plan mode; it is not part of the standard protocol.
+
+## Select the model before launch
+
+Model catalogs are account- and version-dependent. Honor an explicit user model request. If the user asks to choose a model but does not name one, list that harness's current catalog and ask. If the user has no preference, use the documented default.
+
+| Harness | Discover available models | Default when the user has no preference |
+| --- | --- | --- |
+| Pi | `pi --list-models` or `pi --list-models <search>` | `openai-codex/gpt-5.6-sol`, `xhigh` |
+| Codex | `codex debug models | jq -r '.models[].slug'` | `gpt-5.6-sol`, `xhigh` |
+| Claude | Start Claude and use `/model`; the CLI has no standalone model-list command. `claude --help` documents accepted aliases and full IDs. | `claude-fable-5`, `xhigh` |
+| Cursor Agent | `cursor-agent --list-models` or `cursor-agent models` | `composer-2.5` (not a `-fast` model) |
+| Agy | `agy models` | No implicit default: show the catalog and ask the user |
+
+Validate a requested model against the current catalog where the CLI exposes one. Do not silently replace an unavailable requested model with the default. Model selection happens before opening the worker pane so the main can ask the user without leaving a blocked sidecar.
+
+## Prepare the AMQ room
+
+Choose a short kebab-case topic. Pi mains normally already have `AM_ROOT` and `AM_ME=pi` from `amq-notify`; preserve that binding. A main without a binding must choose one explicitly.
 
 ```bash
-amq coop exec --root "$AM_ROOT" claude -- \
-  --model claude-opus-4-8 --effort xhigh --dangerously-skip-permissions \
-  --append-system-prompt-file <worker-prompt> "<kickoff>"
+TOPIC="<kebab-topic>"
+MAIN_HANDLE="${AM_ME:-pi}"
+export AM_ROOT="${AM_ROOT:-$PWD/.agent-mail/use-agent-$TOPIC}"
+export AM_ME="$MAIN_HANDLE"
+
+# Include every handle that may participate in this room. --force repairs an
+# incomplete config without deleting queued mailbox files.
+amq init --root "$AM_ROOT" --agents pi,pi-worker,claude,codex,cursor-agent,agy --force
+amq doctor --ops
 ```
 
-`amq coop exec` sets `AM_ROOT` and `AM_ME=claude` inside the worker, so the worker talks with bare `amq` commands.
+Use AMQ 0.45.0 or newer; this protocol relies on fail-closed wake startup and current runtime diagnostics. Always give concurrent processes distinct handles. A Pi worker uses `pi-worker` when the main is already `pi`. When adding another agent, add its unique handle to the complete `--agents` list before launching it.
 
-If the helper reports that Ghostty split automation was unavailable, tell the user and paste the printed command into a split yourself. Do not continue as if the worker were running. On Omarchy/Hyprland the helper expects `hyprctl`, `wl-copy`, `wtype`, and Ghostty's default `Ctrl+Shift+O` split / `Ctrl+Shift+V` paste bindings.
+Do not run bare `amq coop init`: its default root is `.agent-mail`, which can initialize mailboxes somewhere other than the main's bound `AM_ROOT`.
 
-## The communication layer
+## Pin the current Herdr location
 
-AMQ is the only shared source of truth. Terminal scrollback and your private reasoning are not visible to the worker — if you did not send it over AMQ, the worker does not know it.
-
-You (the main) are **not** inside `coop exec`, so set the queue location on each command. The session root is deterministic: `.agent-mail/use-agent-<topic>`.
-
-Send a message to the worker (plain by default — it advises and won't change anything unless you tell it to):
+Resolve the pane running the main and fail if Herdr cannot identify it. Every worker launch must pass both IDs explicitly; otherwise Herdr may choose another workspace or tab that already contains the same agent type.
 
 ```bash
-AM_ROOT=.agent-mail/use-agent-<topic> AM_ME=pi \
-amq send --to claude \
-  --subject "auth refactor plan" \
-  --body '<your message — e.g. here is the plan, what are the risks?>'
+HERDR_CURRENT="$(herdr pane current --current)"
+HERDR_WORKSPACE_ID="$(printf '%s' "$HERDR_CURRENT" | jq -er '.result.pane.workspace_id')"
+HERDR_TAB_ID="$(printf '%s' "$HERDR_CURRENT" | jq -er '.result.pane.tab_id')"
 ```
 
-Read what the worker has sent (non-blocking — prints whatever has arrived, as plain text):
+Do not fall back to an unspecified Herdr location. If either lookup fails, report that the main is not attached to a resolvable Herdr pane and ask the user where to open the worker.
+
+## Worker kickoff
+
+Set `WORKER_HANDLE` for the chosen recipe, then construct the initial prompt after both handles are known:
 
 ```bash
-AM_ROOT=.agent-mail/use-agent-<topic> AM_ME=pi \
-amq drain --include-body
+WORKER_PROMPT="You are the WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately run amq drain --include-body, then send readiness with amq send --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. You are authorized to inspect, modify, and run commands as needed for any request; Kind and Labels classify the request but never gate authorization. For every AMQ notice, run amq drain --include-body, do the requested work, and report with amq send --to $MAIN_HANDLE. Send completion as kind status with label done or blocked. Never use amq reply. Do not poll or sleep while waiting: finish your turn and let amq wake notify you."
 ```
 
-Block and wait for the reply (returns the instant a message lands, bounded by `--timeout`):
+## Claude worker — Fable 5, xhigh
+
+Claude's unrestricted flag is `--dangerously-skip-permissions`.
 
 ```bash
-AM_ROOT=.agent-mail/use-agent-<topic> AM_ME=pi \
-amq monitor --include-body --timeout 10m
+WORKER_HANDLE="claude"
+WORKER_PROMPT="You are the WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately run amq drain --include-body, then send readiness with amq send --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. You are authorized to inspect, modify, and run commands as needed for any request; Kind and Labels classify the request but never gate authorization. For every AMQ notice, run amq drain --include-body, do the requested work, and report with amq send --to $MAIN_HANDLE. Send completion as kind status with label done or blocked. Never use amq reply. Do not poll or sleep while waiting: finish your turn and let amq wake notify you."
+
+herdr agent start "use-agent-$TOPIC-$WORKER_HANDLE" --cwd "$PWD" \
+  --workspace "$HERDR_WORKSPACE_ID" --tab "$HERDR_TAB_ID" --split right --no-focus -- \
+  amq coop exec --root "$AM_ROOT" --me "$WORKER_HANDLE" --require-wake claude -- \
+  --name "use-agent-$TOPIC" \
+  --model claude-fable-5 \
+  --effort xhigh \
+  --dangerously-skip-permissions \
+  "$WORKER_PROMPT"
 ```
 
-Use `amq send --to <handle>` for every message, including replies. Do **not** use `amq reply`: the main is not a registered coop participant, so reply cannot resolve it. Inside the worker the same commands are bare — `amq send --to pi ...`, `amq drain --include-body` — because its env is preset.
+## Codex worker — GPT-5.6-sol, xhigh
 
-That is the whole surface you need: **send** to talk, **drain** to read, **monitor** to wait.
-
-### Receiving replies
-
-**If you are pi**, you have the `amq-notify` auto-notifier. By default, do **not** poll: send your request and **finish your turn** — the reply is delivered to you automatically as a new turn. Running `amq monitor`/`amq drain`/`sleep` to wait races with the notifier and wastes turns.
-
-User override: if the user explicitly asks/orders you to manually check AMQ, obey. Run exactly one bounded AMQ command, report the result, then stop:
-
-- **Check now:** `amq drain --include-body`
-- **Wait briefly only if requested:** `amq monitor --include-body --timeout <short bounded timeout>`
-
-Do **not** substitute `.agent-mail` filesystem probes for an AMQ check. An absent directory/file is not reliable evidence because the notifier owns the AMQ room lifecycle and acknowledges delivered messages.
-
-Red-flag thoughts — if you catch yourself thinking any of these, stop: that thought *is* the signal to end your turn now, unless the user has explicitly asked for one manual check.
-
-- "I shouldn't end my turn until the reply arrives" — backwards; **ending the turn is how you wait**. You'll be given a new turn when it lands.
-- "Let me run `amq monitor`/`amq drain`/`amq watch` to wait for it" — no by default; only do one bounded AMQ command when the user explicitly asks/orders it.
-- "I'll `sleep` until it comes" — no; sleeping only delays the push (you're busy, so it queues behind the sleep).
-- "Let me check whether it arrived yet" — no by default; yes with exactly one bounded AMQ command if the user explicitly asks. Do not use filesystem probes under `.agent-mail` as a substitute.
-
-Default waiting = doing nothing. User-requested manual checking = one bounded AMQ command.
-
-**If you are claude** (no auto-notifier), you fetch the reply yourself:
-
-- **Check (non-blocking):** `amq drain --include-body` returns whatever has arrived, or nothing. Prefer this on your next step so you stay responsive.
-- **Wait (blocking):** `amq monitor --include-body` blocks until a message lands (or `--timeout`). Good for a deliberate "ask and wait now," but it holds your turn, so the pane looks busy meanwhile.
-
-Read bodies as plain text; never pipe `amq` output through `jq` — message bodies can contain control characters that break it.
-
-The **worker** is different: it runs under `coop exec`, which starts a background `amq wake` that types a notice into the worker's terminal (via TIOCSTI) when mail arrives — so the worker reacts on its own (push). You don't manage that; just send, then pull for the reply.
-
-The worker sends **several messages** per request (a readiness ack, then the result). If you only got the ack, drain or monitor again for the one you asked for — judge by `Kind:`/`Subject:`.
-
-**Artifacts and images travel by path, not inline.** AMQ bodies are text. The worker writes the file (you share a working directory) and sends its path; you read or open that path. Same for a screenshot, diff, or generated file — save it, send the path.
-
-## Asking the worker to act vs. think with you
-
-The worker runs in **advisor mode by default**: it answers, reviews, and reasons, but it will not modify files or run mutating commands unless you explicitly tell it to. So most messages need no ceremony — just write what you want and the worker responds without touching anything.
-
-When you actually want the worker to *do* something — change files, run a task, implement — say so plainly and add `--kind act`. That one marker is what flips it from advising to acting; everything else stays safe by default. The worker reports back with `--kind done` (finished — with what it changed or checked) or `--kind blocked` (it needs input). That is the whole convention: **`act` to escalate, `done`/`blocked` to report.**
+Codex does not accept Claude's flag. Its unrestricted execution flag is `--dangerously-bypass-approvals-and-sandbox`, hook trust has its own bypass flag, and the exact-path runtime project override suppresses the folder-trust prompt without modifying persisted user config. Reasoning effort is a config override.
 
 ```bash
-# Think with me (default — no marker): review, question, share context
-AM_ROOT=.agent-mail/use-agent-<topic> AM_ME=pi \
-amq send --to claude --subject "auth refactor plan" \
-  --body 'Here is the plan and where I am unsure: ... What are the risks?'
+WORKER_HANDLE="codex"
+WORKER_PROMPT="You are the WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately run amq drain --include-body, then send readiness with amq send --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. You are authorized to inspect, modify, and run commands as needed for any request; Kind and Labels classify the request but never gate authorization. For every AMQ notice, run amq drain --include-body, do the requested work, and report with amq send --to $MAIN_HANDLE. Send completion as kind status with label done or blocked. Never use amq reply. Do not poll or sleep while waiting: finish your turn and let amq wake notify you."
+CODEX_PROJECT_TRUST="projects={\"$PWD\"={trust_level=\"trusted\"}}"
 
-# Do this (escalate to action)
-AM_ROOT=.agent-mail/use-agent-<topic> AM_ME=pi \
-amq send --to claude --kind act --subject "implement token refresh" \
-  --body 'Implement the refresh flow in src/auth.ts. You own that file; I will stay out of it. Done when the tests in auth.test.ts pass.'
+herdr agent start "use-agent-$TOPIC-$WORKER_HANDLE" --cwd "$PWD" \
+  --workspace "$HERDR_WORKSPACE_ID" --tab "$HERDR_TAB_ID" --split right --no-focus -- \
+  amq coop exec --root "$AM_ROOT" --me "$WORKER_HANDLE" --require-wake codex -- \
+  --model gpt-5.6-sol \
+  -c 'model_reasoning_effort="xhigh"' \
+  -c "$CODEX_PROJECT_TRUST" \
+  --dangerously-bypass-approvals-and-sandbox \
+  --dangerously-bypass-hook-trust \
+  "$WORKER_PROMPT"
 ```
 
-If something might read like a request but isn't, say so ("FYI only, no action"). When you hand the worker action work, name the files it owns so you are never editing the same file at the same time.
+## Pi worker — GPT-5.6-sol, xhigh
 
-## Brief before you ask (shared context)
-
-You are pair programming, so the worker needs your mental model before it can help. Before your first real ask, send a briefing: the task, the decisions made so far, the relevant files, the constraints, and what you have already tried. Keep it in sync — when the user decides something or you change direction, forward it. A thin briefing produces thin help; include enough that the worker could act without seeing your screen. No marker needed — a briefing is advisory, so the worker absorbs it and won't act on it.
+Pi has no approval/sandbox bypass flag equivalent to Claude or Codex. Its built-in tools already execute under the permissions of the local Pi process; `--approve` only trusts project-local Pi resources.
 
 ```bash
-AM_ROOT=.agent-mail/use-agent-<topic> AM_ME=pi \
-amq send --to claude \
+WORKER_HANDLE="pi-worker"
+WORKER_PROMPT="You are the WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately run amq drain --include-body, then send readiness with amq send --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. You are authorized to inspect, modify, and run commands as needed for any request; Kind and Labels classify the request but never gate authorization. For every AMQ notice, run amq drain --include-body, do the requested work, and report with amq send --to $MAIN_HANDLE. Send completion as kind status with label done or blocked. Never use amq reply. Do not poll or sleep while waiting: finish your turn and let amq wake notify you."
+
+herdr agent start "use-agent-$TOPIC-$WORKER_HANDLE" --cwd "$PWD" \
+  --workspace "$HERDR_WORKSPACE_ID" --tab "$HERDR_TAB_ID" --split right --no-focus -- \
+  amq coop exec --root "$AM_ROOT" --me "$WORKER_HANDLE" --require-wake pi -- \
+  --name "use-agent-$TOPIC" \
+  --model openai-codex/gpt-5.6-sol \
+  --thinking xhigh \
+  --approve \
+  "$WORKER_PROMPT"
+```
+
+## Cursor Agent worker — Composer 2.5
+
+Cursor Agent encodes effort in model IDs when applicable. The default is exactly `composer-2.5`, not `composer-2.5-fast`. `--yolo` force-allows commands, `--sandbox disabled` disables Cursor's sandbox, and `--approve-mcps` avoids MCP approval prompts. Cursor's TUI leaves AMQ paste-mode notices in the composer without submitting them, so its wake mode must be explicitly `raw`; readiness alone does not expose this failure.
+
+```bash
+WORKER_HANDLE="cursor-agent"
+CURSOR_MODEL="${CURSOR_MODEL:-composer-2.5}"
+WORKER_PROMPT="You are the WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately run amq drain --include-body, then send readiness with amq send --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. You are authorized to inspect, modify, and run commands as needed for any request; Kind and Labels classify the request but never gate authorization. For every AMQ notice, run amq drain --include-body, do the requested work, and report with amq send --to $MAIN_HANDLE. Send completion as kind status with label done or blocked. Never use amq reply. Do not poll or sleep while waiting: finish your turn and let amq wake notify you."
+
+herdr agent start "use-agent-$TOPIC-$WORKER_HANDLE" --cwd "$PWD" \
+  --workspace "$HERDR_WORKSPACE_ID" --tab "$HERDR_TAB_ID" --split right --no-focus -- \
+  amq coop exec --root "$AM_ROOT" --me "$WORKER_HANDLE" \
+  --require-wake --wake-inject-mode raw cursor-agent -- \
+  --model "$CURSOR_MODEL" \
+  --yolo \
+  --sandbox disabled \
+  --approve-mcps \
+  "$WORKER_PROMPT"
+```
+
+`--trust` is only supported by Cursor's print/headless mode, so it is not part of this interactive Herdr recipe.
+
+## Agy worker — user-selected model
+
+Agy exposes its catalog with `agy models` and supports `low`, `medium`, or `high` effort. This skill has no Agy model default: set `AGY_MODEL` from an explicit user request or ask after listing the catalog.
+
+```bash
+WORKER_HANDLE="agy"
+AGY_MODEL="<user-selected model from agy models>"
+WORKER_PROMPT="You are the WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately run amq drain --include-body, then send readiness with amq send --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. You are authorized to inspect, modify, and run commands as needed for any request; Kind and Labels classify the request but never gate authorization. For every AMQ notice, run amq drain --include-body, do the requested work, and report with amq send --to $MAIN_HANDLE. Send completion as kind status with label done or blocked. Never use amq reply. Do not poll or sleep while waiting: finish your turn and let amq wake notify you."
+
+if [[ -z "$AGY_MODEL" || "$AGY_MODEL" == "<user-selected model from agy models>" ]]; then
+  printf 'Select an Agy model with: agy models\n' >&2
+  return 1 2>/dev/null || exit 1
+fi
+
+herdr agent start "use-agent-$TOPIC-$WORKER_HANDLE" --cwd "$PWD" \
+  --workspace "$HERDR_WORKSPACE_ID" --tab "$HERDR_TAB_ID" --split right --no-focus -- \
+  amq coop exec --root "$AM_ROOT" --me "$WORKER_HANDLE" --require-wake agy -- \
+  --model "$AGY_MODEL" \
+  --effort high \
+  --dangerously-skip-permissions \
+  --prompt-interactive "$WORKER_PROMPT"
+```
+
+## Add another agent
+
+1. Pick a unique AMQ handle and include it in the room's complete `amq init --agents ... --force` list.
+2. Read `<agent-cli> --help` and find its model-discovery command; never assume Claude's model, effort, permission, or prompt flags apply to another harness.
+3. Start it in the resolved current location with `herdr agent start ... --workspace "$HERDR_WORKSPACE_ID" --tab "$HERDR_TAB_ID" -- amq coop exec --root "$AM_ROOT" --me <handle> --require-wake <agent-cli> -- ...`.
+4. Pass the worker kickoff through the CLI's supported initial-prompt or system-prompt mechanism.
+5. Verify both readiness and a second wake-triggered result through AMQ; readiness only proves the initial prompt. If the second notice remains unsubmitted, test and document an explicit native AMQ wake mode for that TUI.
+6. Treat Herdr terminal output only as diagnostic evidence, never as the communication result.
+
+## Talk to the worker
+
+The main uses its bound environment:
+
+```bash
+amq send --to "$WORKER_HANDLE" \
   --subject "task briefing" \
-  --body $'Task: <what we are doing>\nDecisions: <what the user chose>\nFiles: <paths that matter>\nTried: <what already failed>'
+  --body $'Task: <goal>\nDecisions: <settled choices>\nFiles: <relevant paths>\nTried: <what happened>'
 ```
 
-## Common uses
+Advisory request:
 
-- **Second opinion on a plan** — send your plan, the constraints, and what you are unsure about; ask for risks and alternatives. Default mode: it advises, doesn't edit.
-- **Reviewer / auditor** — send a diff or a completion claim with the acceptance criteria and tests run; ask for approve/reject with evidence.
-- **Implementation help** — `--kind act` with explicit file ownership and success criteria; avoid editing the same files at the same time.
-- **Sounding board** — ask about a design tradeoff, and keep the worker looped in on user decisions as they happen.
+```bash
+amq send --to "$WORKER_HANDLE" \
+  --subject "review the plan" \
+  --body "Review this plan and report risks; do not change files."
+```
 
-## Stop conditions
+Action request:
 
-- You own synthesis and the final user response; relay the worker's findings in your own words.
-- Do not claim the worker did or verified something unless its `done` reply says what it checked.
-- The worker is a peer, not an oracle. Weigh its output; don't rubber-stamp it.
+```bash
+amq send --to "$WORKER_HANDLE" --kind todo \
+  --subject "implement token refresh" \
+  --body "Implement the agreed change in <owned files>. Report changed paths and validation."
+```
+
+Require a drained receipt when delivery itself must be proven:
+
+```bash
+amq send --to "$WORKER_HANDLE" --kind question \
+  --subject "delivery check" --body "Reply with your handle." \
+  --wait-for drained --wait-timeout 60s
+```
+
+A drained receipt proves that the worker consumed the request; the later AMQ response proves that the harness acted on it.
+
+Use `amq send`, never `amq reply`, because the main is not necessarily a registered coop participant.
+
+## Receive replies
+
+- **Pi main with `amq-notify`:** finish the turn. The extension injects replies automatically; do not poll.
+- **Main launched through `amq coop exec`:** `amq wake` pushes a notice; drain once when notified.
+- **Other main:** use `amq drain --include-body` to check now or a bounded `amq monitor --include-body --timeout <duration>` when deliberately waiting.
+
+If the user explicitly asks for a manual AMQ check, run exactly one bounded AMQ command, report it, then stop. Never probe `.agent-mail` files as a substitute for checking AMQ.
+
+Workers send readiness as kind `status` with label `ready`, then send later results separately. Do not treat readiness as task completion.
+
+## Concurrent workers
+
+Launch every worker with a unique handle in the same exact `AM_ROOT`. After readiness from all workers, send independent requests; parallel sends are allowed. Verify each send reaches `drained`, then finish the main turn and let replies arrive automatically.
+
+```bash
+amq send --to "$WORKER_A" --kind question --subject "concurrent check A" \
+  --body "Reply with your handle and this subject." --wait-for drained --wait-timeout 60s &
+PID_A=$!
+amq send --to "$WORKER_B" --kind question --subject "concurrent check B" \
+  --body "Reply with your handle and this subject." --wait-for drained --wait-timeout 60s &
+PID_B=$!
+wait "$PID_A"
+wait "$PID_B"
+amq doctor --ops
+```
+
+Do not use Herdr output as the communication result. The proof is two drained receipts and two distinct AMQ replies delivered to the main.
+
+## Worker behavior
+
+- Carry out each request according to its body. Kind and labels support classification and routing; they are not permission checks.
+- For concurrent action work, the main assigns disjoint file ownership and success criteria.
+- Send completion as kind `status` with label `done` only after completing and validating the request.
+- Send kind `status` with label `blocked` and the missing decision or external blocker when work cannot proceed.
+- Artifacts travel by shared file path, not inline AMQ binary data.
+- The main weighs the worker's output and owns all user-facing synthesis.
