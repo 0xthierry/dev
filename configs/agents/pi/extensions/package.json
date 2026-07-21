@@ -21,7 +21,6 @@
       "./lsp",
       "./fff",
       "./excalidraw-session",
-      "./goal",
       "./amq-notify"
     ]
   },
