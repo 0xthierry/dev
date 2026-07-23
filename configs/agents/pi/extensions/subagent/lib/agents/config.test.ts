@@ -170,19 +170,24 @@ describe("applyAgentOverrideConfig", () => {
     expect((originalScout as AgentDefinition).model).toBeUndefined();
   });
 
-  test("rejects overrides for agents that were not discovered", () => {
+  test("skips overrides for agents that were not discovered and applies the rest", () => {
     // Arrange
     const config = normalizeAgentOverrideConfig(
-      { agents: { missing: { provider: "google", model: "gemini-flash" } } },
+      {
+        agents: {
+          missing: { provider: "google", model: "gemini-flash" },
+          scout: { provider: "xai", model: "grok-4.5" },
+        },
+      },
       "/repo/pi-subagent.json",
     );
 
     // Act
-    const apply = () => applyAgentOverrideConfig([...BUILTIN_AGENTS], config);
+    const applied = applyAgentOverrideConfig([...BUILTIN_AGENTS], config);
 
     // Assert
-    expect(apply).toThrow(
-      "/repo/pi-subagent.json overrides unknown subagents: missing. Available agents: scout, worker.",
-    );
+    const scout = applied.find((agent) => agent.name === "scout");
+    expect(scout?.model).toEqual({ provider: "xai", id: "grok-4.5" });
+    expect(applied.map((agent) => agent.name)).not.toContain("missing");
   });
 });

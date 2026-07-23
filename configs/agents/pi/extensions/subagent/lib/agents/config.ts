@@ -56,13 +56,10 @@ export function applyAgentOverrideConfig(agents: AgentDefinition[], config: Agen
   const availableNames = new Set(agents.map((agent) => agent.name));
   const unknownNames = [...config.agents.keys()].filter((name) => !availableNames.has(name)).sort();
   if (unknownNames.length > 0) {
-    const available =
-      agents
-        .map((agent) => agent.name)
-        .sort()
-        .join(", ") || "none";
-    throw new Error(
-      `${config.filePath} overrides unknown subagents: ${unknownNames.join(", ")}. Available agents: ${available}.`,
+    // Overrides can name agents that only exist on some branches/worktrees;
+    // skip the unmatched entries instead of failing every override.
+    console.warn(
+      `${config.filePath} overrides subagents not discovered here (skipped): ${unknownNames.join(", ")}.`,
     );
   }
 
