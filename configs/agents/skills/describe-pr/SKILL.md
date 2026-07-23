@@ -25,9 +25,9 @@ You are tasked with generating a comprehensive pull request description using th
 
 4. **Discover task directory and ticket:**
    - Get branch name from PR: extract `headRefName` from step 2
-   - Extract task slug (strip prefix before `/`, e.g., `dexter/eng-2612-feature` -> `eng-2612-feature`)
-   - Extract ticket ID (e.g., `ENG-2612` or `LL-25` from the slug)
-   - Check for task directory: `ls ai_docs/tasks/ | grep -i "{ticket-id}"`
+   - Extract task slug (strip prefix before `/`, e.g., `feat/plt-1665-task-context-recovery` -> `plt-1665-task-context-recovery`)
+   - Extract ticket ID (e.g., `PLT-1665` from the slug)
+   - Check for task directory: `ls issues/ | grep -i "{ticket-id}"` (local-only artifacts from the /issue → /implement pipeline)
    - [if applicable] Get Linear ticket URL: `linear issue url {TICKET_ID} 2>/dev/null`
        - if linear tools not found or ticket not found, skip this step that's fine
    - If task directory exists, set `TASK_DIR`
@@ -40,17 +40,21 @@ You are tasked with generating a comprehensive pull request description using th
    - Identify user-facing changes vs internal implementation details
 
 7. **Analyze for plan deviations (if plan file exists):**
-   - Check if task directory has a plan file: `ls ai_docs/tasks/{task-dir}/*-plan.md 2>/dev/null`
-   - If plan file exists, use the Task tool with `subagent_type=implementation-reviewer`:
+   - Check if the task directory has a plan file: `ls {TASK_DIR}/*plan*.md 2>/dev/null`
+   - **Recorded ledgers first — do not dispatch an agent when they exist.** Repos with a pipeline record deviations as first-class artifacts; read them and derive the section directly:
+     - `{TASK_DIR}/execution-state.md` → `## Deviations` and `## Escalations`
+     - the plan's `Derivations` section
+     - any review logs / feature-review verdicts in the task directory
+   - Only if a plan exists but **no** recorded deviation/derivation ledger does, use the Task tool with `subagent_type=implementation-reviewer`:
      ```
-     Analyze deviations between the plan at ai_docs/tasks/{task-dir}/{plan-file}
+     Analyze deviations between the plan at {TASK_DIR}/{plan-file}
      and the current implementation. Compare against the base branch.
      ```
-   - Include the agent's output in the "Deviations from the plan" section
+   - Include the derived (or agent) output in the "Deviations from the plan" section
 
 8. **Determine output path:**
-   - If task directory exists: `ai_docs/tasks/{task-slug}/pr-description.md`
-   - If no task directory: `ai_docs/tasks/pr-{number}/description.md`
+   - If task directory exists: `{TASK_DIR}/pr-description.md`
+   - If no task directory: `issues/pr-{number}/description.md` (issues/ is local-only/ignored; the PR body itself is delivered via `gh pr edit`)
 
 9. **Generate the description:**
    Fill out each section from the template:
@@ -77,7 +81,7 @@ You are tasked with generating a comprehensive pull request description using th
 
 ## Important notes:
 - Always read the template from `{SKILLBASE}/references/pr_description_template.md`
-- Use the `implementation-reviewer` agent for deviation analysis when a plan exists
+- Prefer recorded deviation ledgers (execution-state, plan Derivations, review logs) for deviation analysis; dispatch the `implementation-reviewer` agent only when a plan exists with no ledgers
 - Focus on the "why" as much as the "what"
 - Include breaking changes or migration notes prominently
 
