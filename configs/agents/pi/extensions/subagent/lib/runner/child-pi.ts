@@ -16,12 +16,14 @@ import { type AgentRunResult, buildAgentRunResult } from "./run-result";
 export type AgentProgressCallback = (result: AgentRunResult) => void;
 
 const CHILD_COMPLETION_EXIT_GRACE_MS = 250;
+const CHILD_PROGRESS_INTERVAL_MS = 1_000;
 
 export async function runChildPiAgent(
   request: AgentRunRequest,
   signal: AbortSignal | undefined,
   onProgress?: AgentProgressCallback,
 ): Promise<AgentRunResult> {
+  const startedAt = Date.now();
   const artifactPlan = createAgentArtifactPlan({
     cwd: request.cwd,
     sessionId: request.resumeAgentId,
@@ -38,6 +40,9 @@ export async function runChildPiAgent(
   try {
     const invocation = buildChildInvocation(request, promptFile.filePath);
     const state = createChildAgentEventState();
+    const refreshDuration = () => {
+      state.durationMs = Math.max(0, Date.now() - startedAt);
+    };
     let stderr = "";
     let stdoutBuffer = "";
     let aborted = false;
@@ -61,8 +66,10 @@ export async function runChildPiAgent(
       });
       let closed = false;
       let completionExitTimer: ReturnType<typeof setTimeout> | undefined;
+      let progressInterval: ReturnType<typeof setInterval> | undefined;
 
       const emitProgress = () => {
+        refreshDuration();
         onProgress?.(buildAgentRunResult(request, state, -1, stderr));
       };
 
@@ -87,6 +94,7 @@ export async function runChildPiAgent(
         if (closed) return;
         closed = true;
         if (completionExitTimer) clearTimeout(completionExitTimer);
+        if (progressInterval) clearInterval(progressInterval);
         signal?.removeEventListener("abort", abortChild);
         resolveExit(exitCode);
       };
@@ -121,11 +129,17 @@ export async function runChildPiAgent(
         finalize(code ?? 0);
       });
 
+      if (onProgress) {
+        progressInterval = setInterval(emitProgress, CHILD_PROGRESS_INTERVAL_MS);
+        progressInterval.unref();
+      }
+
       if (signal?.aborted) abortChild();
       else signal?.addEventListener("abort", abortChild, { once: true });
     });
 
     await jsonlWriteChain;
+    refreshDuration();
     const finalExitCode = aborted ? 1 : exitCode;
     const sessionFile = await resolveChildSessionFile(request, state);
     const fallbackOutput = state.finalOutput.trim()
@@ -211,6 +225,7 @@ function buildAgentArtifactMetadata(
     errorMessage: state.errorMessage,
     stderr: stderr.trim() || undefined,
     usage: state.usage,
+    durationMs: state.durationMs,
     artifactSetupError,
     jsonlArtifactError,
   };

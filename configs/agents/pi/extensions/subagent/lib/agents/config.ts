@@ -58,9 +58,7 @@ export function applyAgentOverrideConfig(agents: AgentDefinition[], config: Agen
   if (unknownNames.length > 0) {
     // Overrides can name agents that only exist on some branches/worktrees;
     // skip the unmatched entries instead of failing every override.
-    console.warn(
-      `${config.filePath} overrides subagents not discovered here (skipped): ${unknownNames.join(", ")}.`,
-    );
+    console.warn(`${config.filePath} overrides subagents not discovered here (skipped): ${unknownNames.join(", ")}.`);
   }
 
   return agents.map((agent) => {

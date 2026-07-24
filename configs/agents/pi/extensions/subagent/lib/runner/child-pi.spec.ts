@@ -5,6 +5,7 @@ import { delimiter, join } from "node:path";
 import type { AgentDefinition } from "../agents/types";
 import { runChildPiAgent } from "./child-pi";
 import type { AgentRunRequest } from "./invocation";
+import type { AgentRunResult } from "./run-result";
 
 describe("runChildPiAgent", () => {
   let tempDir: string | undefined;
@@ -36,9 +37,10 @@ describe("runChildPiAgent", () => {
     process.env.PI_CODING_AGENT_DIR = agentDir;
 
     const startedAt = Date.now();
+    const progress: AgentRunResult[] = [];
 
     // Act
-    const result = await runChildPiAgent(runRequest(tempDir), undefined);
+    const result = await runChildPiAgent(runRequest(tempDir), undefined, (current) => progress.push(current));
 
     // Assert
     expect(Date.now() - startedAt).toBeLessThan(5_000);
@@ -48,6 +50,8 @@ describe("runChildPiAgent", () => {
     expect(result.finalOutput).toContain("Fake child output.");
     expect(result.agentId).toBe("fake-child-session-id");
     expect(result.outputArtifactPath).toBeTruthy();
+    expect(result.durationMs).toBeGreaterThan(1_000);
+    expect(progress.some((current) => current.status === "running" && (current.durationMs ?? 0) >= 1_000)).toBe(true);
   }, 10_000);
 });
 
@@ -75,8 +79,11 @@ async function writeFakePiExecutable(filePath: string): Promise<void> {
     "  { type: 'turn_end', message, toolResults: [] },",
     "  { type: 'agent_end', messages: [message] },",
     "];",
-    "for (const event of events) console.log(JSON.stringify(event));",
-    "setInterval(() => {}, 1000);",
+    "console.log(JSON.stringify(events[0]));",
+    "setTimeout(() => {",
+    "  for (const event of events.slice(1)) console.log(JSON.stringify(event));",
+    "  setInterval(() => {}, 1000);",
+    "}, 1100);",
     "",
   ].join("\n");
   await writeFile(filePath, script, "utf8");

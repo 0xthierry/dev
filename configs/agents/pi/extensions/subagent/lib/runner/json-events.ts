@@ -33,6 +33,7 @@ export interface AgentToolActivityItem {
 
 export interface ChildAgentEventState {
   finalOutput: string;
+  durationMs: number;
   usage: AgentUsageStats;
   activity: AgentActivityItem[];
   currentAssistantText: string;
@@ -46,6 +47,7 @@ export interface ChildAgentEventState {
 export function createChildAgentEventState(): ChildAgentEventState {
   return {
     finalOutput: "",
+    durationMs: 0,
     usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, totalTokens: 0, turns: 0 },
     activity: [],
     currentAssistantText: "",

@@ -103,6 +103,7 @@ describe("subagent extension E2E", () => {
     expect(JSON.stringify(toolEnd)).toContain(childResponse);
     expect(JSON.stringify(toolEnd)).toContain("echo-agent");
     expect(JSON.stringify(toolEnd)).toContain('"thinking":"low"');
+    expect(JSON.stringify(toolEnd)).toMatch(/"durationMs":\d+/);
     expect(JSON.stringify(agentEnd)).toContain(childResponse);
     const projectDirs = await readdir(join(piAgentDir, "agent-sessions"));
     expect(projectDirs.length).toBe(1);
@@ -194,6 +195,7 @@ describe("subagent extension E2E", () => {
       expect(firstRun?.sessionFile).toBeTruthy();
       expect(firstRun?.model).toBe(FAUX_MODEL_ID);
       expect(firstRun?.thinking).toBe("high");
+      expect(firstRun?.durationMs).toBeGreaterThan(0);
       expect(second.content[0]?.type === "text" ? second.content[0].text : "").toContain(
         `agent_id: ${firstRun?.agentId}`,
       );

@@ -105,6 +105,26 @@ describe("formatAgentToolResult", () => {
     expect(text).toContain("Session: /agent-sessions/session.jsonl");
   });
 
+  test("omits elapsed time for historical results without duration metadata", () => {
+    // Arrange
+    const result: AgentToolResult<AgentToolDetails> = {
+      content: [{ type: "text", text: "done" }],
+      details: {
+        ok: true,
+        mode: "single",
+        agentsDir: "/agents",
+        results: [{ ...agentResult("reviewer", "succeeded"), durationMs: undefined }],
+      },
+    };
+
+    // Act
+    const text = formatAgentToolResult(result, { expanded: false }, theme);
+
+    // Assert
+    expect(text).not.toContain("⏱");
+    expect(text).not.toContain("NaN");
+  });
+
   test("shows child model thinking level in usage", () => {
     // Arrange
     const result: AgentToolResult<AgentToolDetails> = {
@@ -113,7 +133,14 @@ describe("formatAgentToolResult", () => {
         ok: true,
         mode: "single",
         agentsDir: "/agents",
-        results: [{ ...agentResult("reviewer", "succeeded"), model: "gpt-5.5", thinking: "xhigh" }],
+        results: [
+          {
+            ...agentResult("reviewer", "succeeded"),
+            durationMs: 65_400,
+            model: "gpt-5.5",
+            thinking: "xhigh",
+          },
+        ],
       },
     };
 
@@ -121,6 +148,7 @@ describe("formatAgentToolResult", () => {
     const text = formatAgentToolResult(result, { expanded: false }, theme);
 
     // Assert
+    expect(text).toContain("⏱ 1m 5s");
     expect(text).toContain("gpt-5.5 • xhigh");
   });
 });
@@ -137,6 +165,7 @@ function agentResult(
     status,
     ok: status === "succeeded",
     exitCode: status === "queued" || status === "running" ? -1 : status === "succeeded" ? 0 : 1,
+    durationMs: 1_500,
     finalOutput: status === "succeeded" ? `${agent} output` : status === "queued" ? "(queued)" : "(running...)",
     outputTruncated: false,
     stderr: "",

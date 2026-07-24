@@ -420,6 +420,7 @@ function baseAgentRunResult(
     status,
     ok: status === "succeeded",
     exitCode: status === "queued" || status === "running" ? -1 : 0,
+    durationMs: 0,
     finalOutput,
     outputTruncated: false,
     stderr: "",

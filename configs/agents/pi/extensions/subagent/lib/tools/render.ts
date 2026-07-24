@@ -174,6 +174,9 @@ function formatUsage(result: AgentRunResult): string {
   if (result.usage.cacheRead) parts.push(`R${formatTokens(result.usage.cacheRead)}`);
   if (result.usage.cacheWrite) parts.push(`W${formatTokens(result.usage.cacheWrite)}`);
   if (result.usage.cost) parts.push(`$${result.usage.cost.toFixed(4)}`);
+  if (result.status !== "queued" && typeof result.durationMs === "number" && Number.isFinite(result.durationMs)) {
+    parts.push(`⏱ ${formatDuration(result.durationMs)}`);
+  }
   if (result.agentId) parts.push(`id:${result.agentId.slice(0, 8)}`);
   if (result.model) parts.push(result.thinking ? `${result.model} • ${result.thinking}` : result.model);
   else if (result.thinking) parts.push(`thinking: ${result.thinking}`);
@@ -232,4 +235,18 @@ function formatTokens(count: number): string {
   if (count < 10_000) return `${(count / 1_000).toFixed(1)}k`;
   if (count < 1_000_000) return `${Math.round(count / 1_000)}k`;
   return `${(count / 1_000_000).toFixed(1)}M`;
+}
+
+function formatDuration(durationMs: number): string {
+  const totalSeconds = Math.max(0, durationMs) / 1_000;
+  if (totalSeconds < 60) return `${totalSeconds.toFixed(1)}s`;
+
+  const roundedSeconds = Math.round(totalSeconds);
+  const seconds = roundedSeconds % 60;
+  const totalMinutes = Math.floor(roundedSeconds / 60);
+  if (totalMinutes < 60) return `${totalMinutes}m ${seconds}s`;
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}h ${minutes}m`;
 }

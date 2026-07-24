@@ -12,6 +12,7 @@ describe("buildAgentRunResult", () => {
     state.model = "test-model";
     state.stopReason = "stop";
     state.sessionId = "019e1882-8bc8-767c-a1e6-d7c9ebd3a574";
+    state.durationMs = 65_400;
     state.usage.input = 10;
     const request = runRequest("reviewer", "Review diff");
 
@@ -40,6 +41,7 @@ describe("buildAgentRunResult", () => {
       status: "succeeded",
       ok: true,
       exitCode: 0,
+      durationMs: 65_400,
       finalOutput: "Agent completed.\n\nDetailed subagent output saved to: /agent-artifacts/output.md",
       agentId: "019e1882-8bc8-767c-a1e6-d7c9ebd3a574",
       sessionFile: "/agent-sessions/session.jsonl",

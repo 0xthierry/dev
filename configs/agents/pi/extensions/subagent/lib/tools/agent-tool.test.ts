@@ -412,6 +412,7 @@ function resultFor(agentName: string, task: string, thinking?: AgentRunResult["t
     status: "succeeded",
     ok: true,
     exitCode: 0,
+    durationMs: 1_250,
     finalOutput: `${agentName} completed: ${task}`,
     outputTruncated: false,
     stderr: "",

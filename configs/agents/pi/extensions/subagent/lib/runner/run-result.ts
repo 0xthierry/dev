@@ -13,6 +13,7 @@ export interface AgentRunResult {
   status: AgentRunStatus;
   ok: boolean;
   exitCode: number;
+  durationMs?: number;
   finalOutput: string;
   outputTruncated: boolean;
   outputArtifactPath?: string;
@@ -52,6 +53,7 @@ export function buildAgentRunResult(
     status,
     ok,
     exitCode,
+    durationMs: state.durationMs,
     finalOutput: prepared.text,
     outputTruncated: prepared.truncated,
     ...(outputArtifactPath ? { outputArtifactPath } : {}),
