@@ -23,7 +23,7 @@ java = "temurin-17.0.19+10"
 dotnet = "8.0.420"
 zig = "latest"
 aws = "latest"
-"github:ogulcancelik/herdr" = "0.7.4"
+"github:ogulcancelik/herdr" = "0.7.5"
 
 [settings]
 experimental = false

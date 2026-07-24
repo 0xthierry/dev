@@ -5,8 +5,8 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 AMQ_SOURCE_URL="https://github.com/avivsinai/agent-message-queue.git"
-AMQ_VERSION="v0.45.0"
-AMQ_COMMIT="e50379a1c3d2719b4eb03cd0180aa9938a30238d"
+AMQ_VERSION="v0.46.0"
+AMQ_COMMIT="b2645f5b4d379d897239cef3e10c0f4a3a26f01e"
 
 install_npm_global_cli() {
   local name="$1"
@@ -369,34 +369,34 @@ install_ai_clis() {
   log_section "AI Coding CLIs"
 
   # Claude Code (Anthropic) — standalone binary, not npm
-  install_claude_code_binary "2.1.216"
+  install_claude_code_binary "2.1.218"
 
   # Codex (OpenAI)
   install_npm_global_cli "Codex CLI" "@openai/codex" "0.145.0"
 
   # Gemini CLI (Google)
-  install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.51.0"
+  install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.52.0"
 
   # Pi Coding Agent (Earendil Works) — minimal terminal coding harness
   install_pi_coding_agent_cli "0.81.1"
 
   # Plannotator — plan and code review UI; hooks and skills are deployed from this repo
-  install_plannotator_binary "v0.24.1"
+  install_plannotator_binary "v0.24.2"
 
   # Agent Slack (Stably) — standalone binary
   install_agent_slack_binary "0.9.3"
 
   # Agent Browser — npm package (crates.io lags behind)
-  install_agent_browser_binary "0.32.3"
+  install_agent_browser_binary "0.33.0"
 
   # Agent Message Queue — local file-based inter-agent bus, built from a pinned source tag+commit
   install_amq_from_source
 
   # Linear CLI (schpet) — agent-friendly Linear.app CLI
-  install_npm_global_cli "Linear CLI" "@schpet/linear-cli" "2.0.0"
+  install_npm_global_cli "Linear CLI" "@schpet/linear-cli" "2.3.0"
 
   # Notion CLI (makenotion) — `ntn` binary, pairs with notion-cli skill
-  install_notion_cli_binary "v0.19.0"
+  install_notion_cli_binary "v0.20.0"
 
   # Factory CLI — `droid` binary
   install_factory_cli_binary
@@ -410,7 +410,7 @@ install_ai_clis() {
   install_cursor_agent_cli_binary
 
   # Railway CLI — deploy/manage Railway projects
-  install_npm_global_cli "Railway CLI" "@railway/cli" "5.27.1"
+  install_npm_global_cli "Railway CLI" "@railway/cli" "5.28.0"
 }
 
 # Run if executed directly
