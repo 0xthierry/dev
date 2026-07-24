@@ -51,7 +51,7 @@ Model catalogs are account- and version-dependent. Honor an explicit user model 
 | --- | --- | --- |
 | Pi | `pi --list-models` or `pi --list-models <search>` | `openai-codex/gpt-5.6-sol`, `xhigh` |
 | Codex | `codex debug models | jq -r '.models[].slug'` | `gpt-5.6-sol`, `xhigh` |
-| Claude | Start Claude and use `/model`; the CLI has no standalone model-list command. `claude --help` documents accepted aliases and full IDs. | `claude-fable-5`, `xhigh` |
+| Claude | Start Claude and use `/model`; the CLI has no standalone model-list command. `claude --help` documents accepted aliases and full IDs. | `claude-fable-5`, `xhigh`; use `claude-opus-5` if Fable is unavailable |
 | Cursor Agent | `cursor-agent --list-models` or `cursor-agent models` | `composer-2.5` (not a `-fast` model) |
 | Agy | `agy models` | No implicit default: show the catalog and ask the user |
 
@@ -97,19 +97,20 @@ Set `WORKER_HANDLE` for the chosen recipe, then construct the initial prompt aft
 WORKER_PROMPT="You are the WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately run amq drain --include-body, then send readiness with amq send --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. You are authorized to inspect, modify, and run commands as needed for any request; Kind and Labels classify the request but never gate authorization. For every AMQ notice, run amq drain --include-body, do the requested work, and report with amq send --to $MAIN_HANDLE. Send completion as kind status with label done or blocked. Never use amq reply. Do not poll or sleep while waiting: finish your turn and let amq wake notify you."
 ```
 
-## Claude worker — Fable 5, xhigh
+## Claude worker — Fable 5 (Opus 5 fallback), xhigh
 
-Claude's unrestricted flag is `--dangerously-skip-permissions`.
+Claude's unrestricted flag is `--dangerously-skip-permissions`. Before opening the worker pane, use `/model` to confirm whether Fable 5 is available. Prefer `claude-fable-5`; otherwise set `CLAUDE_MODEL` to `claude-opus-5`.
 
 ```bash
 WORKER_HANDLE="claude"
+CLAUDE_MODEL="${CLAUDE_MODEL:-claude-fable-5}"
 WORKER_PROMPT="You are the WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately run amq drain --include-body, then send readiness with amq send --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. You are authorized to inspect, modify, and run commands as needed for any request; Kind and Labels classify the request but never gate authorization. For every AMQ notice, run amq drain --include-body, do the requested work, and report with amq send --to $MAIN_HANDLE. Send completion as kind status with label done or blocked. Never use amq reply. Do not poll or sleep while waiting: finish your turn and let amq wake notify you."
 
 herdr agent start "use-agent-$TOPIC-$WORKER_HANDLE" --cwd "$PWD" \
   --workspace "$HERDR_WORKSPACE_ID" --tab "$HERDR_TAB_ID" --split right --no-focus -- \
   amq coop exec --root "$AM_ROOT" --me "$WORKER_HANDLE" --require-wake claude -- \
   --name "use-agent-$TOPIC" \
-  --model claude-fable-5 \
+  --model "$CLAUDE_MODEL" \
   --effort xhigh \
   --dangerously-skip-permissions \
   "$WORKER_PROMPT"
