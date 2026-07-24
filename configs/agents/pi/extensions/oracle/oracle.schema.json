@@ -27,8 +27,8 @@
         },
         "model": {
           "type": "string",
-          "default": "gpt-5-5-pro",
-          "description": "ChatGPT Web model id used by the oracle. Defaults to GPT-5.5 Pro."
+          "default": "gpt-5-6-sol-pro",
+          "description": "ChatGPT Web model id used by the oracle. Defaults to GPT-5.6 Sol Pro."
         },
         "projectId": {
           "type": "string",

@@ -28,6 +28,7 @@ describe("extractOracleConversationText", () => {
             author: { role: "assistant" },
             create_time: 2,
             status: "finished_successfully",
+            metadata: { model_slug: "gpt-5-6-sol-pro" },
             content: { parts: ["latest answer"] },
           },
         },
@@ -42,6 +43,7 @@ describe("extractOracleConversationText", () => {
       text: "latest answer",
       messageId: "latest-message",
       currentNode: "latest-message",
+      model: "gpt-5-6-sol-pro",
       status: "finished_successfully",
       finished: true,
     });
@@ -57,6 +59,7 @@ describe("extractOracleConversationText", () => {
             id: "message-id",
             author: { role: "assistant" },
             status: "in_progress",
+            metadata: { model_slug: "gpt-5-6-sol-pro" },
             content: { parts: [{ content_type: "text", text: "partial answer" }] },
           },
         },
@@ -71,6 +74,7 @@ describe("extractOracleConversationText", () => {
       text: "partial answer",
       messageId: "message-id",
       currentNode: "message-id",
+      model: "gpt-5-6-sol-pro",
       status: "in_progress",
       finished: false,
     });

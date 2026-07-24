@@ -132,10 +132,16 @@ export async function askChatGptOracle(
   const answer = await waitForOracleAnswer(conversationId, context, request, transport);
   const currentNode = answer.currentNode ?? answer.messageId;
   if (!currentNode) throw new Error("ChatGPT conversation poll did not return a current node for resuming.");
+  if (!answer.model) throw new Error("ChatGPT conversation poll did not report the model used for the Oracle answer.");
+  if (answer.model !== request.config.model) {
+    throw new Error(
+      `ChatGPT used model ${JSON.stringify(answer.model)} instead of configured Oracle model ${JSON.stringify(request.config.model)}.`,
+    );
+  }
   return {
     providerId: "chatgpt-web",
     providerLabel: "ChatGPT Web",
-    model: request.config.model,
+    model: answer.model,
     conversationId,
     messageId: answer.messageId,
     currentNode,

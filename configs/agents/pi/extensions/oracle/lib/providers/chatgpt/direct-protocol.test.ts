@@ -119,7 +119,7 @@ describe("buildChatGptConversationPayload", () => {
     const payload = buildChatGptConversationPayload({
       prompt: "answer as oracle",
       messageId: "message-id",
-      model: "gpt-5-5-pro",
+      model: "gpt-5-6-sol-pro",
       now,
       timezoneOffsetMin: 180,
       timezone: "America/Sao_Paulo",
@@ -129,7 +129,7 @@ describe("buildChatGptConversationPayload", () => {
     expect(payload).toMatchObject({
       action: "next",
       parent_message_id: "client-created-root",
-      model: "gpt-5-5-pro",
+      model: "gpt-5-6-sol-pro",
       client_prepare_state: "none",
       timezone_offset_min: 180,
       timezone: "America/Sao_Paulo",
@@ -156,7 +156,7 @@ describe("buildChatGptConversationPayload", () => {
       conversationId: "conversation-id",
       parentMessageId: "current-node-id",
       messageId: "message-id",
-      model: "gpt-5-5-pro",
+      model: "gpt-5-6-sol-pro",
       now,
     });
 
@@ -176,7 +176,7 @@ describe("buildChatGptConversationPayload", () => {
     const payload = buildChatGptConversationPayload({
       prompt: "answer in the oracle project",
       messageId: "message-id",
-      model: "gpt-5-5-pro",
+      model: "gpt-5-6-sol-pro",
       now,
       projectId,
     });

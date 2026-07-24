@@ -1,18 +1,18 @@
 # Oracle
 
-Pi extension that registers an `oracle` tool: a separate, state-of-the-art reasoning intelligence the agent can consult for hard problems. The backend is ChatGPT Web (GPT-5.5 Pro) reached through direct HTTP impersonation, but that is an operator-only detail — to the agent it is simply "the Oracle."
+Pi extension that registers an `oracle` tool: a separate, state-of-the-art reasoning intelligence the agent can consult for hard problems. The backend is ChatGPT Web (GPT-5.6 Sol Pro) reached through direct HTTP impersonation, but that is an operator-only detail — to the agent it is simply "the Oracle."
 
 ## What it registers
 
 | Tool | Purpose |
 | --- | --- |
-| `oracle` | Consult the Oracle (backed by ChatGPT Web / GPT-5.5 Pro) for state-of-the-art reasoning, debugging, design, and second opinions. |
+| `oracle` | Consult the Oracle (backed by ChatGPT Web / GPT-5.6 Sol Pro) for state-of-the-art reasoning, debugging, design, and second opinions. |
 
 It does not register slash commands, keyboard shortcuts, flags, or custom UI.
 
 ## How the agent sees it
 
-To the agent, the tool is simply **the Oracle**. The agent-facing prompts never mention ChatGPT, GPT-5.5 Pro, accounts, or cookies — the backend is an operator detail configured in `~/.pi/oracle.json` (see below). Keeping the abstraction provider-agnostic means the agent's mental model stays stable even if the backend changes.
+To the agent, the tool is simply **the Oracle**. The agent-facing prompts never mention ChatGPT, GPT-5.6 Sol Pro, accounts, or cookies — the backend is an operator detail configured in `~/.pi/oracle.json` (see below). Keeping the abstraction provider-agnostic means the agent's mental model stays stable even if the backend changes.
 
 ## When the agent should consult it
 
@@ -47,7 +47,7 @@ Example:
   "chatgpt": {
     "browser": "Chrome",
     "profile": "Default",
-    "model": "gpt-5-5-pro",
+    "model": "gpt-5-6-sol-pro",
     "projectId": "g-p-69ab61612c908191a5a197743a08cb71",
     "timeoutMs": 1800000,
     "pollIntervalMs": 3000
@@ -62,10 +62,12 @@ Example:
 | `$schema` | unset | Optional editor schema reference. From `~/.pi/oracle.json`, use `./agent/extensions/oracle/oracle.schema.json`. |
 | `chatgpt.browser` | `Chrome` | Local browser whose `chatgpt.com` cookies should be used. Supported: `Brave`, `Chromium`, `Chrome`. |
 | `chatgpt.profile` | `Default` | Browser profile signed into `https://chatgpt.com`. |
-| `chatgpt.model` | `gpt-5-5-pro` | ChatGPT Web model id used by the Oracle. |
+| `chatgpt.model` | `gpt-5-6-sol-pro` | ChatGPT Web model id used by the Oracle. The previous `gpt-5-5-pro` default is upgraded automatically. |
 | `chatgpt.projectId` | unset | Optional ChatGPT project id. When set, Oracle conversations are created inside this project. |
 | `chatgpt.timeoutMs` | `1800000` | Overall timeout for one Oracle request (30 minutes). |
 | `chatgpt.pollIntervalMs` | `3000` | Poll interval while waiting for the ChatGPT conversation answer. |
+
+Each answer is accepted only when the polled ChatGPT conversation reports the configured `metadata.model_slug`; a missing or different server-reported model fails the Oracle request instead of silently accepting a fallback.
 
 ## Requirements
 

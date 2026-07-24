@@ -2,6 +2,7 @@ export interface OracleConversationText {
   text: string;
   messageId?: string;
   currentNode?: string;
+  model?: string;
   status?: string;
   finished: boolean;
 }
@@ -9,6 +10,7 @@ export interface OracleConversationText {
 interface CandidateMessage {
   text: string;
   messageId?: string;
+  model?: string;
   status?: string;
   createTime: number;
   order: number;
@@ -30,9 +32,11 @@ export function extractOracleConversationText(conversation: unknown): OracleConv
 
     const text = extractTextFromMessage(message).trim();
     if (!text) continue;
+    const metadata = getRecordValue(message, "metadata");
     candidates.push({
       text,
       messageId: optionalString(getRecordValue(message, "id")),
+      model: isRecord(metadata) ? optionalString(getRecordValue(metadata, "model_slug")) : undefined,
       status: optionalString(getRecordValue(message, "status")),
       createTime: optionalNumber(getRecordValue(message, "create_time")) ?? 0,
       order,
@@ -48,6 +52,7 @@ export function extractOracleConversationText(conversation: unknown): OracleConv
     text: candidate.text,
     messageId: candidate.messageId,
     currentNode: currentNode ?? candidate.messageId,
+    model: candidate.model,
     status: candidate.status,
     finished: candidate.status === "finished_successfully" || candidate.status === "finished_partial_completion",
   };

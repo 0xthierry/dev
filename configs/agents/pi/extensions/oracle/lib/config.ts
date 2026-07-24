@@ -5,7 +5,8 @@ import { normalizeBrowserName, type SupportedBrowser } from "./providers/chatgpt
 
 export const ORACLE_CONFIG_PATH = join(homedir(), ".pi", "oracle.json");
 export const ORACLE_CONFIG_DISPLAY_PATH = "~/.pi/oracle.json";
-export const DEFAULT_ORACLE_MODEL = "gpt-5-5-pro";
+export const DEFAULT_ORACLE_MODEL = "gpt-5-6-sol-pro";
+const PREVIOUS_DEFAULT_ORACLE_MODEL = "gpt-5-5-pro";
 export const DEFAULT_ORACLE_BROWSER: SupportedBrowser = "Chrome";
 export const DEFAULT_ORACLE_PROFILE = "Default";
 export const DEFAULT_ORACLE_TIMEOUT_MS = 1_800_000;
@@ -59,7 +60,7 @@ export function normalizeOracleConfig(config: OracleConfig): NormalizedOracleCon
     chatgpt: {
       browser: normalizeConfiguredBrowser(chatgpt.browser),
       profile: normalizedString(chatgpt.profile) ?? DEFAULT_ORACLE_PROFILE,
-      model: normalizedString(chatgpt.model) ?? DEFAULT_ORACLE_MODEL,
+      model: normalizedOracleModel(chatgpt.model),
       ...(projectId ? { projectId } : {}),
       timeoutMs: normalizedPositiveInteger(chatgpt.timeoutMs, DEFAULT_ORACLE_TIMEOUT_MS),
       pollIntervalMs: normalizedPositiveInteger(chatgpt.pollIntervalMs, DEFAULT_ORACLE_POLL_INTERVAL_MS),
@@ -76,6 +77,11 @@ export function normalizedString(value: unknown): string | undefined {
 export function normalizedPositiveInteger(value: unknown, fallback: number): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return fallback;
   return Math.floor(value);
+}
+
+function normalizedOracleModel(value: unknown): string {
+  const model = normalizedString(value);
+  return !model || model === PREVIOUS_DEFAULT_ORACLE_MODEL ? DEFAULT_ORACLE_MODEL : model;
 }
 
 function normalizeConfiguredBrowser(value: unknown): SupportedBrowser {

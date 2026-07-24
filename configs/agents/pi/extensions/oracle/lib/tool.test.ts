@@ -53,7 +53,7 @@ describe("registerOracleTool", () => {
       ok: true,
       providerId: "chatgpt-web",
       providerLabel: "ChatGPT Web",
-      model: "gpt-5-5-pro",
+      model: "gpt-5-6-sol-pro",
       conversationId: "conversation-id",
       currentNode: "message-id",
       finished: true,
@@ -194,7 +194,7 @@ function fakeRuntime(): OracleRuntime {
       async (): Promise<OracleAnswer> => ({
         providerId: "chatgpt-web",
         providerLabel: "ChatGPT Web",
-        model: "gpt-5-5-pro",
+        model: "gpt-5-6-sol-pro",
         conversationId: "conversation-id",
         currentNode: "message-id",
         messageId: "message-id",
