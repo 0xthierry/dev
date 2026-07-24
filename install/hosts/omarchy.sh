@@ -22,6 +22,7 @@ HOST_CONFIG_TARGETS=(
 HOST_PACMAN_PACKAGES=(
   bitwarden
   cameractrls
+  containerd
   dbeaver
   discord
   edk2-ovmf
@@ -36,12 +37,14 @@ HOST_PACMAN_PACKAGES=(
   qemu-system-x86
   socat
   steam
+  sysstat
   tailscale
   telegram-desktop
   virtiofsd
   wtype
   xdg-utils
   xorg-setxkbmap
+  zram-generator
 )
 
 # shellcheck disable=SC2034
@@ -181,6 +184,141 @@ configure_legacy_tiocsti() {
   run_cmd sudo sysctl -w "${sysctl_name}=1"
 }
 
+install_omarchy_root_config() {
+  local source_path="$1"
+  local target_path="$2"
+  local label="$3"
+
+  if [[ -f "$target_path" ]] && cmp -s "$source_path" "$target_path"; then
+    log_item "$label: already configured"
+    return 0
+  fi
+
+  log_item "$label: installing $target_path"
+  run_cmd sudo install -Dm644 "$source_path" "$target_path"
+}
+
+configure_omarchy_docker_daemon() {
+  local fragment="$REPO_ROOT/configs/omarchy/docker-daemon-fragment.json"
+  local target="/etc/docker/daemon.json"
+  local merged=""
+  local existing=""
+
+  if (( ${DRY_RUN:-0} )); then
+    log_item "Docker daemon: merge $fragment into $target (preserving existing settings)"
+    dry_run_cmd dockerd --validate --config-file "$target"
+    return 0
+  fi
+
+  if ! check_installed jq || ! check_installed dockerd; then
+    log_item "Docker daemon: jq or dockerd unavailable; skipping policy merge"
+    return 0
+  fi
+
+  merged="$(mktemp)"
+  existing="$(mktemp)"
+
+  if [[ -f "$target" ]]; then
+    if ! jq -e 'type == "object"' "$target" > /dev/null; then
+      rm -f "$merged" "$existing"
+      log_item "ERROR: $target is not a valid JSON object; refusing to replace it"
+      return 1
+    fi
+    cp "$target" "$existing"
+  else
+    printf '{}\n' > "$existing"
+  fi
+
+  if ! jq -s '.[0] * .[1]' "$existing" "$fragment" > "$merged"; then
+    rm -f "$merged" "$existing"
+    return 1
+  fi
+  rm -f "$existing"
+
+  if ! dockerd --validate --config-file "$merged"; then
+    rm -f "$merged"
+    log_item "ERROR: merged Docker daemon configuration failed validation"
+    return 1
+  fi
+
+  if [[ -f "$target" ]] && cmp -s "$merged" "$target"; then
+    rm -f "$merged"
+    log_item "Docker daemon: already configured"
+    return 0
+  fi
+
+  sudo install -Dm644 "$merged" "$target"
+  rm -f "$merged"
+  log_item "Docker daemon: configured 300GB default-builder GC target and container slice"
+}
+
+report_containerd_ttrpc_version() {
+  local containerd_bin=""
+  local ttrpc_version=""
+
+  if ! check_installed containerd || ! check_installed go; then
+    return 0
+  fi
+
+  containerd_bin="$(command -v containerd)"
+  ttrpc_version="$(
+    go version -m "$containerd_bin" 2> /dev/null |
+      awk '$1 == "dep" && $2 == "github.com/containerd/ttrpc" { print $3; exit }'
+  )" || true
+
+  if [[ -z "$ttrpc_version" ]]; then
+    return 0
+  fi
+
+  if [[ "$ttrpc_version" == "v1.2.8" ]]; then
+    log_item "containerd embeds ttrpc $ttrpc_version; the deadline-collapse fix is not released yet"
+  else
+    log_item "containerd embeds ttrpc $ttrpc_version"
+  fi
+}
+
+configure_omarchy_resource_resilience() {
+  log_section "Resource Resilience"
+
+  install_omarchy_root_config \
+    "$REPO_ROOT/configs/omarchy/zram-generator.conf" \
+    "/etc/systemd/zram-generator.conf.d/90-dev-setup.conf" \
+    "zram"
+  install_omarchy_root_config \
+    "$REPO_ROOT/configs/omarchy/oomd.conf" \
+    "/etc/systemd/oomd.conf.d/90-dev-setup.conf" \
+    "systemd-oomd"
+  install_omarchy_root_config \
+    "$REPO_ROOT/configs/omarchy/user-oomd.conf" \
+    "/etc/systemd/system/user@.service.d/90-dev-setup-oomd.conf" \
+    "User-session OOM policy"
+  install_omarchy_root_config \
+    "$REPO_ROOT/configs/omarchy/system-docker-slice.conf" \
+    "/etc/systemd/system/system-docker.slice.d/90-dev-setup-memory.conf" \
+    "Docker container memory budget"
+  install_omarchy_root_config \
+    "$REPO_ROOT/configs/omarchy/sysstat-collect.timer.conf" \
+    "/etc/systemd/system/sysstat-collect.timer.d/90-dev-setup-interval.conf" \
+    "sysstat collection interval"
+  configure_omarchy_docker_daemon
+
+  log_item "Reloading systemd and enabling resource monitoring"
+  run_cmd sudo systemctl daemon-reload
+  run_cmd sudo systemctl enable --now systemd-oomd.service
+  run_cmd sudo systemctl restart systemd-oomd.service
+  run_cmd sudo systemctl enable --now \
+    sysstat.service \
+    sysstat-collect.timer \
+    sysstat-rotate.timer \
+    sysstat-summary.timer
+  run_cmd sudo systemctl restart sysstat-collect.timer
+  report_containerd_ttrpc_version
+
+  log_item "NOTE: Reboot to activate the resized zram device and Docker daemon policy"
+  log_item "NOTE: Docker cgroup-parent applies only to newly created containers"
+  log_item "NOTE: Recreate each Compose stack to migrate its containers into system-docker.slice"
+}
+
 set_default_browser_brave() {
   log_section "Default Browser"
 
@@ -273,6 +411,7 @@ setup_host_machine_state() {
   log_section "Host Machine State"
   configure_keyboard
   configure_legacy_tiocsti
+  configure_omarchy_resource_resilience
   set_default_browser_brave
   apply_host_configs
   configure_voxtype

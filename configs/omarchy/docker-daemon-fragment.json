@@ -1,0 +1,32 @@
+{
+  "cgroup-parent": "system-docker.slice",
+  "builder": {
+    "gc": {
+      "enabled": true,
+      "policy": [
+        {
+          "filter": [
+            "type=source.local,type=exec.cachemount,type=source.git.checkout"
+          ],
+          "keepDuration": "48h",
+          "reservedSpace": "20GB",
+          "maxUsedSpace": "40GB"
+        },
+        {
+          "keepDuration": "1440h",
+          "reservedSpace": "50GB",
+          "maxUsedSpace": "300GB"
+        },
+        {
+          "reservedSpace": "50GB",
+          "maxUsedSpace": "300GB"
+        },
+        {
+          "all": true,
+          "reservedSpace": "50GB",
+          "maxUsedSpace": "300GB"
+        }
+      ]
+    }
+  }
+}
