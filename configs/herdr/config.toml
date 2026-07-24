@@ -200,7 +200,6 @@ command = "lazygit"
 # accent = "cyan"
 
 # Background notification popup delivery
-agent_panel_scope = "current"
 [ui.toast]
 # off = disable pop-up notifications
 # herdr = show in-app toasts
