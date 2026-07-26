@@ -471,8 +471,18 @@ configure_omarchy_storage_maintenance() {
     run_cmd sudo sed -i -E \
       '/[[:space:]]btrfs[[:space:]]/s/\brelatime\b/noatime/g' \
       /etc/fstab
-    run_cmd sudo mount -o remount /
-    run_cmd sudo mount -o remount /home
+
+    # systemd caches fstab into generated mount units; without this the remounts
+    # below warn that it is still using the old version.
+    run_cmd sudo systemctl daemon-reload
+
+    # Remount every btrfs mount rather than a hardcoded pair, otherwise
+    # subvolumes like /var/log keep relatime until the next reboot.
+    local target=""
+    while read -r target; do
+      [[ -n "$target" ]] || continue
+      run_cmd sudo mount -o remount "$target"
+    done < <(findmnt -rno TARGET -t btrfs 2>/dev/null)
   else
     log_item "fstab: btrfs mounts already noatime"
   fi
