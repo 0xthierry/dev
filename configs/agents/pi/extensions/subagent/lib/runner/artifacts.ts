@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { appendFile, copyFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getAgentDir, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { encodeProjectCwd } from "../sessions/paths";
@@ -10,7 +10,6 @@ const ARTIFACT_DIR = "artifacts";
 export interface AgentArtifactPaths {
   inputPath: string;
   outputPath: string;
-  jsonlPath: string;
   metadataPath: string;
 }
 
@@ -27,7 +26,6 @@ export interface AgentArtifactPlan {
 export interface FinalizeAgentRunArtifactsInput {
   sessionId?: string;
   fallbackOutput: string;
-  jsonlLines: string[];
   metadata: Record<string, unknown>;
 }
 
@@ -72,7 +70,6 @@ export function getAgentArtifactPaths(input: {
   return {
     inputPath: join(dir, `${stem}_input.md`),
     outputPath: join(dir, `${stem}_output.md`),
-    jsonlPath: join(dir, `${stem}.jsonl`),
     metadataPath: join(dir, `${stem}_meta.json`),
   };
 }
@@ -89,14 +86,6 @@ export function getAgentOutputArtifactPath(input: {
 
 export async function writeAgentInputArtifact(plan: AgentArtifactPlan, content: string): Promise<void> {
   await writeTextArtifact(plan.paths.inputPath, content);
-}
-
-export async function appendAgentJsonlArtifact(plan: AgentArtifactPlan, line: string): Promise<void> {
-  if (!line.trim()) return;
-  await mkdir(dirname(plan.paths.jsonlPath), { recursive: true });
-  await withFileMutationQueue(plan.paths.jsonlPath, async () => {
-    await appendFile(plan.paths.jsonlPath, `${line}\n`, { encoding: "utf8", mode: 0o600 });
-  });
 }
 
 export async function finalizeAgentRunArtifacts(
@@ -120,7 +109,6 @@ export async function finalizeAgentRunArtifacts(
     const inputContent = await readOptionalText(plan.paths.inputPath);
     if (inputContent !== undefined) await writeTextArtifact(paths.inputPath, inputContent);
     await writeTextArtifact(paths.outputPath, output);
-    await finalizeJsonlArtifact(plan.paths.jsonlPath, paths.jsonlPath, input.jsonlLines);
     await writeJsonArtifact(paths.metadataPath, {
       ...input.metadata,
       artifactSessionId: sessionId,
@@ -154,29 +142,6 @@ async function writeJsonArtifact(filePath: string, value: unknown): Promise<void
   await writeTextArtifact(filePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-async function finalizeJsonlArtifact(sourcePath: string, targetPath: string, fallbackLines: string[]): Promise<void> {
-  if (await fileExists(sourcePath)) {
-    if (sourcePath === targetPath) return;
-    await mkdir(dirname(targetPath), { recursive: true });
-    await withFileMutationQueue(targetPath, async () => {
-      await copyFile(sourcePath, targetPath);
-    });
-    return;
-  }
-  await writeTextArtifact(targetPath, formatJsonl(fallbackLines));
-}
-
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await stat(filePath);
-    return true;
-  } catch (error) {
-    const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
-    if (code === "ENOENT" || code === "ENOTDIR") return false;
-    throw error;
-  }
-}
-
 async function readOptionalText(filePath: string): Promise<string | undefined> {
   try {
     return await readFile(filePath, "utf8");
@@ -185,10 +150,6 @@ async function readOptionalText(filePath: string): Promise<string | undefined> {
     if (code === "ENOENT" || code === "ENOTDIR") return undefined;
     throw error;
   }
-}
-
-function formatJsonl(lines: string[]): string {
-  return lines.length === 0 ? "" : `${lines.join("\n")}\n`;
 }
 
 function countLines(text: string): number {

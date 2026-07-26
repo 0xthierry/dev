@@ -3,7 +3,6 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
-  appendAgentJsonlArtifact,
   createAgentArtifactPlan,
   finalizeAgentRunArtifacts,
   getAgentArtifactPaths,
@@ -33,7 +32,6 @@ describe("agent run artifacts", () => {
     expect(paths).toEqual({
       inputPath: `${dir}/2026-05-12T10-20-30-400Z_code-scout_input.md`,
       outputPath: `${dir}/2026-05-12T10-20-30-400Z_code-scout_output.md`,
-      jsonlPath: `${dir}/2026-05-12T10-20-30-400Z_code-scout.jsonl`,
       metadataPath: `${dir}/2026-05-12T10-20-30-400Z_code-scout_meta.json`,
     });
     expect(getAgentOutputArtifactPath({ projectKey, sessionId, agentName: "code/scout", agentDir, createdAt })).toBe(
@@ -52,15 +50,12 @@ describe("agent run artifacts", () => {
     });
     await writeAgentInputArtifact(pendingPlan, "# Input\n\nTask details");
     await writeFile(pendingPlan.paths.outputPath, "Detailed child-authored report.", "utf8");
-    await appendAgentJsonlArtifact(pendingPlan, '{"type":"session"}');
-    await appendAgentJsonlArtifact(pendingPlan, '{"type":"message_end"}');
 
     try {
       // Act
       const result = await finalizeAgentRunArtifacts(pendingPlan, {
         sessionId: "019e1882-8bc8-767c-a1e6-d7c9ebd3a574",
         fallbackOutput: "Short final response.",
-        jsonlLines: [],
         metadata: { agent: "explorer", exitCode: 0 },
       });
 
@@ -79,7 +74,7 @@ describe("agent run artifacts", () => {
         );
         expect(await readFile(result.paths.inputPath, "utf8")).toBe("# Input\n\nTask details");
         expect(await readFile(result.paths.outputPath, "utf8")).toBe("Detailed child-authored report.");
-        expect(await readFile(result.paths.jsonlPath, "utf8")).toBe('{"type":"session"}\n{"type":"message_end"}\n');
+        expect((await readdir(dirname(result.paths.outputPath))).some((file) => file.endsWith(".jsonl"))).toBe(false);
         const metadata = JSON.parse(await readFile(result.paths.metadataPath, "utf8")) as Record<string, unknown>;
         expect(metadata).toMatchObject({
           agent: "explorer",
@@ -112,7 +107,6 @@ describe("agent run artifacts", () => {
       // Act
       const result = await finalizeAgentRunArtifacts(plan, {
         fallbackOutput: "Fallback assistant output.",
-        jsonlLines: [],
         metadata: { agent: "worker", exitCode: 0 },
       });
 

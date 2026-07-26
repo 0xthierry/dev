@@ -118,16 +118,15 @@ Child sessions are saved under Pi's agent directory in a separate namespace that
 ~/.pi/agent/agent-sessions/--home-thierry-dev--/<timestamp>_<child-session-id>.jsonl
 ```
 
-Children hand off through their final message: each child is instructed to make its last assistant message a complete handoff report, and the harness persists that message as the `_output.md` artifact. Children do not write progress notes or reports to disk — the harness streams the full child transcript to the `.jsonl` artifact live, so durability never depends on the child's own writes. The final files live outside the parent conversation under the child session id:
+Children hand off through their final message: each child is instructed to make its last assistant message a complete handoff report, and the harness persists that message as the `_output.md` artifact. Pi saves the canonical resumable child transcript under `agent-sessions`; the harness does not duplicate the high-volume streamed JSON event log in the artifact directory. The lightweight final files live outside the parent conversation under the child session id:
 
 ```text
 ~/.pi/agent/agent-sessions-artifacts/<project-key>/<child-session-id>/artifacts/<timestamp>_<agent>_input.md
 ~/.pi/agent/agent-sessions-artifacts/<project-key>/<child-session-id>/artifacts/<timestamp>_<agent>_output.md
-~/.pi/agent/agent-sessions-artifacts/<project-key>/<child-session-id>/artifacts/<timestamp>_<agent>.jsonl
 ~/.pi/agent/agent-sessions-artifacts/<project-key>/<child-session-id>/artifacts/<timestamp>_<agent>_meta.json
 ```
 
-The `_output.md` file is the detailed result: the child's final message on a normal run, or — when a child exits without a final message (crash, abort, context failure) — a handoff synthesized by the harness from the streamed transcript (exit reason, last assistant text, recent tool activity, stderr tail, and the resumable child session path). The parent tool result inlines reports up to 360 lines / 40 KB (sized to the p95 of observed real reports); anything larger is truncated with an explicit "Read the full report at: <path>" notice so the parent knows to read the artifact, and `details.results` carries `outputTruncated` plus the artifact paths. `PI_CODING_AGENT_DIR` is respected, so custom Pi agent directories keep child sessions and artifacts beside the rest of that Pi state.
+The `_output.md` file is the detailed result: the child's final message on a normal run, or — when a child exits without a final message (crash, abort, context failure) — a handoff synthesized by the harness from parsed stream state (exit reason, last assistant text, recent tool activity, stderr tail, and the resumable child session path). The parent tool result inlines reports up to 360 lines / 40 KB (sized to the p95 of observed real reports); anything larger is truncated with an explicit "Read the full report at: <path>" notice so the parent knows to read the artifact, and `details.results` carries `outputTruncated` plus the artifact paths. `PI_CODING_AGENT_DIR` is respected, so custom Pi agent directories keep child sessions and artifacts beside the rest of that Pi state.
 
 ## Child process controls
 

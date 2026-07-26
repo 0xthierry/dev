@@ -28,7 +28,6 @@ describe("buildAgentRunResult", () => {
       {
         inputPath: "/agent-artifacts/input.md",
         outputPath: "/agent-artifacts/output.md",
-        jsonlPath: "/agent-artifacts/run.jsonl",
         metadataPath: "/agent-artifacts/meta.json",
       },
     );
@@ -49,7 +48,6 @@ describe("buildAgentRunResult", () => {
       artifactPaths: {
         inputPath: "/agent-artifacts/input.md",
         outputPath: "/agent-artifacts/output.md",
-        jsonlPath: "/agent-artifacts/run.jsonl",
         metadataPath: "/agent-artifacts/meta.json",
       },
       model: "test-model",

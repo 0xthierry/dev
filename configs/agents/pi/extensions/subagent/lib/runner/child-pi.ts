@@ -1,12 +1,7 @@
 import { spawn } from "node:child_process";
 import { rm } from "node:fs/promises";
 import { findAgentSessionFileById } from "../sessions/paths";
-import {
-  appendAgentJsonlArtifact,
-  createAgentArtifactPlan,
-  finalizeAgentRunArtifacts,
-  writeAgentInputArtifact,
-} from "./artifacts";
+import { createAgentArtifactPlan, finalizeAgentRunArtifacts, writeAgentInputArtifact } from "./artifacts";
 import { synthesizeCrashHandoff } from "./handoff";
 import { type AgentRunRequest, buildChildInvocation } from "./invocation";
 import { applyChildJsonEvent, type ChildAgentEventState, createChildAgentEventState } from "./json-events";
@@ -46,16 +41,6 @@ export async function runChildPiAgent(
     let stderr = "";
     let stdoutBuffer = "";
     let aborted = false;
-    const jsonlLines: string[] = [];
-    let jsonlArtifactError: string | undefined;
-    let jsonlWriteChain = Promise.resolve();
-    const queueJsonlArtifactLine = (line: string) => {
-      jsonlWriteChain = jsonlWriteChain
-        .then(() => appendAgentJsonlArtifact(artifactPlan, line))
-        .catch((error) => {
-          jsonlArtifactError ??= error instanceof Error ? error.message : String(error);
-        });
-    };
 
     const exitCode = await new Promise<number>((resolveExit) => {
       const child = spawn("pi", invocation.args, {
@@ -100,10 +85,6 @@ export async function runChildPiAgent(
       };
 
       const processStdoutLine = (line: string) => {
-        if (line.trim()) {
-          jsonlLines.push(line);
-          queueJsonlArtifactLine(line);
-        }
         if (applyChildJsonEvent(state, line)) emitProgress();
         if (state.agentEnded) requestCompletionExit();
       };
@@ -138,7 +119,6 @@ export async function runChildPiAgent(
       else signal?.addEventListener("abort", abortChild, { once: true });
     });
 
-    await jsonlWriteChain;
     refreshDuration();
     const finalExitCode = aborted ? 1 : exitCode;
     const sessionFile = await resolveChildSessionFile(request, state);
@@ -154,16 +134,7 @@ export async function runChildPiAgent(
     const artifacts = await finalizeAgentRunArtifacts(artifactPlan, {
       sessionId: state.sessionId ?? request.resumeAgentId,
       fallbackOutput,
-      jsonlLines,
-      metadata: buildAgentArtifactMetadata(
-        request,
-        state,
-        finalExitCode,
-        stderr,
-        sessionFile,
-        artifactSetupError,
-        jsonlArtifactError,
-      ),
+      metadata: buildAgentArtifactMetadata(request, state, finalExitCode, stderr, sessionFile, artifactSetupError),
     });
     const resultState = { ...state, finalOutput: artifacts.ok ? artifacts.output : fallbackOutput };
     const result = buildAgentRunResult(
@@ -209,7 +180,6 @@ function buildAgentArtifactMetadata(
   stderr: string,
   sessionFile: string | undefined,
   artifactSetupError: string | undefined,
-  jsonlArtifactError: string | undefined,
 ): Record<string, unknown> {
   return {
     agent: request.agent.name,
@@ -227,7 +197,6 @@ function buildAgentArtifactMetadata(
     usage: state.usage,
     durationMs: state.durationMs,
     artifactSetupError,
-    jsonlArtifactError,
   };
 }
 

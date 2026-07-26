@@ -124,7 +124,7 @@ describe("subagent extension E2E", () => {
     const outputFile = artifactFiles.find((file) => file.endsWith("_echo-agent_output.md"));
     expect(artifactFiles.some((file) => file.endsWith("_echo-agent_input.md"))).toBe(true);
     expect(outputFile).toBeTruthy();
-    expect(artifactFiles.some((file) => file.endsWith("_echo-agent.jsonl"))).toBe(true);
+    expect(artifactFiles.some((file) => file.endsWith(".jsonl"))).toBe(false);
     expect(artifactFiles.some((file) => file.endsWith("_echo-agent_meta.json"))).toBe(true);
     expect(await readFile(join(artifactDir, outputFile ?? ""), "utf8")).toContain(childResponse);
     expect(harness.stderr()).toBe("");
