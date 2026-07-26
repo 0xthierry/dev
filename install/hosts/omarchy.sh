@@ -22,6 +22,7 @@ HOST_CONFIG_TARGETS=(
 HOST_PACMAN_PACKAGES=(
   bitwarden
   cameractrls
+  ccache
   containerd
   dbeaver
   discord
@@ -34,6 +35,7 @@ HOST_PACMAN_PACKAGES=(
   libxkbfile
   libxss
   obsidian
+  pacman-contrib
   qemu-system-x86
   socat
   steam
@@ -184,6 +186,10 @@ configure_legacy_tiocsti() {
   run_cmd sudo sysctl -w "${sysctl_name}=1"
 }
 
+# Set by install_omarchy_root_config whenever a file actually changed, so the
+# reload/restart steps can be skipped on a run where nothing moved.
+OMARCHY_ROOT_CONFIG_CHANGED=0
+
 install_omarchy_root_config() {
   local source_path="$1"
   local target_path="$2"
@@ -196,6 +202,30 @@ install_omarchy_root_config() {
 
   log_item "$label: installing $target_path"
   run_cmd sudo install -Dm644 "$source_path" "$target_path"
+  OMARCHY_ROOT_CONFIG_CHANGED=1
+}
+
+# Enable only the units that are not already enabled, so a converged machine
+# does no work.
+enable_omarchy_units() {
+  local unit=""
+  local pending=()
+
+  for unit in "$@"; do
+    if systemctl is-enabled --quiet "$unit" 2>/dev/null \
+      && systemctl is-active --quiet "$unit" 2>/dev/null; then
+      continue
+    fi
+    pending+=("$unit")
+  done
+
+  if (( ${#pending[@]} == 0 )); then
+    log_item "Units: all $# already enabled and active"
+    return 0
+  fi
+
+  log_item "Units: enabling ${pending[*]}"
+  run_cmd sudo systemctl enable --now "${pending[@]}"
 }
 
 configure_omarchy_docker_daemon() {
@@ -300,23 +330,183 @@ configure_omarchy_resource_resilience() {
     "$REPO_ROOT/configs/omarchy/sysstat-collect.timer.conf" \
     "/etc/systemd/system/sysstat-collect.timer.d/90-dev-setup-interval.conf" \
     "sysstat collection interval"
+  install_omarchy_root_config \
+    "$REPO_ROOT/configs/omarchy/journald.conf" \
+    "/etc/systemd/journald.conf.d/90-dev-setup.conf" \
+    "Journal size cap"
+  install_omarchy_root_config \
+    "$REPO_ROOT/configs/omarchy/sysctl-vm.conf" \
+    "/etc/sysctl.d/90-dev-setup-vm.conf" \
+    "Virtual memory tuning"
   configure_omarchy_docker_daemon
 
-  log_item "Reloading systemd and enabling resource monitoring"
-  run_cmd sudo systemctl daemon-reload
-  run_cmd sudo systemctl enable --now systemd-oomd.service
-  run_cmd sudo systemctl restart systemd-oomd.service
-  run_cmd sudo systemctl enable --now \
+  enable_omarchy_units \
+    systemd-oomd.service \
     sysstat.service \
     sysstat-collect.timer \
     sysstat-rotate.timer \
     sysstat-summary.timer
-  run_cmd sudo systemctl restart sysstat-collect.timer
+
+  # Reconfiguring a zram device that already carries active swap fails with
+  # EBUSY, so only recover a device that failed to come up. A size change on an
+  # already-running device needs the reboot noted below.
+  if ! systemctl is-active --quiet systemd-zram-setup@zram0.service; then
+    log_item "zram: device inactive, bringing it up"
+    run_cmd sudo systemctl reset-failed systemd-zram-setup@zram0.service
+    run_cmd sudo systemctl restart systemd-zram-setup@zram0.service
+  else
+    log_item "zram: already active"
+  fi
+
+  if (( OMARCHY_ROOT_CONFIG_CHANGED )); then
+    log_item "Reloading systemd and applying changed resource configuration"
+    run_cmd sudo systemctl daemon-reload
+    run_cmd sudo sysctl --system
+    # These daemons read their configuration only at startup, so they restart
+    # only on the run that actually changed a file.
+    run_cmd sudo systemctl restart systemd-oomd.service
+    run_cmd sudo systemctl restart systemd-journald.service
+    run_cmd sudo systemctl restart sysstat-collect.timer
+  else
+    log_item "Resource configuration unchanged, skipping reloads"
+  fi
+
   report_containerd_ttrpc_version
 
-  log_item "NOTE: Reboot to activate the resized zram device and Docker daemon policy"
+  log_item "NOTE: Reboot to activate the Docker daemon policy"
   log_item "NOTE: Docker cgroup-parent applies only to newly created containers"
   log_item "NOTE: Recreate each Compose stack to migrate its containers into system-docker.slice"
+}
+
+configure_omarchy_build_jobs() {
+  local conf="/etc/makepkg.conf"
+  local jobs=""
+
+  log_section "Build Parallelism"
+
+  if [[ ! -f "$conf" ]]; then
+    log_item "makepkg.conf not found, skipping build tuning"
+    return 0
+  fi
+
+  jobs="$(nproc)"
+
+  # Unset MAKEFLAGS means make defaults to -j1, so every AUR package builds on a
+  # single core. Arch ships the line commented out.
+  if grep -qE "^MAKEFLAGS=\"-j${jobs}\"$" "$conf"; then
+    log_item "MAKEFLAGS: already -j${jobs}"
+  else
+    log_item "MAKEFLAGS: building with -j${jobs}"
+    run_cmd sudo sed -i -E \
+      "s|^#?MAKEFLAGS=.*|MAKEFLAGS=\"-j${jobs}\"|" \
+      "$conf"
+  fi
+
+  # ccache returns a cached object when a translation unit hashes to something
+  # already built, which dominates rebuild time for large AUR packages.
+  if ! check_installed ccache; then
+    log_item "ccache: not installed, leaving BUILDENV unchanged"
+  elif grep -qE '^BUILDENV=\(.*[^!]ccache' "$conf"; then
+    log_item "ccache: already enabled in BUILDENV"
+  else
+    log_item "ccache: enabling in BUILDENV"
+    run_cmd sudo sed -i -E \
+      's|^(BUILDENV=\(.*)!ccache(.*\))$|\1ccache\2|' \
+      "$conf"
+  fi
+}
+
+configure_omarchy_storage_maintenance() {
+  local luks_device=""
+
+  log_section "Storage Maintenance"
+
+  # An SSD only learns a block is free when the filesystem says so. Without
+  # TRIM its garbage collector keeps relocating data nothing owns, which costs
+  # write bandwidth and endurance.
+  enable_omarchy_units fstrim.timer
+
+  if check_installed paccache; then
+    enable_omarchy_units paccache.timer
+  else
+    log_item "paccache: pacman-contrib not installed, skipping cache trimming"
+  fi
+
+  # atime turns every read into a metadata write, and on this stack that write
+  # is copy-on-write, duplicated (DUP metadata), compressed and encrypted.
+  if grep -qE '^[^#].*[[:space:]]btrfs[[:space:]].*relatime' /etc/fstab; then
+    log_item "fstab: switching btrfs mounts from relatime to noatime"
+    run_cmd sudo sed -i -E \
+      '/[[:space:]]btrfs[[:space:]]/s|(^|,)relatime|\1noatime|g' \
+      /etc/fstab
+    run_cmd sudo mount -o remount /
+    run_cmd sudo mount -o remount /home
+  else
+    log_item "fstab: btrfs mounts already noatime"
+  fi
+
+  configure_omarchy_luks_performance
+}
+
+configure_omarchy_luks_performance() {
+  local mapper="root"
+  local backing=""
+
+  if ! check_installed cryptsetup; then
+    log_item "LUKS: cryptsetup unavailable, skipping"
+    return 0
+  fi
+
+  if [[ ! -e "/dev/mapper/$mapper" ]]; then
+    log_item "LUKS: /dev/mapper/$mapper not present, skipping"
+    return 0
+  fi
+
+  # dm-crypt hands every request to a worker thread before encrypting it. That
+  # was free when a seek cost 10ms; on PCIe 5.0 NVMe the handoff costs more than
+  # the AES it defers. allow-discards additionally lets TRIM reach the SSD --
+  # it leaks which blocks are in use to someone holding the disk, but never
+  # plaintext.
+  #
+  # --persistent stores these in the LUKS2 header, so they survive reboot with
+  # no bootloader change. LUKS1 headers cannot hold them.
+  if (( ${DRY_RUN:-0} )); then
+    log_item "LUKS: apply discard and workqueue-bypass flags to $mapper"
+    dry_run_cmd sudo cryptsetup refresh --allow-discards \
+      --perf-no_read_workqueue --perf-no_write_workqueue --persistent "$mapper"
+    return 0
+  fi
+
+  # Second line of the raw dependency list is the device backing the mapping.
+  backing="$(lsblk -nrso NAME "/dev/mapper/$mapper" 2>/dev/null | sed -n '2p')"
+  if [[ -z "$backing" ]]; then
+    log_item "LUKS: could not resolve backing device, skipping"
+    return 0
+  fi
+
+  if ! sudo cryptsetup luksDump "/dev/$backing" 2>/dev/null | grep -qE '^Version:[[:space:]]*2'; then
+    log_item "LUKS: /dev/$backing is not LUKS2, skipping persistent flags"
+    return 0
+  fi
+
+  # The live dm target lists its active feature flags, so a converged machine
+  # skips the refresh entirely.
+  local table=""
+  table="$(sudo dmsetup table "$mapper" 2>/dev/null)"
+  if [[ "$table" == *allow_discards* ]] \
+    && [[ "$table" == *no_read_workqueue* ]] \
+    && [[ "$table" == *no_write_workqueue* ]]; then
+    log_item "LUKS: discard and workqueue-bypass flags already active"
+    return 0
+  fi
+
+  log_item "LUKS: applying discard and workqueue-bypass flags to $mapper"
+  run_cmd sudo cryptsetup refresh \
+    --allow-discards \
+    --perf-no_read_workqueue \
+    --perf-no_write_workqueue \
+    --persistent \
+    "$mapper"
 }
 
 set_default_browser_brave() {
@@ -412,6 +602,8 @@ setup_host_machine_state() {
   configure_keyboard
   configure_legacy_tiocsti
   configure_omarchy_resource_resilience
+  configure_omarchy_build_jobs
+  configure_omarchy_storage_maintenance
   set_default_browser_brave
   apply_host_configs
   configure_voxtype
