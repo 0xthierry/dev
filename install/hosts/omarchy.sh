@@ -183,7 +183,11 @@ configure_legacy_tiocsti() {
     log_item "Sysctl config: $sysctl_conf"
   fi
 
-  run_cmd sudo sysctl -w "${sysctl_name}=1"
+  if [[ "$(cat "$sysctl_proc" 2>/dev/null)" == "1" ]]; then
+    log_item "${sysctl_name}: already active"
+  else
+    run_cmd sudo sysctl -w "${sysctl_name}=1"
+  fi
 }
 
 # Set by install_omarchy_root_config whenever a file actually changed, so the
@@ -362,7 +366,9 @@ configure_omarchy_resource_resilience() {
   if (( OMARCHY_ROOT_CONFIG_CHANGED )); then
     log_item "Reloading systemd and applying changed resource configuration"
     run_cmd sudo systemctl daemon-reload
-    run_cmd sudo sysctl --system
+    # --system reapplies every drop-in on the machine and echoes each one; -q
+    # keeps the run readable without changing what is applied.
+    run_cmd sudo sysctl -q --system
     # These daemons read their configuration only at startup, so they restart
     # only on the run that actually changed a file.
     run_cmd sudo systemctl restart systemd-oomd.service
@@ -460,8 +466,10 @@ configure_omarchy_storage_maintenance() {
   # is copy-on-write, duplicated (DUP metadata), compressed and encrypted.
   if grep -qE '^[^#].*[[:space:]]btrfs[[:space:]].*relatime' /etc/fstab; then
     log_item "fstab: switching btrfs mounts from relatime to noatime"
+    # Delimiter must not be '|' -- an alternation in the pattern would split the
+    # s/// expression. Word boundaries keep this off other options.
     run_cmd sudo sed -i -E \
-      '/[[:space:]]btrfs[[:space:]]/s|(^|,)relatime|\1noatime|g' \
+      '/[[:space:]]btrfs[[:space:]]/s/\brelatime\b/noatime/g' \
       /etc/fstab
     run_cmd sudo mount -o remount /
     run_cmd sudo mount -o remount /home
@@ -553,15 +561,31 @@ configure_keyboard() {
     return 0
   fi
 
-  log_item "Setting console keymap to us-acentos"
-  run_cmd sudo localectl set-keymap us-acentos
+  # localectl rewrites vconsole.conf and the X11 keymap unconditionally, so
+  # compare against the current values first.
+  if [[ "$(localectl status 2>/dev/null | awk -F': ' '/VC Keymap/{print $2}')" == "us-acentos" ]]; then
+    log_item "Console keymap: already us-acentos"
+  else
+    log_item "Setting console keymap to us-acentos"
+    run_cmd sudo localectl set-keymap us-acentos
+  fi
 
-  log_item "Setting X11 fallback keymap to us / pc105 / intl"
-  run_cmd sudo localectl set-x11-keymap us pc105 intl terminate:ctrl_alt_bksp
+  if [[ "$(localectl status 2>/dev/null | awk -F': ' '/X11 Variant/{print $2}')" == "intl" ]] \
+    && [[ "$(localectl status 2>/dev/null | awk -F': ' '/X11 Layout/{print $2}')" == "us" ]]; then
+    log_item "X11 keymap: already us / pc105 / intl"
+  else
+    log_item "Setting X11 fallback keymap to us / pc105 / intl"
+    run_cmd sudo localectl set-x11-keymap us pc105 intl terminate:ctrl_alt_bksp
+  fi
 
   if check_installed setxkbmap && [[ -n "${DISPLAY:-}" ]]; then
-    log_item "Setting current Xwayland keymap to us / pc105 / intl"
-    run_cmd setxkbmap -layout us -model pc105 -variant intl -option compose:caps
+    if [[ "$(setxkbmap -query 2>/dev/null | awk '/^layout:/{print $2}')" == "us" ]] \
+      && [[ "$(setxkbmap -query 2>/dev/null | awk '/^variant:/{print $2}')" == "intl" ]]; then
+      log_item "Xwayland keymap: already us / pc105 / intl"
+    else
+      log_item "Setting current Xwayland keymap to us / pc105 / intl"
+      run_cmd setxkbmap -layout us -model pc105 -variant intl -option compose:caps
+    fi
   fi
 }
 

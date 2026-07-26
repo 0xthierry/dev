@@ -19,8 +19,13 @@ install_docker() {
     run_cmd sudo pacman -S --needed --noconfirm docker
   fi
 
-  log_item "Enabling docker service..."
-  run_cmd sudo systemctl enable --now docker
+  if systemctl is-enabled --quiet docker 2>/dev/null \
+    && systemctl is-active --quiet docker 2>/dev/null; then
+    log_item "Docker service: already enabled and running"
+  else
+    log_item "Enabling docker service..."
+    run_cmd sudo systemctl enable --now docker
+  fi
 
   if groups "$USER" | grep -q '\bdocker\b'; then
     log_item "User $USER: already in docker group"
