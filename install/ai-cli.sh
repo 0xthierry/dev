@@ -8,12 +8,50 @@ AMQ_SOURCE_URL="https://github.com/avivsinai/agent-message-queue.git"
 AMQ_VERSION="v0.46.0"
 AMQ_COMMIT="b2645f5b4d379d897239cef3e10c0f4a3a26f01e"
 
+# True when an already-installed binary reports the pinned version. Each vendor
+# prints a different shape ("plannotator 0.24.2", "2.1.219 (Claude Code)",
+# "0.9.3"), so match the first semver-looking token and compare with any
+# leading "v" stripped from both sides.
+installed_binary_is_pinned() {
+  local bin_name="$1"
+  local expected="$2"
+  local bin_path=""
+  local actual=""
+
+  bin_path="$(command -v "$bin_name" 2>/dev/null)" || return 1
+  [[ -x "$bin_path" ]] || return 1
+
+  actual="$(timeout 15 "$bin_path" --version 2>/dev/null \
+    | head -1 \
+    | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[^[:space:]]*' \
+    | head -1)"
+  [[ -n "$actual" ]] || return 1
+
+  [[ "${actual#v}" == "${expected#v}" ]]
+}
+
+# Version recorded in the globally installed package, or empty if absent.
+# Reading package.json directly avoids `npm ls`, which is orders of magnitude
+# slower than the `npm root -g` lookup it needs anyway.
+npm_global_installed_version() {
+  local package_name="$1"
+  local global_root=""
+  local manifest=""
+
+  global_root="$(npm root -g 2>/dev/null)" || return 0
+  manifest="$global_root/$package_name/package.json"
+  [[ -f "$manifest" ]] || return 0
+
+  sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$manifest" | head -1
+}
+
 install_npm_global_cli() {
   local name="$1"
   local package_name="$2"
   local version="$3"
   local npm_bin=""
   local mise_bin=""
+  local installed=""
   local -a install_cmd=()
 
   if npm_bin="$(command -v npm 2>/dev/null)"; then
@@ -25,7 +63,17 @@ install_npm_global_cli() {
     return 1
   fi
 
-  log_item "Installing $name @ $version..."
+  installed="$(npm_global_installed_version "$package_name")"
+  if [[ -n "$installed" && "$installed" == "$version" ]]; then
+    log_item "$name: already at $version"
+    return 0
+  fi
+
+  if [[ -n "$installed" ]]; then
+    log_item "Installing $name @ $version (replacing $installed)..."
+  else
+    log_item "Installing $name @ $version..."
+  fi
   run_cmd "${install_cmd[@]}"
 }
 
@@ -90,6 +138,11 @@ install_pi_coding_agent_cli() {
 
 install_claude_code_binary() {
   local version="$1"
+  if installed_binary_is_pinned "claude" "$version"; then
+    log_item "Claude Code CLI: already at $version"
+    return 0
+  fi
+
   log_item "Installing Claude Code CLI @ $version..."
   # shellcheck disable=SC2016  # $0 is intentionally expanded by the inner bash, not the outer one
   run_cmd bash -c 'curl -fsSL https://claude.ai/install.sh | bash -s -- "$0"' "$version"
@@ -97,6 +150,11 @@ install_claude_code_binary() {
 
 install_plannotator_binary() {
   local version="$1"
+  if installed_binary_is_pinned "plannotator" "$version"; then
+    log_item "Plannotator: already at $version"
+    return 0
+  fi
+
   log_item "Installing Plannotator @ $version..."
   # Install only the pinned binary; repo-owned agent config supplies hooks and skills.
   # shellcheck disable=SC2016  # $0 is intentionally expanded by the inner bash, not the outer one
@@ -105,6 +163,11 @@ install_plannotator_binary() {
 
 install_agent_slack_binary() {
   local version="$1"
+  if installed_binary_is_pinned "agent-slack" "$version"; then
+    log_item "Agent Slack: already at $version"
+    return 0
+  fi
+
   log_item "Installing Agent Slack @ $version..."
   run_cmd env "AGENT_SLACK_VERSION=$version" \
     bash -c 'curl -fsSL https://raw.githubusercontent.com/stablyai/agent-slack/main/install.sh | sh'
@@ -115,6 +178,11 @@ install_notion_cli_binary() {
   local install_dir="$HOME/.local/bin"
 
   ensure_dir "$install_dir"
+  if installed_binary_is_pinned "ntn" "$version"; then
+    log_item "Notion CLI: already at $version"
+    return 0
+  fi
+
   log_item "Installing Notion CLI @ $version to $install_dir..."
   run_cmd env "NTN_VERSION=$version" "NTN_INSTALL_DIR=$install_dir" \
     bash -c 'curl -fsSL https://ntn.dev | bash'
@@ -322,6 +390,14 @@ install_amq_from_source() {
   local mise_bin=""
   local resolved_commit=""
   local -a go_cmd=()
+
+  # The pinned version is baked in via -ldflags, so a matching binary is proof
+  # the pinned commit was already built. Skipping avoids a git fetch and a full
+  # Go build on every run.
+  if installed_binary_is_pinned "amq" "$AMQ_VERSION"; then
+    log_item "AMQ: already at $AMQ_VERSION"
+    return 0
+  fi
 
   ensure_dir "$install_dir"
   ensure_dir "$(dirname "$source_dir")"
