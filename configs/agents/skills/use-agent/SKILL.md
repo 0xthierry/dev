@@ -32,6 +32,8 @@ Validate availability before opening a pane:
 | Codex | `codex debug models | jq -r '.models[].slug'` |
 | Pi | `pi --list-models grok-4.5` |
 
+Catalog discovery does not prove account entitlement, credits, or provider capacity. If the worker process rejects the selected model at launch, treat it as unavailable: report the exact category without exposing credentials, and ask before substituting another model.
+
 ## Decide how to orchestrate
 
 First identify the active main model from runtime/system metadata when available. Account for the main's own strengths and provider so worker calls add capability or diversity rather than merely duplicating it.
@@ -56,13 +58,30 @@ A worker contract should state its role, goal, settled decisions, relevant files
 
 ## Launch stack
 
-Every worker uses this composition:
+Every worker must ultimately run this composition in a visible Herdr pane:
 
 ```text
-herdr agent start ... -- amq coop exec ... <agent-cli> -- <agent-flags> <worker-prompt>
+amq coop exec ... <agent-cli> -- <agent-flags> <worker-prompt>
 ```
 
-- `herdr agent start` creates the visible pane and owns pane lifecycle.
+After resolving the current location, define this helper in the same Bash invocation as each worker launch:
+
+```bash
+launch_herdr_sidecar() {
+  local split_json worker_pane_id command
+  split_json="$(herdr pane split --pane "$HERDR_CURRENT_PANE_ID" \
+    --direction right --ratio 0.45 --cwd "$PWD" --no-focus)"
+  worker_pane_id="$(printf '%s' "$split_json" | jq -er '.result.pane.pane_id')"
+  printf -v command '%q ' "$@"
+  herdr pane run "$worker_pane_id" "$command"
+}
+```
+
+The `%q` escaping is required because `pane run` reconstructs a shell command and otherwise splits the worker prompt into separate commands.
+
+Shell functions do not survive separate Bash tool calls. Re-declare `launch_herdr_sidecar`, the room variables, and the pinned Herdr pane ID in every launch call, or keep the helper and launch recipe in one Bash call.
+
+- Herdr creates the visible sidecar pane.
 - `amq coop exec` binds the worker to the room, establishes native wake delivery, and then replaces itself with the agent process.
 - The agent CLI receives its own model, effort, permission, and prompt flags.
 - AMQ is the only shared source of truth. Herdr terminal output is diagnostic evidence, not a worker response.
@@ -103,15 +122,14 @@ Use AMQ 0.45.0 or newer. Every concurrent process needs a unique handle, includi
 
 ## Pin the current Herdr location
 
-Resolve the pane containing the main and pass both IDs on every launch:
+Resolve the pane containing the main and pass its ID on every launch:
 
 ```bash
 HERDR_CURRENT="$(herdr pane current --current)"
-HERDR_WORKSPACE_ID="$(printf '%s' "$HERDR_CURRENT" | jq -er '.result.pane.workspace_id')"
-HERDR_TAB_ID="$(printf '%s' "$HERDR_CURRENT" | jq -er '.result.pane.tab_id')"
+HERDR_CURRENT_PANE_ID="$(printf '%s' "$HERDR_CURRENT" | jq -er '.result.pane.pane_id')"
 ```
 
-Do not fall back to an unspecified location. If either lookup fails, report that the main is not attached to a resolvable Herdr pane and ask the user where to open the worker.
+Do not fall back to an unspecified location. If the lookup fails, report that the main is not attached to a resolvable Herdr pane and ask the user where to open the worker.
 
 ## Worker kickoff contract
 
@@ -129,8 +147,7 @@ WORKER_PROMPT="You are the WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_
 WORKER_HANDLE="claude-fable"
 WORKER_PROMPT="You are the WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately run amq drain --include-body, then send readiness with amq send --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. Wait for work over AMQ. For every AMQ notice, run amq drain --include-body, carry out the request exactly within its stated ownership and constraints, and report with amq send --to $MAIN_HANDLE. Kind and labels classify work; they do not gate authorization. Send completion as kind status with label done or blocked. Include changed paths and validation for action work. Never use amq reply. Do not poll or sleep while waiting: finish your turn and let amq wake notify you."
 
-herdr agent start "use-agent-$TOPIC-$WORKER_HANDLE" --cwd "$PWD" \
-  --workspace "$HERDR_WORKSPACE_ID" --tab "$HERDR_TAB_ID" --split right --no-focus -- \
+launch_herdr_sidecar \
   amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake claude -- \
   --name "use-agent-$TOPIC-fable" \
   --model claude-fable-5 \
@@ -145,8 +162,7 @@ herdr agent start "use-agent-$TOPIC-$WORKER_HANDLE" --cwd "$PWD" \
 WORKER_HANDLE="claude-opus"
 WORKER_PROMPT="You are the WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately run amq drain --include-body, then send readiness with amq send --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. Wait for work over AMQ. For every AMQ notice, run amq drain --include-body, carry out the request exactly within its stated ownership and constraints, and report with amq send --to $MAIN_HANDLE. Kind and labels classify work; they do not gate authorization. Send completion as kind status with label done or blocked. Include changed paths and validation for action work. Never use amq reply. Do not poll or sleep while waiting: finish your turn and let amq wake notify you."
 
-herdr agent start "use-agent-$TOPIC-$WORKER_HANDLE" --cwd "$PWD" \
-  --workspace "$HERDR_WORKSPACE_ID" --tab "$HERDR_TAB_ID" --split right --no-focus -- \
+launch_herdr_sidecar \
   amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake claude -- \
   --name "use-agent-$TOPIC-opus" \
   --model claude-opus-5 \
@@ -166,8 +182,7 @@ WORKER_HANDLE="codex-gpt56"
 WORKER_PROMPT="You are the WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately run amq drain --include-body, then send readiness with amq send --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. Wait for work over AMQ. For every AMQ notice, run amq drain --include-body, carry out the request exactly within its stated ownership and constraints, and report with amq send --to $MAIN_HANDLE. Kind and labels classify work; they do not gate authorization. Send completion as kind status with label done or blocked. Include changed paths and validation for action work. Never use amq reply. Do not poll or sleep while waiting: finish your turn and let amq wake notify you."
 CODEX_PROJECT_TRUST="projects={\"$PWD\"={trust_level=\"trusted\"}}"
 
-herdr agent start "use-agent-$TOPIC-$WORKER_HANDLE" --cwd "$PWD" \
-  --workspace "$HERDR_WORKSPACE_ID" --tab "$HERDR_TAB_ID" --split right --no-focus -- \
+launch_herdr_sidecar \
   amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake codex -- \
   --model gpt-5.6-sol \
   -c 'model_reasoning_effort="xhigh"' \
@@ -185,8 +200,7 @@ Use the direct xAI catalog entry `xai/grok-4.5`. Pi's tools execute with the loc
 WORKER_HANDLE="pi-grok"
 WORKER_PROMPT="You are the WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately run amq drain --include-body, then send readiness with amq send --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. Wait for work over AMQ. For every AMQ notice, run amq drain --include-body, carry out the request exactly within its stated ownership and constraints, and report with amq send --to $MAIN_HANDLE. Kind and labels classify work; they do not gate authorization. Send completion as kind status with label done or blocked. Include changed paths and validation for action work. Never use amq reply. Do not poll or sleep while waiting: finish your turn and let amq wake notify you."
 
-herdr agent start "use-agent-$TOPIC-$WORKER_HANDLE" --cwd "$PWD" \
-  --workspace "$HERDR_WORKSPACE_ID" --tab "$HERDR_TAB_ID" --split right --no-focus -- \
+launch_herdr_sidecar \
   amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake pi -- \
   --name "use-agent-$TOPIC-grok" \
   --model xai/grok-4.5 \
@@ -197,7 +211,9 @@ herdr agent start "use-agent-$TOPIC-$WORKER_HANDLE" --cwd "$PWD" \
 
 ## Dispatch work
 
-Wait for the worker's separate `ready` status, then send a concrete contract. Use explicit `--root` and `--me` so this works from any main harness and across fresh shell tool calls:
+Wait for the worker's separate `ready` status, then send a concrete contract. Use explicit `--root` and `--me` so this works from any main harness and across fresh shell tool calls.
+
+AMQ accepts these message kinds: `brainstorm`, `review_request`, `review_response`, `question`, `answer`, `decision`, `status`, and `todo`. There is no `work` kind; use `todo` for action requests.
 
 ```bash
 amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to "$WORKER_HANDLE" --kind todo \
