@@ -279,5 +279,6 @@ function createFakeSessionManager() {
     getLeafId: () => undefined,
     getSessionFile: () => undefined,
     getLabel: () => undefined,
+    getSessionId: () => "fake-session-id",
   };
 }

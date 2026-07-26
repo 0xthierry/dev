@@ -1,119 +1,175 @@
 import { describe, expect, test } from "bun:test";
-import type { Api, Model } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import { injectCodexCompactionIntoPayload, repairOrphanCodexToolOutputs } from "./payload";
-import { CODEX_COMPACTION_DETAILS_VERSION, type CodexCompactionDetails } from "./types";
-
-const model = {
-  id: "gpt-5.4-mini",
-  provider: "openai-codex",
-  api: "openai-codex-responses",
-  name: "GPT-5.4 mini",
-  baseUrl: "https://chatgpt.com/backend-api",
-  reasoning: true,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  contextWindow: 128000,
-  maxTokens: 32000,
-} as Model<Api>;
-
-function compactionEntry(): SessionEntry {
-  const details: CodexCompactionDetails = {
-    codexCompaction: {
-      version: CODEX_COMPACTION_DETAILS_VERSION,
-      sentinel: "pi-codex-compaction:test",
-      provider: "openai-codex",
-      api: "openai-codex-responses",
-      modelId: "gpt-5.4-mini",
-      item: { type: "compaction", encrypted_content: "enc", id: "cmp_1" },
-    },
-  };
-
-  return {
-    type: "compaction",
-    id: "cmp-entry",
-    parentId: "parent",
-    timestamp: new Date(0).toISOString(),
-    summary: "placeholder pi-codex-compaction:test",
-    firstKeptEntryId: "kept",
-    tokensBefore: 123,
-    details,
-  };
-}
+import { hashAccountId } from "./binding";
+import { repairOrphanCodexToolOutputs } from "./payload";
+import { SEAM_STRIKE_THRESHOLD } from "./types";
 
 describe("repairOrphanCodexToolOutputs", () => {
-  test("inserts a recovered function call before an orphan output", () => {
-    // Arrange
+  test("does not repair when artifact injection did not occur (afterIndex default whole payload still requires no strike lock)", () => {
+    // Arrange — call with afterIndex at end means nothing after boundary
     const payload: { input: Record<string, unknown>[] } = {
-      input: [{ type: "function_call_output", call_id: "call_orphan", output: "late output" }],
+      input: [{ type: "function_call_output", call_id: "call_orphan", output: "late" }],
     };
-    const branch: SessionEntry[] = [
-      {
-        type: "message",
-        id: "tool-result",
-        parentId: "cmp-entry",
-        timestamp: new Date(1).toISOString(),
-        message: {
-          role: "toolResult",
-          toolCallId: "call_orphan|fc_orphan",
-          toolName: "bash",
-          content: [{ type: "text", text: "late output" }],
-          isError: false,
-          timestamp: 1,
-        },
-      } as SessionEntry,
-    ];
 
     // Act
-    const repaired = repairOrphanCodexToolOutputs(payload, branch);
+    const repaired = repairOrphanCodexToolOutputs(payload, [toolResultEntry()], 0);
 
-    // Assert
-    expect(repaired).toBe(true);
-    expect(payload.input).toEqual([
-      { type: "function_call", id: "fc_orphan", call_id: "call_orphan", name: "bash", arguments: "{}" },
-      { type: "function_call_output", call_id: "call_orphan", output: "late output" },
-    ]);
+    // Assert — boundary at 0, orphan at 0 is not after boundary
+    expect(repaired).toBe(false);
+    expect(payload.input).toHaveLength(1);
   });
-});
 
-describe("injectCodexCompactionIntoPayload", () => {
-  test("replaces the sentinel summary item with the Codex compaction item", () => {
+  test("recovers real assistant toolCall arguments after the inserted boundary", () => {
     // Arrange
     const payload: { input: Record<string, unknown>[] } = {
       input: [
-        { role: "user", content: [{ type: "input_text", text: "before pi-codex-compaction:test after" }] },
-        { role: "user", content: "tail" },
+        { type: "compaction", encrypted_content: "enc" },
+        { type: "function_call_output", call_id: "call_1", output: "ok" },
+      ],
+    };
+    const branch: SessionEntry[] = [
+      v2Boundary(),
+      {
+        type: "message",
+        id: "assistant",
+        parentId: "cmp",
+        timestamp: new Date(0).toISOString(),
+        message: {
+          role: "assistant",
+          api: "openai-codex-responses",
+          provider: "openai-codex",
+          model: "gpt-5.6-sol",
+          content: [{ type: "toolCall", id: "call_1|fc_1", name: "read", arguments: { path: "a.ts" } }],
+          usage: zeroUsage(),
+          stopReason: "toolUse",
+          timestamp: 1,
+        },
+      } as SessionEntry,
+      toolResultEntry(),
+    ];
+
+    // Act
+    const repaired = repairOrphanCodexToolOutputs(payload, branch, 0);
+
+    // Assert
+    expect(repaired).toBe(true);
+    expect(payload.input[1]).toEqual({
+      type: "function_call",
+      id: "fc_1",
+      call_id: "call_1",
+      name: "read",
+      arguments: JSON.stringify({ path: "a.ts" }),
+    });
+  });
+
+  test("drops unknown orphan output rather than fabricating an unnamed call", () => {
+    // Arrange
+    const payload: { input: Record<string, unknown>[] } = {
+      input: [
+        { type: "compaction", encrypted_content: "enc" },
+        { type: "function_call_output", call_id: "call_unknown", output: "ghost" },
       ],
     };
 
     // Act
-    const result = injectCodexCompactionIntoPayload(payload, model, [compactionEntry()]);
+    const repaired = repairOrphanCodexToolOutputs(payload, [v2Boundary()], 0);
 
     // Assert
-    expect(result).toEqual({ injected: true, sentinel: "pi-codex-compaction:test" });
-    expect(payload.input[0]).toEqual({ type: "compaction", encrypted_content: "enc", id: "cmp_1" });
-    expect(payload.input[1]).toEqual({ role: "user", content: "tail" });
+    expect(repaired).toBe(true);
+    expect(payload.input).toEqual([{ type: "compaction", encrypted_content: "enc" }]);
   });
 
-  test("does not inject when the stored item was invalidated", () => {
+  test("skips repair after seam strike threshold", () => {
     // Arrange
+    const strikes = Array.from({ length: SEAM_STRIKE_THRESHOLD }, (_, index) => seamError(index));
+    const branch: SessionEntry[] = [v2Boundary(), ...strikes, toolResultEntry()];
     const payload: { input: Record<string, unknown>[] } = {
-      input: [{ role: "user", content: "pi-codex-compaction:test" }],
-    };
-    const invalidation: SessionEntry = {
-      type: "custom",
-      id: "invalidate",
-      parentId: "cmp-entry",
-      timestamp: new Date(1).toISOString(),
-      customType: "codex-compaction-invalidated",
-      data: { sentinel: "pi-codex-compaction:test", status: 400 },
+      input: [
+        { type: "compaction", encrypted_content: "enc" },
+        { type: "function_call_output", call_id: "call_orphan", output: "late" },
+      ],
     };
 
     // Act
-    const result = injectCodexCompactionIntoPayload(payload, model, [compactionEntry(), invalidation]);
+    const repaired = repairOrphanCodexToolOutputs(payload, branch, 0);
 
     // Assert
-    expect(result).toEqual({ injected: false, reason: "invalidated" });
-    expect(payload.input[0]).toEqual({ role: "user", content: "pi-codex-compaction:test" });
+    expect(repaired).toBe(false);
   });
 });
+
+function toolResultEntry(): SessionEntry {
+  return {
+    type: "message",
+    id: "tool-result",
+    parentId: "cmp",
+    timestamp: new Date(1).toISOString(),
+    message: {
+      role: "toolResult",
+      toolCallId: "call_orphan|fc_orphan",
+      toolName: "bash",
+      content: [{ type: "text", text: "late" }],
+      isError: false,
+      timestamp: 1,
+    },
+  } as SessionEntry;
+}
+
+function v2Boundary(): SessionEntry {
+  return {
+    type: "compaction",
+    id: "cmp",
+    parentId: null,
+    timestamp: new Date(0).toISOString(),
+    summary: "summary",
+    firstKeptEntryId: "kept",
+    tokensBefore: 1,
+    details: {
+      codexCompaction: {
+        version: 2,
+        binding: {
+          provider: "openai-codex",
+          api: "openai-codex-responses",
+          modelId: "gpt-5.6-sol",
+          endpoint: "https://chatgpt.com/backend-api/codex/responses",
+          accountHash: hashAccountId("acct"),
+        },
+        userPrefix: [],
+        artifact: [{ type: "compaction", encrypted_content: "enc" }],
+        firstKeptEntryId: "kept",
+        tokensBefore: 1,
+      },
+    },
+  } as SessionEntry;
+}
+
+function seamError(index: number): SessionEntry {
+  return {
+    type: "message",
+    id: `seam-${index}`,
+    parentId: "cmp",
+    timestamp: new Date(index + 1).toISOString(),
+    message: {
+      role: "assistant",
+      api: "openai-codex-responses",
+      provider: "openai-codex",
+      model: "gpt-5.6-sol",
+      content: [],
+      usage: zeroUsage(),
+      stopReason: "error",
+      timestamp: index + 1,
+      errorMessage: "invalid_request_error No tool call found for function call output",
+    },
+  } as SessionEntry;
+}
+
+function zeroUsage() {
+  return {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 0,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  };
+}
