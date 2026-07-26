@@ -330,6 +330,7 @@ configure_omarchy_resource_resilience() {
     "$REPO_ROOT/configs/omarchy/sysstat-collect.timer.conf" \
     "/etc/systemd/system/sysstat-collect.timer.d/90-dev-setup-interval.conf" \
     "sysstat collection interval"
+  configure_omarchy_sysstat_activities
   install_omarchy_root_config \
     "$REPO_ROOT/configs/omarchy/journald.conf" \
     "/etc/systemd/journald.conf.d/90-dev-setup.conf" \
@@ -414,6 +415,29 @@ configure_omarchy_build_jobs() {
       's|^(BUILDENV=\(.*)!ccache(.*\))$|\1ccache\2|' \
       "$conf"
   fi
+}
+
+configure_omarchy_sysstat_activities() {
+  local conf="/etc/conf.d/sysstat"
+
+  if [[ ! -f "$conf" ]]; then
+    log_item "sysstat: $conf not found, skipping activity set"
+    return 0
+  fi
+
+  # sadc's default activity set excludes per-device disk statistics, so `sar -d`
+  # reports "Requested activities not available" -- the one subsystem worth
+  # recording on an encrypted CoW filesystem. sa1 sources this file on every
+  # invocation, and sadc -F resets the current day's file when the set changes.
+  if grep -qE '^SADC_OPTIONS="-S DISK"$' "$conf"; then
+    log_item "sysstat: disk activity collection already enabled"
+    return 0
+  fi
+
+  log_item "sysstat: enabling disk activity collection (sar -d)"
+  run_cmd sudo sed -i -E \
+    's|^SADC_OPTIONS=.*|SADC_OPTIONS="-S DISK"|' \
+    "$conf"
 }
 
 configure_omarchy_storage_maintenance() {
