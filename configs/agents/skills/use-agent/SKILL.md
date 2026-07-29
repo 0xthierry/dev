@@ -101,13 +101,30 @@ Every worker must ultimately run this composition in a visible Herdr pane:
 amq coop exec ... <agent-cli> -- <agent-flags> <worker-prompt>
 ```
 
-After resolving the current location, define this helper in the same shell invocation as each worker launch:
+After resolving the current location, define these helpers in the same shell invocation as each worker launch. The binding guard is fail-closed: a main that inherited `AM_ROOT` may operate only on that exact room.
 
 ```bash
+require_preserved_main_amq_binding() {
+  local candidate_root="$1"
+
+  if [[ -z "$candidate_root" ]]; then
+    printf 'error: ROOM_ROOT is required\n' >&2
+    return 2
+  fi
+  if [[ -n "${AM_ROOT:-}" && "$candidate_root" != "$AM_ROOT" ]]; then
+    printf 'error: refusing AMQ room override: inherited AM_ROOT=%s, ROOM_ROOT=%s\n' \
+      "$AM_ROOT" "$candidate_root" >&2
+    printf 'error: use ROOM_ROOT="${AM_ROOT}"; the main notifier watches only that exact room\n' >&2
+    return 2
+  fi
+}
+
 launch_herdr_sidecar() {
   local split_target="$1" split_direction="$2"
   local split_json worker_pane_id process_json command
   shift 2
+
+  require_preserved_main_amq_binding "${ROOM_ROOT:-}" || return
 
   case "$split_direction" in
     right | down) ;;
@@ -163,9 +180,11 @@ Do not use `herdr agent prompt`, `herdr pane send-*`, a Herdr injector, or an ex
 
 The main can be Claude, Pi, or Codex. Preserve an existing AMQ binding when the main already has one; otherwise use a deterministic room and the current harness name as its handle.
 
+**Hard room invariant:** if `AM_ROOT` is non-empty, it is authoritative for the lifetime of that main session. Never replace it with `.agent-mail/use-agent-$TOPIC`, another session's printed path, or a custom room. Pi's `amq-notify` watches only its exact bound room; it does not discover sibling rooms created later. Setting `AM_ROOT` only on an `amq` command also does not retarget the already-running notifier. A worker launched into any other room can send successfully while the main receives nothing automatically.
+
 Main-side notification differs by harness:
 
-- **Pi main:** the installed `amq-notify` extension watches its mailbox and injects replies automatically.
+- **Pi main:** the installed `amq-notify` extension watches its exact `AM_ROOT` mailbox and injects replies automatically.
 - **Claude or Codex main:** there is no equivalent notify integration. The main must check AMQ at natural orchestration checkpoints or run one bounded monitor while waiting. Never assume replies will appear automatically.
 
 Workers are different: every worker launched below uses `amq coop exec`, so native wake delivery notifies the worker regardless of whether it runs Claude, Pi, or Codex.
@@ -175,8 +194,16 @@ Set `CURRENT_HARNESS` to the harness actually running this skill:
 ```bash
 TOPIC="<short-kebab-topic>"
 CURRENT_HARNESS="<claude|pi|codex>"
+INHERITED_AM_ROOT="${AM_ROOT:-}"
 MAIN_HANDLE="${AM_ME:-$CURRENT_HARNESS}"
-ROOM_ROOT="${AM_ROOT:-$PWD/.agent-mail/use-agent-$TOPIC}"
+ROOM_ROOT="${INHERITED_AM_ROOT:-$PWD/.agent-mail/use-agent-$TOPIC}"
+if [[ -n "$INHERITED_AM_ROOT" && "$ROOM_ROOT" != "$INHERITED_AM_ROOT" ]]; then
+  printf 'error: refusing to replace inherited AM_ROOT=%s with ROOM_ROOT=%s\n' \
+    "$INHERITED_AM_ROOT" "$ROOM_ROOT" >&2
+  exit 1
+fi
+# Prevent an accidental same-shell reassignment after the guard.
+readonly MAIN_HANDLE ROOM_ROOT
 # Before running this block, set every count from the runnable frontier.
 # Zero omits a model; N has no fixed skill-level maximum. No defaults are
 # provided because the skill must not bias fleet composition.
@@ -224,7 +251,7 @@ printf 'ROOM_ROOT=%s\nMAIN_HANDLE=%s\nWORKER_HANDLES=%s\n' \
   "$ROOM_ROOT" "$MAIN_HANDLE" "$WORKER_HANDLES"
 ```
 
-Shell state from one tool call may not survive the next. Re-declare `TOPIC`, `MAIN_HANDLE`, `ROOM_ROOT`, and the helper functions, or use their printed literal values in every later launch and AMQ command. Do not assume an `export` in an earlier tool call persisted.
+Shell state from one tool call may not survive the next. Re-declare `TOPIC`, `MAIN_HANDLE`, `ROOM_ROOT`, and both helper functions in every later launch or main-side AMQ call. When the current process exposes `AM_ROOT`, always derive `ROOM_ROOT` from it again and run `require_preserved_main_amq_binding`; never use a topic-derived or copied literal instead. Printed literal room values are acceptable only for a main whose `AM_ROOT` is unset. Do not assume an `export` in an earlier tool call persisted.
 
 Use the pinned AMQ 0.46.0 unless a newer version has passed the real Herdr lifecycle smoke test. `amq init --root ... --force` refreshes the room's configured handle list and creates missing mailboxes without consuming queued messages. Every live process needs a unique handle, including replicas of the same model and a worker using the same harness as the main. Choose any unused numbered handle; never launch the whole configured pool merely because it exists.
 
@@ -325,11 +352,12 @@ To launch replicas, rerun only the needed recipe with another unused handle and 
 
 ## Dispatch work
 
-Wait for the worker's separate `ready` status, then send a concrete contract. Use explicit `--root` and `--me` on main-side commands so this works from any main harness and across fresh shell tool calls. Workers launched by `coop exec` should use bare AMQ commands: it already sets their exact `AM_ROOT`, `AM_ME`, `AM_BASE_ROOT`, and `AM_SESSION` context.
+Wait for the worker's separate `ready` status, then send a concrete contract. Before every main-side `init`, launch, `send`, `drain`, `monitor`, `doctor`, or retirement command, run `require_preserved_main_amq_binding "$ROOM_ROOT"`. Use explicit `--root` and `--me` on main-side commands so this works from any main harness and across fresh shell tool calls. Workers launched by `coop exec` should use bare AMQ commands: it already sets their exact `AM_ROOT`, `AM_ME`, `AM_BASE_ROOT`, and `AM_SESSION` context.
 
 AMQ accepts these message kinds: `brainstorm`, `review_request`, `review_response`, `question`, `answer`, `decision`, `status`, and `todo`. There is no `work` kind; use `todo` for action requests.
 
 ```bash
+require_preserved_main_amq_binding "$ROOM_ROOT" || exit 1
 amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to "$WORKER_HANDLE" --kind todo \
   --subject "<short task>" \
   --body $'Task ID: <lane-id>\nRole: <architect|implementer|debugger|tester|reviewer>\nGoal: <one bounded outcome>\nDependencies: <already-settled prerequisites>\nDecisions: <current canonical decisions>\nContext: <evidence and relevant artifact paths>\nOwnership: <exact files/modules it may change, or read-only>\nConstraints: <what must not change>\nSuccess: <acceptance criteria>\nValidation: <commands/checks>\nLifetime: one primary contract plus at most one immediate same-artifact follow-up\nReport: <findings, changed paths, validation, remaining risks, done/retire or blocked status>' \
@@ -386,6 +414,8 @@ Use this lifecycle helper with the literal handle and pane ID printed at launch:
 ```bash
 retire_worker() {
   local worker_handle="$1" worker_pane_id="$2"
+
+  require_preserved_main_amq_binding "${ROOM_ROOT:-}" || return
 
   # Closed pane IDs are not reused. If the worker already exited, continue to
   # wake cleanup verification; otherwise close only its recorded pane.
