@@ -1,11 +1,11 @@
 ---
 name: use-agent
-description: Use only when the user explicitly asks or allows the current Claude, Pi, or Codex main to orchestrate other agent harnesses over Herdr and AMQ. Teaches model-aware routing between Fable 5, Opus 5, GPT-5.6-sol, and Grok 4.5. Otherwise, never invoke it.
+description: Use only when the user explicitly asks or allows the current Claude or Pi main to orchestrate other agent harnesses over Herdr and AMQ. Teaches model-aware routing between Fable 5, Opus 5, GPT-5.6-sol, and Grok 4.5. Otherwise, never invoke it.
 ---
 
 # Use Agent
 
-Launch Claude, Pi, or Codex workers as visible Herdr sidecars and coordinate with them through AMQ. This skill works when the **main** is itself running in Claude, Pi, or Codex.
+Launch Claude or Pi workers as visible Herdr sidecars and coordinate with them through AMQ. This skill works when the **main** is itself running in Claude or Pi.
 
 Only use this skill when the user explicitly asks or allows the use of another agent. The main owns the user relationship, orchestration, synthesis, verification, and final decision. Workers advise or act within the contract sent over AMQ.
 
@@ -31,7 +31,7 @@ Use only this curated model/harness mapping:
 | --- | --- | --- | --- |
 | **Fable 5** | Claude | `xhigh` | Treat as the most intelligent available model: a tech lead, oracle, or deep specialist. Use for ambiguous architecture, difficult root-cause analysis, high-risk decisions, and adjudicating disagreements. |
 | **Opus 5** | Claude | `xhigh` | State-of-the-art workhorse. Use for medium-to-complex plans, implementations, debugging, and detailed or adversarial review. |
-| **GPT-5.6-sol** | Codex | `xhigh` | State-of-the-art workhorse in the same capability tier as Opus 5. Use for medium-to-complex implementation, debugging, and adversarial review. |
+| **GPT-5.6-sol** | Pi | `xhigh` | State-of-the-art workhorse in the same capability tier as Opus 5. Use for medium-to-complex implementation, debugging, and adversarial review. |
 | **Grok 4.5** | Pi | `high` | Very capable and much faster, but less intelligent than the other models in this roster. Prefer it for simpler, settled, well-bounded implementation, reconnaissance, mechanical changes, and test/fix loops. Pair it with Opus 5 and/or GPT-5.6-sol when stronger independent review is warranted. |
 
 These models come from different providers and training datasets. Their disagreement is useful: independent answers can expose blind spots that one provider or dataset misses. For important reviews, ask models independently before showing them another model's answer; otherwise the second reviewer may anchor on the first.
@@ -43,8 +43,7 @@ Validate availability before opening a pane:
 | Harness | Discovery |
 | --- | --- |
 | Claude | Start Claude and use `/model`; `claude --help` documents aliases and full IDs such as `claude-fable-5`. |
-| Codex | `codex debug models | jq -r '.models[].slug'` |
-| Pi | `pi --list-models grok-4.5` |
+| Pi | `pi --list-models gpt-5.6-sol`; `pi --list-models grok-4.5` |
 
 Catalog discovery does not prove account entitlement, credits, or provider capacity. If the worker process rejects the selected model at launch, treat it as unavailable: report the exact category without exposing credentials, and ask before substituting another model.
 
@@ -79,10 +78,10 @@ Typical fleets:
 
 - **Small simple change:** one Grok implementer; no reviewer unless risk warrants one.
 - **Several simple lanes:** N Grok workers on disjoint bounded tasks.
-- **Several medium/complex lanes:** N Codex workers, N Opus workers, or a mixed Codex/Opus fleet on disjoint modules; add a different-provider reviewer only when risk warrants it.
-- **Wide mixed feature:** Grok handles simpler settled lanes while Codex and/or Opus own the medium/complex modules; launch an adversarial reviewer after the implementation wave settles. No Fable unless architecture remains uncertain.
-- **Difficult bug:** Codex and Opus form independent hypotheses; the main chooses using repository evidence; a fresh worker matched to the implementation difficulty applies the fix.
-- **High-risk design:** one Fable architecture wave, then retire it before launching the implementation wave; add an independent Opus or Codex challenge only when risk warrants it.
+- **Several medium/complex lanes:** N GPT-5.6-sol workers, N Opus workers, or a mixed GPT-5.6-sol/Opus fleet on disjoint modules; add a different-provider reviewer only when risk warrants it.
+- **Wide mixed feature:** Grok handles simpler settled lanes while GPT-5.6-sol and/or Opus own the medium/complex modules; launch an adversarial reviewer after the implementation wave settles. No Fable unless architecture remains uncertain.
+- **Difficult bug:** GPT-5.6-sol and Opus form independent hypotheses; the main chooses using repository evidence; a fresh worker matched to the implementation difficulty applies the fix.
+- **High-risk design:** one Fable architecture wave, then retire it before launching the implementation wave; add an independent Opus or GPT-5.6-sol challenge only when risk warrants it.
 - **Main already supplies one perspective:** add a different provider or a fresh isolated sample rather than duplicating the main by default.
 
 ### Bound context and rotate workers
@@ -178,22 +177,22 @@ Do not use `herdr agent prompt`, `herdr pane send-*`, a Herdr injector, or an ex
 
 ## Prepare a portable main
 
-The main can be Claude, Pi, or Codex. Preserve an existing AMQ binding when the main already has one; otherwise use a deterministic room and the current harness name as its handle.
+The main can be Claude or Pi. Preserve an existing AMQ binding when the main already has one; otherwise use a deterministic room and the current harness name as its handle.
 
 **Hard room invariant:** if `AM_ROOT` is non-empty, it is authoritative for the lifetime of that main session. Never replace it with `.agent-mail/use-agent-$TOPIC`, another session's printed path, or a custom room. Pi's `amq-notify` watches only its exact bound room; it does not discover sibling rooms created later. Setting `AM_ROOT` only on an `amq` command also does not retarget the already-running notifier. A worker launched into any other room can send successfully while the main receives nothing automatically.
 
 Main-side notification differs by harness:
 
 - **Pi main:** the installed `amq-notify` extension watches its exact `AM_ROOT` mailbox and injects replies automatically.
-- **Claude or Codex main:** there is no equivalent notify integration. The main must check AMQ at natural orchestration checkpoints or run one bounded monitor while waiting. Never assume replies will appear automatically.
+- **Claude main:** there is no equivalent notify integration. The main must check AMQ at natural orchestration checkpoints or run one bounded monitor while waiting. Never assume replies will appear automatically.
 
-Workers are different: every worker launched below uses `amq coop exec`, so native wake delivery notifies the worker regardless of whether it runs Claude, Pi, or Codex.
+Workers are different: every worker launched below uses `amq coop exec`, so native wake delivery notifies the worker regardless of whether it runs Claude or Pi.
 
 Set `CURRENT_HARNESS` to the harness actually running this skill:
 
 ```bash
 TOPIC="<short-kebab-topic>"
-CURRENT_HARNESS="<claude|pi|codex>"
+CURRENT_HARNESS="<claude|pi>"
 INHERITED_AM_ROOT="${AM_ROOT:-}"
 MAIN_HANDLE="${AM_ME:-$CURRENT_HARNESS}"
 ROOM_ROOT="${INHERITED_AM_ROOT:-$PWD/.agent-mail/use-agent-$TOPIC}"
@@ -209,11 +208,11 @@ readonly MAIN_HANDLE ROOM_ROOT
 # provided because the skill must not bias fleet composition.
 : "${FABLE_REPLICAS:?set FABLE_REPLICAS from the workload plan}"
 : "${OPUS_REPLICAS:?set OPUS_REPLICAS from the workload plan}"
-: "${CODEX_REPLICAS:?set CODEX_REPLICAS from the workload plan}"
+: "${GPT56_REPLICAS:?set GPT56_REPLICAS from the workload plan}"
 : "${GROK_REPLICAS:?set GROK_REPLICAS from the workload plan}"
 
 for replica_count in \
-  "$FABLE_REPLICAS" "$OPUS_REPLICAS" "$CODEX_REPLICAS" "$GROK_REPLICAS"; do
+  "$FABLE_REPLICAS" "$OPUS_REPLICAS" "$GPT56_REPLICAS" "$GROK_REPLICAS"; do
   if [[ ! "$replica_count" =~ ^[0-9]+$ ]]; then
     printf 'error: every replica count must be a non-negative integer\n' >&2
     exit 1
@@ -232,7 +231,7 @@ WORKER_HANDLES="$(
   {
     replica_handles claude-fable "$FABLE_REPLICAS"
     replica_handles claude-opus "$OPUS_REPLICAS"
-    replica_handles codex-gpt56 "$CODEX_REPLICAS"
+    replica_handles pi-gpt56 "$GPT56_REPLICAS"
     replica_handles pi-grok "$GROK_REPLICAS"
   } | paste -sd, -
 )"
@@ -312,21 +311,19 @@ printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID
 
 Claude's unrestricted flag is `--dangerously-skip-permissions`; do not copy another harness's permission flag into this recipe.
 
-## Codex worker — GPT-5.6-sol, xhigh
+## Pi worker — GPT-5.6-sol, xhigh
 
-Codex reasoning effort is a config override. Its exact-path project override suppresses the folder-trust prompt without changing persisted config.
+Use Pi's direct ChatGPT-backed catalog entry `openai-codex/gpt-5.6-sol`. Pi's tools execute with the local Pi process's permissions; `--approve` trusts project-local Pi resources.
 
 ```bash
-WORKER_HANDLE="codex-gpt56-1" # choose any configured unused codex-gpt56-1..N
+WORKER_HANDLE="pi-gpt56-1" # choose any configured unused pi-gpt56-1..N
 WORKER_PROMPT="$(build_worker_prompt)"
-CODEX_PROJECT_TRUST="projects={\"$PWD\"={trust_level=\"trusted\"}}"
 WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
-  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake codex -- \
-  --model gpt-5.6-sol \
-  -c 'model_reasoning_effort="xhigh"' \
-  -c "$CODEX_PROJECT_TRUST" \
-  --dangerously-bypass-approvals-and-sandbox \
-  --dangerously-bypass-hook-trust \
+  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake pi -- \
+  --name "use-agent-$TOPIC-$WORKER_HANDLE" \
+  --model openai-codex/gpt-5.6-sol \
+  --thinking xhigh \
+  --approve \
   "$WORKER_PROMPT")"
 printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
 ```
@@ -385,12 +382,12 @@ amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to claude-opus-1 --kind revie
   --subject "independent adversarial review" --body "<artifact and review criteria>" \
   --wait-for drained --wait-timeout 60s &
 OPUS_SEND_PID=$!
-amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to codex-gpt56-1 --kind review_request \
+amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to pi-gpt56-1 --kind review_request \
   --subject "independent adversarial review" --body "<same artifact and criteria>" \
   --wait-for drained --wait-timeout 60s &
-CODEX_SEND_PID=$!
+GPT56_SEND_PID=$!
 wait "$OPUS_SEND_PID"
-wait "$CODEX_SEND_PID"
+wait "$GPT56_SEND_PID"
 ```
 
 For concurrent action work, assign disjoint file ownership and designate one integration owner for shared interfaces. Never let two workers edit the same files concurrently. The main compares reports, resolves disagreement against repository evidence, and decides what to accept.
@@ -448,7 +445,7 @@ Pane closure is lifecycle control, not worker communication. Never ask the worke
 
 - **Pi main with `amq-notify`:** finish the turn. The extension injects replies automatically; do not manually check unless the user explicitly asks.
 - **Main already launched through `amq coop exec`:** native wake submits a notice. On notice, run `amq drain --include-body`.
-- **Plain Claude or Codex main:** replies are not injected automatically. Check AMQ periodically at natural checkpoints—for example, after preparing local validation or before making a decision that depends on a worker:
+- **Plain Claude main:** replies are not injected automatically. Check AMQ periodically at natural orchestration checkpoints—for example, after preparing local validation or before making a decision that depends on a worker:
 
 ```bash
 amq drain --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --include-body
@@ -460,4 +457,4 @@ When deliberately waiting for a result, use one bounded monitor instead of repea
 amq monitor --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --include-body --timeout 30m
 ```
 
-Claude and Codex mains must continue checking until every expected worker reports `done,retire`, `blocked,awaiting-input`, or `blocked,rotate`; silence in the harness UI is not evidence that no message arrived. Do not use a tight polling loop, sleep between checks, inspect `.agent-mail` files, or treat visible Herdr output as the reply. Readiness is not completion. Record and verify each final report, then follow the retirement policy instead of keeping workers alive by default.
+Claude mains must continue checking until every expected worker reports `done,retire`, `blocked,awaiting-input`, or `blocked,rotate`; silence in the harness UI is not evidence that no message arrived. Do not use a tight polling loop, sleep between checks, inspect `.agent-mail` files, or treat visible Herdr output as the reply. Readiness is not completion. Record and verify each final report, then follow the retirement policy instead of keeping workers alive by default.
