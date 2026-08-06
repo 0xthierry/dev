@@ -1,6 +1,6 @@
 ---
 name: use-agent
-description: Use only when the user explicitly asks or allows the current Claude or Pi main to orchestrate other agent harnesses over Herdr and AMQ. Teaches model-aware routing between Fable 5, Opus 5, GPT-5.6-sol, and Grok 4.5. Otherwise, never invoke it.
+description: Use only when the user explicitly asks or allows the current Claude or Pi main to orchestrate other agent harnesses over Herdr and AMQ. Teaches model-aware routing between Fable 5, Opus 5, GPT-5.6-sol, GPT-5.6-luna, GPT-5.6-terra, and Grok 4.5. Otherwise, never invoke it.
 ---
 
 # Use Agent
@@ -32,18 +32,20 @@ Use only this curated model/harness mapping:
 | **Fable 5** | Claude | `xhigh` | Treat as the most intelligent available model: a tech lead, oracle, or deep specialist. Use for ambiguous architecture, difficult root-cause analysis, high-risk decisions, and adjudicating disagreements. |
 | **Opus 5** | Claude | `xhigh` | State-of-the-art workhorse. Use for medium-to-complex plans, implementations, debugging, and detailed or adversarial review. |
 | **GPT-5.6-sol** | Pi | `xhigh` | State-of-the-art workhorse in the same capability tier as Opus 5. Use for medium-to-complex implementation, debugging, and adversarial review. |
-| **Grok 4.5** | Pi | `high` | Very capable and much faster, but less intelligent than the other models in this roster. Prefer it for simpler, settled, well-bounded implementation, reconnaissance, mechanical changes, and test/fix loops. Pair it with Opus 5 and/or GPT-5.6-sol when stronger independent review is warranted. |
+| **GPT-5.6-luna** | Pi | `xhigh` | Fast GPT-5.6 variant. Prefer it for rapid independent plan/code review, simplification, code/example-quality passes, and bounded well-specified implementation. Give parallel replicas distinct lenses. |
+| **GPT-5.6-terra** | Pi | `xhigh` | Fast GPT-5.6 variant. Prefer it as another independent sample for plan/code review, debugging, TDD/phase analysis, and bounded implementation when low latency matters. |
+| **Grok 4.5** | Pi | `high` | Very capable and much faster, but less intelligent than the other models in this roster. Prefer it for simpler, settled, well-bounded implementation, reconnaissance, mechanical changes, and test/fix loops. Pair it with Opus 5 and/or a GPT-5.6 variant when stronger independent review is warranted. |
 
-These models come from different providers and training datasets. Their disagreement is useful: independent answers can expose blind spots that one provider or dataset misses. For important reviews, ask models independently before showing them another model's answer; otherwise the second reviewer may anchor on the first.
+These models come from different providers and training datasets. Their disagreement is useful: independent answers can expose blind spots that one provider or dataset misses. Independent samples from sol/luna/terra add within-family diversity, not provider diversity. For important reviews, ask models independently before showing them another model's answer; otherwise the second reviewer may anchor on the first.
 
-Fable and Opus are separate choices, not automatic fallbacks for one another. Honor an explicit user model request. If a selected model is unavailable, report it and ask before substituting.
+Fable, Opus, GPT-5.6-sol, GPT-5.6-luna, and GPT-5.6-terra are separate choices, not automatic fallbacks for one another. Honor an explicit user model request. If a selected model is unavailable, report it and ask before substituting.
 
 Validate availability before opening a pane:
 
 | Harness | Discovery |
 | --- | --- |
 | Claude | Start Claude and use `/model`; `claude --help` documents aliases and full IDs such as `claude-fable-5`. |
-| Pi | `pi --list-models gpt-5.6-sol`; `pi --list-models grok-4.5` |
+| Pi | `pi --list-models gpt-5.6-sol`; `pi --list-models gpt-5.6-luna`; `pi --list-models gpt-5.6-terra`; `pi --list-models grok-4.5` |
 
 Catalog discovery does not prove account entitlement, credits, or provider capacity. If the worker process rejects the selected model at launch, treat it as unavailable: report the exact category without exposing credentials, and ask before substituting another model.
 
@@ -68,6 +70,7 @@ Find the critical path before adding parallelism. Increase worker count only whe
 Worker count and model mix are dynamic. Never launch one of every model by habit.
 
 - Use **Grok** for simpler, settled, well-bounded implementation, reconnaissance, mechanical changes, and test/fix lanes.
+- Use **GPT-5.6-luna** and **GPT-5.6-terra** for fast, independent review lanes and bounded work where low latency matters. Assign one named lens per reviewer instead of duplicating the same prompt.
 - Use **GPT-5.6-sol** or **Opus 5** for medium-to-complex implementation, difficult debugging, demanding plans, and adversarial review. They are implementation workhorses as well as reviewers.
 - Use **Fable 5** only when genuine architecture ambiguity, high-risk judgment, specialist reasoning, or adjudication justifies it.
 - Scale any selected model horizontally from one to N replicas when tasks and file ownership are independent. N is the justified width of the runnable frontier, bounded only by useful parallelism, machine resources, and provider capacity—not an arbitrary model quota.
@@ -78,9 +81,10 @@ Typical fleets:
 
 - **Small simple change:** one Grok implementer; no reviewer unless risk warrants one.
 - **Several simple lanes:** N Grok workers on disjoint bounded tasks.
-- **Several medium/complex lanes:** N GPT-5.6-sol workers, N Opus workers, or a mixed GPT-5.6-sol/Opus fleet on disjoint modules; add a different-provider reviewer only when risk warrants it.
-- **Wide mixed feature:** Grok handles simpler settled lanes while GPT-5.6-sol and/or Opus own the medium/complex modules; launch an adversarial reviewer after the implementation wave settles. No Fable unless architecture remains uncertain.
-- **Difficult bug:** GPT-5.6-sol and Opus form independent hypotheses; the main chooses using repository evidence; a fresh worker matched to the implementation difficulty applies the fix.
+- **Fast review swarm:** N GPT-5.6-luna / GPT-5.6-terra / Grok reviewers, each assigned a different named lens; the main deduplicates and verifies their findings.
+- **Several medium/complex lanes:** N GPT-5.6-sol, GPT-5.6-luna, GPT-5.6-terra, or Opus workers on disjoint modules; add a different-provider reviewer only when risk warrants it.
+- **Wide mixed feature:** Grok handles simpler settled lanes; GPT-5.6-luna/terra handle fast bounded lanes; GPT-5.6-sol and/or Opus own the most demanding implementation modules. Launch an adversarial reviewer after the implementation wave settles. No Fable unless architecture remains uncertain.
+- **Difficult bug:** GPT-5.6-sol and Opus form independent hypotheses; luna/terra can add fast independent probes. The main chooses using repository evidence; a fresh worker matched to the implementation difficulty applies the fix.
 - **High-risk design:** one Fable architecture wave, then retire it before launching the implementation wave; add an independent Opus or GPT-5.6-sol challenge only when risk warrants it.
 - **Main already supplies one perspective:** add a different provider or a fresh isolated sample rather than duplicating the main by default.
 
@@ -209,10 +213,13 @@ readonly MAIN_HANDLE ROOM_ROOT
 : "${FABLE_REPLICAS:?set FABLE_REPLICAS from the workload plan}"
 : "${OPUS_REPLICAS:?set OPUS_REPLICAS from the workload plan}"
 : "${GPT56_REPLICAS:?set GPT56_REPLICAS from the workload plan}"
+: "${LUNA_REPLICAS:?set LUNA_REPLICAS from the workload plan}"
+: "${TERRA_REPLICAS:?set TERRA_REPLICAS from the workload plan}"
 : "${GROK_REPLICAS:?set GROK_REPLICAS from the workload plan}"
 
 for replica_count in \
-  "$FABLE_REPLICAS" "$OPUS_REPLICAS" "$GPT56_REPLICAS" "$GROK_REPLICAS"; do
+  "$FABLE_REPLICAS" "$OPUS_REPLICAS" "$GPT56_REPLICAS" \
+  "$LUNA_REPLICAS" "$TERRA_REPLICAS" "$GROK_REPLICAS"; do
   if [[ ! "$replica_count" =~ ^[0-9]+$ ]]; then
     printf 'error: every replica count must be a non-negative integer\n' >&2
     exit 1
@@ -232,6 +239,8 @@ WORKER_HANDLES="$(
     replica_handles claude-fable "$FABLE_REPLICAS"
     replica_handles claude-opus "$OPUS_REPLICAS"
     replica_handles pi-gpt56 "$GPT56_REPLICAS"
+    replica_handles pi-luna "$LUNA_REPLICAS"
+    replica_handles pi-terra "$TERRA_REPLICAS"
     replica_handles pi-grok "$GROK_REPLICAS"
   } | paste -sd, -
 )"
@@ -322,6 +331,40 @@ WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
   amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake pi -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
   --model openai-codex/gpt-5.6-sol \
+  --thinking xhigh \
+  --approve \
+  "$WORKER_PROMPT")"
+printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
+```
+
+## Pi worker — GPT-5.6-luna, xhigh
+
+Use Pi's direct ChatGPT-backed catalog entry `openai-codex/gpt-5.6-luna`.
+
+```bash
+WORKER_HANDLE="pi-luna-1" # choose any configured unused pi-luna-1..N
+WORKER_PROMPT="$(build_worker_prompt)"
+WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
+  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake pi -- \
+  --name "use-agent-$TOPIC-$WORKER_HANDLE" \
+  --model openai-codex/gpt-5.6-luna \
+  --thinking xhigh \
+  --approve \
+  "$WORKER_PROMPT")"
+printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
+```
+
+## Pi worker — GPT-5.6-terra, xhigh
+
+Use Pi's direct ChatGPT-backed catalog entry `openai-codex/gpt-5.6-terra`.
+
+```bash
+WORKER_HANDLE="pi-terra-1" # choose any configured unused pi-terra-1..N
+WORKER_PROMPT="$(build_worker_prompt)"
+WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
+  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake pi -- \
+  --name "use-agent-$TOPIC-$WORKER_HANDLE" \
+  --model openai-codex/gpt-5.6-terra \
   --thinking xhigh \
   --approve \
   "$WORKER_PROMPT")"
