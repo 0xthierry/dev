@@ -13,6 +13,7 @@ COMMON_PACMAN_PACKAGES=(
   curl
   wget
   xh
+  cloudflared
   dnsutils
   inetutils
   nmap
@@ -83,6 +84,7 @@ COMMON_BREW_FORMULAE=(
   curl
   wget
   xh
+  cloudflared
   nmap
   whois
   mitmproxy
