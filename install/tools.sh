@@ -10,6 +10,11 @@ apply_pnpm_security_defaults() {
     return 0
   fi
 
+  if (( ! ${DRY_RUN:-0} )) && ! pnpm --version >/dev/null 2>&1; then
+    log_item "pnpm config: pnpm unavailable, skipping"
+    return 0
+  fi
+
   log_item "pnpm config: frozen lockfile + 24h minimum release age"
   run_cmd pnpm config set -g frozen-lockfile true
   run_cmd pnpm config set -g minimum-release-age 1440

@@ -69,12 +69,12 @@ setup_shared_cli_packages() {
 }
 
 apply_shared_machine_state() {
+  install_runtimes
   apply_tool_configs
   write_env_file
   apply_shell_setup
   write_git_files
   write_ssh_config
-  install_runtimes
   install_google_workspace_cli
   install_ai_clis
 

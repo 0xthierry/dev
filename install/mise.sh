@@ -15,6 +15,7 @@ write_mise_config() {
   cat > "$tmp" <<'EOF'
 [tools]
 node = "latest"
+pnpm = "latest"
 python = "3.12"
 go = "latest"
 bun = "latest"
