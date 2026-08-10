@@ -168,6 +168,35 @@ describe("codex client", () => {
     expect(results.every((result) => result.ok === false)).toBe(true);
   });
 
+  test("applies provider header overrides and null deletions", async () => {
+    // Arrange
+    const modelWithHeaders = {
+      ...model,
+      headers: { "x-keep": "model-value", "x-remove": "model-value" },
+    } as CodexModel;
+    const fetchMock = mock(async (_url: string, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      expect(headers.get("x-keep")).toBe("resolved-value");
+      expect(headers.has("x-remove")).toBe(false);
+      return new Response("", { status: 500 });
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    // Act
+    await fetchCodexCompaction({
+      model: modelWithHeaders,
+      apiKey: "token",
+      headers: { "x-keep": "resolved-value", "x-remove": null },
+      accountId: "acct",
+      systemPrompt: "system",
+      input: [{ role: "user", content: "remember alpha" }],
+      thinkingLevel: "low",
+    });
+
+    // Assert
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   test("fetch sets stable session headers and returns responseId + usage", async () => {
     // Arrange
     const body = [

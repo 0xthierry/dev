@@ -189,7 +189,9 @@ describe("mergeDualCompactionResult", () => {
 describe("dualCompact", () => {
   test("passes custom instructions to compact and combines concurrent remote success", async () => {
     // Arrange
-    const compactFn = mock(async (_prep, _model, _key, _headers, customInstructions) => {
+    const providerHeaders = { "x-keep": "value", "x-remove": null };
+    const compactFn = mock(async (_prep, _model, _key, headers, customInstructions) => {
+      expect(headers).toBe(providerHeaders);
       expect(customInstructions).toBe("focus on decisions");
       return {
         summary: "meaningful portable summary",
@@ -216,7 +218,7 @@ describe("dualCompact", () => {
         messagesToSummarize: [{ role: "user", content: "remember alpha", timestamp: 1 }],
       }),
       model,
-      auth: { apiKey: jwtWithAccountId("acct_123") },
+      auth: { apiKey: jwtWithAccountId("acct_123"), headers: providerHeaders },
       customInstructions: "focus on decisions",
       thinkingLevel: "low",
       systemPrompt: "system",
@@ -227,7 +229,7 @@ describe("dualCompact", () => {
 
     // Assert
     expect(compactFn).toHaveBeenCalledTimes(1);
-    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(fetchFn).toHaveBeenCalledWith(expect.objectContaining({ headers: providerHeaders }));
     expect(result?.summary).toBe("meaningful portable summary");
     expect(result?.usage).toEqual(usage(14, 6, 1.2));
   });

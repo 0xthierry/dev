@@ -1,4 +1,4 @@
-import { calculateCost, type Usage } from "@earendil-works/pi-ai";
+import { calculateCost, type ProviderHeaders, type Usage } from "@earendil-works/pi-ai";
 import { codexReasoningEffort, resolveCodexResponsesUrl } from "./model";
 import { isCodexCompactionItem } from "./state";
 import type { CodexCompactionFetchResult, CodexCompactionItem, CodexRequestOptions, JsonObject } from "./types";
@@ -187,8 +187,9 @@ function extractTerminalMeta(
 }
 
 function buildCodexHeaders(options: CodexRequestOptions): Headers {
-  const headers = new Headers(options.model.headers);
-  for (const [key, value] of Object.entries(options.headers ?? {})) headers.set(key, value);
+  const headers = new Headers();
+  applyProviderHeaders(headers, options.model.headers);
+  applyProviderHeaders(headers, options.headers);
 
   headers.set("Authorization", `Bearer ${options.apiKey}`);
   headers.set("chatgpt-account-id", options.accountId);
@@ -205,6 +206,13 @@ function buildCodexHeaders(options: CodexRequestOptions): Headers {
   }
 
   return headers;
+}
+
+function applyProviderHeaders(headers: Headers, values: ProviderHeaders | undefined): void {
+  for (const [key, value] of Object.entries(values ?? {})) {
+    if (value === null) headers.delete(key);
+    else headers.set(key, value);
+  }
 }
 
 function stableSessionKey(sessionId: string | undefined): string | undefined {

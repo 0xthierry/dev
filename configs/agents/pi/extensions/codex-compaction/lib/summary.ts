@@ -1,5 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { Usage } from "@earendil-works/pi-ai";
+import type { ProviderHeaders, Usage } from "@earendil-works/pi-ai";
 import { type CompactionResult, compact, type SessionEntry } from "@earendil-works/pi-coding-agent";
 import { createBinding, hashAccountId, isCompatibleV2Binding } from "./binding";
 import { fetchCodexCompaction } from "./codex-client";
@@ -21,7 +21,7 @@ import { buildUserPrefix } from "./user-prefix";
 
 export type CompactAuth = {
   apiKey?: string;
-  headers?: Record<string, string>;
+  headers?: ProviderHeaders;
   env?: Record<string, string>;
 };
 
@@ -72,7 +72,9 @@ export async function dualCompact(options: DualCompactOptions): Promise<Compacti
       preparation,
       options.model,
       options.auth.apiKey,
-      options.auth.headers,
+      // Pi 0.84 preserves null header-deletion markers at runtime, but compact's
+      // compatibility declaration still exposes the older string-only shape.
+      options.auth.headers as Record<string, string> | undefined,
       options.customInstructions,
       options.signal,
       options.thinkingLevel as never,
@@ -191,7 +193,8 @@ export async function portableCompactOnly(options: {
       preparation,
       options.model,
       options.auth.apiKey,
-      options.auth.headers,
+      // Preserve ProviderHeaders null markers for the underlying pi-ai stream.
+      options.auth.headers as Record<string, string> | undefined,
       options.customInstructions,
       options.signal,
       options.thinkingLevel as never,

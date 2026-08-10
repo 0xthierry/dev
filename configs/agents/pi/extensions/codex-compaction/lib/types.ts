@@ -1,4 +1,4 @@
-import type { Api, Model, Usage } from "@earendil-works/pi-ai";
+import type { Api, Model, ProviderHeaders, Usage } from "@earendil-works/pi-ai";
 
 export const CODEX_COMPACTION_DETAILS_VERSION_V1 = 1;
 export const CODEX_COMPACTION_DETAILS_VERSION = 2;
@@ -70,7 +70,7 @@ export type CodexModel = Model<Api> & {
 export type CodexRequestOptions = {
   model: CodexModel;
   apiKey: string;
-  headers?: Record<string, string>;
+  headers?: ProviderHeaders;
   accountId: string;
   systemPrompt: string;
   input: JsonObject[];

@@ -445,16 +445,16 @@ install_ai_clis() {
   log_section "AI Coding CLIs"
 
   # Claude Code (Anthropic) — standalone binary, not npm
-  install_claude_code_binary "2.1.219"
+  install_claude_code_binary "2.1.226"
 
   # Codex (OpenAI)
-  install_npm_global_cli "Codex CLI" "@openai/codex" "0.145.0"
+  install_npm_global_cli "Codex CLI" "@openai/codex" "0.147.0"
 
   # Gemini CLI (Google)
   install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.52.0"
 
   # Pi Coding Agent (Earendil Works) — minimal terminal coding harness
-  install_pi_coding_agent_cli "0.81.1"
+  install_pi_coding_agent_cli "0.84.1"
 
   # Plannotator — plan and code review UI; hooks and skills are deployed from this repo
   install_plannotator_binary "v0.24.2"
