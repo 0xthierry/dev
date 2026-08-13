@@ -1,6 +1,6 @@
 ---
 name: use-agent
-description: Use only when the user explicitly asks or allows the current Claude or Pi main to orchestrate other agent harnesses over Herdr and AMQ. Teaches model-aware routing between Fable 5, Opus 5, GPT-5.6-sol, GPT-5.6-luna, GPT-5.6-terra, and Grok 4.5. Otherwise, never invoke it.
+description: Use only when the user explicitly asks or allows the current Claude or Pi main to orchestrate other agent harnesses over Herdr and AMQ. Teaches model-aware routing between Fable 5, Opus 5, GPT-5.6-sol, GPT-5.6-luna, GPT-5.6-terra, and Grok 4.6. Otherwise, never invoke it.
 ---
 
 # Use Agent
@@ -34,7 +34,7 @@ Use only this curated model/harness mapping:
 | **GPT-5.6-sol** | Pi | `xhigh` | State-of-the-art workhorse in the same capability tier as Opus 5. Use for medium-to-complex implementation, debugging, and adversarial review. |
 | **GPT-5.6-luna** | Pi | `xhigh` | Fast GPT-5.6 variant. Prefer it for rapid independent plan/code review, simplification, code/example-quality passes, and bounded well-specified implementation. Give parallel replicas distinct lenses. |
 | **GPT-5.6-terra** | Pi | `xhigh` | Fast GPT-5.6 variant. Prefer it as another independent sample for plan/code review, debugging, TDD/phase analysis, and bounded implementation when low latency matters. |
-| **Grok 4.5** | Pi | `high` | Very capable and much faster, but less intelligent than the other models in this roster. Prefer it for simpler, settled, well-bounded implementation, reconnaissance, mechanical changes, and test/fix loops. Pair it with Opus 5 and/or a GPT-5.6 variant when stronger independent review is warranted. |
+| **Grok 4.6** | Pi | `high` | Very capable and much faster, but less intelligent than the other models in this roster. Prefer it for simpler, settled, well-bounded implementation, reconnaissance, mechanical changes, and test/fix loops. Pair it with Opus 5 and/or a GPT-5.6 variant when stronger independent review is warranted. |
 
 These models come from different providers and training datasets. Their disagreement is useful: independent answers can expose blind spots that one provider or dataset misses. Independent samples from sol/luna/terra add within-family diversity, not provider diversity. For important reviews, ask models independently before showing them another model's answer; otherwise the second reviewer may anchor on the first.
 
@@ -45,7 +45,7 @@ Validate availability before opening a pane:
 | Harness | Discovery |
 | --- | --- |
 | Claude | Start Claude and use `/model`; `claude --help` documents aliases and full IDs such as `claude-fable-5`. |
-| Pi | `pi --list-models gpt-5.6-sol`; `pi --list-models gpt-5.6-luna`; `pi --list-models gpt-5.6-terra`; `pi --list-models grok-4.5` |
+| Pi | `pi --list-models gpt-5.6-sol`; `pi --list-models gpt-5.6-luna`; `pi --list-models gpt-5.6-terra`; `pi --list-models grok-4.6` |
 
 Catalog discovery does not prove account entitlement, credits, or provider capacity. If the worker process rejects the selected model at launch, treat it as unavailable: report the exact category without exposing credentials, and ask before substituting another model.
 
@@ -371,9 +371,9 @@ WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
 printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
 ```
 
-## Pi worker — Grok 4.5, high
+## Pi worker — Grok 4.6, high
 
-Use the direct xAI catalog entry `xai/grok-4.5`. Pi's tools execute with the local Pi process's permissions; `--approve` trusts project-local Pi resources.
+Use the direct xAI catalog entry `xai/grok-4.6`. Pi's tools execute with the local Pi process's permissions; `--approve` trusts project-local Pi resources.
 
 ```bash
 WORKER_HANDLE="pi-grok-1" # choose any configured unused pi-grok-1..N
@@ -381,7 +381,7 @@ WORKER_PROMPT="$(build_worker_prompt)"
 WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
   amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake pi -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
-  --model xai/grok-4.5 \
+  --model xai/grok-4.6 \
   --thinking high \
   --approve \
   "$WORKER_PROMPT")"
