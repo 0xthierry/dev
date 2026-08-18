@@ -53,6 +53,7 @@ HOST_PACMAN_PACKAGES=(
 HOST_AUR_PACKAGES=(
   bambustudio-bin
   brave-bin
+  chatgpt-desktop
   figma-linux
   linear-desktop-bin
   slack-desktop
