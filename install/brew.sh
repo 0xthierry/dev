@@ -90,6 +90,47 @@ install_common_brew_formulae() {
   install_brew_formulae "${COMMON_BREW_FORMULAE[@]}"
 }
 
+upgrade_brew_casks_to_latest() {
+  local -a packages=("$@")
+  local -a installed_packages=()
+  local brew_bin=""
+  local package=""
+
+  if [[ ${#packages[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  log_section "Homebrew Cask Upgrades"
+
+  if (( ${DRY_RUN:-0} )); then
+    run_brew update
+    run_brew upgrade --cask --greedy "${packages[@]}"
+    return 0
+  fi
+
+  if ! brew_bin="$(resolve_brew_bin 2>/dev/null)"; then
+    log_item "Skipping: Homebrew not installed"
+    return 1
+  fi
+
+  for package in "${packages[@]}"; do
+    if "$brew_bin" list --cask --versions "$package" >/dev/null 2>&1; then
+      installed_packages+=("$package")
+    else
+      log_item "Skipping upgrade for uninstalled cask: $package"
+    fi
+  done
+
+  if [[ ${#installed_packages[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  log_item "Refreshing Homebrew metadata"
+  run_brew update
+  log_item "Upgrading to latest: ${installed_packages[*]}"
+  run_brew upgrade --cask --greedy "${installed_packages[@]}"
+}
+
 install_brew_casks() {
   local -a packages=("$@")
   local -a pending_packages=()

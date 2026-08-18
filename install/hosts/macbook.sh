@@ -39,6 +39,8 @@ HOST_BREW_CASKS=(
   discord
   figma
   ghostty
+  grok-bot
+  handy
   linear
   obs
   obsidian
@@ -80,6 +82,7 @@ setup_host_packages() {
   log_section "Host Packages"
   log_item "Installing shared CLI package set for macbook"
   setup_shared_cli_packages
+  upgrade_brew_casks_to_latest chatgpt claude grok-bot
 }
 
 setup_shared_machine_state() {

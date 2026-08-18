@@ -77,6 +77,12 @@ fi
 
 if command -v mise >/dev/null 2>&1; then
   eval "$(mise activate zsh)"
+
+  # Project-local Node versions can expose stale npm-global `pi` binaries.
+  # Resolve Pi through its dedicated mise npm tool instead.
+  pi() {
+    mise exec 'npm:@earendil-works/pi-coding-agent' -- pi "$@"
+  }
 fi
 
 if [[ -f "$HOME/.local/share/omarchy/default/bash/aliases" ]]; then
