@@ -388,13 +388,13 @@ install_ai_clis() {
   log_section "AI Coding CLIs"
 
   # Claude Code (Anthropic) — standalone binary, not npm
-  install_claude_code_binary "2.1.226"
+  install_claude_code_binary "2.1.239"
 
   # Codex (OpenAI)
-  install_npm_global_cli "Codex CLI" "@openai/codex" "0.147.0"
+  install_npm_global_cli "Codex CLI" "@openai/codex" "0.149.0"
 
   # Gemini CLI (Google)
-  install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.52.0"
+  install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.56.0"
 
   # Pi Coding Agent is installed through mise's npm backend in install/mise.sh.
   # This keeps one Pi version active even when a project pins a different Node version.
