@@ -23,7 +23,6 @@ SOURCE_PI_WEB_SEARCH_CONFIG="$SOURCE_PI_DIR/web-search.json"
 SOURCE_PI_PROMPTS_DIR="$SOURCE_PI_DIR/prompts"
 SOURCE_PI_EXTENSIONS_DIR="$SOURCE_PI_DIR/extensions"
 SOURCE_PI_APPEND_SYSTEM="$SOURCE_PI_DIR/APPEND_SYSTEM.md"
-SOURCE_PI_MODELS="$SOURCE_PI_DIR/models.json"
 SOURCE_PLANNOTATOR_SKILLS_DIR="$SCRIPT_DIR/plannotator/skills"
 SOURCE_STATUSLINE="$SCRIPT_DIR/statusline.ts"
 SOURCE_DEV_INSTRUCTIONS="$SCRIPT_DIR/developer-instructions.txt"
@@ -226,6 +225,31 @@ force_link_path_replacing_symlink() {
   fi
 
   force_link_path "$source_path" "$target_path" "$label"
+}
+
+remove_managed_symlink() {
+  local source_path="$1"
+  local target_path="$2"
+  local label="$3"
+  local current_target=""
+  local resolved_source_path=""
+  local resolved_current_target=""
+
+  if [[ ! -L "$target_path" ]]; then
+    return 0
+  fi
+
+  current_target="$(readlink "$target_path")"
+  resolved_source_path="$(canonicalize_path "$source_path")"
+  resolved_current_target="$(resolve_symlink_target "$target_path")"
+
+  if [[ "$current_target" != "$source_path" && "$resolved_current_target" != "$resolved_source_path" ]]; then
+    return 0
+  fi
+
+  run_cmd rm -f -- "$target_path"
+  log "removed: $label managed symlink"
+  ((LINKED_COUNT += 1))
 }
 
 copy_file_if_needed() {
@@ -586,7 +610,7 @@ install_pi_target() {
   copy_file_if_needed "$SOURCE_PI_SETTINGS" "$target_root/settings.json" "pi settings.json"
   copy_file_if_needed "$SOURCE_PI_WEB_SEARCH_CONFIG" "$HOME/.pi/web-search.json" "pi web-search.json"
   force_link_path "$SOURCE_PI_APPEND_SYSTEM" "$target_root/APPEND_SYSTEM.md" "pi APPEND_SYSTEM.md"
-  force_link_path "$SOURCE_PI_MODELS" "$target_root/models.json" "pi models.json"
+  remove_managed_symlink "$SOURCE_PI_DIR/models.json" "$target_root/models.json" "legacy pi models.json override"
   force_link_path "$SOURCE_AGENTS_DIR" "$target_root/agents" "pi agents"
   force_link_pi_skill_entries "$target_root"
   force_link_path "$SOURCE_PI_PROMPTS_DIR" "$target_root/prompts" "pi prompts"
@@ -681,11 +705,6 @@ main() {
 
   if [[ ! -f "$SOURCE_PI_APPEND_SYSTEM" ]]; then
     warn "Missing source Pi append-system file: $SOURCE_PI_APPEND_SYSTEM"
-    exit 1
-  fi
-
-  if [[ ! -f "$SOURCE_PI_MODELS" ]]; then
-    warn "Missing source Pi models file: $SOURCE_PI_MODELS"
     exit 1
   fi
 
