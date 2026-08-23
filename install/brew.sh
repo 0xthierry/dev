@@ -93,8 +93,10 @@ install_common_brew_formulae() {
 upgrade_brew_casks_to_latest() {
   local -a packages=("$@")
   local -a installed_packages=()
+  local -a failed_packages=()
   local brew_bin=""
   local package=""
+  local upgrade_log=""
 
   if [[ ${#packages[@]} -eq 0 ]]; then
     return 0
@@ -127,8 +129,33 @@ upgrade_brew_casks_to_latest() {
 
   log_item "Refreshing Homebrew metadata"
   run_brew update
-  log_item "Upgrading to latest: ${installed_packages[*]}"
-  run_brew upgrade --cask --greedy "${installed_packages[@]}"
+
+  for package in "${installed_packages[@]}"; do
+    log_item "Upgrading to latest: $package"
+    upgrade_log="$(mktemp)"
+
+    if "$brew_bin" upgrade --cask --greedy "$package" 2>&1 | tee "$upgrade_log"; then
+      rm -f "$upgrade_log"
+      continue
+    fi
+
+    if grep -Fq "It seems the App source" "$upgrade_log" && grep -Fq "is not there" "$upgrade_log"; then
+      log_item "Repairing missing app artifact for cask: $package"
+      if run_brew reinstall --cask "$package"; then
+        rm -f "$upgrade_log"
+        continue
+      fi
+    fi
+
+    rm -f "$upgrade_log"
+    log_item "WARNING: failed to upgrade cask: $package"
+    failed_packages+=("$package")
+  done
+
+  if [[ ${#failed_packages[@]} -gt 0 ]]; then
+    log_item "WARNING: cask upgrades needing manual attention: ${failed_packages[*]}"
+    return 1
+  fi
 }
 
 install_brew_casks() {
