@@ -21,7 +21,8 @@
       "./lsp",
       "./fff",
       "./excalidraw-session",
-      "./amq-notify"
+      "./amq-notify",
+      "./computer-use"
     ]
   },
   "dependencies": {
@@ -30,7 +31,8 @@
     "impit": "0.13.1",
     "linkedom": "0.18.12",
     "p-limit": "7.3.0",
-    "turndown": "7.2.4"
+    "turndown": "7.2.4",
+    "zod": "4.4.3"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",

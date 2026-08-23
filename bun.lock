@@ -11,6 +11,7 @@
         "linkedom": "0.18.12",
         "p-limit": "7.3.0",
         "turndown": "7.2.4",
+        "zod": "4.4.3",
       },
       "devDependencies": {
         "@biomejs/biome": "2.4.13",
