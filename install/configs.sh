@@ -60,7 +60,7 @@ apply_agents() {
   "$REPO_ROOT/configs/agents/install.sh" --yes
 }
 
-apply_brave() {
+apply_brave_linux() {
   local wrapper_src="$REPO_ROOT/configs/brave/brave-wrapper"
   local wrapper_dst="$HOME/.local/bin/brave-wrapper"
   local desktop_src="$REPO_ROOT/configs/brave/brave-browser.desktop"
@@ -75,6 +75,71 @@ apply_brave() {
   if check_installed update-desktop-database; then
     run_cmd update-desktop-database "$HOME/.local/share/applications"
   fi
+}
+
+apply_brave_macos() {
+  local label="com.thierry.brave-cdp"
+  local launch_agent_src="$REPO_ROOT/configs/brave/${label}.plist"
+  local launch_agent_dst="$HOME/Library/LaunchAgents/${label}.plist"
+  local launch_domain=""
+  local backup_path=""
+  local changed=0
+
+  launch_domain="gui/$(id -u)"
+
+  if [[ -x /usr/bin/plutil ]]; then
+    /usr/bin/plutil -lint "$launch_agent_src" >/dev/null
+  elif (( ! ${DRY_RUN:-0} )); then
+    printf 'error: plutil is required to install the Brave launch agent\n' >&2
+    return 1
+  fi
+
+  ensure_dir "$HOME/Library/LaunchAgents"
+
+  if [[ -f "$launch_agent_dst" ]] && cmp -s "$launch_agent_src" "$launch_agent_dst"; then
+    log_item "Brave CDP launch agent: already up to date"
+  else
+    if [[ -e "$launch_agent_dst" || -L "$launch_agent_dst" ]]; then
+      backup_path="$(next_backup_path "$launch_agent_dst")"
+      run_cmd mv "$launch_agent_dst" "$backup_path"
+      log_item "Brave CDP launch agent: backed up to $backup_path"
+    fi
+
+    run_cmd cp "$launch_agent_src" "$launch_agent_dst"
+    log_item "Brave CDP launch agent: installed"
+    changed=1
+  fi
+
+  if (( ${DRY_RUN:-0} )); then
+    dry_run_cmd launchctl bootstrap "$launch_domain" "$launch_agent_dst"
+    return 0
+  fi
+
+  if ! launchctl print "$launch_domain" >/dev/null 2>&1; then
+    log_item "Brave CDP launch agent: will load at next GUI login"
+    return 0
+  fi
+
+  if launchctl print "$launch_domain/$label" >/dev/null 2>&1; then
+    if (( changed )); then
+      log_item "Brave CDP launch agent: updated; changes apply at next GUI login"
+    else
+      log_item "Brave CDP launch agent: already loaded"
+    fi
+    return 0
+  fi
+
+  run_cmd launchctl bootstrap "$launch_domain" "$launch_agent_dst"
+  log_item "Brave CDP launch agent: loaded"
+}
+
+apply_brave() {
+  if [[ "${SETUP_HOST:-}" == "macbook" ]]; then
+    apply_brave_macos
+    return 0
+  fi
+
+  apply_brave_linux
 }
 
 apply_cameractrls() {

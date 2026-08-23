@@ -23,6 +23,7 @@ HOST_CONFIG_TARGETS=(
   ghostty
   herdr
   agents
+  brave
 )
 
 # shellcheck disable=SC2034
@@ -70,7 +71,10 @@ apply_macos_defaults() {
   run_cmd defaults write com.knollsoft.Rectangle launchOnLogin -bool true
 
   log_item "Setting default browser to Brave (may prompt for confirmation)"
-  run_cmd open -a "Brave Browser" --args --make-default-browser
+  run_cmd open -a "Brave Browser" --args \
+    --remote-debugging-port=9222 \
+    --remote-debugging-address=127.0.0.1 \
+    --make-default-browser
 }
 
 setup_host_prereqs() {
