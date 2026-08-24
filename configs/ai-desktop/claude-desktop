@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Electron falls back to basic_text under Hyprland unless the Secret Service
+# backend is selected explicitly, which prevents Claude from persisting login.
+exec /usr/bin/claude-desktop --password-store=gnome-libsecret "$@"

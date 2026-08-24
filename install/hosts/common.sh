@@ -108,8 +108,8 @@ apply_host_configs() {
       hypr)
         apply_hypr
         ;;
-      voxtype)
-        apply_voxtype
+      ai-desktop)
+        apply_ai_desktop_linux
         ;;
       ghostty)
         apply_ghostty

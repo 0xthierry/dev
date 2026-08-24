@@ -14,26 +14,18 @@ apply_hypr() {
   safe_link_path "$REPO_ROOT/configs/hypr" "$HOME/.config/hypr" "hypr config"
 }
 
-apply_voxtype() {
-  local config_src="$REPO_ROOT/configs/voxtype/config.toml"
-  local config_dst="$HOME/.config/voxtype/config.toml"
-  local backup_path=""
+apply_ai_desktop_linux() {
+  ensure_dir "$HOME/.config"
+  safe_link_path \
+    "$REPO_ROOT/configs/ai-desktop/chatgpt-flags.conf" \
+    "$HOME/.config/chatgpt-flags.conf" \
+    "ChatGPT Linux flags"
 
-  ensure_dir "$(dirname "$config_dst")"
-
-  if [[ -f "$config_dst" ]] && cmp -s "$config_src" "$config_dst"; then
-    log_item "voxtype config: already up to date"
-    return 0
-  fi
-
-  if [[ -e "$config_dst" || -L "$config_dst" ]]; then
-    backup_path="$(next_backup_path "$config_dst")"
-    run_cmd mv "$config_dst" "$backup_path"
-    log_item "voxtype config: backed up to $backup_path"
-  fi
-
-  run_cmd cp "$config_src" "$config_dst"
-  log_item "voxtype config: installed"
+  ensure_dir "$HOME/.local/bin"
+  safe_link_path \
+    "$REPO_ROOT/configs/ai-desktop/claude-desktop" \
+    "$HOME/.local/bin/claude-desktop" \
+    "Claude Desktop Linux wrapper"
 }
 
 apply_ghostty() {

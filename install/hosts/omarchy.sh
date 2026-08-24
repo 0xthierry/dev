@@ -9,7 +9,7 @@ HOST_ENV_VARS=(
 HOST_CONFIG_TARGETS=(
   nvim
   hypr
-  voxtype
+  ai-desktop
   ghostty
   herdr
   agents
@@ -29,6 +29,7 @@ HOST_PACMAN_PACKAGES=(
   edk2-ovmf
   fuse2
   ghostty
+  gnome-keyring
   hicolor-icon-theme
   libnotify
   libsecret
@@ -55,15 +56,10 @@ HOST_AUR_PACKAGES=(
   brave-bin
   chatgpt-desktop
   figma-linux
+  handy-bin
   linear-desktop-bin
   slack-desktop
   spotify
-)
-
-VOXTYPE_PARAKEET_MODEL="parakeet-tdt-0.6b-v3"
-VOXTYPE_PGP_KEYS=(
-  E79F5BAF8CD51A806AA27DBB7DA2709247D75BC6
-  9CCF7915B750CAE8B095ED1AA3FC9F33FD209279
 )
 
 setup_host_prereqs() {
@@ -71,81 +67,10 @@ setup_host_prereqs() {
   log_item "Preparing omarchy host prerequisites"
 }
 
-import_voxtype_pgp_keys() {
-  local key=""
-
-  if (( ! ${DRY_RUN:-0} )) && ! check_installed gpg; then
-    log_item "gpg not available, skipping Voxtype PGP key import"
-    return 0
-  fi
-
-  for key in "${VOXTYPE_PGP_KEYS[@]}"; do
-    if (( ${DRY_RUN:-0} )); then
-      dry_run_cmd gpg --keyserver hkps://keys.openpgp.org --recv-keys "$key"
-      continue
-    fi
-
-    if gpg --list-keys "$key" >/dev/null 2>&1; then
-      log_item "Voxtype PGP key present: ${key: -16}"
-      continue
-    fi
-
-    log_item "Importing Voxtype PGP key: ${key: -16}"
-    gpg --keyserver hkps://keys.openpgp.org --recv-keys "$key" || \
-      gpg --keyserver hkps://keyserver.ubuntu.com --recv-keys "$key"
-  done
-}
-
-install_voxtype_package() {
-  local build_parent="$HOME/.cache/dev-setup/aur"
-  local build_dir="$build_parent/voxtype-bin"
-  local quoted_build_dir=""
-
-  log_section "Voxtype Package"
-
-  if check_installed voxtype; then
-    log_item "voxtype: installed"
-    return 0
-  fi
-
-  if (( ! ${DRY_RUN:-0} )) && ! check_installed git; then
-    log_item "git not available, skipping voxtype-bin AUR checkout"
-    return 0
-  fi
-
-  if (( ! ${DRY_RUN:-0} )) && ! check_installed makepkg; then
-    log_item "makepkg not available, skipping voxtype-bin AUR build"
-    return 0
-  fi
-
-  # Do not use yay/paru here: Omarchy has a repo package with the same name,
-  # and its mirror can advertise stale package files. Building from the AUR
-  # checkout guarantees pacman installs the locally built package with -U.
-  ensure_dir "$build_parent"
-
-  if [[ -d "$build_dir/.git" ]]; then
-    log_item "Updating AUR checkout: voxtype-bin"
-    run_cmd git -C "$build_dir" pull --ff-only
-  elif [[ -e "$build_dir" ]]; then
-    log_item "WARNING: $build_dir exists but is not a git checkout; skipping voxtype-bin"
-    return 0
-  else
-    log_item "Cloning AUR checkout: voxtype-bin"
-    run_cmd git clone https://aur.archlinux.org/voxtype-bin.git "$build_dir"
-  fi
-
-  import_voxtype_pgp_keys
-
-  log_item "Building/installing AUR voxtype-bin"
-  printf -v quoted_build_dir '%q' "$build_dir"
-  run_cmd bash -lc "cd $quoted_build_dir && makepkg -si --noconfirm"
-}
-
 setup_host_packages() {
   log_section "Host Packages"
   log_item "Installing shared CLI package set for omarchy"
   setup_shared_cli_packages
-  install_voxtype_package
   install_zed_linux
   install_ai_desktop_apps_linux
   log_item "Skipping unsupported Omarchy apps: ChatGPT desktop, Codex.app, Conductor, Rectangle"
@@ -610,49 +535,105 @@ reload_hyprland_if_running() {
   run_cmd hyprctl reload
 }
 
-voxtype_parakeet_model_installed() {
-  local model_dir="$HOME/.local/share/voxtype/models/$VOXTYPE_PARAKEET_MODEL"
+configure_secret_service() {
+  log_section "Secret Service"
 
-  [[ -f "$model_dir/encoder-model.onnx" ]] && \
-    [[ -f "$model_dir/encoder-model.onnx.data" ]] && \
-    [[ -f "$model_dir/decoder_joint-model.onnx" ]] && \
-    [[ -f "$model_dir/vocab.txt" ]] && \
-    [[ -f "$model_dir/config.json" ]]
-}
-
-configure_voxtype() {
-  log_section "Voxtype Dictation"
-
-  if (( ! ${DRY_RUN:-0} )) && ! check_installed voxtype; then
-    log_item "voxtype not available after package installation; skipping runtime setup"
+  if (( ! ${DRY_RUN:-0} )) && ! check_installed gnome-keyring-daemon; then
+    log_item "GNOME Keyring is unavailable; desktop app sign-ins will not persist"
     return 0
   fi
 
-  log_item "Selecting ONNX AVX-512 Voxtype binary for Parakeet"
-  run_cmd sudo voxtype setup variant --to voxtype-onnx-avx512
+  log_item "Enabling GNOME Keyring for desktop app credentials"
+  run_cmd systemctl --user enable --now gnome-keyring-daemon.socket
+}
 
-  if (( ${DRY_RUN:-0} )) || ! voxtype_parakeet_model_installed; then
-    log_item "Downloading/selecting Parakeet model: $VOXTYPE_PARAKEET_MODEL"
-    run_cmd voxtype setup --download --model "$VOXTYPE_PARAKEET_MODEL" --quiet --no-post-install
+cleanup_ai_launcher_duplicates() {
+  local changed=0
+  local chatgpt_webapp="$HOME/.local/share/applications/ChatGPT.desktop"
+  local chatgpt_webapp_icon="$HOME/.local/share/applications/icons/ChatGPT.png"
+  local claude_webapp="$HOME/.local/share/applications/Claude.desktop"
+  local claude_webapp_icon="$HOME/.local/share/applications/icons/Claude.png"
+  local claude_duplicate="$HOME/.local/share/applications/claude-desktop.desktop"
+  local claude_wrapper="$HOME/.local/bin/claude-desktop"
 
-    # `voxtype setup --download --model` also edits config.toml. This repo owns
-    # the config, so restore the canonical file before installing the service.
-    apply_voxtype
+  log_section "AI Desktop Entries"
+
+  if [[ -f "$chatgpt_webapp" ]] \
+    && grep -Fqx 'Exec=omarchy-launch-webapp https://chatgpt.com/' "$chatgpt_webapp"; then
+    log_item "Removing obsolete ChatGPT web-app launcher"
+    run_cmd rm -f "$chatgpt_webapp" "$chatgpt_webapp_icon"
+    changed=1
+  fi
+
+  if [[ -f "$claude_webapp" ]] \
+    && grep -Fqx 'Exec=omarchy-launch-webapp https://claude.ai' "$claude_webapp"; then
+    log_item "Removing obsolete Claude web-app launcher"
+    run_cmd rm -f "$claude_webapp" "$claude_webapp_icon"
+    changed=1
+  fi
+
+  if [[ -f "$claude_duplicate" ]] \
+    && grep -Fqx "Exec=$HOME/.local/bin/claude-desktop %U" "$claude_duplicate"; then
+    log_item "Removing duplicate Claude desktop entry"
+    run_cmd rm -f "$claude_duplicate"
+    changed=1
+  fi
+
+  if [[ -x /usr/bin/claude-desktop && -f "$claude_wrapper" ]] \
+    && grep -Fq 'exec "/usr/lib/claude-desktop/claude-desktop"' "$claude_wrapper"; then
+    log_item "Removing obsolete Claude compatibility wrapper"
+    run_cmd rm -f "$claude_wrapper"
+    changed=1
+  fi
+
+  if (( changed )); then
+    if check_installed update-desktop-database || (( ${DRY_RUN:-0} )); then
+      run_cmd update-desktop-database "$HOME/.local/share/applications"
+    fi
+    if check_installed omarchy || (( ${DRY_RUN:-0} )); then
+      run_cmd omarchy restart walker
+    fi
   else
-    log_item "Parakeet model installed: $VOXTYPE_PARAKEET_MODEL"
+    log_item "ChatGPT and Claude launchers: already deduplicated"
+  fi
+}
+
+start_handy_hidden() {
+  if (( ${DRY_RUN:-0} )); then
+    dry_run_cmd uwsm-app -- handy --start-hidden
+    return 0
   fi
 
-  log_item "Installing/enabling Voxtype user service"
-  run_cmd voxtype setup systemd
+  nohup uwsm-app -- handy --start-hidden >/dev/null 2>&1 &
+}
 
-  if check_installed systemctl || (( ${DRY_RUN:-0} )); then
-    log_item "Restarting Voxtype user service"
-    run_cmd systemctl --user restart voxtype.service
+configure_handy() {
+  log_section "Handy Dictation"
+
+  if (( ! ${DRY_RUN:-0} )) && ! check_installed handy; then
+    log_item "handy not available after package installation; skipping runtime setup"
+    return 0
   fi
 
-  if check_installed omarchy-restart-waybar || (( ${DRY_RUN:-0} )); then
-    log_item "Restarting Waybar for Voxtype indicator"
-    run_cmd omarchy-restart-waybar
+  # Keep the old package and user data, but stop its background service now that
+  # Handy owns the dictation shortcuts.
+  if (( ${DRY_RUN:-0} )) || {
+    check_installed systemctl && systemctl --user cat voxtype.service >/dev/null 2>&1
+  }; then
+    log_item "Disabling legacy Voxtype user service"
+    run_cmd systemctl --user disable --now voxtype.service
+  fi
+
+  if (( ${DRY_RUN:-0} )); then
+    log_item "Starting Handy hidden with Hyprland"
+    start_handy_hidden
+  elif [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    log_item "Handy will start hidden at the next Hyprland login"
+  elif pgrep -x handy >/dev/null 2>&1; then
+    log_item "Handy: running"
+  else
+    log_item "Starting Handy hidden; complete onboarding on first launch"
+    start_handy_hidden
   fi
 }
 
@@ -664,8 +645,10 @@ setup_host_machine_state() {
   configure_omarchy_build_jobs
   configure_omarchy_storage_maintenance
   set_default_browser_brave
+  configure_secret_service
   apply_host_configs
-  configure_voxtype
+  cleanup_ai_launcher_duplicates
+  configure_handy
   reload_hyprland_if_running
 }
 
