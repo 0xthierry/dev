@@ -607,6 +607,124 @@ start_handy_hidden() {
   nohup uwsm-app -- handy --start-hidden >/dev/null 2>&1 &
 }
 
+configure_handy_shortcuts() {
+  local settings_dir="$HOME/.local/share/com.pais.handy"
+  local settings_file="$settings_dir/settings_store.json"
+  local tmp=""
+  local attempt=0
+
+  log_item "Reserving Handy's built-in shortcuts on F23/F24; Hyprland F9 owns push-to-talk"
+
+  if (( ${DRY_RUN:-0} )); then
+    return 0
+  fi
+
+  if ! check_installed jq; then
+    log_item "jq unavailable; cannot neutralize Handy's modifier shortcuts"
+    return 0
+  fi
+
+  if [[ -f "$settings_file" ]] && jq -e '
+    .settings.bindings.transcribe.default_binding == "f24" and
+    .settings.bindings.transcribe.current_binding == "f24" and
+    .settings.bindings.transcribe_with_post_process.default_binding == "f23" and
+    .settings.bindings.transcribe_with_post_process.current_binding == "f23"
+  ' "$settings_file" >/dev/null 2>&1; then
+    log_item "Handy built-in modifier shortcuts: already neutralized"
+    return 0
+  fi
+
+  if [[ -f "$settings_file" ]] && ! jq -e '
+    type == "object" and
+    ((.settings // {}) | type == "object") and
+    ((.settings.bindings // {}) | type == "object") and
+    ((.settings.bindings.transcribe // {}) | type == "object") and
+    ((.settings.bindings.transcribe_with_post_process // {}) | type == "object")
+  ' "$settings_file" >/dev/null; then
+    log_item "ERROR: $settings_file has an unexpected structure; refusing to modify it"
+    return 1
+  fi
+
+  ensure_dir "$settings_dir"
+  tmp="$(mktemp)"
+
+  if [[ -f "$settings_file" ]]; then
+    jq '
+      .settings = (.settings // {}) |
+      .settings.bindings = (.settings.bindings // {}) |
+      .settings.bindings.transcribe = (
+        (.settings.bindings.transcribe // {
+          "id": "transcribe",
+          "name": "Transcribe",
+          "description": "Converts your speech into text."
+        }) + {
+          "default_binding": "f24",
+          "current_binding": "f24"
+        }
+      ) |
+      .settings.bindings.transcribe_with_post_process = (
+        (.settings.bindings.transcribe_with_post_process // {
+          "id": "transcribe_with_post_process",
+          "name": "Transcribe with Post-Processing",
+          "description": "Converts your speech into text and applies AI post-processing."
+        }) + {
+          "default_binding": "f23",
+          "current_binding": "f23"
+        }
+      )
+    ' "$settings_file" > "$tmp"
+    chmod --reference="$settings_file" "$tmp"
+  else
+    jq -n '
+      {
+        "settings": {
+          "bindings": {
+            "transcribe": {
+              "id": "transcribe",
+              "name": "Transcribe",
+              "description": "Converts your speech into text.",
+              "default_binding": "f24",
+              "current_binding": "f24"
+            },
+            "transcribe_with_post_process": {
+              "id": "transcribe_with_post_process",
+              "name": "Transcribe with Post-Processing",
+              "description": "Converts your speech into text and applies AI post-processing.",
+              "default_binding": "f23",
+              "current_binding": "f23"
+            }
+          }
+        }
+      }
+    ' > "$tmp"
+    chmod 600 "$tmp"
+  fi
+
+  # Handy keeps settings in memory. Stop it before replacing the store so it
+  # cannot restore the unsafe shortcut during shutdown.
+  if pgrep -x handy >/dev/null 2>&1; then
+    if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+      rm -f "$tmp"
+      log_item "Handy is running outside this Hyprland environment; shortcut update deferred"
+      return 0
+    fi
+
+    log_item "Restarting Handy to apply safe shortcuts"
+    run_cmd pkill --signal TERM --exact handy
+    for attempt in {1..50}; do
+      pgrep -x handy >/dev/null 2>&1 || break
+      sleep 0.1
+    done
+    if pgrep -x handy >/dev/null 2>&1; then
+      rm -f "$tmp"
+      log_item "ERROR: Handy did not stop; refusing to replace its live settings store"
+      return 1
+    fi
+  fi
+
+  run_cmd mv "$tmp" "$settings_file"
+}
+
 configure_handy() {
   log_section "Handy Dictation"
 
@@ -623,6 +741,8 @@ configure_handy() {
     log_item "Disabling legacy Voxtype user service"
     run_cmd systemctl --user disable --now voxtype.service
   fi
+
+  configure_handy_shortcuts
 
   if (( ${DRY_RUN:-0} )); then
     log_item "Starting Handy hidden with Hyprland"
