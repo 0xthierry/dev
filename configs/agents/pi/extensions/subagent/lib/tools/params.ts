@@ -30,6 +30,16 @@ export type AgentPlanResult = { ok: true; plan: AgentExecutionPlan } | { ok: fal
 
 export const MAX_PARALLEL_AGENT_TASKS = 15;
 
+export function prepareAgentArguments(args: unknown): unknown {
+  const prepared = normalizeEffortField(args);
+  if (!isRecord(prepared) || !Array.isArray(prepared.tasks)) return prepared;
+
+  return {
+    ...prepared,
+    tasks: prepared.tasks.map((task) => normalizeEffortField(task)),
+  };
+}
+
 export function planAgentInvocation(params: AgentParams): AgentPlanResult {
   const single = readSingleTask(params);
   const parallel = readParallelTasks(params);
@@ -81,6 +91,17 @@ function readParallelTasks(params: AgentParams): PlannedAgentTask[] | undefined 
     tasks.push(normalized);
   }
   return tasks;
+}
+
+function normalizeEffortField(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+
+  const effort = parsePiThinkingLevel(value.effort);
+  return effort && effort !== value.effort ? { ...value, effort } : value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function normalizeTask(

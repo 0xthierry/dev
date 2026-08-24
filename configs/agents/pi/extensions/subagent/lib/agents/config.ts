@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { type PiThinkingLevel, parsePiThinkingLevel } from "../thinking";
+import { PI_THINKING_LEVELS, type PiThinkingLevel, parsePiThinkingLevel } from "../thinking";
 import type { AgentDefinition, AgentModelSelection } from "./types";
 
 export const SUBAGENT_CONFIG_FILE_NAME = "pi-subagent.json";
@@ -92,7 +92,7 @@ function normalizeAgentOverride(value: unknown, label: string): AgentExecutionOv
 
   const effort = override.effort === undefined ? undefined : parsePiThinkingLevel(override.effort);
   if (override.effort !== undefined && !effort) {
-    throw new Error(`${label}.effort must be one of: off, minimal, low, medium, high, xhigh, max.`);
+    throw new Error(`${label}.effort must be one of: ${PI_THINKING_LEVELS.join(", ")}.`);
   }
 
   const allowEffortOverride = optionalBoolean(override.allowEffortOverride, `${label}.allowEffortOverride`);

@@ -6,8 +6,8 @@ import type { SubagentRuntime } from "../runtime";
 import { findAgentSessionFileById, getProjectAgentSessionDir } from "../sessions/paths";
 import type { AgentSessionRecord } from "../sessions/registry";
 import { findAgentSessionRecord, restoreAgentSessionRecords } from "../sessions/registry";
-import type { PiThinkingLevel } from "../thinking";
-import { MAX_PARALLEL_AGENT_TASKS, type PlannedAgentTask, planAgentInvocation } from "./params";
+import { type PiThinkingLevel, parsePiThinkingLevel } from "../thinking";
+import { MAX_PARALLEL_AGENT_TASKS, type PlannedAgentTask, planAgentInvocation, prepareAgentArguments } from "./params";
 import { renderAgentToolCall, renderAgentToolResult } from "./render";
 import { type AgentParams, AgentParamsSchema } from "./schemas";
 
@@ -55,6 +55,10 @@ export function registerAgentTool(pi: ExtensionAPI, runtime: SubagentRuntime): v
       "Prompt child agents with a compact contract: goal, context/evidence, success criteria, hard constraints, validation, expected output, and stop rules.",
     ],
     parameters: AgentParamsSchema,
+
+    prepareArguments(args) {
+      return prepareAgentArguments(args) as AgentParams;
+    },
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeAgentTool(pi, runtime, params, signal, onUpdate, ctx);
@@ -455,5 +459,5 @@ function errorMessage(error: unknown): string {
 }
 
 function readThinkingLevel(pi: ExtensionAPI): PiThinkingLevel {
-  return pi.getThinkingLevel?.() ?? "medium";
+  return parsePiThinkingLevel(pi.getThinkingLevel?.()) ?? "medium";
 }

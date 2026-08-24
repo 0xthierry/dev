@@ -35,7 +35,7 @@ describe("subagent extension E2E", () => {
     tempDir = undefined;
   });
 
-  test("executes the agent tool through the Pi agent loop", async () => {
+  test("executes the agent tool and normalizes legacy max effort through the Pi agent loop", async () => {
     // Arrange
     tempDir = await mkdtemp(join(tmpdir(), "pi-subagent-e2e-"));
     const piAgentDir = join(tempDir, "pi-agent");
@@ -53,7 +53,7 @@ describe("subagent extension E2E", () => {
       ].join("\n"),
       "utf8",
     );
-    await writeSubagentConfig(join(projectRoot, SUBAGENT_CONFIG_FILE_NAME), "low");
+    await writeSubagentConfig(join(projectRoot, SUBAGENT_CONFIG_FILE_NAME));
 
     harness = await startPiRpcHarness({
       cwd: projectRoot,
@@ -102,7 +102,7 @@ describe("subagent extension E2E", () => {
     expect(response.success).toBe(true);
     expect(JSON.stringify(toolEnd)).toContain(childResponse);
     expect(JSON.stringify(toolEnd)).toContain("echo-agent");
-    expect(JSON.stringify(toolEnd)).toContain('"thinking":"low"');
+    expect(JSON.stringify(toolEnd)).toContain('"thinking":"xhigh"');
     expect(JSON.stringify(toolEnd)).toMatch(/"durationMs":\d+/);
     expect(JSON.stringify(agentEnd)).toContain(childResponse);
     const projectDirs = await readdir(join(piAgentDir, "agent-sessions"));
@@ -172,7 +172,7 @@ describe("subagent extension E2E", () => {
       const first = await executeAgentTool(
         fakePi.pi,
         runtime,
-        { subagent_type: "echo-agent", prompt: "Start the child session.", effort: "max" },
+        { subagent_type: "echo-agent", prompt: "Start the child session.", effort: "xhigh" },
         undefined,
         undefined,
         ctx,
@@ -184,7 +184,7 @@ describe("subagent extension E2E", () => {
       const second = await executeAgentTool(
         fakePi.pi,
         runtime,
-        { agent_id: firstRun?.agentId, prompt: "Continue the child session.", effort: "max" },
+        { agent_id: firstRun?.agentId, prompt: "Continue the child session.", effort: "xhigh" },
         undefined,
         undefined,
         ctx,
@@ -222,7 +222,7 @@ describe("subagent extension E2E", () => {
   }, 120_000);
 });
 
-async function writeSubagentConfig(configPath: string, effort: "low" | "medium" | "high"): Promise<void> {
+async function writeSubagentConfig(configPath: string, effort?: "low" | "medium" | "high"): Promise<void> {
   await writeFile(
     configPath,
     JSON.stringify({
@@ -230,8 +230,7 @@ async function writeSubagentConfig(configPath: string, effort: "low" | "medium" 
         "echo-agent": {
           provider: FAUX_PROVIDER_NAME,
           model: FAUX_MODEL_ID,
-          effort,
-          allowEffortOverride: false,
+          ...(effort ? { effort, allowEffortOverride: false } : {}),
         },
       },
     }),

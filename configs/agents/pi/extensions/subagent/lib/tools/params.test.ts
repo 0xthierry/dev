@@ -1,5 +1,30 @@
 import { describe, expect, test } from "bun:test";
-import { MAX_PARALLEL_AGENT_TASKS, planAgentInvocation } from "./params";
+import { MAX_PARALLEL_AGENT_TASKS, planAgentInvocation, prepareAgentArguments } from "./params";
+
+describe("prepareAgentArguments", () => {
+  test("maps legacy max effort to xhigh before schema validation", () => {
+    // Arrange
+    const args = {
+      effort: "max",
+      tasks: [
+        { subagent_type: "locator", prompt: "Find files", effort: "MAX" },
+        { subagent_type: "reviewer", prompt: "Review files", effort: "high" },
+      ],
+    };
+
+    // Act
+    const result = prepareAgentArguments(args);
+
+    // Assert
+    expect(result).toEqual({
+      effort: "xhigh",
+      tasks: [
+        { subagent_type: "locator", prompt: "Find files", effort: "xhigh" },
+        { subagent_type: "reviewer", prompt: "Review files", effort: "high" },
+      ],
+    });
+  });
+});
 
 describe("planAgentInvocation", () => {
   test("plans a single agent invocation", () => {

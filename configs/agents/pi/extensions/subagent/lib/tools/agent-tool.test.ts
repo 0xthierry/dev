@@ -20,6 +20,8 @@ describe("registerAgentTool", () => {
     expect(tool).toBeDefined();
     expect(tool?.description).toContain("Spawn or resume a subagent");
     expect(tool?.description).toContain("built-in agents");
+    expect(JSON.stringify(tool?.parameters)).toContain('"xhigh"');
+    expect(JSON.stringify(tool?.parameters)).not.toContain('"max"');
     expect(tool?.promptGuidelines).toContain(
       "Before delegating, decide what immediate critical-path work you should do locally; do not hand off urgent blocking work when your next step depends on the result.",
     );
@@ -159,7 +161,7 @@ describe("executeAgentTool", () => {
     const result = await executeAgentTool(
       fakePi.pi,
       runtime,
-      { subagent_type: "reviewer", prompt: "Review this diff", effort: "max" },
+      { subagent_type: "reviewer", prompt: "Review this diff", effort: "xhigh" },
       undefined,
       undefined,
       fakePi.createContext() as unknown as ExtensionContext,
