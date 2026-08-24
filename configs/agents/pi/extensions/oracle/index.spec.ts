@@ -71,7 +71,7 @@ describe("oracle extension E2E", () => {
     // Assert
     expect(promptResponse.success).toBe(true);
     expect(eventText(toolEnd)).toContain("The Oracle answered");
-    expect(eventText(toolEnd)).toContain("gpt-5-6-sol-pro");
+    expect(eventText(toolEnd)).toContain("gpt-5-6-pro");
     expect(eventText(toolEnd).toLowerCase()).toContain("pong");
     expect(eventText(agentEnd)).toContain(expectedFinalResponseText);
     expect(harness.stderr()).toBe("");

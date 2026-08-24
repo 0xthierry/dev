@@ -18,7 +18,7 @@ function config(overrides: Partial<NormalizedChatGptOracleConfig> = {}): Normali
   return {
     browser: "Chrome",
     profile: "Default",
-    model: "gpt-5-6-sol-pro",
+    model: "gpt-5-6-pro",
     timeoutMs: 30_000,
     pollIntervalMs: 1,
     ...overrides,
@@ -104,7 +104,7 @@ function defaultApiResponse(url: string, init?: RequestInit): Response {
   if (url === CHATGPT_CONVERSATION_URL) {
     const body = JSON.parse(String(init?.body));
     expect(body).toMatchObject({
-      model: "gpt-5-6-sol-pro",
+      model: "gpt-5-6-pro",
       parent_message_id: "client-created-root",
       force_parallel_switch: "auto",
     });
@@ -121,7 +121,7 @@ function defaultApiResponse(url: string, init?: RequestInit): Response {
             author: { role: "assistant" },
             status: "finished_successfully",
             create_time: 1,
-            metadata: { model_slug: "gpt-5-6-sol-pro" },
+            metadata: { model_slug: "gpt-5-6-pro" },
             content: { parts: ["oracle pong"] },
           },
         },
@@ -143,7 +143,7 @@ describe("askChatGptOracle", () => {
     expect(result).toEqual({
       providerId: "chatgpt-web",
       providerLabel: "ChatGPT Web",
-      model: "gpt-5-6-sol-pro",
+      model: "gpt-5-6-pro",
       conversationId: "conversation-id",
       messageId: "message-id",
       currentNode: "message-id",
@@ -186,7 +186,7 @@ describe("askChatGptOracle", () => {
                 id: "stream-message-id",
                 author: { role: "assistant" },
                 status: "finished_successfully",
-                metadata: { model_slug: "gpt-5-6-sol-pro" },
+                metadata: { model_slug: "gpt-5-6-pro" },
                 content: { parts: ["streamed oracle"] },
               },
             },
@@ -299,9 +299,7 @@ describe("askChatGptOracle", () => {
     const promise = askChatGptOracle({ prompt: "ask", config: config() }, fake.transport);
 
     // Assert
-    await expect(promise).rejects.toThrow(
-      'used model "gpt-5-5-pro" instead of configured Oracle model "gpt-5-6-sol-pro"',
-    );
+    await expect(promise).rejects.toThrow('used model "gpt-5-5-pro" instead of configured Oracle model "gpt-5-6-pro"');
   });
 
   test("fails clearly when configured ChatGPT cookies are missing", async () => {

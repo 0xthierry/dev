@@ -47,7 +47,7 @@ Example:
   "chatgpt": {
     "browser": "Chrome",
     "profile": "Default",
-    "model": "gpt-5-6-sol-pro",
+    "model": "gpt-5-6-pro",
     "projectId": "g-p-69ab61612c908191a5a197743a08cb71",
     "timeoutMs": 1800000,
     "pollIntervalMs": 3000
@@ -62,7 +62,7 @@ Example:
 | `$schema` | unset | Optional editor schema reference. From `~/.pi/oracle.json`, use `./agent/extensions/oracle/oracle.schema.json`. |
 | `chatgpt.browser` | `Chrome` | Local browser whose `chatgpt.com` cookies should be used. Supported: `Brave`, `Chromium`, `Chrome`. |
 | `chatgpt.profile` | `Default` | Browser profile signed into `https://chatgpt.com`. |
-| `chatgpt.model` | `gpt-5-6-sol-pro` | ChatGPT Web model id used by the Oracle. The previous `gpt-5-5-pro` default is upgraded automatically. |
+| `chatgpt.model` | `gpt-5-6-pro` | ChatGPT Web model id used by the Oracle. Legacy `gpt-5-5-pro` and `gpt-5-6-sol-pro` defaults are upgraded automatically. |
 | `chatgpt.projectId` | unset | Optional ChatGPT project id. When set, Oracle conversations are created inside this project. |
 | `chatgpt.timeoutMs` | `1800000` | Overall timeout for one Oracle request (30 minutes). |
 | `chatgpt.pollIntervalMs` | `3000` | Poll interval while waiting for the ChatGPT conversation answer. |

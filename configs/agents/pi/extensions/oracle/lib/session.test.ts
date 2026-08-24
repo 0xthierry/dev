@@ -10,7 +10,7 @@ describe("restoreOracleSessionState", () => {
         conversationId: "conversation-2",
         currentNode: "node-2",
         projectId: "g-p-one",
-        model: "gpt-5-6-sol-pro",
+        model: "gpt-5-6-pro",
       }),
     ];
 
@@ -22,7 +22,7 @@ describe("restoreOracleSessionState", () => {
       conversationId: "conversation-2",
       currentNode: "node-2",
       projectId: "g-p-one",
-      model: "gpt-5-6-sol-pro",
+      model: "gpt-5-6-pro",
     });
   });
 

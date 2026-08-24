@@ -38,7 +38,7 @@ describe("oracle config normalization", () => {
       chatgpt: {
         browser: "brave",
         profile: " Work ",
-        model: " gpt-5-6-sol-pro ",
+        model: " gpt-5-6-pro ",
         projectId: " g-p-69ab61612c908191a5a197743a08cb71 ",
         timeoutMs: 12_345.9,
         pollIntervalMs: 250.5,
@@ -52,22 +52,22 @@ describe("oracle config normalization", () => {
     expect(result.chatgpt).toEqual({
       browser: "Brave",
       profile: "Work",
-      model: "gpt-5-6-sol-pro",
+      model: "gpt-5-6-pro",
       projectId: "g-p-69ab61612c908191a5a197743a08cb71",
       timeoutMs: 12_345,
       pollIntervalMs: 250,
     });
   });
 
-  test("upgrades the previous default model", () => {
+  test("upgrades legacy default model slugs", () => {
     // Arrange
-    const config = { chatgpt: { model: "gpt-5-5-pro" } };
+    const configs = ["gpt-5-5-pro", "gpt-5-6-sol-pro"].map((model) => ({ chatgpt: { model } }));
 
     // Act
-    const result = normalizeOracleConfig(config);
+    const models = configs.map((config) => normalizeOracleConfig(config).chatgpt.model);
 
     // Assert
-    expect(result.chatgpt.model).toBe("gpt-5-6-sol-pro");
+    expect(models).toEqual(["gpt-5-6-pro", "gpt-5-6-pro"]);
   });
 
   test("rejects invalid configured browser and project ids", () => {

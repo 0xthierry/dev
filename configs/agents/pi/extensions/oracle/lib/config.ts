@@ -5,8 +5,8 @@ import { normalizeBrowserName, type SupportedBrowser } from "./providers/chatgpt
 
 export const ORACLE_CONFIG_PATH = join(homedir(), ".pi", "oracle.json");
 export const ORACLE_CONFIG_DISPLAY_PATH = "~/.pi/oracle.json";
-export const DEFAULT_ORACLE_MODEL = "gpt-5-6-sol-pro";
-const PREVIOUS_DEFAULT_ORACLE_MODEL = "gpt-5-5-pro";
+export const DEFAULT_ORACLE_MODEL = "gpt-5-6-pro";
+const LEGACY_ORACLE_MODELS = new Set(["gpt-5-5-pro", "gpt-5-6-sol-pro"]);
 export const DEFAULT_ORACLE_BROWSER: SupportedBrowser = "Chrome";
 export const DEFAULT_ORACLE_PROFILE = "Default";
 export const DEFAULT_ORACLE_TIMEOUT_MS = 1_800_000;
@@ -81,7 +81,7 @@ export function normalizedPositiveInteger(value: unknown, fallback: number): num
 
 function normalizedOracleModel(value: unknown): string {
   const model = normalizedString(value);
-  return !model || model === PREVIOUS_DEFAULT_ORACLE_MODEL ? DEFAULT_ORACLE_MODEL : model;
+  return !model || LEGACY_ORACLE_MODELS.has(model) ? DEFAULT_ORACLE_MODEL : model;
 }
 
 function normalizeConfiguredBrowser(value: unknown): SupportedBrowser {
