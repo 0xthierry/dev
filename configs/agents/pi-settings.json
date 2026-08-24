@@ -4,6 +4,7 @@
   "transport": "auto",
   "defaultThinkingLevel": "xhigh",
   "theme": "dark",
+  "tuiMode": "fullscreen",
   "hideThinkingBlock": false,
   "showCacheMissNotices": true,
   "quietStartup": false,
