@@ -23,6 +23,36 @@ describe("computer-use extension E2E", () => {
     harness = undefined;
   });
 
+  test("reports platform availability through Pi", async () => {
+    // Arrange
+    harness = await startPiRpcHarness({
+      extensionPath,
+      args: ["--no-extensions", "--no-skills", "--no-context-files"],
+    });
+
+    // Act
+    const commandsResponse = await harness.request({ type: "get_commands" });
+    const commandResponse = await harness.request({ type: "prompt", message: "/computer-use-status" });
+    const statusEvent = await harness.waitForEvent(
+      (event) =>
+        event.type === "extension_ui_request" &&
+        event.method === "notify" &&
+        typeof event.message === "string" &&
+        (process.platform === "darwin"
+          ? event.message.includes('"permissionMode": "no-permissions"')
+          : event.message.includes("this extension requires macOS")),
+      30_000,
+    );
+
+    // Assert
+    expect(commandNames(commandsResponse)).toContain("computer-use-status");
+    expect(commandResponse.success).toBe(true);
+    expect(statusEvent.message).toContain(
+      process.platform === "darwin" ? '"permissionMode": "no-permissions"' : "this extension requires macOS",
+    );
+    expect(harness.stderr()).toBe("");
+  }, 45_000);
+
   test("reports broker status and executes the source-owned tool through Pi", async () => {
     // Arrange
     if (process.platform !== "darwin") {

@@ -20,7 +20,6 @@
       "./nested-agents",
       "./lsp",
       "./fff",
-      "./excalidraw-session",
       "./amq-notify",
       "./computer-use"
     ]

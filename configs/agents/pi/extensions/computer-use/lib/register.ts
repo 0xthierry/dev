@@ -48,15 +48,21 @@ export function createComputerUseRuntime(): ComputerUseRuntime {
 }
 
 export function registerComputerUseExtension(pi: ExtensionAPI, host: ComputerUseHost = createComputerUseHost()): void {
-  if (host.platform !== "darwin") return;
-  const runtime = host.createRuntime();
+  const runtime = host.platform === "darwin" ? host.createRuntime() : undefined;
 
   pi.registerCommand("computer-use-status", {
     description: "Show Computer Use status",
     handler: async (_args, ctx) => {
+      if (!ctx.hasUI) return;
+      if (!runtime) {
+        ctx.ui.notify(`Computer Use is unavailable on ${host.platform}; this extension requires macOS.`, "warning");
+        return;
+      }
       ctx.ui.notify(JSON.stringify(runtime.getStatus(runtime.stateRoot), null, 2), "info");
     },
   });
+
+  if (!runtime) return;
 
   pi.registerTool({
     name: "computer_use",

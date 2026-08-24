@@ -1,6 +1,6 @@
 # Computer Use
 
-macOS-only Pi extension based on
+Pi extension with a macOS-only control tool based on
 [`codex-computer-use-mcp`](https://github.com/tmustier/codex-computer-use-mcp) **v0.5.0** at commit
 [`e90efa7`](https://github.com/tmustier/codex-computer-use-mcp/commit/e90efa7bf83cd7a2a8b821c568bf20da4c894c12).
 It exposes OpenAI's signed Computer Use surface directly to Pi without a nested model.
@@ -11,9 +11,9 @@ These files are adapted rather than copied unchanged.
 
 ## Usage
 
-- `/computer-use-status` shows broker and component availability. The command accepts no arguments, so it has no
-  argument completions.
-- `computer_use` runs composable JavaScript against the official Computer Use methods.
+- `/computer-use-status` shows broker and component availability on macOS, or explains that Computer Use is unavailable
+  on the current platform. The command accepts no arguments, so it has no argument completions.
+- `computer_use` runs composable JavaScript against the official Computer Use methods on macOS.
 
 ## Requirements
 
@@ -23,7 +23,7 @@ These files are adapted rather than copied unchanged.
 - ChatGPT's signed Computer Use component in either the current
   `~/.codex/computer-use/Codex Computer Use.app` layout or the reviewed legacy ChatGPT plugin layout
 
-The shared extension bundle loads this extension only on macOS.
+The shared extension bundle registers `/computer-use-status` on every platform, but exposes `computer_use` only on macOS.
 
 ## Security warning
 

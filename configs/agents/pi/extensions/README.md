@@ -52,7 +52,6 @@ pi install ./configs/agents/pi/extensions/codex-compaction
 pi install ./configs/agents/pi/extensions/nested-agents
 pi install ./configs/agents/pi/extensions/lsp
 pi install ./configs/agents/pi/extensions/fff
-pi install ./configs/agents/pi/extensions/excalidraw-session
 pi install ./configs/agents/pi/extensions/computer-use
 ```
 
@@ -77,7 +76,6 @@ For day-to-day use on Thierry's machines, `configs/agents/install.sh` symlinks t
 - [`nested-agents`](./nested-agents/README.md) — dynamically loads nested `AGENTS.md` / `CLAUDE.md` files when the agent touches files under those directories.
 - [`lsp`](./lsp/README.md) — exposes configured Language Server Protocol diagnostics and source fixes to Pi tools.
 - [`fff`](./fff/README.md) — overrides `grep`, `find`, and `multi_grep` with FFF-backed search and autocomplete.
-- [`excalidraw-session`](./excalidraw-session/README.md) — exposes an always-on local Excalidraw bridge tool for the focused browser canvas.
 - [`computer-use`](./computer-use/README.md) — copies and organizes OpenAI's signed macOS Computer Use bridge for direct Pi desktop control.
 
 ## Dependencies

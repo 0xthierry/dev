@@ -37,19 +37,26 @@ function createHost(runtime: ComputerUseRuntime, platform: NodeJS.Platform = "da
 }
 
 describe("registerComputerUseExtension", () => {
-  test("does not expose macOS computer control on other platforms", () => {
+  test("reports unsupported platforms without exposing macOS computer control", async () => {
     // Arrange
     const fakePi = createFakePi();
     const host = createHost(createRuntime(), "linux");
 
     // Act
     registerComputerUseExtension(fakePi.pi, host);
+    await fakePi.runCommand("computer-use-status", "", { hasUI: true });
 
     // Assert
     expect(host.createRuntime).not.toHaveBeenCalled();
-    expect(fakePi.commands.size).toBe(0);
+    expect(fakePi.commands.has("computer-use-status")).toBe(true);
     expect(fakePi.tools.size).toBe(0);
     expect(fakePi.handlers.size).toBe(0);
+    expect(fakePi.uiNotifications).toEqual([
+      {
+        message: "Computer Use is unavailable on linux; this extension requires macOS.",
+        type: "warning",
+      },
+    ]);
   });
 
   test("registers the status command and composable tool on macOS", async () => {
@@ -60,7 +67,7 @@ describe("registerComputerUseExtension", () => {
 
     // Act
     registerComputerUseExtension(fakePi.pi, host);
-    await fakePi.runCommand("computer-use-status");
+    await fakePi.runCommand("computer-use-status", "", { hasUI: true });
     const toolResult = await fakePi.runTool("computer_use", { code: "emit(await sky.list_apps());" });
     await fakePi.emit("session_start");
 
