@@ -41,17 +41,69 @@ function homeResponse(): Response {
   );
 }
 
-function oraclePollResponse(model?: string): Response {
+function oraclePollResponse(model?: string, text = "oracle pong"): Response {
   return jsonResponse({
-    current_node: "message-id",
+    current_node: "final",
     mapping: {
-      node: {
+      thoughts: {
+        parent: null,
+        message: {
+          id: "thoughts-message",
+          author: { role: "assistant" },
+          recipient: "all",
+          status: "finished_successfully",
+          end_turn: false,
+          metadata: { turn_exchange_id: "turn-id", reasoning_status: "is_reasoning" },
+          content: { content_type: "thoughts", parts: [] },
+        },
+      },
+      recap: {
+        parent: "thoughts",
+        message: {
+          id: "recap-message",
+          author: { role: "assistant" },
+          recipient: "all",
+          status: "finished_successfully",
+          end_turn: true,
+          metadata: { turn_exchange_id: "turn-id", reasoning_status: "reasoning_ended" },
+          content: { content_type: "reasoning_recap", parts: [] },
+        },
+      },
+      final: {
+        parent: "recap",
         message: {
           id: "message-id",
           author: { role: "assistant" },
+          recipient: "all",
           status: "finished_successfully",
-          metadata: model ? { model_slug: model } : {},
-          content: { parts: ["oracle pong"] },
+          end_turn: true,
+          metadata: {
+            turn_exchange_id: "turn-id",
+            ...(model ? { model_slug: model } : {}),
+            finish_details: { type: "stop" },
+          },
+          content: { content_type: "text", parts: [text] },
+        },
+      },
+    },
+  });
+}
+
+function commentaryPollResponse(): Response {
+  return jsonResponse({
+    current_node: "commentary",
+    mapping: {
+      commentary: {
+        parent: null,
+        message: {
+          id: "commentary-message",
+          author: { role: "assistant" },
+          recipient: "all",
+          channel: "commentary",
+          status: "finished_successfully",
+          end_turn: true,
+          metadata: { turn_exchange_id: "turn-id", model_slug: "gpt-5-6-pro" },
+          content: { content_type: "text", parts: ["I will analyze the trade-offs."] },
         },
       },
     },
@@ -109,25 +161,13 @@ function defaultApiResponse(url: string, init?: RequestInit): Response {
       force_parallel_switch: "auto",
     });
     expect((init?.headers as Record<string, string>)["openai-sentinel-chat-requirements-token"]).toBe("chat-token");
-    return textResponse('data: {"v":{"conversation_id":"conversation-id","message":{"metadata":{}}}}\n');
+    return textResponse(
+      'data: {"type":"stream_handoff","conversation_id":"conversation-id","turn_exchange_id":"turn-id","options":[]}\n',
+      200,
+      "text/event-stream",
+    );
   }
-  if (url === CHATGPT_CONVERSATION_POLL_URL) {
-    return jsonResponse({
-      current_node: "message-id",
-      mapping: {
-        node: {
-          message: {
-            id: "message-id",
-            author: { role: "assistant" },
-            status: "finished_successfully",
-            create_time: 1,
-            metadata: { model_slug: "gpt-5-6-pro" },
-            content: { parts: ["oracle pong"] },
-          },
-        },
-      },
-    });
-  }
+  if (url === CHATGPT_CONVERSATION_POLL_URL) return oraclePollResponse("gpt-5-6-pro");
   throw new Error(`Unexpected fetch URL: ${url}`);
 }
 
@@ -172,27 +212,13 @@ describe("askChatGptOracle", () => {
           [
             'data: {"v":{"conversation_id":"conversation-id","message":{"metadata":{}}}}',
             'data: {"v":[{"p":"/message/content/parts/0","v":"streamed oracle"}]}',
+            'data: {"type":"stream_handoff","conversation_id":"conversation-id","turn_exchange_id":"turn-id","options":[]}',
           ].join("\n"),
           200,
           "text/event-stream",
         );
       }
-      if (url === CHATGPT_CONVERSATION_POLL_URL) {
-        return jsonResponse({
-          current_node: "stream-message-id",
-          mapping: {
-            node: {
-              message: {
-                id: "stream-message-id",
-                author: { role: "assistant" },
-                status: "finished_successfully",
-                metadata: { model_slug: "gpt-5-6-pro" },
-                content: { parts: ["streamed oracle"] },
-              },
-            },
-          },
-        });
-      }
+      if (url === CHATGPT_CONVERSATION_POLL_URL) return oraclePollResponse("gpt-5-6-pro", "streamed oracle");
       return undefined;
     });
 
@@ -201,8 +227,25 @@ describe("askChatGptOracle", () => {
 
     // Assert
     expect(result.text).toBe("streamed oracle");
-    expect(result.currentNode).toBe("stream-message-id");
+    expect(result.currentNode).toBe("message-id");
     expect(fake.fetch.mock.calls.map((call) => call[0])).toContain(CHATGPT_CONVERSATION_POLL_URL);
+  });
+
+  test("keeps polling after a finished commentary message until the Pro answer is complete", async () => {
+    // Arrange
+    const pollResponses = [commentaryPollResponse(), oraclePollResponse("gpt-5-6-pro", "substantive answer")];
+    const fake = transport((url) => {
+      if (url === CHATGPT_CONVERSATION_POLL_URL) return pollResponses.shift();
+      return undefined;
+    });
+
+    // Act
+    const result = await askChatGptOracle({ prompt: "ask", config: config() }, fake.transport);
+
+    // Assert
+    expect(result.text).toBe("substantive answer");
+    expect(fake.fetch.mock.calls.filter((call) => call[0] === CHATGPT_CONVERSATION_POLL_URL)).toHaveLength(2);
+    expect(fake.sleep).toHaveBeenCalledWith(1, undefined);
   });
 
   test("resumes a compatible prior Oracle conversation", async () => {
@@ -216,7 +259,11 @@ describe("askChatGptOracle", () => {
           parent_message_id: "previous-node-id",
           conversation_template_id: projectId,
         });
-        return textResponse("data: [DONE]\n", 200, "text/event-stream");
+        return textResponse(
+          'data: {"type":"stream_handoff","conversation_id":"conversation-id","turn_exchange_id":"turn-id","options":[]}\n',
+          200,
+          "text/event-stream",
+        );
       }
       return undefined;
     });

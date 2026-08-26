@@ -2,7 +2,7 @@ import { Impit } from "impit";
 import type { NormalizedChatGptOracleConfig } from "../../config";
 import { isOracleSessionStateCompatible, type OracleSessionState } from "../../session";
 import { type CookieMap, getChatGptCookies } from "./browser-cookies";
-import { extractOracleConversationText } from "./conversation";
+import { extractOracleConversationText, type OracleTurnScope } from "./conversation";
 import {
   buildChatGptCommonHeaders,
   buildChatGptConversationPayload,
@@ -129,7 +129,10 @@ export async function askChatGptOracle(
   const conversationId = stream.conversationId ?? conversationState?.conversationId;
   if (!conversationId) throw new Error("ChatGPT did not return a conversation id for the oracle request.");
 
-  const answer = await waitForOracleAnswer(conversationId, context, request, transport);
+  const turnScope: OracleTurnScope = stream.turnExchangeId
+    ? { kind: "pro", turnExchangeId: stream.turnExchangeId }
+    : { kind: "instant", requestMessageId: stream.requestMessageId };
+  const answer = await waitForOracleAnswer(conversationId, turnScope, context, request, transport);
   const currentNode = answer.currentNode ?? answer.messageId;
   if (!currentNode) throw new Error("ChatGPT conversation poll did not return a current node for resuming.");
   if (!answer.model) throw new Error("ChatGPT conversation poll did not report the model used for the Oracle answer.");
@@ -234,11 +237,12 @@ async function sendConversationRequest(
   request: OracleAskRequest,
   transport: ChatGptOracleTransport,
 ) {
+  const requestMessageId = transport.randomUUID();
   const payload = buildChatGptConversationPayload({
     prompt,
     conversationId: conversationState?.conversationId,
     parentMessageId: conversationState?.currentNode,
-    messageId: transport.randomUUID(),
+    messageId: requestMessageId,
     model: request.config.model,
     now: new Date(),
     projectId: request.config.projectId,
@@ -270,17 +274,17 @@ async function sendConversationRequest(
       })}.`,
     );
   }
-  return stream;
+  return { ...stream, requestMessageId };
 }
 
 async function waitForOracleAnswer(
   conversationId: string,
+  turnScope: OracleTurnScope,
   context: AuthenticatedContext,
   request: OracleAskRequest,
   transport: ChatGptOracleTransport,
 ) {
   const started = Date.now();
-  let latest = null as ReturnType<typeof extractOracleConversationText>;
   while (Date.now() - started < request.config.timeoutMs) {
     const conversation = await fetchJson<unknown>(
       transport,
@@ -296,16 +300,12 @@ async function waitForOracleAnswer(
       },
       { label: "conversation poll", signal: request.signal, timeoutMs: 60_000 },
     );
-    const answer = extractOracleConversationText(conversation);
-    if (answer?.text) {
-      latest = answer;
-      if (answer.finished) return answer;
-    }
+    const answer = extractOracleConversationText(conversation, turnScope);
+    if (answer) return answer;
     await transport.sleep(request.config.pollIntervalMs, request.signal);
   }
 
-  if (latest?.text) return latest;
-  throw new Error("Timed out waiting for ChatGPT oracle text.");
+  throw new Error("Timed out waiting for the complete ChatGPT Oracle answer.");
 }
 
 async function fetchChatGptBuildInfo(

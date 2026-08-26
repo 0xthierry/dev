@@ -211,6 +211,21 @@ describe("parseChatGptConversationStream", () => {
     expect(result).toEqual({ conversationId: "conversation-id", text: "hello" });
   });
 
+  test("does not classify an instant message turn id as a Pro stream handoff", () => {
+    // Arrange
+    const raw = [
+      'data: {"v":{"conversation_id":"conversation-id","message":{"metadata":{"turn_exchange_id":"instant-turn"}}}}',
+      'data: {"v":[{"p":"/message/content/parts/0","v":"instant answer"}]}',
+      "data: [DONE]",
+    ].join("\n");
+
+    // Act
+    const result = parseChatGptConversationStream(raw);
+
+    // Assert
+    expect(result).toEqual({ conversationId: "conversation-id", text: "instant answer" });
+  });
+
   test("extracts conversation id from a Pro stream handoff", () => {
     // Arrange
     const raw = [
@@ -222,7 +237,7 @@ describe("parseChatGptConversationStream", () => {
     const result = parseChatGptConversationStream(raw);
 
     // Assert
-    expect(result).toEqual({ conversationId: "conversation-id", text: "" });
+    expect(result).toEqual({ conversationId: "conversation-id", turnExchangeId: "turn-id", text: "" });
   });
 
   test("recovers conversation id from a malformed stream prefix", () => {

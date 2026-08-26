@@ -59,6 +59,7 @@ export interface ChatGptSession {
 
 export interface ChatGptConversationStreamSummary {
   conversationId?: string;
+  turnExchangeId?: string;
   text: string;
 }
 
@@ -287,6 +288,7 @@ export function buildChatGptConversationPayload(options: {
 
 export function parseChatGptConversationStream(rawText: string): ChatGptConversationStreamSummary {
   let conversationId: string | undefined;
+  let turnExchangeId: string | undefined;
   let text = "";
 
   for (const rawLine of rawText.split(/\r?\n/)) {
@@ -298,6 +300,15 @@ export function parseChatGptConversationStream(rawText: string): ChatGptConversa
       event = JSON.parse(line.slice(6)) as unknown;
     } catch {
       continue;
+    }
+
+    if (isRecord(event)) {
+      const directConversationId = getRecordValue(event, "conversation_id");
+      if (typeof directConversationId === "string") conversationId = directConversationId;
+      if (getRecordValue(event, "type") === "stream_handoff") {
+        const directTurnExchangeId = getRecordValue(event, "turn_exchange_id");
+        if (typeof directTurnExchangeId === "string") turnExchangeId = directTurnExchangeId;
+      }
     }
 
     const value = getRecordValue(event, "v");
@@ -321,7 +332,11 @@ export function parseChatGptConversationStream(rawText: string): ChatGptConversa
     if (match?.[1]) conversationId = match[1];
   }
 
-  return { conversationId, text };
+  return {
+    ...(conversationId ? { conversationId } : {}),
+    ...(turnExchangeId ? { turnExchangeId } : {}),
+    text,
+  };
 }
 
 function buildNavigatorKeys(userAgent: string, hardwareConcurrency: number): string[] {
