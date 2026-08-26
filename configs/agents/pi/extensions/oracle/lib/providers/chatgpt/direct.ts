@@ -28,6 +28,7 @@ import {
 
 const CHATGPT_DIRECT_RETRY_ATTEMPTS = 3;
 const CHATGPT_DIRECT_RETRY_BACKOFF_MS = [500, 1_500];
+const CHATGPT_MAX_POLL_RATE_LIMIT_BACKOFF_MS = 60_000;
 const CHATGPT_RETRYABLE_HTTP_STATUS = new Set([429, 502, 503, 504]);
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<ChatGptFetchResponse>;
@@ -87,6 +88,7 @@ interface ChatGptFetchOptions {
   label: string;
   signal?: AbortSignal;
   timeoutMs: number;
+  retryRateLimits?: boolean;
 }
 
 export function createDefaultChatGptOracleTransport(timeoutMs: number): ChatGptOracleTransport {
@@ -284,25 +286,46 @@ async function waitForOracleAnswer(
   request: OracleAskRequest,
   transport: ChatGptOracleTransport,
 ) {
-  const started = Date.now();
-  while (Date.now() - started < request.config.timeoutMs) {
-    const conversation = await fetchJson<unknown>(
-      transport,
-      `${CHATGPT_BASE_URL}/backend-api/conversation/${conversationId}`,
-      {
-        headers: {
-          ...context.commonHeaders,
-          ...buildChatGptTargetHeaders(
-            `/backend-api/conversation/${conversationId}`,
-            "/backend-api/conversation/{conversation_id}",
-          ),
+  const deadline = Date.now() + request.config.timeoutMs;
+  let consecutiveRateLimits = 0;
+  while (Date.now() < deadline) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) break;
+    const pollSignal = timeoutSignal(request.signal, remainingMs);
+    let conversation: unknown;
+    try {
+      conversation = await fetchJson<unknown>(
+        transport,
+        `${CHATGPT_BASE_URL}/backend-api/conversation/${conversationId}`,
+        {
+          headers: {
+            ...context.commonHeaders,
+            ...buildChatGptTargetHeaders(
+              `/backend-api/conversation/${conversationId}`,
+              "/backend-api/conversation/{conversation_id}",
+            ),
+          },
         },
-      },
-      { label: "conversation poll", signal: request.signal, timeoutMs: 60_000 },
-    );
+        {
+          label: "conversation poll",
+          signal: pollSignal,
+          timeoutMs: Math.min(60_000, remainingMs),
+          retryRateLimits: false,
+        },
+      );
+      consecutiveRateLimits = 0;
+    } catch (error) {
+      if (Date.now() >= deadline && !request.signal?.aborted) break;
+      if (!isRateLimitError(error)) throw error;
+      consecutiveRateLimits += 1;
+      const delayMs = pollRateLimitDelayMs(error, request.config.pollIntervalMs, consecutiveRateLimits);
+      await sleepBeforeDeadline(transport, delayMs, deadline, request.signal);
+      continue;
+    }
+
     const answer = extractOracleConversationText(conversation, turnScope);
     if (answer) return answer;
-    await transport.sleep(request.config.pollIntervalMs, request.signal);
+    await sleepBeforeDeadline(transport, request.config.pollIntervalMs, deadline, request.signal);
   }
 
   throw new Error("Timed out waiting for the complete ChatGPT Oracle answer.");
@@ -339,7 +362,7 @@ async function fetchJson<T>(
   init: RequestInit,
   options: ChatGptFetchOptions,
 ): Promise<T> {
-  return retryChatGptDirect(transport, options.signal, async () => {
+  const fetchOnce = async () => {
     const snapshot = await fetchTextOnce(transport, url, init, options);
     try {
       return JSON.parse(snapshot.body) as T;
@@ -352,7 +375,8 @@ async function fetchJson<T>(
         true,
       );
     }
-  });
+  };
+  return retryChatGptDirect(transport, options.signal, fetchOnce, options.retryRateLimits ?? true);
 }
 
 async function postJson<T>(
@@ -387,6 +411,8 @@ async function fetchTextOnce(
     throw new ChatGptDirectResponseError(
       `ChatGPT ${options.label} failed: ${formatResponseDiagnostics(url, snapshot)}.`,
       CHATGPT_RETRYABLE_HTTP_STATUS.has(response.status),
+      response.status,
+      parseRetryAfterMs(response.headers.get("retry-after")),
     );
   }
   return snapshot;
@@ -396,12 +422,14 @@ async function retryChatGptDirect<T>(
   transport: ChatGptOracleTransport,
   signal: AbortSignal | undefined,
   run: () => Promise<T>,
+  retryRateLimits = true,
 ): Promise<T> {
   for (let attempt = 1; attempt <= CHATGPT_DIRECT_RETRY_ATTEMPTS; attempt++) {
     try {
       return await run();
     } catch (error) {
-      if (attempt >= CHATGPT_DIRECT_RETRY_ATTEMPTS || !shouldRetryChatGptDirectError(error, signal)) throw error;
+      if (attempt >= CHATGPT_DIRECT_RETRY_ATTEMPTS || !shouldRetryChatGptDirectError(error, signal, retryRateLimits))
+        throw error;
       await transport.sleep(CHATGPT_DIRECT_RETRY_BACKOFF_MS[attempt - 1] ?? 0, signal);
     }
   }
@@ -409,9 +437,16 @@ async function retryChatGptDirect<T>(
   throw new Error("ChatGPT direct retry loop exited unexpectedly.");
 }
 
-function shouldRetryChatGptDirectError(error: unknown, signal: AbortSignal | undefined): boolean {
+function shouldRetryChatGptDirectError(
+  error: unknown,
+  signal: AbortSignal | undefined,
+  retryRateLimits: boolean,
+): boolean {
   if (signal?.aborted) return false;
-  if (error instanceof ChatGptDirectResponseError) return error.retryable;
+  if (error instanceof ChatGptDirectResponseError) {
+    if (error.status === 429 && !retryRateLimits) return false;
+    return error.retryable;
+  }
   return true;
 }
 
@@ -419,10 +454,49 @@ class ChatGptDirectResponseError extends Error {
   constructor(
     message: string,
     readonly retryable: boolean,
+    readonly status?: number,
+    readonly retryAfterMs?: number,
   ) {
     super(message);
     this.name = "ChatGptDirectResponseError";
   }
+}
+
+function isRateLimitError(error: unknown): error is ChatGptDirectResponseError {
+  return error instanceof ChatGptDirectResponseError && error.status === 429;
+}
+
+function pollRateLimitDelayMs(
+  error: ChatGptDirectResponseError,
+  pollIntervalMs: number,
+  consecutiveRateLimits: number,
+): number {
+  const exponentialBackoff = Math.min(
+    pollIntervalMs * 2 ** Math.max(0, consecutiveRateLimits - 1),
+    CHATGPT_MAX_POLL_RATE_LIMIT_BACKOFF_MS,
+  );
+  return Math.max(exponentialBackoff, error.retryAfterMs ?? 0);
+}
+
+async function sleepBeforeDeadline(
+  transport: ChatGptOracleTransport,
+  delayMs: number,
+  deadline: number,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  const remainingMs = deadline - Date.now();
+  if (remainingMs <= 0) return;
+  await transport.sleep(Math.min(delayMs, remainingMs), signal);
+}
+
+function parseRetryAfterMs(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds * 1_000);
+
+  const dateMs = Date.parse(value);
+  if (!Number.isFinite(dateMs)) return undefined;
+  return Math.max(0, dateMs - Date.now());
 }
 
 function chatGptReferer(projectId: string | undefined): string {

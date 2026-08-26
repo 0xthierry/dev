@@ -41,6 +41,16 @@ function homeResponse(): Response {
   );
 }
 
+function rateLimitedResponse(retryAfter?: string): Response {
+  return new Response(JSON.stringify({ detail: "rate limited" }), {
+    status: 429,
+    headers: {
+      "content-type": "application/json",
+      ...(retryAfter ? { "retry-after": retryAfter } : {}),
+    },
+  });
+}
+
 function oraclePollResponse(model?: string, text = "oracle pong"): Response {
   return jsonResponse({
     current_node: "final",
@@ -248,6 +258,65 @@ describe("askChatGptOracle", () => {
     expect(fake.sleep).toHaveBeenCalledWith(1, undefined);
   });
 
+  test("keeps polling the same Pro turn after a rate-limit response", async () => {
+    // Arrange
+    const pollResponses = [rateLimitedResponse("7"), oraclePollResponse("gpt-5-6-pro", "answer after backoff")];
+    const fake = transport((url) => {
+      if (url === CHATGPT_CONVERSATION_POLL_URL) return pollResponses.shift();
+      return undefined;
+    });
+
+    // Act
+    const result = await askChatGptOracle({ prompt: "ask", config: config() }, fake.transport);
+
+    // Assert
+    expect(result.text).toBe("answer after backoff");
+    expect(fake.fetch.mock.calls.filter((call) => call[0] === CHATGPT_CONVERSATION_URL)).toHaveLength(1);
+    expect(fake.fetch.mock.calls.filter((call) => call[0] === CHATGPT_CONVERSATION_POLL_URL)).toHaveLength(2);
+    expect(fake.sleep).toHaveBeenCalledWith(7_000, undefined);
+  });
+
+  test("retains short retries for transient non-rate-limit polling failures", async () => {
+    // Arrange
+    const pollResponses = [
+      textResponse("temporarily unavailable", 503),
+      oraclePollResponse("gpt-5-6-pro", "answer after service recovery"),
+    ];
+    const fake = transport((url) => {
+      if (url === CHATGPT_CONVERSATION_POLL_URL) return pollResponses.shift();
+      return undefined;
+    });
+
+    // Act
+    const result = await askChatGptOracle({ prompt: "ask", config: config() }, fake.transport);
+
+    // Assert
+    expect(result.text).toBe("answer after service recovery");
+    expect(fake.fetch.mock.calls.filter((call) => call[0] === CHATGPT_CONVERSATION_POLL_URL)).toHaveLength(2);
+    expect(fake.sleep).toHaveBeenCalledWith(500, expect.any(AbortSignal));
+  });
+
+  test("backs off repeated polling rate limits when the server omits Retry-After", async () => {
+    // Arrange
+    const pollResponses = [
+      rateLimitedResponse(),
+      rateLimitedResponse(),
+      oraclePollResponse("gpt-5-6-pro", "answer after exponential backoff"),
+    ];
+    const fake = transport((url) => {
+      if (url === CHATGPT_CONVERSATION_POLL_URL) return pollResponses.shift();
+      return undefined;
+    });
+
+    // Act
+    const result = await askChatGptOracle({ prompt: "ask", config: config({ pollIntervalMs: 10 }) }, fake.transport);
+
+    // Assert
+    expect(result.text).toBe("answer after exponential backoff");
+    expect(fake.sleep).toHaveBeenNthCalledWith(1, 10, undefined);
+    expect(fake.sleep).toHaveBeenNthCalledWith(2, 20, undefined);
+  });
+
   test("resumes a compatible prior Oracle conversation", async () => {
     // Arrange
     const projectId = "g-p-69ab61612c908191a5a197743a08cb71";
@@ -323,6 +392,24 @@ describe("askChatGptOracle", () => {
     expect(result.text).toBe("oracle pong");
     expect(fake.fetch.mock.calls.filter((call) => call[0] === CHATGPT_HOME_URL)).toHaveLength(2);
     expect(fake.sleep).toHaveBeenCalledWith(500, undefined);
+  });
+
+  test("keeps non-poll rate-limit retries on the existing short backoff", async () => {
+    // Arrange
+    const authResponses = [rateLimitedResponse("120"), jsonResponse({ accessToken: "access-token" })];
+    const fake = transport((url) => {
+      if (url === CHATGPT_AUTH_SESSION_URL) return authResponses.shift();
+      return undefined;
+    });
+
+    // Act
+    const result = await askChatGptOracle({ prompt: "ask", config: config() }, fake.transport);
+
+    // Assert
+    expect(result.text).toBe("oracle pong");
+    expect(fake.fetch.mock.calls.filter((call) => call[0] === CHATGPT_AUTH_SESSION_URL)).toHaveLength(2);
+    expect(fake.sleep).toHaveBeenCalledWith(500, undefined);
+    expect(fake.sleep).not.toHaveBeenCalledWith(120_000, undefined);
   });
 
   test("rejects answers whose server-reported model is missing", async () => {

@@ -71,6 +71,8 @@ Each answer is accepted only when the polled ChatGPT conversation reports the co
 
 For Pro turns, the initial HTTP stream can end after handing generation to another transport, and intermediate commentary can itself be marked `finished_successfully`. The extension therefore captures the handoff's `turn_exchange_id` and keeps polling that exact conversation turn until a completed `reasoning_recap` is followed by its final answer on the active branch. Intermediate commentary, previous-turn answers, partial completions, hidden messages, and stream `[DONE]` markers are not treated as completed Oracle answers.
 
+A `429` response while polling is treated as backpressure, not as a failed Oracle turn. The extension honors `Retry-After` when present, otherwise applies bounded exponential backoff, and then continues polling the same conversation and turn until the normal request timeout.
+
 ## Requirements
 
 - Sign into `https://chatgpt.com` in the configured local browser profile.
