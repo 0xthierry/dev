@@ -102,7 +102,7 @@ describe("subagent extension E2E", () => {
     expect(response.success).toBe(true);
     expect(JSON.stringify(toolEnd)).toContain(childResponse);
     expect(JSON.stringify(toolEnd)).toContain("echo-agent");
-    expect(JSON.stringify(toolEnd)).toContain('"thinking":"xhigh"');
+    expect(JSON.stringify(toolEnd)).toContain('"thinking":"high"');
     expect(JSON.stringify(toolEnd)).toMatch(/"durationMs":\d+/);
     expect(JSON.stringify(agentEnd)).toContain(childResponse);
     const projectDirs = await readdir(join(piAgentDir, "agent-sessions"));
@@ -172,7 +172,7 @@ describe("subagent extension E2E", () => {
       const first = await executeAgentTool(
         fakePi.pi,
         runtime,
-        { subagent_type: "echo-agent", prompt: "Start the child session.", effort: "xhigh" },
+        { subagent_type: "echo-agent", prompt: "Start the child session.", effort: "low" },
         undefined,
         undefined,
         ctx,
@@ -184,7 +184,7 @@ describe("subagent extension E2E", () => {
       const second = await executeAgentTool(
         fakePi.pi,
         runtime,
-        { agent_id: firstRun?.agentId, prompt: "Continue the child session.", effort: "xhigh" },
+        { agent_id: firstRun?.agentId, prompt: "Continue the child session.", effort: "high" },
         undefined,
         undefined,
         ctx,

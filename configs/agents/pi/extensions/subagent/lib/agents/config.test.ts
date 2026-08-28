@@ -92,15 +92,21 @@ describe("normalizeAgentOverrideConfig", () => {
     expect(parse).toThrow("provider and pi-subagent.json.agents.reviewer.model must be provided together");
   });
 
-  test("maps legacy max effort to xhigh", () => {
+  test("clamps retired max and xhigh effort to high", () => {
     // Arrange
-    const value = { agents: { reviewer: { effort: "max" } } };
+    const value = {
+      agents: {
+        maxReviewer: { effort: "max" },
+        xhighReviewer: { effort: "xhigh" },
+      },
+    };
 
     // Act
     const result = normalizeAgentOverrideConfig(value, "pi-subagent.json");
 
     // Assert
-    expect(result.agents.get("reviewer")).toEqual({ effort: "xhigh" });
+    expect(result.agents.get("maxReviewer")).toEqual({ effort: "high" });
+    expect(result.agents.get("xhighReviewer")).toEqual({ effort: "high" });
   });
 
   test("rejects unsupported effort levels", () => {
@@ -111,7 +117,7 @@ describe("normalizeAgentOverrideConfig", () => {
     const parse = () => normalizeAgentOverrideConfig(value, "pi-subagent.json");
 
     // Assert
-    expect(parse).toThrow("effort must be one of: off, minimal, low, medium, high, xhigh");
+    expect(parse).toThrow("effort must be one of: off, minimal, low, medium, high");
   });
 
   test("requires a configured effort when effort overrides are disabled", () => {

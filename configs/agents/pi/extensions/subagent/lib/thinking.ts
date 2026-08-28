@@ -1,4 +1,4 @@
-export const PI_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+export const PI_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high"] as const;
 
 export type PiThinkingLevel = (typeof PI_THINKING_LEVELS)[number];
 
@@ -8,6 +8,6 @@ export function parsePiThinkingLevel(value: unknown): PiThinkingLevel | undefine
   if (typeof value !== "string") return undefined;
 
   const normalized = value.trim().toLowerCase();
-  if (normalized === "max") return "xhigh";
+  if (normalized === "max" || normalized === "xhigh") return "high";
   return PI_THINKING_LEVEL_SET.has(normalized) ? (normalized as PiThinkingLevel) : undefined;
 }

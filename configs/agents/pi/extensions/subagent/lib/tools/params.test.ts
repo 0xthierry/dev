@@ -2,12 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { MAX_PARALLEL_AGENT_TASKS, planAgentInvocation, prepareAgentArguments } from "./params";
 
 describe("prepareAgentArguments", () => {
-  test("maps legacy max effort to xhigh before schema validation", () => {
+  test("clamps retired max and xhigh effort to high before schema validation", () => {
     // Arrange
     const args = {
       effort: "max",
       tasks: [
-        { subagent_type: "locator", prompt: "Find files", effort: "MAX" },
+        { subagent_type: "locator", prompt: "Find files", effort: "xhigh" },
         { subagent_type: "reviewer", prompt: "Review files", effort: "high" },
       ],
     };
@@ -17,9 +17,9 @@ describe("prepareAgentArguments", () => {
 
     // Assert
     expect(result).toEqual({
-      effort: "xhigh",
+      effort: "high",
       tasks: [
-        { subagent_type: "locator", prompt: "Find files", effort: "xhigh" },
+        { subagent_type: "locator", prompt: "Find files", effort: "high" },
         { subagent_type: "reviewer", prompt: "Review files", effort: "high" },
       ],
     });

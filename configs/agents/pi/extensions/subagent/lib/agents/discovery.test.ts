@@ -137,7 +137,7 @@ describe("discoverAgents", () => {
       });
       expect(result.agents.find((agent) => agent.name === "worker")).toMatchObject({
         source: "builtin",
-        effort: "xhigh",
+        effort: "high",
       });
       expect(result.agents.find((agent) => agent.name === "worker")?.systemPrompt).toContain("bounded implementation");
     } finally {

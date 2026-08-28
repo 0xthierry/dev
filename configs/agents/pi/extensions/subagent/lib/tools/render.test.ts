@@ -138,7 +138,7 @@ describe("formatAgentToolResult", () => {
             ...agentResult("reviewer", "succeeded"),
             durationMs: 65_400,
             model: "gpt-5.5",
-            thinking: "xhigh",
+            thinking: "high",
           },
         ],
       },
@@ -149,7 +149,7 @@ describe("formatAgentToolResult", () => {
 
     // Assert
     expect(text).toContain("⏱ 1m 5s");
-    expect(text).toContain("gpt-5.5 • xhigh");
+    expect(text).toContain("gpt-5.5 • high");
   });
 });
 

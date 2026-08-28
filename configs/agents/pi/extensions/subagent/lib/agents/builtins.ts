@@ -56,7 +56,7 @@ export const BUILTIN_AGENTS: readonly AgentDefinition[] = Object.freeze([
     systemPrompt: WORKER_PROMPT,
     filePath: "builtin://worker",
     source: "builtin",
-    frontmatter: { name: "worker", description: "Bounded implementation agent.", effort: "xhigh" },
-    effort: "xhigh",
+    frontmatter: { name: "worker", description: "Bounded implementation agent.", effort: "high" },
+    effort: "high",
   }),
 ]);

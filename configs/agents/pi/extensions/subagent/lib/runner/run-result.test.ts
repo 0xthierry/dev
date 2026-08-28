@@ -113,13 +113,13 @@ describe("buildAgentRunResult", () => {
     state.finalOutput = "Agent completed.";
     state.model = "test-model";
     state.stopReason = "stop";
-    const request = { ...runRequest("reviewer", "Review diff"), thinking: "xhigh" as const };
+    const request = { ...runRequest("reviewer", "Review diff"), thinking: "high" as const };
 
     // Act
     const result = buildAgentRunResult(request, state, 0, "");
 
     // Assert
-    expect(result.thinking).toBe("xhigh");
+    expect(result.thinking).toBe("high");
   });
 
   test("treats late child errors after assistant output as a successful result", () => {

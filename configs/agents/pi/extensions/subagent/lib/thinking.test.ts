@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { PI_THINKING_LEVELS, parsePiThinkingLevel } from "./thinking";
 
 describe("parsePiThinkingLevel", () => {
-  test("normalizes supported Pi thinking levels and maps legacy max effort to xhigh", () => {
+  test("normalizes supported levels and clamps retired max and xhigh effort to high", () => {
     // Arrange
     const values = ["off", " minimal ", "LOW", "medium", "high", "xhigh", "MAX"];
 
@@ -10,12 +10,12 @@ describe("parsePiThinkingLevel", () => {
     const levels = values.map((value) => parsePiThinkingLevel(value));
 
     // Assert
-    expect(levels).toEqual(["off", "minimal", "low", "medium", "high", "xhigh", "xhigh"]);
+    expect(levels).toEqual(["off", "minimal", "low", "medium", "high", "high", "high"]);
   });
 
-  test("does not advertise max as a thinking-level option", () => {
+  test("does not advertise retired thinking levels", () => {
     // Arrange
-    const expected: Array<(typeof PI_THINKING_LEVELS)[number]> = ["off", "minimal", "low", "medium", "high", "xhigh"];
+    const expected: Array<(typeof PI_THINKING_LEVELS)[number]> = ["off", "minimal", "low", "medium", "high"];
 
     // Act
     const levels = [...PI_THINKING_LEVELS];

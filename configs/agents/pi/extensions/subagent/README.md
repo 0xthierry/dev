@@ -11,7 +11,7 @@ The agent tool renders live progress in Pi's tool row. Single-agent runs show th
 Two built-in agents are always available:
 
 - `scout` — fast, read-only codebase reconnaissance for specific, well-scoped questions. Uses `low` effort.
-- `worker` — bounded implementation agent for production changes, fixes, refactors, and validation. Uses `xhigh` effort.
+- `worker` — bounded implementation agent for production changes, fixes, refactors, and validation. Uses `high` effort.
 
 Configured agents are Markdown files under project-local `.pi/agents` directories or Pi's normal agent config directory and override built-ins with the same name:
 
@@ -32,7 +32,7 @@ effort: medium
 Agent system prompt goes here.
 ```
 
-Optional `effort` frontmatter sets the default child Pi thinking level for that agent. Supported options are `off`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Legacy `max` values are normalized to `xhigh`, but `max` is no longer advertised as a tool option. Agents without `effort` inherit the parent session's current thinking level. Built-in agents have pinned effort values listed above. A tool call can pass `effort` to override both the agent definition and parent thinking level for that run.
+Optional `effort` frontmatter sets the default child Pi thinking level for that agent. Supported options are `off`, `minimal`, `low`, `medium`, and `high`. Retired `max` and `xhigh` values are clamped to `high` for compatibility but are not advertised as tool options. Agents without `effort` inherit the parent session's current thinking level, clamped to the supported range. Built-in agents have pinned effort values listed above. A tool call can pass `effort` to override both the agent definition and parent thinking level for that run.
 
 The child `pi` process loads Pi context files and skills through normal Pi discovery. A stable child-boundary prompt is prepended before the agent body so child sessions know the parent owns orchestration and that they must not run more subagents.
 
@@ -52,7 +52,7 @@ A trusted repository can optionally add `pi-subagent.json` at its git root to ch
     "worker": {
       "provider": "openai-codex",
       "model": "gpt-5.4",
-      "effort": "xhigh"
+      "effort": "high"
     }
   }
 }
