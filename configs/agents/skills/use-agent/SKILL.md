@@ -29,11 +29,11 @@ Use only this curated model/harness mapping:
 
 | Model | Worker harness | Effort | Profile and best use |
 | --- | --- | --- | --- |
-| **Fable 5** | Claude | `xhigh` | Treat as the most intelligent available model: a tech lead, oracle, or deep specialist. Use for ambiguous architecture, difficult root-cause analysis, high-risk decisions, and adjudicating disagreements. |
-| **Opus 5** | Claude | `xhigh` | State-of-the-art workhorse. Use for medium-to-complex plans, implementations, debugging, and detailed or adversarial review. |
-| **GPT-5.6-sol** | Pi | `xhigh` | State-of-the-art workhorse in the same capability tier as Opus 5. Use for medium-to-complex implementation, debugging, and adversarial review. |
-| **GPT-5.6-luna** | Pi | `xhigh` | Fast GPT-5.6 variant. Prefer it for rapid independent plan/code review, simplification, code/example-quality passes, and bounded well-specified implementation. Give parallel replicas distinct lenses. |
-| **GPT-5.6-terra** | Pi | `xhigh` | Fast GPT-5.6 variant. Prefer it as another independent sample for plan/code review, debugging, TDD/phase analysis, and bounded implementation when low latency matters. |
+| **Fable 5** | Claude | `high` | Treat as the most intelligent available model: a tech lead, oracle, or deep specialist. Use for ambiguous architecture, difficult root-cause analysis, high-risk decisions, and adjudicating disagreements. |
+| **Opus 5** | Claude | `high` | State-of-the-art workhorse. Use for medium-to-complex plans, implementations, debugging, and detailed or adversarial review. |
+| **GPT-5.6-sol** | Pi | `high` | State-of-the-art workhorse in the same capability tier as Opus 5. Use for medium-to-complex implementation, debugging, and adversarial review. |
+| **GPT-5.6-luna** | Pi | `high` | Fast GPT-5.6 variant. Prefer it for rapid independent plan/code review, simplification, code/example-quality passes, and bounded well-specified implementation. Give parallel replicas distinct lenses. |
+| **GPT-5.6-terra** | Pi | `high` | Fast GPT-5.6 variant. Prefer it as another independent sample for plan/code review, debugging, TDD/phase analysis, and bounded implementation when low latency matters. |
 | **Grok 4.6** | Pi | `high` | Very capable and much faster, but less intelligent than the other models in this roster. Prefer it for simpler, settled, well-bounded implementation, reconnaissance, mechanical changes, and test/fix loops. Pair it with Opus 5 and/or a GPT-5.6 variant when stronger independent review is warranted. |
 
 These models come from different providers and training datasets. Their disagreement is useful: independent answers can expose blind spots that one provider or dataset misses. Independent samples from sol/luna/terra add within-family diversity, not provider diversity. For important reviews, ask models independently before showing them another model's answer; otherwise the second reviewer may anchor on the first.
@@ -288,7 +288,7 @@ build_worker_prompt() {
 
 `amq coop exec --require-wake` must establish native wake before the agent starts. If it fails, do not launch with degraded delivery and do not invent a hook workaround. Run `AM_ROOT="$ROOM_ROOT" AM_ME="$MAIN_HANDLE" amq doctor --ops`, fix the wake boundary, and relaunch.
 
-## Claude worker — Fable 5, xhigh
+## Claude worker — Fable 5, high
 
 ```bash
 WORKER_HANDLE="claude-fable-1" # choose any configured unused claude-fable-1..N
@@ -297,13 +297,13 @@ WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
   amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake claude -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
   --model claude-fable-5 \
-  --effort xhigh \
+  --effort high \
   --dangerously-skip-permissions \
   "$WORKER_PROMPT")"
 printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
 ```
 
-## Claude worker — Opus 5, xhigh
+## Claude worker — Opus 5, high
 
 ```bash
 WORKER_HANDLE="claude-opus-1" # choose any configured unused claude-opus-1..N
@@ -312,7 +312,7 @@ WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
   amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake claude -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
   --model claude-opus-5 \
-  --effort xhigh \
+  --effort high \
   --dangerously-skip-permissions \
   "$WORKER_PROMPT")"
 printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
@@ -320,7 +320,7 @@ printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID
 
 Claude's unrestricted flag is `--dangerously-skip-permissions`; do not copy another harness's permission flag into this recipe.
 
-## Pi worker — GPT-5.6-sol, xhigh
+## Pi worker — GPT-5.6-sol, high
 
 Use Pi's direct ChatGPT-backed catalog entry `openai-codex/gpt-5.6-sol`. Pi's tools execute with the local Pi process's permissions; `--approve` trusts project-local Pi resources.
 
@@ -331,13 +331,13 @@ WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
   amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake pi -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
   --model openai-codex/gpt-5.6-sol \
-  --thinking xhigh \
+  --thinking high \
   --approve \
   "$WORKER_PROMPT")"
 printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
 ```
 
-## Pi worker — GPT-5.6-luna, xhigh
+## Pi worker — GPT-5.6-luna, high
 
 Use Pi's direct ChatGPT-backed catalog entry `openai-codex/gpt-5.6-luna`.
 
@@ -348,13 +348,13 @@ WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
   amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake pi -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
   --model openai-codex/gpt-5.6-luna \
-  --thinking xhigh \
+  --thinking high \
   --approve \
   "$WORKER_PROMPT")"
 printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
 ```
 
-## Pi worker — GPT-5.6-terra, xhigh
+## Pi worker — GPT-5.6-terra, high
 
 Use Pi's direct ChatGPT-backed catalog entry `openai-codex/gpt-5.6-terra`.
 
@@ -365,7 +365,7 @@ WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
   amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake pi -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
   --model openai-codex/gpt-5.6-terra \
-  --thinking xhigh \
+  --thinking high \
   --approve \
   "$WORKER_PROMPT")"
 printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
