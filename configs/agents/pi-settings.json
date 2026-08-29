@@ -23,7 +23,6 @@
     "npm:@plannotator/pi-extension@0.24.2"
   ],
   "extensions": [
-    "-extensions/codex-fast-mode",
     "!../../.agents/**",
     "!../../.claude/**",
     "!../../.codex/**"
