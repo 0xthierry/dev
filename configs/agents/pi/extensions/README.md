@@ -48,6 +48,7 @@ pi install ./configs/agents/pi/extensions/subagent
 pi install ./configs/agents/pi/extensions/statusline
 pi install ./configs/agents/pi/extensions/token-speed
 pi install ./configs/agents/pi/extensions/codex-fast-mode
+pi install ./configs/agents/pi/extensions/xai-grok-fast-mode
 pi install ./configs/agents/pi/extensions/codex-compaction
 pi install ./configs/agents/pi/extensions/nested-agents
 pi install ./configs/agents/pi/extensions/lsp
@@ -71,6 +72,7 @@ For day-to-day use on Thierry's machines, `configs/agents/install.sh` symlinks t
 - [`statusline`](./statusline/README.md) — appends clickable PR number, git change counts, and the Cloudflare BDR quote to Pi's existing footer.
 - [`token-speed`](./token-speed/README.md) — displays real-time assistant streaming throughput in Pi's footer.
 - [`codex-fast-mode`](./codex-fast-mode/README.md) — injects Codex Fast mode's `service_tier: "priority"` for eligible ChatGPT-backed Codex requests.
+- [`xai-grok-fast-mode`](./xai-grok-fast-mode/README.md) — injects xAI Priority Processing's `service_tier: "priority"` for direct xAI Grok requests.
 - [`codex-compaction`](./codex-compaction/README.md) — uses Codex native opaque compaction for `/compact` on ChatGPT-backed Codex models.
 - [`nested-agents`](./nested-agents/README.md) — dynamically loads nested `AGENTS.md` / `CLAUDE.md` files when the agent touches files under those directories.
 - [`lsp`](./lsp/README.md) — exposes configured Language Server Protocol diagnostics and source fixes to Pi tools.
