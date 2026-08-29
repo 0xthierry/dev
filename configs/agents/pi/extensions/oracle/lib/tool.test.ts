@@ -14,7 +14,7 @@ import {
 type ToolResult = AgentToolResult<OracleToolDetails>;
 
 describe("registerOracleTool", () => {
-  test("registers oracle with state-of-the-art guidance and only prompt/session parameters", () => {
+  test("registers oracle with exceptional-escalation guidance and only prompt/session parameters", () => {
     // Arrange
     const fakePi = createFakePi();
     const runtime = fakeRuntime();
@@ -24,11 +24,14 @@ describe("registerOracleTool", () => {
 
     // Assert
     const tool = fakePi.tools.get(ORACLE_TOOL_NAME);
-    expect(tool?.description).toContain("state-of-the-art intelligence");
-    expect(tool?.description).toContain("blind and stateless");
-    expect(tool?.promptGuidelines).toContain(
-      "oracle: The Oracle is a separate, state-of-the-art intelligence. Consult it for hard reasoning, debugging, architecture, or review — or whenever the user asks for the Oracle or a second opinion. First do your own reasoning and propose a concrete fix or decision, then bring that to the Oracle to challenge or confirm; do not offload the decision the moment something looks tricky.",
+    expect(tool?.description).toContain("exceptional escalation tool");
+    expect(tool?.description).toContain("Uncertainty alone does not qualify");
+    expect(tool?.promptSnippet).toBe(
+      "Optional escalation for an explicitly requested or high-consequence unresolved second opinion.",
     );
+    expect(tool?.promptGuidelines).toEqual([
+      "oracle: Do not invoke oracle by default. Use it only when the user explicitly requests the Oracle or a second opinion, or after concrete investigation leaves a consequential decision unresolved and a wrong answer would carry substantial security, data-loss, concurrency, or costly long-lived architectural risk. Ordinary implementation, debugging, code review, refactoring, test failures, and design choices do not qualify; uncertainty alone does not qualify.",
+    ]);
     expect(JSON.stringify(tool?.parameters)).toContain("prompt");
     expect(JSON.stringify(tool?.parameters)).toContain("context");
     expect(JSON.stringify(tool?.parameters)).not.toContain("profile");

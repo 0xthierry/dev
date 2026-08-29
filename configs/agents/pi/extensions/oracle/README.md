@@ -16,7 +16,9 @@ To the agent, the tool is simply **the Oracle**. The agent-facing prompts never 
 
 ## When the agent should consult it
 
-The tool prompt tells the agent to consult the Oracle on hard reasoning, debugging, architecture, or review; when it wants an independent second opinion on a risky change; or whenever the user explicitly asks for the Oracle or a second opinion. Crucially, the agent is told to **do its own reasoning first and arrive at a concrete proposed fix or decision**, then bring that to the Oracle to challenge, refine, or confirm — the Oracle reviews the agent's thinking, it does not replace it. Reaching for the Oracle the moment something looks tricky, before proposing a solution, is called out as the wrong reflex. It is also told **not** to use the Oracle for routine work it can do confidently, because the Oracle is slow (answers can take minutes) and deliberate.
+The Oracle is an **exceptional escalation tool**, not a default step in implementation, debugging, code review, refactoring, test-failure investigation, or design. The agent should use it only when the user explicitly requests the Oracle or a second opinion, or after concrete investigation leaves a consequential decision unresolved and a wrong answer would carry substantial security, data-loss, concurrency, or costly long-lived architectural risk. Ordinary uncertainty does not qualify.
+
+Before invoking it, the agent must **do its own reasoning and arrive at a concrete proposed fix or decision**, then ask the Oracle to challenge that position. If repository evidence, tests, documentation, or ordinary engineering judgment are enough to proceed confidently, the agent should proceed without the Oracle.
 
 ## How the agent should prompt it
 
