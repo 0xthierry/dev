@@ -2,6 +2,7 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 
 export const MAX_INLINE_CONTENT = 30_000;
+export const MAX_FETCH_URLS = 20;
 export const CUSTOM_ENTRY_TYPE = "web-access-results";
 export const CONTENT_ANALYSIS_MODELS = [
   "gemini-3-flash-preview",
@@ -39,7 +40,10 @@ export const WEB_SEARCH_PARAMETERS = Type.Object({
 export const FETCH_CONTENT_PARAMETERS = Type.Object({
   url: Type.Optional(Type.String({ description: "Single URL to fetch. Use when inspecting one page or video." })),
   urls: Type.Optional(
-    Type.Array(Type.String(), { description: "Multiple URLs to fetch. Use when comparing or batching sources." }),
+    Type.Array(Type.String(), {
+      maxItems: MAX_FETCH_URLS,
+      description: `Multiple URLs to fetch (max ${MAX_FETCH_URLS}). Use when comparing or batching sources.`,
+    }),
   ),
   forceClone: Type.Optional(
     Type.Boolean({
@@ -83,14 +87,15 @@ export const GET_SEARCH_CONTENT_PARAMETERS = Type.Object({
   offset: Type.Optional(
     Type.Integer({
       minimum: 0,
-      description: "Character offset into stored fetched content (default 0). Use to page through long content.",
+      description:
+        "Character offset into a stored search summary or fetched content (default 0). Use to page through long content.",
     }),
   ),
   limit: Type.Optional(
     Type.Integer({
       minimum: 1,
       maximum: MAX_INLINE_CONTENT,
-      description: "Maximum fetched-content characters to return. Use to request smaller chunks.",
+      description: "Maximum stored-content characters to return. Use to request smaller search or fetch chunks.",
     }),
   ),
 });

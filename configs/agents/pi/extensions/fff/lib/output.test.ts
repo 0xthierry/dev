@@ -1,6 +1,47 @@
 import { describe, expect, test } from "bun:test";
-import { fffFileAnnotation, formatFindOutput, formatGrepOutput } from "./output";
+import { boundFffOutput, fffFileAnnotation, formatFindOutput, formatGrepOutput } from "./output";
 import type { GrepResult, SearchResult } from "./types";
+
+describe("boundFffOutput", () => {
+  test("leaves output within aggregate bounds unchanged", () => {
+    // Arrange
+    const output = "src/a.ts\n 1: needle";
+
+    // Act
+    const result = boundFffOutput(output, "Retry with a smaller limit to continue.");
+
+    // Assert
+    expect(result).toBe(output);
+  });
+
+  test("reserves space for a continuation notice within the 2000-line bound", () => {
+    // Arrange
+    const output = Array.from({ length: 2_100 }, (_, index) => `line ${index}`).join("\n");
+
+    // Act
+    const result = boundFffOutput(output, 'Continue with cursor="fff_g1".');
+
+    // Assert
+    expect(result.split("\n")).toHaveLength(2_000);
+    expect(result).toEndWith(
+      '\n\n[Output truncated at the aggregate 50 KiB/2000-line limit. Continue with cursor="fff_g1".]',
+    );
+  });
+
+  test("keeps the final model-visible text within the 50 KiB byte bound", () => {
+    // Arrange
+    const output = Array.from({ length: 600 }, () => "é".repeat(50)).join("\n");
+
+    // Act
+    const result = boundFffOutput(output, "Retry with a smaller limit/context to continue.");
+
+    // Assert
+    expect(Buffer.byteLength(result, "utf8")).toBeLessThanOrEqual(50 * 1024);
+    expect(result).toEndWith(
+      "\n\n[Output truncated at the aggregate 50 KiB/2000-line limit. Retry with a smaller limit/context to continue.]",
+    );
+  });
+});
 
 describe("fffFileAnnotation", () => {
   test("prefers git status over frecency", () => {

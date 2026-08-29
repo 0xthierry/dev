@@ -1,79 +1,71 @@
 # codex-compaction
 
-Durable dual-representation compaction for Codex (`openai-codex-responses`) models.
+Remote-only opaque compaction for Codex (`openai-codex-responses`) models.
 
-## Dual representation
+## One endpoint call
 
-Each compaction entry remains a normal Pi compaction:
+Every Codex compaction—manual, Pi threshold/overflow, early extension threshold, or legacy recovery—makes exactly one direct subscription-endpoint request to `/codex/responses` with one trailing `compaction_trigger` input item.
 
-- `summary` is always a real portable Pi summary produced through exported `compact()`
-- `details.readFiles` / `details.modifiedFiles` stay Pi-native and accumulate across repeated extension compactions
-- when remote Codex compaction succeeds, `details.codexCompaction` (v2) adds opaque provider state
+The extension does not call Pi's exported `compact()` on Codex. A successful endpoint response becomes the complete `CompactionResult`:
 
-v2 never writes placeholder summaries. Legacy v1 entries (sentinel placeholder + single opaque item) are still read for migration/recovery, but are never written.
+- `summary` is the stable required placeholder `[Opaque Codex compaction artifact — replaced only on compatible Codex provider requests.]`
+- `usage` is the remote endpoint usage
+- `details.codexCompaction` stores the opaque artifact, remote usage, response id, binding, and validated recent user prefix
+- `details.readFiles` and `details.modifiedFiles` are derived from Pi's prepared file operations and merged latest metadata, without another model call
 
-A successfully parsed v2 record is never treated as legacy recovery, even if the portable summary text happens to mention `pi-codex-compaction:`.
+The direct fetch bypasses Pi provider transport, retry policy, and proxy hooks.
 
-### v2 record
+## Persisted v2 record
 
 ```ts
 details.codexCompaction = {
   version: 2,
-  binding: { provider, api, modelId, endpoint, accountHash }, // accountHash = sha256(accountId).slice(0,16)
-  userPrefix: JsonObject[],  // validated literal user turns only
-  artifact: [compactionItem], // empty when invalid → prefix-only degradation
+  binding: { provider, api, modelId, endpoint, accountHash }, // sha256(accountId).slice(0, 16)
+  userPrefix: JsonObject[],   // validated literal user text only
+  artifact: [compactionItem],
   firstKeptEntryId,
   tokensBefore,
   responseId?,
   remoteUsage?,
-  recovery?, // only after v1/legacy recovery
+  recovery?,
 }
 ```
 
-No raw account id, token, headers, or system prompt is persisted.
+No raw account id, bearer token, headers, or system prompt is persisted.
 
-## Two-call cost
+## Provider injection
 
-On Codex models, `session_before_compact` runs two calls concurrently (`Promise.allSettled`):
+On `before_provider_request` for Codex, the extension inspects only the latest compaction entry on the active branch.
 
-1. portable Pi `compact()` over the prepared discarded span (plus turn-prefix split handling)
-2. direct remote Codex `/codex/responses` fetch with a `compaction_trigger`
+- Compatible binding and valid artifact: replace the placeholder summary payload item with `userPrefix + artifact`, then repair orphan tool-output seams after the inserted boundary.
+- Incompatible binding, unavailable auth hash, invalidated artifact, invalid artifact, or repeated seam errors: replace the opaque placeholder with validated `userPrefix` only.
+- No usable prefix: remove the opaque placeholder rather than present it as a semantic summary.
+- Older v2 records containing a real semantic summary retain that summary during prefix-only migration behavior.
+- A newer ordinary Pi compaction prevents injection of any older Codex artifact.
 
-**Transport note:** the remote fetch is a direct subscription-endpoint HTTP call. It bypasses Pi provider transport, retry policy, and proxy hooks. The portable `compact()` call also does **not** inherit `AgentSession` retry callbacks; only the default `compact()` behavior applies.
+Replacement searches only a small input prefix and is idempotent after the placeholder has been removed.
 
-Outcomes:
+## Early Codex threshold
 
-| Summary | Remote | Result |
-|---|---|---|
-| ok | ok | combined usage + Pi details + v2 codex record |
-| ok | fail | summary-only (Pi details; combine known remote failure usage when present) |
-| fail | any | `undefined` so Pi retries/defaults (non-recovery); remote artifact discarded |
-| abort | any | `undefined` without warning (non-recovery) |
-| recovery + any hard failure | | `{ cancel: true }` — never lets Pi compact the original placeholder prep |
+A `turn_end` handler uses `ctx.getContextUsage()` and calls `ctx.compact()` when Codex context reaches the exact configured extension threshold of **176,800 tokens** (`tokens >= 176800`). An in-flight guard prevents duplicate triggers until `onComplete` or `onError` fires. The resulting `session_before_compact` path is the same single-endpoint path used by manual and core-triggered compactions.
 
-## Pi-hybrid retention
+## Failure behavior
 
-The cut boundary stays Pi-owned:
+Endpoint, authentication, account-binding, malformed-response, and abort failures return `{ cancel: true }` from `session_before_compact`. Pi therefore does not silently make a second portable summary model call. Interactive failures notify with a warning; aborts remain quiet. No placeholder entry is persisted on a failed regular compaction.
 
-- compact only `messagesToSummarize` + `turnPrefixMessages`
-- keep Pi `firstKeptEntryId` tail unchanged
+## Legacy recovery
 
-At provider time (`before_provider_request`, Codex only):
+Legacy v1 entries and the exact historical two-line sentinel placeholder remain readable for migration:
 
-1. inspect **only the latest** `type=compaction` entry on the branch
-2. locate the Pi compaction-summary item in a small input prefix window
-3. if binding+artifact are valid and not invalidated: replace that one summary item with `userPrefix + artifact`, then run seam repair after the inserted boundary
-4. if binding mismatches, artifact invalid/empty, seam-strike threshold reached, or custom v1 invalidation present: insert binding-independent validated `userPrefix` before the retained summary (prefix-only; idempotent if already present)
-5. ordinary Pi compaction or no record: no mutation
+- Recovery is detected before the Codex model guard.
+- Raw pre-boundary messages are budget-bounded, compaction entries are skipped, and full recovered file operations are merged.
+- Missing `firstKeptEntryId` falls back only to entries before the latest compaction, never the whole branch.
+- Truncated recovery always cancels to avoid lossy migration.
+- Compatible Codex v1 artifacts chain into the one remote request with only the original current span, avoiding recovered-message duplication.
+- Codex recovery endpoint failure cancels; it never invokes a portable fallback.
+- Non-Codex legacy recovery may use `portableCompactOnly()` once because it is a model-migration fallback.
 
-A newer ordinary Pi compaction above an older Codex entry never injects or chains the older artifact.
-
-## Fallback and migration
-
-- **Remote failure**: keep portable summary; next turns use normal Pi summary text.
-- **v1 / exact legacy sentinel recovery** (model-agnostic, before the Codex guard): clear `previousSummary`, prepend budget-bounded raw pre-boundary messages (skipping compaction entries; missing `firstKept` falls back to entries before the latest compaction only — never the whole branch), merge **full** recovered file ops, and summarize once. Budget uses model `contextWindow` headroom minus `reserveTokens`, a fixed prompt margin, and estimated existing summarize/turn-prefix tokens — not `reserveTokens` alone. Reports `attempted` / `truncated` / `recoveredMessages`. **If recovery is truncated, the extension always `{ cancel: true }` before any portable/dual compact can persist** (lossy migration is refused). When a compatible v1 artifact is chained for the remote call, remote input is `old artifact + original current span` (not recovered duplicates). Other recovery failures also cancel rather than falling back to Pi default. Ordinary-placeholder detection matches only the exact trimmed two-line legacy template with a bracketed `pi-codex-compaction:<id>` sentinel.
-- **Invalidation** is stateless branch evidence after the latest boundary (no `after_provider_response` correlation): custom `codex-compaction-invalidated` entries (v1 sentinel/entry id), deterministic compaction/encrypted/unknown-item rejections, and missing-tool-call seam errors after a small strike threshold all disable the artifact (prefix-only/none). False positives degrade to summary/prefix-only.
-- **Repeated compaction**: candidate `userPrefix` is previous v2 `userPrefix` plus newly discarded literal user text (images ignored; drop only when no text remains), re-trimmed to `keepRecentTokens`. Latest compaction file lists are merged into `fileOps` before portable compact so cumulative file metadata survives `fromHook` drops.
+Legacy v1 records are read but never written.
 
 ## Scope
 

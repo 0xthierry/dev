@@ -66,14 +66,16 @@ fetch_content({
   frames: 6,
 })
 
-get_search_content({ responseId: "<responseId>", urlIndex: 0 })
+get_search_content({ responseId: "<responseId>", queryIndex: 0 })
 
 get_search_content({
   responseId: "<responseId>",
-  urlIndex: 0,
+  queryIndex: 0,
   offset: 30000,
   limit: 30000,
 })
+
+get_search_content({ responseId: "<responseId>", urlIndex: 0 })
 ```
 
 The model normally calls these tools itself. The examples above show the parameter shapes.
@@ -191,7 +193,7 @@ Search output is formatted as a concise answer plus a `Sources` list. Provider r
 
 ## How fetching works
 
-`fetch_content` accepts either `url` or `urls`. Batch fetches run with a concurrency limit of 10.
+`fetch_content` accepts either `url` or `urls`. A batch accepts up to 20 URLs and runs with a concurrency limit of 10. Batch summaries are capped at the 30,000-character inline safety limit; full per-URL content remains available through `get_search_content`.
 
 Before fetching, the extension validates the target:
 
@@ -263,9 +265,9 @@ It can retrieve:
 - a stored search query by `responseId` and optional `queryIndex`;
 - fetched content by `responseId` and optional `urlIndex`;
 - fetched content by exact `url`;
-- long fetched content chunks with optional `offset` and `limit` character parameters.
+- long search-summary or fetched-content chunks with optional `offset` and `limit` character parameters.
 
-For fetched content, `offset` defaults to `0`, and `limit` defaults to the inline safety limit of 30,000 characters. `limit` is capped at 30,000 characters. When more content remains, the tool returns `nextOffset` in details and includes a ready-to-call `get_search_content` hint for the next chunk.
+For search summaries and fetched content, `offset` defaults to `0`, and `limit` defaults to the inline safety limit of 30,000 characters. `limit` is capped at 30,000 characters. When more content remains, the tool returns `nextOffset` in details and includes a ready-to-call `get_search_content` hint that preserves the query/URL selector and requested limit for the next chunk.
 
 Storage behavior:
 

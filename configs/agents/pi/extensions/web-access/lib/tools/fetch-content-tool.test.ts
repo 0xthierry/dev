@@ -3,6 +3,7 @@ import { createFakePi } from "../../../_shared/testing/fake-pi";
 import { fetchFailedError } from "../shared/errors";
 import { clearResults } from "../storage/result-store";
 import type { ExtractedContent } from "../types";
+import { MAX_INLINE_CONTENT } from "./definitions";
 import { WebAccessToolError } from "./errors";
 import { registerFetchContentTool } from "./fetch-content-tool";
 import type { WebAccessRuntime } from "./runtime";
@@ -63,6 +64,51 @@ describe("registerFetchContentTool", () => {
     expect(result.content.at(-1)?.text).toContain("offset: 30000");
     expect(result.content.at(-1)?.text).toContain("Use get_search_content");
     expect(result.details).toMatchObject({ truncated: true, totalChars: 30_001 });
+  });
+
+  test("caps oversized batch summaries and points to stored content", async () => {
+    // Arrange
+    const fake = createFakePi();
+    const results: ExtractedContent[] = Array.from({ length: 20 }, (_, index) => ({
+      url: `https://example.com/${index}`,
+      title: `${index}-${"x".repeat(2_000)}`,
+      content: "Body",
+      error: null,
+      provider: "http",
+    }));
+    const fakeRuntime = runtime(results);
+    registerFetchContentTool(fake.pi, fakeRuntime);
+
+    // Act
+    const result = (await fake.runTool("fetch_content", { urls: results.map((item) => item.url) })) as ToolResult;
+    const summary = result.content[0]?.text ?? "";
+
+    // Assert
+    expect(summary.length).toBeLessThanOrEqual(MAX_INLINE_CONTENT);
+    expect(summary).toContain("[Batch summary truncated]");
+    expect(summary).toContain('get_search_content({ responseId: "fetch-id", urlIndex: 0 })');
+    expect(result.details).toMatchObject({ responseId: "fetch-id", urlCount: 20, successful: 20, truncated: true });
+    expect(fake.appendedEntries).toHaveLength(1);
+  });
+
+  test("leaves normal batch summaries untruncated", async () => {
+    // Arrange
+    const fake = createFakePi();
+    const fakeRuntime = runtime([
+      { url: "https://example.com/a", title: "A", content: "First", error: null, provider: "http" },
+      { url: "https://example.com/b", title: "B", content: "Second", error: null, provider: "http" },
+    ]);
+    registerFetchContentTool(fake.pi, fakeRuntime);
+
+    // Act
+    const result = (await fake.runTool("fetch_content", {
+      urls: ["https://example.com/a", "https://example.com/b"],
+    })) as ToolResult;
+
+    // Assert
+    expect(result.content[0]?.text).toContain("- 0: A (5 chars)");
+    expect(result.content[0]?.text).toContain("- 1: B (6 chars)");
+    expect(result.details.truncated).toBe(false);
   });
 
   test("throws a structured validation error when no URL is provided", async () => {

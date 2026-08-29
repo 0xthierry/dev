@@ -1,13 +1,23 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { CompactionPreparation } from "./recovery";
 import { latestCompaction } from "./state";
-import type { CompactionEntryDetails } from "./types";
+import type { CompactionEntryDetails, CompactionFileDetails } from "./types";
 
 /**
  * Pi ignores fromHook compaction details on the next prepare. Merge the latest
  * compaction entry's readFiles/modifiedFiles into preparation.fileOps so repeated
  * extension compactions keep cumulative file metadata. Modified wins over read.
  */
+export function compactionFileDetails(preparation: CompactionPreparation): Required<CompactionFileDetails> {
+  const modifiedFiles = new Set([...preparation.fileOps.written, ...preparation.fileOps.edited]);
+  const readFiles = [...preparation.fileOps.read].filter((path) => !modifiedFiles.has(path));
+
+  return {
+    readFiles: readFiles.sort(),
+    modifiedFiles: [...modifiedFiles].sort(),
+  };
+}
+
 export function mergeLatestCompactionFileOps(
   preparation: CompactionPreparation,
   branchEntries: SessionEntry[],

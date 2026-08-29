@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { fetchFailedError, noFetchUrlError } from "../shared/errors";
 import { trimText } from "../shared/text";
-import type { ExtractedContentFailure } from "../types";
+import type { ExtractedContent, ExtractedContentFailure } from "../types";
 import { FETCH_CONTENT_PARAMETERS, MAX_INLINE_CONTENT } from "./definitions";
 import { failTool } from "./errors";
 import { stripImages } from "./render";
@@ -9,6 +9,28 @@ import { storeAndPublish } from "./result-publisher";
 import type { WebAccessRuntime } from "./runtime";
 
 const DEFAULT_MISSING_URL = "";
+const BATCH_TRUNCATION_NOTICE = "[Batch summary truncated]";
+
+type BatchSummary = { text: string; truncated: boolean };
+
+function formatBatchSummary(results: ExtractedContent[], responseId: string): BatchSummary {
+  const retrievalHint = `Use get_search_content({ responseId: "${responseId}", urlIndex: 0 }) to retrieve stored content.`;
+  const body = [
+    "## Fetched URLs",
+    "",
+    ...results.map((result, index) =>
+      result.error
+        ? `- ${index}: ${result.url}: Error - ${result.error}`
+        : `- ${index}: ${result.title || result.url} (${result.content.length} chars)`,
+    ),
+  ].join("\n");
+  const output = `${body}\n\n${retrievalHint}`;
+  if (output.length <= MAX_INLINE_CONTENT) return { text: output, truncated: false };
+
+  const suffix = `\n\n${BATCH_TRUNCATION_NOTICE}\n\n${retrievalHint}`;
+  const availableBodyLength = Math.max(0, MAX_INLINE_CONTENT - suffix.length);
+  return { text: `${body.slice(0, availableBodyLength)}${suffix}`, truncated: true };
+}
 
 function missingResult(url: string): ExtractedContentFailure {
   const message = "Content extraction failed.";
@@ -20,7 +42,7 @@ export function registerFetchContentTool(pi: ExtensionAPI, runtime: WebAccessRun
     name: "fetch_content",
     label: "Fetch Content",
     description:
-      "Fetch one or more URLs and extract readable markdown or structured content. Use to read articles and documentation, inspect GitHub repositories or files, analyze YouTube videos, retrieve video thumbnails, or extract requested video frames. PDFs and local video files are unsupported.",
+      "Fetch one or more URLs (up to 20 in a batch) and extract readable markdown or structured content. Use to read articles and documentation, inspect GitHub repositories or files, analyze YouTube videos, retrieve video thumbnails, or extract requested video frames. PDFs and local video files are unsupported; content omitted from batch summaries remains available through get_search_content.",
     promptSnippet:
       "Use when the user provides URLs or asks to inspect a web page, repository, or YouTube video. For plain YouTube summary, description, or transcript requests, call fetch_content without prompt so default video extraction includes transcript with timestamps. Include the user's exact question in prompt only for narrow content-specific questions; if the user's task needs a transcript, explicitly ask for it.",
     parameters: FETCH_CONTENT_PARAMETERS,
@@ -87,24 +109,15 @@ export function registerFetchContentTool(pi: ExtensionAPI, runtime: WebAccessRun
         };
       }
 
-      const output = [
-        "## Fetched URLs",
-        "",
-        ...results.map((result, index) =>
-          result.error
-            ? `- ${index}: ${result.url}: Error - ${result.error}`
-            : `- ${index}: ${result.title || result.url} (${result.content.length} chars)`,
-        ),
-        "",
-        `Use get_search_content({ responseId: "${responseId}", urlIndex: 0 }) to retrieve stored content.`,
-      ].join("\n");
+      const summary = formatBatchSummary(results, responseId);
       return {
-        content: [{ type: "text", text: output }],
+        content: [{ type: "text", text: summary.text }],
         details: {
           responseId,
           urls,
           urlCount: urls.length,
           successful: results.filter((result) => !result.error).length,
+          truncated: summary.truncated,
           errors: results
             .filter((result): result is ExtractedContentFailure => Boolean(result.error))
             .map((result) => result.errorDetails),

@@ -1,3 +1,4 @@
+import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, truncateHead } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import type { GrepResult, SearchResult } from "./types";
 
@@ -73,6 +74,20 @@ export function formatFindOutput(result: SearchResult, limit: number, pattern: s
     weak,
     shownCount: shown.length,
   };
+}
+
+export function boundFffOutput(output: string, continuation: string): string {
+  const aggregate = truncateHead(output, { maxLines: DEFAULT_MAX_LINES, maxBytes: DEFAULT_MAX_BYTES });
+  if (!aggregate.truncated) return output;
+
+  const suffix = `\n\n[Output truncated at the aggregate 50 KiB/2000-line limit. ${continuation}]`;
+  const suffixBytes = new TextEncoder().encode(suffix).byteLength;
+  const bounded = truncateHead(output, {
+    maxLines: DEFAULT_MAX_LINES - 2,
+    maxBytes: DEFAULT_MAX_BYTES - suffixBytes,
+  });
+
+  return `${bounded.content}${suffix}`;
 }
 
 export function renderTextResult(

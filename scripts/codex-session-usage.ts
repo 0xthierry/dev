@@ -81,6 +81,12 @@ interface Totals {
   totalTokens: number;
 }
 
+interface EfficiencyMetrics {
+  averagePromptSize: number | null;
+  cacheHitRate: number | null;
+  uncachedInputPerCall: number | null;
+}
+
 interface Bucket {
   label: string;
   totals: Totals;
@@ -206,6 +212,7 @@ Options:
 
 Notes:
   - Usage is summed from saved Codex token_count info.last_token_usage values.
+  - Codex input_tokens is the full prompt; cached_input_tokens is the cached subset.
   - Cost is not shown because Codex session logs do not save per-call pricing.
 `);
 }
@@ -466,6 +473,7 @@ function printReport(result: ScanResult, options: Options): void {
   console.log(`  Session files: ${formatInteger(result.sessionsWithUsage)} with usage / ${formatInteger(result.filesScanned)} scanned`);
   if (result.parseErrors > 0) console.log(`  Parse errors:  ${formatInteger(result.parseErrors)} malformed JSONL lines skipped`);
 
+  printEfficiency(result.total);
   printRateLimits(result.latestRateLimits);
   printDailyTable(result.daily);
   printWeekdayTable(result.weekdays, options);
@@ -473,6 +481,14 @@ function printReport(result: ScanResult, options: Options): void {
   printTopSessions(result.sessions);
 
   console.log("\nNote: usage comes from saved Codex token_count info.last_token_usage values; Codex logs do not include per-call cost.");
+}
+
+function printEfficiency(totals: Totals): void {
+  const metrics = efficiencyMetrics(totals);
+  console.log("\nEfficiency:");
+  console.log(`  Average prompt size:    ${formatOptionalTokenCount(metrics.averagePromptSize)}`);
+  console.log(`  Cache-hit rate:         ${formatOptionalPercent(metrics.cacheHitRate)}`);
+  console.log(`  Uncached input / call:  ${formatOptionalTokenCount(metrics.uncachedInputPerCall)}`);
 }
 
 function printRateLimits(snapshot: RateLimitSnapshot | null): void {
@@ -646,7 +662,20 @@ function totalsJson(totals: Totals): unknown {
       reasoningOutput: totals.reasoningOutput,
       total: totals.totalTokens,
     },
+    efficiency: efficiencyMetrics(totals),
   };
+}
+
+function efficiencyMetrics(totals: Totals): EfficiencyMetrics {
+  return {
+    averagePromptSize: safeDivide(totals.input, totals.calls),
+    cacheHitRate: safeDivide(totals.cachedInput, totals.input),
+    uncachedInputPerCall: safeDivide(Math.max(0, totals.input - totals.cachedInput), totals.calls),
+  };
+}
+
+function safeDivide(numerator: number, denominator: number): number | null {
+  return denominator > 0 ? numerator / denominator : null;
 }
 
 function objectPayload<T extends object>(value: unknown): Partial<T> {
@@ -684,6 +713,14 @@ function numberValue(value: unknown): number {
 
 function formatInteger(value: number): string {
   return Math.round(value).toLocaleString("en-US");
+}
+
+function formatOptionalTokenCount(value: number | null): string {
+  return value === null ? "—" : formatTokenCount(value);
+}
+
+function formatOptionalPercent(value: number | null): string {
+  return value === null ? "—" : `${formatCompact(value * 100)}%`;
 }
 
 function formatTokenCount(value: number): string {

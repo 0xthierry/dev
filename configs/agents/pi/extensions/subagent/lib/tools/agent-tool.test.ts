@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import type { AgentToolResult, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createFakePi } from "../../../_shared/testing/fake-pi";
 import type { AgentDefinition } from "../agents/types";
+import { AGENT_OUTPUT_PREVIEW_MAX_BYTES, AGENT_OUTPUT_PREVIEW_MAX_LINES } from "../runner/output";
 import type { AgentRunResult } from "../runner/run-result";
 import type { SubagentRuntime } from "../runtime";
 import { type AgentToolDetails, executeAgentTool, registerAgentTool } from "./agent-tool";
@@ -276,6 +277,55 @@ describe("executeAgentTool", () => {
     expect(hasRunningUpdate).toBe(true);
   });
 
+  test("caps model-visible parallel progress and final aggregates", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const agents = [agent("locator"), agent("reviewer")];
+    const largeOutput = "x".repeat(30 * 1024);
+    const updates: Array<AgentToolResult<AgentToolDetails>> = [];
+    const runtime: SubagentRuntime = {
+      discoverAgents: mock(async () => ({ agentsDir: "/agents", agentDirs: ["/agents"], agents })),
+      runAgent: mock(async (request, _signal, onProgress) => {
+        onProgress?.({
+          ...resultFor(request.agent.name, request.task),
+          status: "running",
+          ok: false,
+          exitCode: -1,
+          finalOutput: `${request.agent.name} progress: ${largeOutput}`,
+        });
+        return {
+          ...resultFor(request.agent.name, request.task),
+          finalOutput: `${request.agent.name} result: ${largeOutput}`,
+        };
+      }),
+    };
+
+    // Act
+    const result = await executeAgentTool(
+      fakePi.pi,
+      runtime,
+      { tasks: agents.map((definition) => ({ subagent_type: definition.name, prompt: definition.description })) },
+      undefined,
+      (partial) => updates.push(partial),
+      fakePi.createContext() as unknown as ExtensionContext,
+    );
+
+    // Assert
+    const finalText = result.content[0]?.type === "text" ? result.content[0].text : "";
+    const oversizedProgress = updates.find(
+      (update) =>
+        update.details?.results.filter((agentResult) => agentResult.status === "running").length === 2 &&
+        update.content[0]?.type === "text" &&
+        update.content[0].text.includes("Parallel subagent aggregate truncated"),
+    );
+    expect(oversizedProgress).toBeDefined();
+    expect(finalText).toContain("Parallel subagent aggregate truncated");
+    for (const text of [finalText, ...updates.map(toolResultText)]) {
+      expect(new TextEncoder().encode(text).byteLength).toBeLessThanOrEqual(AGENT_OUTPUT_PREVIEW_MAX_BYTES);
+      expect(text.split("\n").length).toBeLessThanOrEqual(AGENT_OUTPUT_PREVIEW_MAX_LINES);
+    }
+  });
+
   test("keeps parallel agent failures isolated", async () => {
     // Arrange
     const fakePi = createFakePi();
@@ -379,6 +429,11 @@ describe("executeAgentTool", () => {
     expect(runtime.runAgent).not.toHaveBeenCalled();
   });
 });
+
+function toolResultText(result: AgentToolResult<AgentToolDetails>): string {
+  const content = result.content[0];
+  return content?.type === "text" ? content.text : "";
+}
 
 function fakeRuntime(agents: AgentDefinition[]): SubagentRuntime {
   return {

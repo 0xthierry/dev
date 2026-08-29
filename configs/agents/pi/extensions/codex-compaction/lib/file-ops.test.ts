@@ -1,7 +1,29 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import { mergeLatestCompactionFileOps } from "./file-ops";
+import { compactionFileDetails, mergeLatestCompactionFileOps } from "./file-ops";
 import type { CompactionPreparation } from "./recovery";
+
+describe("compactionFileDetails", () => {
+  test("derives sorted Pi file metadata without a portable model call", () => {
+    // Arrange
+    const preparation = basePreparation({
+      fileOps: {
+        read: new Set(["z.ts", "edited.ts", "a.ts"]),
+        written: new Set(["new.ts"]),
+        edited: new Set(["edited.ts"]),
+      },
+    });
+
+    // Act
+    const details = compactionFileDetails(preparation);
+
+    // Assert
+    expect(details).toEqual({
+      readFiles: ["a.ts", "z.ts"],
+      modifiedFiles: ["edited.ts", "new.ts"],
+    });
+  });
+});
 
 describe("mergeLatestCompactionFileOps", () => {
   test("merges latest compaction file lists with modified winning over read", () => {

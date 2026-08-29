@@ -75,7 +75,61 @@ describe("registerGetSearchContentTool", () => {
     // Assert
     expect(result.content[0]?.text).toContain("Second answer");
     expect(result.content[0]?.text).toContain("https://example.com");
-    expect(result.details).toEqual({ query: "second", resultCount: 1 });
+    expect(result.details).toMatchObject({
+      query: "second",
+      resultCount: 1,
+      offset: 0,
+      returnedChars: result.details.contentLength,
+      nextOffset: null,
+      truncated: false,
+    });
+  });
+
+  test("paginates oversized stored search summaries", async () => {
+    // Arrange
+    const fake = createFakePi();
+    const answer = "a".repeat(30_010);
+    storeResult("search-id", {
+      id: "search-id",
+      type: "search",
+      timestamp: 1,
+      queries: [{ query: "large", answer, results: [], error: null }],
+    });
+    registerGetSearchContentTool(fake.pi);
+
+    // Act
+    const first = (await fake.runTool("get_search_content", {
+      responseId: "search-id",
+      queryIndex: 0,
+    })) as ToolResult;
+    const second = (await fake.runTool("get_search_content", {
+      responseId: "search-id",
+      queryIndex: 0,
+      offset: 30_000,
+      limit: 20,
+    })) as ToolResult;
+
+    // Assert
+    expect(first.content[0]?.text).toContain(
+      'get_search_content({ responseId: "search-id", queryIndex: 0, offset: 30000 })',
+    );
+    expect(first.details).toMatchObject({
+      contentLength: answer.length + "\n\n---\n\n**Sources:**\nNo source URLs found.".length,
+      offset: 0,
+      limit: 30_000,
+      returnedChars: 30_000,
+      nextOffset: 30_000,
+      truncated: true,
+    });
+    expect(second.content[0]?.text).toStartWith("aaaaaaaaaa");
+    expect(second.content[0]?.text).toContain("offset: 30020, limit: 20");
+    expect(second.details).toMatchObject({
+      offset: 30_000,
+      limit: 20,
+      returnedChars: 20,
+      nextOffset: 30_020,
+      truncated: true,
+    });
   });
 
   test("returns stored structured failures", async () => {

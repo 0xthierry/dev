@@ -33,14 +33,23 @@ export function sliceContentRange(content: string, offset = 0, limit = MAX_INLIN
   };
 }
 
+type StoredContentSelector = { queryIndex: number } | { url: string } | { urlIndex: number };
+
 function nextChunkHint(
-  params: { responseId: string; url?: string; urlIndex?: number; limit?: number },
+  responseId: string,
+  selector: StoredContentSelector,
+  requestedLimit: number | undefined,
   range: ContentRange,
 ): string {
   if (!range.hasMore) return "";
-  const selector = params.url ? `url: ${JSON.stringify(params.url)}` : `urlIndex: ${params.urlIndex ?? 0}`;
-  const limit = params.limit ? `, limit: ${range.limit}` : "";
-  return `\n\nUse get_search_content({ responseId: "${params.responseId}", ${selector}, offset: ${range.endOffset}${limit} }) for the next chunk.`;
+  const selectedContent =
+    "queryIndex" in selector
+      ? `queryIndex: ${selector.queryIndex}`
+      : "url" in selector
+        ? `url: ${JSON.stringify(selector.url)}`
+        : `urlIndex: ${selector.urlIndex}`;
+  const limit = requestedLimit ? `, limit: ${range.limit}` : "";
+  return `\n\nUse get_search_content({ responseId: "${responseId}", ${selectedContent}, offset: ${range.endOffset}${limit} }) for the next chunk.`;
 }
 
 export function registerGetSearchContentTool(pi: ExtensionAPI): void {
@@ -48,9 +57,9 @@ export function registerGetSearchContentTool(pi: ExtensionAPI): void {
     name: "get_search_content",
     label: "Get Search Content",
     description:
-      "Retrieve stored search results or fetched content from a previous web_search or fetch_content call. Use when initial output was truncated, when a batch fetch returned only a summary, when full stored content is needed, or when paging through long content with offset/limit.",
+      "Retrieve stored search results or fetched content from a previous web_search or fetch_content call, with pagination for long search summaries and fetched content. Use when initial output was truncated, when a batch fetch returned only a summary, when full stored content is needed, or when paging with offset/limit.",
     promptSnippet:
-      "Use when web_search or fetch_content returned a responseId/searchId/fetchId and you need stored results, full content, a long-content chunk, or a specific URL/query from the batch.",
+      "Use when web_search or fetch_content returned a responseId/searchId/fetchId and you need a stored search-summary or fetched-content chunk, or a specific URL/query from a batch. Continue truncated results with the returned nextOffset.",
     parameters: GET_SEARCH_CONTENT_PARAMETERS,
     async execute(_toolCallId, params): Promise<AgentToolResult<Record<string, unknown>>> {
       const data = getResult(params.responseId);
@@ -66,9 +75,21 @@ export function registerGetSearchContentTool(pi: ExtensionAPI): void {
             details: { query: query.query, resultCount: query.results.length, error },
           };
         }
+        const summary = formatSearchSummary(query.results, query.answer);
+        const range = sliceContentRange(summary, params.offset, params.limit);
+        const text = `${range.text}${nextChunkHint(params.responseId, { queryIndex: index }, params.limit, range)}`;
         return {
-          content: [{ type: "text", text: formatSearchSummary(query.results, query.answer) }],
-          details: { query: query.query, resultCount: query.results.length },
+          content: [{ type: "text", text }],
+          details: {
+            query: query.query,
+            resultCount: query.results.length,
+            contentLength: summary.length,
+            offset: range.offset,
+            limit: range.limit,
+            returnedChars: range.text.length,
+            nextOffset: range.hasMore ? range.endOffset : null,
+            truncated: range.hasMore,
+          },
         };
       }
       if (data.type === "fetch" && data.urls) {
@@ -76,7 +97,13 @@ export function registerGetSearchContentTool(pi: ExtensionAPI): void {
         if (!result) failTool(storedUrlNotFoundError(params.responseId, params.url, params.urlIndex, data.urls.length));
         if (result.error) return errorResult(result.errorDetails, { url: result.url });
         const range = sliceContentRange(result.content, params.offset, params.limit);
-        const text = `# ${result.title}\n\n${range.text}${nextChunkHint(params, range)}`;
+        const selector: StoredContentSelector = params.url ? { url: params.url } : { urlIndex: params.urlIndex ?? 0 };
+        const text = `# ${result.title}\n\n${range.text}${nextChunkHint(
+          params.responseId,
+          selector,
+          params.limit,
+          range,
+        )}`;
         return {
           content: [{ type: "text", text }],
           details: {

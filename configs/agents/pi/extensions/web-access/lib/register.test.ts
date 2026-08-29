@@ -6,6 +6,7 @@ import { clearResults } from "./storage/result-store";
 type ParameterSchema = {
   description?: string;
   enum?: string[];
+  maxItems?: number;
 };
 
 function parameterProperties(tool: unknown): Record<string, ParameterSchema | undefined> {
@@ -103,12 +104,15 @@ describe("registerWebAccessExtension", () => {
     })) {
       expect(schema?.description, `${name} description`).toContain(". Use ");
     }
+    expect(fetchContentProperties.urls?.maxItems).toBe(20);
     expect(fetchContentProperties.model?.enum).toEqual([
       "gemini-3-flash-preview",
       "gemini-3-pro",
       "gemini-2.5-flash",
       "gemini-2.5-pro",
     ]);
+    expect(getSearchContentProperties.offset?.description).toContain("search summary or fetched content");
+    expect(getSearchContentProperties.limit?.description).toContain("search or fetch chunks");
   });
 
   test("registers session lifecycle handlers", async () => {

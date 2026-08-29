@@ -1,9 +1,9 @@
 import { calculateCost, type ProviderHeaders, type Usage } from "@earendil-works/pi-ai";
 import { codexReasoningEffort, resolveCodexResponsesUrl } from "./model";
 import { isCodexCompactionItem } from "./state";
-import type { CodexCompactionFetchResult, CodexCompactionItem, CodexRequestOptions, JsonObject } from "./types";
+import type { CodexCompactionItem, CodexRemoteCompactionResult, CodexRequestOptions, JsonObject } from "./types";
 
-export async function fetchCodexCompaction(options: CodexRequestOptions): Promise<CodexCompactionFetchResult> {
+export async function fetchCodexCompaction(options: CodexRequestOptions): Promise<CodexRemoteCompactionResult> {
   try {
     const body = buildCodexCompactionBody(options);
     const response = await fetch(resolveCodexResponsesUrl(options.model.baseUrl), {
@@ -85,7 +85,7 @@ export function parseSseEvents(text: string): JsonObject[] {
 export function parseCompactionStream(
   text: string,
   options: Pick<CodexRequestOptions, "model">,
-): CodexCompactionFetchResult {
+): CodexRemoteCompactionResult {
   const events = parseSseEvents(text);
 
   for (const event of events) {

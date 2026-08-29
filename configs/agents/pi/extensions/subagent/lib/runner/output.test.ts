@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   AGENT_OUTPUT_PREVIEW_MAX_BYTES,
   AGENT_OUTPUT_PREVIEW_MAX_LINES,
+  prepareAgentAggregateOutput,
   prepareAgentOutput,
   textFromContentParts,
 } from "./output";
@@ -89,6 +90,53 @@ describe("prepareAgentOutput", () => {
       text: "short result\n\nDetailed subagent output saved to: /agent/artifacts/output.md",
       truncated: false,
     });
+  });
+});
+
+describe("prepareAgentAggregateOutput", () => {
+  test("keeps short aggregate output unchanged", () => {
+    // Arrange
+    const output = "Parallel agents completed: 2/2 succeeded.";
+
+    // Act
+    const result = prepareAgentAggregateOutput(output);
+
+    // Assert
+    expect(result).toEqual({ text: output, truncated: false });
+  });
+
+  test("keeps byte-limited aggregate output within policy and marks retained tail", () => {
+    // Arrange
+    const retainedTail = "retained final agent output";
+    const output = `${"x".repeat(AGENT_OUTPUT_PREVIEW_MAX_BYTES)}${retainedTail}`;
+
+    // Act
+    const result = prepareAgentAggregateOutput(output);
+
+    // Assert
+    expect(result.truncated).toBe(true);
+    expect(new TextEncoder().encode(result.text).byteLength).toBeLessThanOrEqual(AGENT_OUTPUT_PREVIEW_MAX_BYTES);
+    expect(result.text.split("\n")).toHaveLength(3);
+    expect(result.text).toContain(retainedTail);
+    expect(result.text).toContain("Parallel subagent aggregate truncated");
+  });
+
+  test("keeps line-limited aggregate output within policy and marks truncation", () => {
+    // Arrange
+    const output = Array.from(
+      { length: AGENT_OUTPUT_PREVIEW_MAX_LINES + 50 },
+      (_, index) => `aggregate line ${index + 1}`,
+    ).join("\n");
+
+    // Act
+    const result = prepareAgentAggregateOutput(output);
+
+    // Assert
+    expect(result.truncated).toBe(true);
+    expect(result.text.split("\n").length).toBeLessThanOrEqual(AGENT_OUTPUT_PREVIEW_MAX_LINES);
+    expect(new TextEncoder().encode(result.text).byteLength).toBeLessThanOrEqual(AGENT_OUTPUT_PREVIEW_MAX_BYTES);
+    expect(result.text).toContain(`aggregate line ${AGENT_OUTPUT_PREVIEW_MAX_LINES + 50}`);
+    expect(result.text).toContain("Parallel subagent aggregate truncated");
   });
 });
 

@@ -1,8 +1,30 @@
 import { describe, expect, mock, test } from "bun:test";
 import { createFakePi } from "../../_shared/testing/fake-pi";
 import { createCursorStore } from "./pagination";
-import { detectGrepMode, isWildcardOnlyPattern, registerFffTools } from "./tools";
+import {
+  detectGrepMode,
+  FindParameters,
+  GrepParameters,
+  isWildcardOnlyPattern,
+  MultiGrepParameters,
+  registerFffTools,
+} from "./tools";
 import type { FffFinder, FffRuntime, GrepResult, SearchResult } from "./types";
+
+describe("tool parameter bounds", () => {
+  test("declares integer maxima for limits and context", () => {
+    // Arrange
+    const schemas = [GrepParameters, FindParameters, MultiGrepParameters];
+
+    // Act
+    const limits = schemas.map((schema) => schema.properties.limit);
+    const contexts = [GrepParameters.properties.context, MultiGrepParameters.properties.context];
+
+    // Assert
+    for (const limit of limits) expect(limit).toMatchObject({ type: "integer", minimum: 1, maximum: 200 });
+    for (const context of contexts) expect(context).toMatchObject({ type: "integer", minimum: 0, maximum: 20 });
+  });
+});
 
 describe("grep pattern classification", () => {
   test("detects regex only when syntax is valid", () => {
@@ -68,6 +90,31 @@ describe("registerFffTools", () => {
     expect(JSON.stringify(result)).toContain("const needle = true");
   });
 
+  test("caps grep limit and context at runtime", async () => {
+    // Arrange
+    const fakePi = createFakePi({ cwd: "/tmp/workspace" });
+    const finder = createFinder({
+      grepResult: {
+        items: [grepMatch()],
+        totalMatched: 1,
+        totalFilesSearched: 1,
+        totalFiles: 1,
+        filteredFileCount: 1,
+        nextCursor: null,
+      },
+    });
+    registerFffTools(fakePi.pi, createRuntime(finder), createCursorStore(), () => "/tmp/workspace");
+
+    // Act
+    await fakePi.runTool("grep", { pattern: "needle", limit: 999, context: 999 });
+
+    // Assert
+    expect(finder.grep).toHaveBeenCalledWith(
+      "needle",
+      expect.objectContaining({ pageSize: 200, maxMatchesPerFile: 50, beforeContext: 20, afterContext: 20 }),
+    );
+  });
+
   test("grep falls back to fuzzy when plain search is empty", async () => {
     // Arrange
     const fakePi = createFakePi({ cwd: "/tmp/workspace" });
@@ -117,6 +164,19 @@ describe("registerFffTools", () => {
     // Assert
     expect(finder.fileSearch).toHaveBeenCalledWith("src", { pageIndex: 0, pageSize: 2 });
     expect(JSON.stringify(result)).toContain("fff_f1");
+  });
+
+  test("caps find limit at runtime", async () => {
+    // Arrange
+    const fakePi = createFakePi({ cwd: "/tmp/workspace" });
+    const finder = createFinder();
+    registerFffTools(fakePi.pi, createRuntime(finder), createCursorStore(), () => "/tmp/workspace");
+
+    // Act
+    await fakePi.runTool("find", { pattern: "src", limit: 999 });
+
+    // Assert
+    expect(finder.fileSearch).toHaveBeenCalledWith("src", { pageIndex: 0, pageSize: 200 });
   });
 
   test("find cursor resumes with stored query and page size", async () => {
@@ -239,6 +299,21 @@ describe("registerFffTools", () => {
 
     // Assert
     expect(JSON.stringify(result)).not.toContain("AND-combined");
+  });
+
+  test("multi_grep caps limit and context at runtime", async () => {
+    // Arrange
+    const fakePi = createFakePi({ cwd: "/tmp/workspace" });
+    const finder = createFinder();
+    registerFffTools(fakePi.pi, createRuntime(finder), createCursorStore(), () => "/tmp/workspace");
+
+    // Act
+    await fakePi.runTool("multi_grep", { patterns: ["Foo"], limit: 999, context: 999 });
+
+    // Assert
+    expect(finder.multiGrep).toHaveBeenCalledWith(
+      expect.objectContaining({ pageSize: 200, maxMatchesPerFile: 50, beforeContext: 20, afterContext: 20 }),
+    );
   });
 
   test("multi_grep passes patterns and constraints to FFF", async () => {

@@ -12,7 +12,7 @@ export type CompactionPreparation = SessionBeforeCompactEvent["preparation"];
 export type RecoveryAdjustment = {
   preparation: CompactionPreparation;
   recovery: CodexRecoveryInfo;
-  /** Messages prepended for portable summary; stripped from remote span when chaining a v1 artifact. */
+  /** Messages prepended for migration; stripped from remote span when chaining a v1 artifact. */
   recoveredMessageCount: number;
 };
 

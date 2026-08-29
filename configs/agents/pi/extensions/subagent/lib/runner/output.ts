@@ -19,6 +19,33 @@ export function prepareAgentOutput(text: string, artifactPath?: string, artifact
   return { text: [truncation.content, ...notices].filter(Boolean).join("\n\n"), truncated: truncation.truncated };
 }
 
+export function prepareAgentAggregateOutput(text: string): PreparedOutput {
+  const initial = truncateTail(text, {
+    maxBytes: AGENT_OUTPUT_PREVIEW_MAX_BYTES,
+    maxLines: AGENT_OUTPUT_PREVIEW_MAX_LINES,
+  });
+  if (!initial.truncated) return { text: initial.content, truncated: false };
+
+  const notice = `[Parallel subagent aggregate truncated: showing the retained tail within the ${formatSize(
+    AGENT_OUTPUT_PREVIEW_MAX_BYTES,
+  )} / ${AGENT_OUTPUT_PREVIEW_MAX_LINES}-line model-visible limit.]`;
+  const suffix = `\n\n${notice}`;
+  const truncation = truncateTail(text, {
+    maxBytes: AGENT_OUTPUT_PREVIEW_MAX_BYTES - utf8ByteLength(suffix),
+    maxLines: AGENT_OUTPUT_PREVIEW_MAX_LINES - newlineCount(suffix),
+  });
+
+  return { text: `${truncation.content}${suffix}`, truncated: true };
+}
+
+function utf8ByteLength(text: string): number {
+  return new TextEncoder().encode(text).byteLength;
+}
+
+function newlineCount(text: string): number {
+  return text.split("\n").length - 1;
+}
+
 function outputNotices(
   truncation: ReturnType<typeof truncateTail>,
   artifactPath: string | undefined,

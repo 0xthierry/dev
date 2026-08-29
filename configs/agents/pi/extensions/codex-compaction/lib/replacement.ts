@@ -2,12 +2,18 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { isCompatibleV2Binding } from "./binding";
 import { isCodexPayload, itemContainsText, repairOrphanCodexToolOutputs } from "./payload";
-import { extractV1Sentinel, isArtifactUnusable, isValidArtifact, latestCompaction } from "./state";
-import { type InjectionMode, type JsonObject, SUMMARY_SEARCH_WINDOW } from "./types";
+import {
+  extractV1Sentinel,
+  isArtifactUnusable,
+  isExactLegacyPlaceholderSummary,
+  isValidArtifact,
+  latestCompaction,
+} from "./state";
+import { CODEX_OPAQUE_SUMMARY_PLACEHOLDER, type InjectionMode, type JsonObject, SUMMARY_SEARCH_WINDOW } from "./types";
 import { prefixesEqual } from "./user-prefix";
 
 export type ReplacementResult =
-  | { mutated: true; mode: "artifact" | "prefix-only" }
+  | { mutated: true; mode: "artifact" | "prefix-only" | "placeholder-cleared" }
   | { mutated: false; reason: string };
 
 export function planInjection(options: {
@@ -74,12 +80,23 @@ export function applyCompactionReplacement(options: {
   if (latest.kind === "none") return { mutated: false, reason: "no-active-compaction" };
 
   const plan = planInjection(options);
-  if (plan.kind === "none") return { mutated: false, reason: plan.reason };
-
   const summaryIndex = findSummaryItemIndex(options.payload.input, latest);
+
+  if (plan.kind === "none") {
+    if (summaryIndex !== -1 && isOpaqueCompactionSummary(latest.entry.summary)) {
+      options.payload.input.splice(summaryIndex, 1);
+      return { mutated: true, mode: "placeholder-cleared" };
+    }
+    return { mutated: false, reason: plan.reason };
+  }
+
   if (summaryIndex === -1) return { mutated: false, reason: "summary-not-found" };
 
   if (plan.kind === "prefix-only") {
+    if (isOpaqueCompactionSummary(latest.entry.summary)) {
+      options.payload.input.splice(summaryIndex, 1, ...plan.userPrefix);
+      return { mutated: true, mode: "prefix-only" };
+    }
     if (hasIdenticalPrefixBefore(options.payload.input, summaryIndex, plan.userPrefix)) {
       return { mutated: false, reason: "prefix-already-present" };
     }
@@ -109,6 +126,10 @@ export function findSummaryItemIndex(
   const summary = latest.entry.summary;
   if (typeof summary !== "string" || summary.length === 0) return -1;
   return window.findIndex((item) => itemContainsText(item, summary));
+}
+
+function isOpaqueCompactionSummary(summary: string | undefined): boolean {
+  return summary?.trim() === CODEX_OPAQUE_SUMMARY_PLACEHOLDER || isExactLegacyPlaceholderSummary(summary);
 }
 
 export function hasIdenticalPrefixBefore(input: JsonObject[], summaryIndex: number, userPrefix: JsonObject[]): boolean {

@@ -1,6 +1,7 @@
 import type { AgentToolResult, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { AgentDefinition } from "../agents/types";
 import { buildAgentRunRequest } from "../runner/invocation";
+import { prepareAgentAggregateOutput } from "../runner/output";
 import type { AgentRunResult } from "../runner/run-result";
 import type { SubagentRuntime } from "../runtime";
 import { findAgentSessionFileById, getProjectAgentSessionDir } from "../sessions/paths";
@@ -93,8 +94,9 @@ export async function executeAgentTool(
   if (!taskResult.ok) return errorResult(taskResult.error, planResult.plan.mode, discovery.agentsDir, []);
 
   const emitUpdate = (results: AgentRunResult[]) => {
+    const progress = formatProgress(planResult.plan.mode, results);
     onUpdate?.({
-      content: [{ type: "text", text: formatProgress(planResult.plan.mode, results) }],
+      content: [{ type: "text", text: prepareModelVisibleOutput(planResult.plan.mode, progress) }],
       details: {
         ok: isCompletedSuccess(results),
         mode: planResult.plan.mode,
@@ -129,8 +131,9 @@ export async function executeAgentTool(
       : await runParallelTasks(taskResult.tasks, PARALLEL_CONCURRENCY, runTask, emitUpdate);
 
   const ok = results.every((result) => result.ok);
+  const formattedResults = formatResults(planResult.plan.mode, results);
   return {
-    content: [{ type: "text", text: formatResults(planResult.plan.mode, results) }],
+    content: [{ type: "text", text: prepareModelVisibleOutput(planResult.plan.mode, formattedResults) }],
     details: { ok, mode: planResult.plan.mode, agentsDir: discovery.agentsDir, results },
   };
 }
@@ -293,6 +296,10 @@ function errorResult(
     content: [{ type: "text", text: message }],
     details: { ok: false, mode, agentsDir, results },
   };
+}
+
+function prepareModelVisibleOutput(mode: "single" | "parallel", text: string): string {
+  return mode === "parallel" ? prepareAgentAggregateOutput(text).text : text;
 }
 
 function formatResults(mode: "single" | "parallel", results: AgentRunResult[]): string {

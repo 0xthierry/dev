@@ -57,6 +57,8 @@ interface SessionEntry {
   timestamp?: unknown;
   cwd?: unknown;
   message?: AssistantMessage;
+  tokensBefore?: unknown;
+  usage?: UsageShape;
 }
 
 interface Totals {
@@ -86,6 +88,20 @@ interface SessionFileStats {
   totals: Totals;
 }
 
+interface CompactionStats {
+  count: number;
+  withUsage: number;
+  tokensBeforeSamples: number;
+  tokensBeforeTotal: number;
+  usage: Totals;
+}
+
+interface EfficiencyMetrics {
+  averagePromptSize: number | null;
+  cacheHitRate: number | null;
+  uncachedInputPerCall: number | null;
+}
+
 interface ScanResult {
   roots: string[];
   missingRoots: string[];
@@ -93,7 +109,9 @@ interface ScanResult {
   sessionsWithUsage: number;
   parseErrors: number;
   duplicateCallsSkipped: number;
+  duplicateCompactionsSkipped: number;
   total: Totals;
+  compactions: CompactionStats;
   daily: Map<string, Bucket>;
   weekdays: Map<string, Bucket>;
   models: Map<string, Bucket>;
@@ -204,7 +222,9 @@ Options:
   -h, --help           Show this help.
 
 Notes:
-  - Cost is read from saved Pi assistant usage.cost.total values; prices are not recalculated.
+  - Cost is read from saved Pi usage.cost.total values; prices are not recalculated.
+  - Prompt size is input + cache read + cache write; uncached input is input + cache write.
+  - Compaction usage and pre-compaction prompt size are reported when saved by Pi.
   - Default scanning includes ~/.pi/agent/sessions and ~/.pi/agent/agent-sessions when present.
 `);
 }
@@ -216,6 +236,7 @@ async function scan(options: Options): Promise<ScanResult> {
   const weekdays = makeWeekdayBuckets();
   const models = new Map<string, Bucket>();
   const seenCalls = new Set<string>();
+  const seenCompactions = new Set<string>();
   const sessions: SessionFileStats[] = [];
   const result: ScanResult = {
     roots,
@@ -224,7 +245,9 @@ async function scan(options: Options): Promise<ScanResult> {
     sessionsWithUsage: 0,
     parseErrors: 0,
     duplicateCallsSkipped: 0,
+    duplicateCompactionsSkipped: 0,
     total: emptyTotals(),
+    compactions: emptyCompactionStats(),
     daily,
     weekdays,
     models,
@@ -240,7 +263,7 @@ async function scan(options: Options): Promise<ScanResult> {
 
     for (const file of files) {
       result.filesScanned += 1;
-      const fileStats = await scanSessionFile(file, range, options, seenCalls, result);
+      const fileStats = await scanSessionFile(file, range, options, seenCalls, seenCompactions, result);
       if (fileStats.calls > 0) {
         result.sessionsWithUsage += 1;
         sessions.push(fileStats);
@@ -257,6 +280,7 @@ async function scanSessionFile(
   range: DateRange,
   options: Options,
   seenCalls: Set<string>,
+  seenCompactions: Set<string>,
   result: ScanResult,
 ): Promise<SessionFileStats> {
   let cwd: string | null = null;
@@ -278,6 +302,20 @@ async function scanSessionFile(
     if (entry.type === "session") {
       const header = entry as SessionHeader;
       cwd = typeof header.cwd === "string" ? header.cwd : null;
+      continue;
+    }
+
+    if (entry.type === "compaction") {
+      const timestamp = entryTimestamp(entry);
+      if (!timestamp || timestamp < range.since || timestamp >= range.untilExclusive) continue;
+
+      const compactionKey = compactionEntryKey(entry, file);
+      if (options.dedupe && seenCompactions.has(compactionKey)) {
+        result.duplicateCompactionsSkipped += 1;
+        continue;
+      }
+      seenCompactions.add(compactionKey);
+      addCompaction(result.compactions, entry);
       continue;
     }
 
@@ -396,6 +434,16 @@ function emptyTotals(): Totals {
   };
 }
 
+function emptyCompactionStats(): CompactionStats {
+  return {
+    count: 0,
+    withUsage: 0,
+    tokensBeforeSamples: 0,
+    tokensBeforeTotal: 0,
+    usage: emptyTotals(),
+  };
+}
+
 function normalizeUsage(usage: UsageShape): Totals {
   const input = numberValue(usage.input);
   const output = numberValue(usage.output);
@@ -428,6 +476,21 @@ function addTotals(target: Totals, usage: Totals): void {
   target.costCacheRead += usage.costCacheRead;
   target.costCacheWrite += usage.costCacheWrite;
   target.costTotal += usage.costTotal;
+}
+
+function addCompaction(stats: CompactionStats, entry: SessionEntry): void {
+  stats.count += 1;
+
+  const tokensBefore = optionalNumberValue(entry.tokensBefore);
+  if (tokensBefore !== null) {
+    stats.tokensBeforeSamples += 1;
+    stats.tokensBeforeTotal += tokensBefore;
+  }
+
+  if (entry.usage) {
+    stats.withUsage += 1;
+    addTotals(stats.usage, normalizeUsage(entry.usage));
+  }
 }
 
 function addToBucket(bucket: Bucket, usage: Totals, file: string): void {
@@ -475,6 +538,14 @@ function modelCallKey(entry: SessionEntry, file: string): string {
   return `entry:${hash}:${fileFallbackScope(entry, file)}`;
 }
 
+function compactionEntryKey(entry: SessionEntry, file: string): string {
+  if (typeof entry.id === "string" && entry.id) return `compaction:${entry.id}`;
+
+  const stablePayload = JSON.stringify({ timestamp: entry.timestamp, tokensBefore: entry.tokensBefore, usage: entry.usage });
+  const hash = createHash("sha1").update(stablePayload).digest("hex");
+  return `compaction:${hash}:${file}`;
+}
+
 function fileFallbackScope(entry: SessionEntry, file: string): string {
   return typeof entry.id === "string" && entry.id ? "copied-entry" : file;
 }
@@ -508,12 +579,35 @@ function printReport(result: ScanResult, options: Options): void {
   if (options.dedupe) console.log(`  Duplicates:    ${formatInteger(result.duplicateCallsSkipped)} skipped`);
   if (result.parseErrors > 0) console.log(`  Parse errors:  ${formatInteger(result.parseErrors)} malformed JSONL lines skipped`);
 
+  printEfficiency(result.total);
+  printCompactions(result.compactions, options.dedupe ? result.duplicateCompactionsSkipped : 0);
+
   printDailyTable(result.daily);
   printWeekdayTable(result.weekdays, options);
   printModelTable(result.models);
   printTopSessions(result.sessions);
 
   console.log("\nNote: cost comes from saved Pi usage.cost.total values; this script does not recalculate provider pricing.");
+}
+
+function printEfficiency(totals: Totals): void {
+  const metrics = efficiencyMetrics(totals);
+  console.log("\nEfficiency:");
+  console.log(`  Average prompt size:    ${formatOptionalTokenCount(metrics.averagePromptSize)}`);
+  console.log(`  Cache-hit rate:         ${formatOptionalPercent(metrics.cacheHitRate)}`);
+  console.log(`  Uncached input / call:  ${formatOptionalTokenCount(metrics.uncachedInputPerCall)}`);
+}
+
+function printCompactions(stats: CompactionStats, duplicatesSkipped: number): void {
+  const averageTokensBefore = safeDivide(stats.tokensBeforeTotal, stats.tokensBeforeSamples);
+  console.log("\nCompactions:");
+  console.log(`  Count:                  ${formatInteger(stats.count)}`);
+  console.log(`  With saved usage:       ${formatInteger(stats.withUsage)}`);
+  console.log(`  Usage tokens:           ${formatTokenCount(stats.usage.totalTokens)}`);
+  console.log(`  Usage cost:             ${formatMoney(stats.usage.costTotal)}`);
+  console.log(`  Avg pre-compact prompt: ${formatOptionalTokenCount(averageTokensBefore)}`);
+  console.log("  Post-compact prompt:    unavailable (not saved directly in Pi session data)");
+  if (duplicatesSkipped > 0) console.log(`  Duplicates:             ${formatInteger(duplicatesSkipped)} skipped`);
 }
 
 function printDailyTable(daily: Map<string, Bucket>): void {
@@ -632,7 +726,9 @@ function toJson(result: ScanResult, options: Options): unknown {
     sessionsWithUsage: result.sessionsWithUsage,
     parseErrors: result.parseErrors,
     duplicateCallsSkipped: result.duplicateCallsSkipped,
+    duplicateCompactionsSkipped: result.duplicateCompactionsSkipped,
     totals: totalsJson(result.total),
+    compactions: compactionsJson(result.compactions),
     daily: [...result.daily.values()].map(bucketJson),
     weekdays: WEEKDAYS.map((weekday) => bucketJson(result.weekdays.get(weekday) ?? { label: weekday, totals: emptyTotals(), sessions: new Set() })),
     models: [...result.models.values()]
@@ -672,7 +768,37 @@ function totalsJson(totals: Totals): unknown {
       cacheWrite: roundMoney(totals.costCacheWrite),
       total: roundMoney(totals.costTotal),
     },
+    efficiency: efficiencyMetrics(totals),
   };
+}
+
+function compactionsJson(stats: CompactionStats): unknown {
+  return {
+    count: stats.count,
+    withUsage: stats.withUsage,
+    usage: totalsJson(stats.usage),
+    promptSize: {
+      preCompaction: {
+        samples: stats.tokensBeforeSamples,
+        total: stats.tokensBeforeTotal,
+        average: safeDivide(stats.tokensBeforeTotal, stats.tokensBeforeSamples),
+      },
+      postCompaction: null,
+    },
+  };
+}
+
+function efficiencyMetrics(totals: Totals): EfficiencyMetrics {
+  const promptTokens = totals.input + totals.cacheRead + totals.cacheWrite;
+  return {
+    averagePromptSize: safeDivide(promptTokens, totals.calls),
+    cacheHitRate: safeDivide(totals.cacheRead, promptTokens),
+    uncachedInputPerCall: safeDivide(totals.input + totals.cacheWrite, totals.calls),
+  };
+}
+
+function safeDivide(numerator: number, denominator: number): number | null {
+  return denominator > 0 ? numerator / denominator : null;
 }
 
 function readRequiredValue(args: string[], index: number, flag: string): string {
@@ -701,7 +827,11 @@ function localDateKey(date: Date): string {
 }
 
 function numberValue(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+  return optionalNumberValue(value) ?? 0;
+}
+
+function optionalNumberValue(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function formatInteger(value: number): string {
@@ -710,6 +840,14 @@ function formatInteger(value: number): string {
 
 function formatMoney(value: number): string {
   return `$${roundMoney(value).toFixed(4)}`;
+}
+
+function formatOptionalTokenCount(value: number | null): string {
+  return value === null ? "—" : formatTokenCount(value);
+}
+
+function formatOptionalPercent(value: number | null): string {
+  return value === null ? "—" : `${formatCompact(value * 100)}%`;
 }
 
 function formatTokenCount(value: number): string {

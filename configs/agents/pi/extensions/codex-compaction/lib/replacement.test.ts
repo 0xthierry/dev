@@ -3,7 +3,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { hashAccountId } from "./binding";
 import { applyCompactionReplacement, planInjection } from "./replacement";
-import { SEAM_STRIKE_THRESHOLD } from "./types";
+import { CODEX_OPAQUE_SUMMARY_PLACEHOLDER, SEAM_STRIKE_THRESHOLD } from "./types";
 
 const model = {
   id: "gpt-5.6-sol",
@@ -21,64 +21,50 @@ const model = {
 const accountHash = hashAccountId("acct_123");
 
 describe("planInjection / applyCompactionReplacement", () => {
-  test("newer ordinary Pi compaction above older Codex does not inject artifacts", () => {
+  test("newer ordinary Pi compaction above older Codex state does not inject artifacts", () => {
     // Arrange
-    const branch: SessionEntry[] = [v2Entry("old-codex", "real summary A"), ordinary("new-pi", "portable B")];
-    const payload = {
-      input: [{ role: "user", content: "The conversation history... portable B ..." }],
-    };
+    const branch: SessionEntry[] = [
+      v2Entry("old-codex", CODEX_OPAQUE_SUMMARY_PLACEHOLDER),
+      ordinary("new-pi", "portable B"),
+    ];
+    const payload = { input: [{ role: "user", content: "portable B" }] };
 
     // Act
-    const plan = planInjection({ model, branchEntries: branch, accountHash });
-    const result = applyCompactionReplacement({
-      payload,
-      model,
-      branchEntries: branch,
-      accountHash,
-    });
+    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, accountHash });
 
     // Assert
-    expect(plan.kind).toBe("none");
     expect(result.mutated).toBe(false);
+    expect(payload.input).toEqual([{ role: "user", content: "portable B" }]);
   });
 
-  test("compatible v2 replaces summary with userPrefix + artifact", () => {
+  test("compatible v2 removes the opaque placeholder in favor of user prefix and artifact", () => {
     // Arrange
-    const summary = "meaningful portable summary about alpha";
-    const branch = [v2Entry("cmp", summary)];
-    const payload = {
+    const branch = [v2Entry("cmp", CODEX_OPAQUE_SUMMARY_PLACEHOLDER)];
+    const payload: { input: Record<string, unknown>[] } = {
       input: [
-        { role: "user", content: `prefix ${summary} suffix` },
+        { role: "user", content: `prefix ${CODEX_OPAQUE_SUMMARY_PLACEHOLDER} suffix` },
         { role: "user", content: "tail" },
       ],
     };
 
     // Act
-    const result = applyCompactionReplacement({
-      payload,
-      model,
-      branchEntries: branch,
-      accountHash,
-    });
+    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, accountHash });
 
     // Assert
     expect(result).toEqual({ mutated: true, mode: "artifact" });
-    expect(payload.input[0]).toEqual({ role: "user", content: "prior user" });
-    expect(payload.input[1] as unknown).toEqual({
-      type: "compaction",
-      encrypted_content: "enc",
-      id: "cmp_1",
-    });
-    expect(payload.input[2]).toEqual({ role: "user", content: "tail" });
+    expect(payload.input).toEqual([
+      { role: "user", content: "prior user" },
+      { type: "compaction", encrypted_content: "enc", id: "cmp_1" },
+      { role: "user", content: "tail" },
+    ]);
   });
 
-  test("binding mismatch keeps summary and inserts prefix-only", () => {
+  test("binding mismatch replaces the opaque placeholder with prefix-only context", () => {
     // Arrange
-    const summary = "meaningful portable summary";
-    const branch = [v2Entry("cmp", summary)];
+    const branch = [v2Entry("cmp", CODEX_OPAQUE_SUMMARY_PLACEHOLDER)];
     const payload = {
       input: [
-        { role: "user", content: summary },
+        { role: "user", content: CODEX_OPAQUE_SUMMARY_PLACEHOLDER },
         { role: "user", content: "tail" },
       ],
     };
@@ -93,15 +79,38 @@ describe("planInjection / applyCompactionReplacement", () => {
 
     // Assert
     expect(result).toEqual({ mutated: true, mode: "prefix-only" });
-    expect(payload.input[0]).toEqual({ role: "user", content: "prior user" });
-    expect(payload.input[1]).toEqual({ role: "user", content: summary });
+    expect(payload.input).toEqual([
+      { role: "user", content: "prior user" },
+      { role: "user", content: "tail" },
+    ]);
   });
 
-  test("invalid artifact degrades to prefix-only", () => {
+  test("binding mismatch preserves semantic summaries from older v2 records", () => {
     // Arrange
-    const summary = "summary text";
-    const branch = [v2Entry("cmp", summary, { artifact: [] })];
+    const summary = "meaningful portable summary";
+    const branch = [v2Entry("cmp", summary)];
     const payload = { input: [{ role: "user", content: summary }] };
+
+    // Act
+    const result = applyCompactionReplacement({
+      payload,
+      model,
+      branchEntries: branch,
+      accountHash: hashAccountId("other-account"),
+    });
+
+    // Assert
+    expect(result).toEqual({ mutated: true, mode: "prefix-only" });
+    expect(payload.input).toEqual([
+      { role: "user", content: "prior user" },
+      { role: "user", content: summary },
+    ]);
+  });
+
+  test("invalid artifact degrades to prefix-only without preserving the opaque placeholder", () => {
+    // Arrange
+    const branch = [v2Entry("cmp", CODEX_OPAQUE_SUMMARY_PLACEHOLDER, { artifact: [] })];
+    const payload = { input: [{ role: "user", content: CODEX_OPAQUE_SUMMARY_PLACEHOLDER }] };
 
     // Act
     const plan = planInjection({ model, branchEntries: branch, accountHash });
@@ -110,28 +119,35 @@ describe("planInjection / applyCompactionReplacement", () => {
     // Assert
     expect(plan.kind).toBe("prefix-only");
     expect(result).toEqual({ mutated: true, mode: "prefix-only" });
+    expect(payload.input).toEqual([{ role: "user", content: "prior user" }]);
   });
 
-  test("malformed prefix items are not injected", () => {
+  test("clears the opaque placeholder when neither artifact nor validated prefix is usable", () => {
     // Arrange
-    const summary = "summary text";
     const branch = [
-      v2Entry("cmp", summary, {
-        userPrefix: [{ role: "system", content: "nope" } as never],
+      v2Entry("cmp", CODEX_OPAQUE_SUMMARY_PLACEHOLDER, {
+        userPrefix: [{ role: "system", content: "not valid" }],
         artifact: [],
       }),
     ];
+    const payload = {
+      input: [
+        { role: "user", content: CODEX_OPAQUE_SUMMARY_PLACEHOLDER },
+        { role: "user", content: "tail" },
+      ],
+    };
 
     // Act
-    const plan = planInjection({ model, branchEntries: branch, accountHash });
+    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, accountHash });
 
     // Assert
-    expect(plan.kind).toBe("none");
+    expect(result).toEqual({ mutated: true, mode: "placeholder-cleared" });
+    expect(payload.input).toEqual([{ role: "user", content: "tail" }]);
   });
 
-  test("prefix-only is idempotent on second application", () => {
+  test("semantic prefix-only insertion is idempotent for migrated v2 records", () => {
     // Arrange
-    const summary = "summary text";
+    const summary = "old semantic summary";
     const branch = [v2Entry("cmp", summary, { artifact: [] })];
     const payload = { input: [{ role: "user", content: summary }] };
 
@@ -145,35 +161,33 @@ describe("planInjection / applyCompactionReplacement", () => {
     expect(payload.input.filter((item) => item.content === "prior user")).toHaveLength(1);
   });
 
-  test("after seam strikes planInjection chooses prefix-only not artifact", () => {
+  test("seam strikes disable artifact injection and remove the opaque placeholder", () => {
     // Arrange
-    const summary = "summary text";
     const strikes = Array.from({ length: SEAM_STRIKE_THRESHOLD }, (_, index) => seamError(index));
-    const branch: SessionEntry[] = [v2Entry("cmp", summary), ...strikes];
+    const branch: SessionEntry[] = [v2Entry("cmp", CODEX_OPAQUE_SUMMARY_PLACEHOLDER), ...strikes];
+    const payload = { input: [{ role: "user", content: CODEX_OPAQUE_SUMMARY_PLACEHOLDER }] };
 
     // Act
     const plan = planInjection({ model, branchEntries: branch, accountHash });
+    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, accountHash });
 
     // Assert
     expect(plan.kind).toBe("prefix-only");
+    expect(result).toEqual({ mutated: true, mode: "prefix-only" });
+    expect(payload.input).toEqual([{ role: "user", content: "prior user" }]);
   });
 
-  test("auth hash failure degrades to prefix-only", () => {
+  test("auth hash failure uses prefix-only and removes the opaque placeholder", () => {
     // Arrange
-    const summary = "summary text";
-    const branch = [v2Entry("cmp", summary)];
-    const payload = { input: [{ role: "user", content: summary }] };
+    const branch = [v2Entry("cmp", CODEX_OPAQUE_SUMMARY_PLACEHOLDER)];
+    const payload = { input: [{ role: "user", content: CODEX_OPAQUE_SUMMARY_PLACEHOLDER }] };
 
     // Act
-    const result = applyCompactionReplacement({
-      payload,
-      model,
-      branchEntries: branch,
-      accountHash: undefined,
-    });
+    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, accountHash: undefined });
 
     // Assert
     expect(result).toEqual({ mutated: true, mode: "prefix-only" });
+    expect(payload.input).toEqual([{ role: "user", content: "prior user" }]);
   });
 });
 
@@ -204,8 +218,6 @@ function v2Entry(
     firstKeptEntryId: "kept",
     tokensBefore: 10,
     details: {
-      readFiles: ["a.ts"],
-      modifiedFiles: ["b.ts"],
       codexCompaction: {
         version: 2,
         binding: {

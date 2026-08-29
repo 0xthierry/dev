@@ -1,13 +1,15 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { type Static, Type } from "typebox";
-import { formatFindOutput, formatGrepOutput, renderTextResult } from "./output";
+import { boundFffOutput, formatFindOutput, formatGrepOutput, renderTextResult } from "./output";
 import type { CursorStore } from "./pagination";
 import { buildQuery } from "./query";
 import type { FffRuntime, GrepMode } from "./types";
 
 const DEFAULT_GREP_LIMIT = 20;
 const DEFAULT_FIND_LIMIT = 30;
+const MAX_LIMIT = 200;
+const MAX_CONTEXT = 20;
 const MAX_MATCHES_PER_FILE = 50;
 
 const FIND_AND_HINT =
@@ -33,8 +35,12 @@ export const GrepParameters = Type.Object({
         "Force case-sensitive matching. Default uses smart-case (case-insensitive when pattern is all lowercase).",
     }),
   ),
-  context: Type.Optional(Type.Number({ description: "Context lines before+after each match" })),
-  limit: Type.Optional(Type.Number({ description: `Max matches (default ${DEFAULT_GREP_LIMIT})` })),
+  context: Type.Optional(
+    Type.Integer({ minimum: 0, maximum: MAX_CONTEXT, description: "Context lines before+after each match" }),
+  ),
+  limit: Type.Optional(
+    Type.Integer({ minimum: 1, maximum: MAX_LIMIT, description: `Max matches (default ${DEFAULT_GREP_LIMIT})` }),
+  ),
   cursor: Type.Optional(Type.String({ description: "Pagination cursor from previous result" })),
 });
 
@@ -45,7 +51,13 @@ export const FindParameters = Type.Object({
   }),
   path: Type.Optional(Type.String({ description: PathDescription })),
   exclude: Type.Optional(Type.Union([Type.String(), Type.Array(Type.String())], { description: ExcludeDescription })),
-  limit: Type.Optional(Type.Number({ description: `Max results per page (default ${DEFAULT_FIND_LIMIT})` })),
+  limit: Type.Optional(
+    Type.Integer({
+      minimum: 1,
+      maximum: MAX_LIMIT,
+      description: `Max results per page (default ${DEFAULT_FIND_LIMIT})`,
+    }),
+  ),
   cursor: Type.Optional(Type.String({ description: "Pagination cursor from previous result" })),
 });
 
@@ -59,8 +71,10 @@ export const MultiGrepParameters = Type.Object({
         "File filter in FFF query syntax. Space-separated terms are AND-combined (a file must satisfy ALL of them), so to allow ANY of several directories or extensions use a brace glob — '{configs,install}/**' or '*.{sh,ts}' — NOT 'configs/** install/**', which means 'under configs AND under install' and matches nothing. Prefix a term with '!' to exclude. Example: 'src/**/*.{ts,tsx} !test/'.",
     }),
   ),
-  context: Type.Optional(Type.Number({ description: "Context lines before+after" })),
-  limit: Type.Optional(Type.Number({ description: `Max matches (default ${DEFAULT_GREP_LIMIT})` })),
+  context: Type.Optional(Type.Integer({ minimum: 0, maximum: MAX_CONTEXT, description: "Context lines before+after" })),
+  limit: Type.Optional(
+    Type.Integer({ minimum: 1, maximum: MAX_LIMIT, description: `Max matches (default ${DEFAULT_GREP_LIMIT})` }),
+  ),
   cursor: Type.Optional(Type.String({ description: "Pagination cursor" })),
 });
 
@@ -108,7 +122,7 @@ function registerGrepTool(
   pi.registerTool({
     name: "grep",
     label: "grep",
-    description: `Grep file contents. Smart-case, auto-detects regex vs literal, git-aware. Results are ranked by frecency (most-accessed files first); matches within a file stay in source order. Default limit ${DEFAULT_GREP_LIMIT}.`,
+    description: `Grep file contents. Smart-case, auto-detects regex vs literal, git-aware. Results are ranked by frecency (most-accessed files first); matches within a file stay in source order. Default limit ${DEFAULT_GREP_LIMIT}. Output is truncated to 50 KiB or 2000 lines.`,
     promptSnippet: "Grep contents",
     promptGuidelines: [
       "Prefer bare identifiers as patterns. Literal queries are most efficient.",
@@ -121,20 +135,20 @@ function registerGrepTool(
     async execute(_toolCallId, params: GrepParams, signal, _onUpdate, ctx) {
       if (signal?.aborted) throw new Error("Operation aborted");
       if (isWildcardOnlyPattern(params.pattern)) {
+        const output = boundFffOutput(
+          `Pattern '${params.pattern}' matches everything. Grep needs a concrete substring or identifier, for example pattern: 'MyClass' or pattern: 'export function'.`,
+          "Retry with a concrete, shorter pattern to continue.",
+        );
         return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Pattern '${params.pattern}' matches everything. Grep needs a concrete substring or identifier, for example pattern: 'MyClass' or pattern: 'export function'.`,
-            },
-          ],
+          content: [{ type: "text" as const, text: output }],
           details: { totalMatched: 0, totalFiles: 0 },
         };
       }
 
       const cwd = cwdForTool(ctx, getActiveCwd);
       const finder = await runtime.ensureFinder(cwd);
-      const effectiveLimit = positiveLimit(params.limit, DEFAULT_GREP_LIMIT);
+      const effectiveLimit = boundedLimit(params.limit, DEFAULT_GREP_LIMIT);
+      const effectiveContext = boundedContext(params.context);
       const query = buildQuery(params.path, params.pattern, params.exclude, cwd);
       const mode = detectGrepMode(params.pattern);
       const smartCase = params.caseSensitive !== true;
@@ -145,8 +159,8 @@ function registerGrepTool(
         maxMatchesPerFile: Math.min(effectiveLimit, MAX_MATCHES_PER_FILE),
         pageSize: effectiveLimit,
         cursor: params.cursor ? (cursorStore.getGrep(params.cursor) ?? null) : null,
-        beforeContext: params.context ?? 0,
-        afterContext: params.context ?? 0,
+        beforeContext: effectiveContext,
+        afterContext: effectiveContext,
         classifyDefinitions: true,
       });
       if (!search.ok) throw new Error(search.error);
@@ -161,8 +175,8 @@ function registerGrepTool(
           maxMatchesPerFile: Math.min(effectiveLimit, MAX_MATCHES_PER_FILE),
           pageSize: effectiveLimit,
           cursor: null,
-          beforeContext: params.context ?? 0,
-          afterContext: params.context ?? 0,
+          beforeContext: effectiveContext,
+          afterContext: effectiveContext,
           classifyDefinitions: true,
         });
         if (fuzzy.ok && fuzzy.value.items.length > 0) {
@@ -174,9 +188,16 @@ function registerGrepTool(
       let output = formatGrepOutput(result);
       const notices: string[] = [];
       if (result.regexFallbackError) notices.push(`Invalid regex: ${result.regexFallbackError}; used literal match`);
-      if (result.nextCursor) notices.push(`Continue with cursor="${cursorStore.storeGrep(result.nextCursor)}"`);
+      const cursor = result.nextCursor ? cursorStore.storeGrep(result.nextCursor) : null;
+      if (cursor) notices.push(`Continue with cursor="${cursor}"`);
       if (notices.length > 0) output += `\n\n[${notices.join(". ")}]`;
       if (fuzzyNotice) output = `[${fuzzyNotice}]\n${output}`;
+      output = boundFffOutput(
+        output,
+        cursor
+          ? `Continue with cursor="${cursor}"; reduce limit/context if needed.`
+          : "Retry with a smaller limit/context to continue.",
+      );
 
       return {
         content: [{ type: "text" as const, text: output }],
@@ -210,7 +231,7 @@ function registerFindTool(
   pi.registerTool({
     name: "find",
     label: "find",
-    description: `Fuzzy path search and glob search. Matches against the whole repo-relative path, not just the filename. Frecency-ranked, git-aware/ignore-aware. Multi-word = AND (every word must match the same path; one concept per call). Default limit ${DEFAULT_FIND_LIMIT}.`,
+    description: `Fuzzy path search and glob search. Matches against the whole repo-relative path, not just the filename. Frecency-ranked, git-aware/ignore-aware. Multi-word = AND (every word must match the same path; one concept per call). Default limit ${DEFAULT_FIND_LIMIT}. Output is truncated to 50 KiB or 2000 lines.`,
     promptSnippet: "Find files by path or glob",
     promptGuidelines: [
       "Matches the WHOLE path, not just the filename — `profile` hits `chrome/browser/profiles/x.cc` too.",
@@ -229,7 +250,7 @@ function registerFindTool(
       const cwd = cwdForTool(ctx, getActiveCwd);
       const finder = await runtime.ensureFinder(cwd);
       const resumed = params.cursor ? cursorStore.getFind(params.cursor) : undefined;
-      const effectiveLimit = resumed ? resumed.pageSize : positiveLimit(params.limit, DEFAULT_FIND_LIMIT);
+      const effectiveLimit = boundedLimit(resumed?.pageSize ?? params.limit, DEFAULT_FIND_LIMIT);
       const query = resumed ? resumed.query : buildQuery(params.path, params.pattern, params.exclude, cwd);
       const pattern = resumed ? resumed.pattern : params.pattern;
       const pageIndex = resumed?.nextPageIndex ?? 0;
@@ -250,10 +271,11 @@ function registerFindTool(
         );
       }
 
+      let cursor: string | null = null;
       if (hasMore) {
         const remaining = result.totalMatched - shownSoFar;
         const pageSize = formatted.weak ? formatted.shownCount : effectiveLimit;
-        const cursor = cursorStore.storeFind({
+        cursor = cursorStore.storeFind({
           query,
           pattern,
           pageSize,
@@ -267,6 +289,12 @@ function registerFindTool(
       }
 
       if (notices.length > 0) output += `\n\n[${notices.join(". ")}]`;
+      output = boundFffOutput(
+        output,
+        cursor
+          ? `Continue with cursor="${cursor}"; reduce limit if needed.`
+          : "Retry with a smaller limit to continue.",
+      );
 
       return {
         content: [{ type: "text" as const, text: output }],
@@ -301,7 +329,7 @@ function registerMultiGrepTool(
     name: "multi_grep",
     label: "multi_grep",
     description:
-      "Search file contents for ANY of multiple literal patterns (OR, SIMD Aho-Corasick). Faster than regex alternation.",
+      "Search file contents for ANY of multiple literal patterns (OR, SIMD Aho-Corasick). Faster than regex alternation. Output is truncated to 50 KiB or 2000 lines.",
     promptSnippet: "Multi-pattern OR content search",
     promptGuidelines: [
       "Use when searching for several identifiers at once.",
@@ -317,7 +345,8 @@ function registerMultiGrepTool(
 
       const cwd = cwdForTool(ctx, getActiveCwd);
       const finder = await runtime.ensureFinder(cwd);
-      const effectiveLimit = positiveLimit(params.limit, DEFAULT_GREP_LIMIT);
+      const effectiveLimit = boundedLimit(params.limit, DEFAULT_GREP_LIMIT);
+      const effectiveContext = boundedContext(params.context);
       const search = finder.multiGrep({
         patterns: params.patterns,
         constraints: params.constraints,
@@ -325,8 +354,8 @@ function registerMultiGrepTool(
         pageSize: effectiveLimit,
         smartCase: true,
         cursor: params.cursor ? (cursorStore.getGrep(params.cursor) ?? null) : null,
-        beforeContext: params.context ?? 0,
-        afterContext: params.context ?? 0,
+        beforeContext: effectiveContext,
+        afterContext: effectiveContext,
         classifyDefinitions: true,
       });
       if (!search.ok) throw new Error(search.error);
@@ -337,8 +366,15 @@ function registerMultiGrepTool(
       if (result.totalMatched === 0 && !params.cursor && positiveConstraintCount(params.constraints) >= 2) {
         notices.push(MULTI_GREP_AND_HINT);
       }
-      if (result.nextCursor) notices.push(`Continue with cursor="${cursorStore.storeGrep(result.nextCursor)}"`);
+      const cursor = result.nextCursor ? cursorStore.storeGrep(result.nextCursor) : null;
+      if (cursor) notices.push(`Continue with cursor="${cursor}"`);
       if (notices.length > 0) output += `\n\n[${notices.join(". ")}]`;
+      output = boundFffOutput(
+        output,
+        cursor
+          ? `Continue with cursor="${cursor}"; reduce limit/context if needed.`
+          : "Retry with a smaller limit/context to continue.",
+      );
 
       return {
         content: [{ type: "text" as const, text: output }],
@@ -424,8 +460,12 @@ function positiveConstraintCount(constraints: string | undefined): number {
     .filter((term) => term.length > 0 && !term.startsWith("!")).length;
 }
 
-function positiveLimit(value: number | undefined, fallback: number): number {
-  return Math.max(1, Math.floor(value ?? fallback));
+function boundedLimit(value: number | undefined, fallback: number): number {
+  return Math.min(MAX_LIMIT, Math.max(1, Math.floor(value ?? fallback)));
+}
+
+function boundedContext(value: number | undefined): number {
+  return Math.min(MAX_CONTEXT, Math.max(0, Math.floor(value ?? 0)));
 }
 
 function cwdForTool(ctx: unknown, getActiveCwd: CwdProvider): string {

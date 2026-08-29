@@ -1,10 +1,16 @@
 import type { ExtensionAPI, ExtensionContext, SessionBeforeCompactEvent } from "@earendil-works/pi-coding-agent";
 import { hashAccountId } from "./binding";
 import { extractChatGptAccountId, isCodexResponsesModel } from "./model";
+import { portableCompactOnly } from "./portable-recovery";
 import { type CompactionPreparation, recoverFromV1Placeholder } from "./recovery";
+import { remoteCompact } from "./remote-compaction";
 import { applyCompactionReplacement } from "./replacement";
-import { dualCompact, portableCompactOnly } from "./summary";
-import type { CodexRecoveryInfo, JsonObject } from "./types";
+import {
+  CODEX_AUTO_COMPACTION_THRESHOLD_TOKENS,
+  type CodexModel,
+  type CodexRecoveryInfo,
+  type JsonObject,
+} from "./types";
 
 type SessionBeforeCompactResult = {
   cancel?: boolean;
@@ -12,82 +18,81 @@ type SessionBeforeCompactResult = {
 };
 
 export type CodexCompactionRuntime = {
-  dualCompact: typeof dualCompact;
+  remoteCompact: typeof remoteCompact;
   portableCompactOnly: typeof portableCompactOnly;
 };
 
 export function createCodexCompactionRuntime(): CodexCompactionRuntime {
-  return { dualCompact, portableCompactOnly };
+  return { remoteCompact, portableCompactOnly };
 }
 
 export function registerCodexCompactionExtension(
   pi: ExtensionAPI,
   runtime: CodexCompactionRuntime = createCodexCompactionRuntime(),
 ): void {
+  let earlyCompactionInFlight = false;
+
+  pi.on("turn_end", (_event, ctx) => {
+    if (!isCodexResponsesModel(ctx.model) || earlyCompactionInFlight) return;
+
+    const currentTokens = ctx.getContextUsage()?.tokens;
+    if (currentTokens == null || currentTokens < CODEX_AUTO_COMPACTION_THRESHOLD_TOKENS) return;
+
+    earlyCompactionInFlight = true;
+    try {
+      ctx.compact({
+        onComplete: () => {
+          earlyCompactionInFlight = false;
+        },
+        onError: (error) => {
+          earlyCompactionInFlight = false;
+          if (ctx.hasUI) ctx.ui.notify(`Codex compaction failed: ${error.message}`, "warning");
+        },
+      });
+    } catch (error) {
+      earlyCompactionInFlight = false;
+      if (ctx.hasUI) {
+        ctx.ui.notify(`Codex compaction failed: ${error instanceof Error ? error.message : String(error)}`, "warning");
+      }
+    }
+  });
+
   pi.on("session_before_compact", async (event, ctx) => {
     const contextWindow =
       ctx.model && typeof ctx.model.contextWindow === "number" ? ctx.model.contextWindow : undefined;
     const recovery = recoverFromV1Placeholder(event.preparation, event.branchEntries, contextWindow);
-    const preparation = recovery?.preparation ?? event.preparation;
-    const recoveryInfo = recovery?.recovery;
-    const originalPreparation = event.preparation;
 
-    // Recovery path: never fall through to Pi default compact of the placeholder preparation.
-    if (recovery) {
-      // Cancel ALL truncated legacy/v1 migrations before any portable/dual compact can persist.
-      if (recovery.recovery.truncated) {
-        return recoveryCancel(
-          ctx,
-          event.signal,
-          "Legacy Codex compaction recovery was truncated; canceling to avoid lossy migration",
-        );
-      }
+    if (recovery?.recovery.truncated) {
+      return compactCancel(
+        ctx,
+        event.signal,
+        "Legacy Codex compaction recovery was truncated; canceling to avoid lossy migration",
+      );
+    }
 
-      return handleRecoveryCompact({
+    if (recovery && !isCodexResponsesModel(ctx.model)) {
+      return handlePortableRecovery({
         pi,
         event,
         ctx,
-        preparation,
-        originalPreparation,
-        recoveryInfo,
+        preparation: recovery.preparation,
+        recovery: recovery.recovery,
         runtime,
       });
     }
 
     if (!isCodexResponsesModel(ctx.model)) return undefined;
 
-    const auth = await ctx.modelRegistry.getApiKeyAndHeaders(ctx.model);
-    if (!auth.ok || !auth.apiKey) return undefined;
-
-    const accountId = extractChatGptAccountId(auth.apiKey);
-    if (!accountId) return undefined;
-
-    try {
-      const compaction = await runtime.dualCompact({
-        preparation,
-        originalPreparation,
-        model: ctx.model,
-        auth: { apiKey: auth.apiKey, headers: auth.headers, env: auth.env },
-        customInstructions: event.customInstructions,
-        signal: event.signal,
-        thinkingLevel: pi.getThinkingLevel(),
-        systemPrompt: ctx.getSystemPrompt(),
-        tools: activeToolSpecs(pi),
-        sessionId: safeSessionId(ctx),
-        branchEntries: event.branchEntries,
-        recovery: recoveryInfo,
-      });
-
-      if (!compaction) return undefined;
-      return { compaction };
-    } catch (error) {
-      if (event.signal.aborted || isAbortError(error)) return undefined;
-      if (ctx.hasUI) {
-        const message = error instanceof Error ? error.message : String(error);
-        ctx.ui.notify(message, "warning");
-      }
-      return undefined;
-    }
+    return handleCodexRemoteCompact({
+      pi,
+      event,
+      ctx,
+      model: ctx.model,
+      preparation: recovery?.preparation ?? event.preparation,
+      originalPreparation: event.preparation,
+      recovery: recovery?.recovery,
+      runtime,
+    });
   });
 
   pi.on("before_provider_request", async (event, ctx) => {
@@ -104,11 +109,10 @@ export function registerCodexCompactionExtension(
       accountHash = undefined;
     }
 
-    const branch = ctx.sessionManager.getBranch();
     const result = applyCompactionReplacement({
       payload: event.payload,
       model: ctx.model,
-      branchEntries: branch,
+      branchEntries: ctx.sessionManager.getBranch(),
       accountHash,
     });
 
@@ -116,73 +120,74 @@ export function registerCodexCompactionExtension(
   });
 }
 
-async function handleRecoveryCompact(options: {
+async function handleCodexRemoteCompact(options: {
+  pi: ExtensionAPI;
+  event: SessionBeforeCompactEvent;
+  ctx: ExtensionContext;
+  model: CodexModel;
+  preparation: CompactionPreparation;
+  originalPreparation: CompactionPreparation;
+  recovery: CodexRecoveryInfo | undefined;
+  runtime: CodexCompactionRuntime;
+}): Promise<SessionBeforeCompactResult> {
+  const { pi, event, ctx, model, preparation, originalPreparation, recovery, runtime } = options;
+  const failureLabel = recovery ? "Codex compaction recovery" : "Codex compaction";
+
+  try {
+    const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+    if (!auth.ok || !auth.apiKey) {
+      return compactCancel(ctx, event.signal, auth.ok ? `${failureLabel} requires API credentials` : auth.error);
+    }
+
+    const accountId = extractChatGptAccountId(auth.apiKey);
+    if (!accountId) {
+      return compactCancel(ctx, event.signal, `${failureLabel} requires a ChatGPT account id`);
+    }
+
+    const compaction = await runtime.remoteCompact({
+      preparation,
+      originalPreparation,
+      model,
+      auth: { apiKey: auth.apiKey, headers: auth.headers, env: auth.env },
+      signal: event.signal,
+      thinkingLevel: pi.getThinkingLevel(),
+      systemPrompt: ctx.getSystemPrompt(),
+      tools: activeToolSpecs(pi),
+      sessionId: safeSessionId(ctx),
+      branchEntries: event.branchEntries,
+      recovery,
+    });
+
+    if (!compaction) {
+      return compactCancel(
+        ctx,
+        event.signal,
+        event.signal.aborted
+          ? undefined
+          : `${failureLabel} endpoint failed; portable summary fallback was not attempted`,
+      );
+    }
+    return { compaction };
+  } catch (error) {
+    if (event.signal.aborted || isAbortError(error)) return compactCancel(ctx, event.signal);
+    return compactCancel(ctx, event.signal, error instanceof Error ? error.message : `${failureLabel} endpoint failed`);
+  }
+}
+
+async function handlePortableRecovery(options: {
   pi: ExtensionAPI;
   event: SessionBeforeCompactEvent;
   ctx: ExtensionContext;
   preparation: CompactionPreparation;
-  originalPreparation: CompactionPreparation;
-  recoveryInfo: CodexRecoveryInfo | undefined;
+  recovery: CodexRecoveryInfo;
   runtime: CodexCompactionRuntime;
 }): Promise<SessionBeforeCompactResult> {
-  const { pi, event, ctx, preparation, originalPreparation, recoveryInfo, runtime } = options;
-
-  if (!ctx.model) {
-    return recoveryCancel(ctx, event.signal, "Codex compaction recovery requires an active model");
-  }
-
-  let auth: Awaited<ReturnType<ExtensionContext["modelRegistry"]["getApiKeyAndHeaders"]>>;
-  try {
-    auth = await ctx.modelRegistry.getApiKeyAndHeaders(ctx.model);
-  } catch (error) {
-    if (event.signal.aborted || isAbortError(error)) {
-      return recoveryCancel(ctx, event.signal);
-    }
-    return recoveryCancel(
-      ctx,
-      event.signal,
-      error instanceof Error ? error.message : "Codex compaction recovery auth failed",
-    );
-  }
-
-  if (!auth.ok) {
-    return recoveryCancel(ctx, event.signal, auth.error || "Codex compaction recovery auth unavailable");
-  }
+  const { pi, event, ctx, preparation, recovery, runtime } = options;
+  if (!ctx.model) return compactCancel(ctx, event.signal, "Codex compaction recovery requires an active model");
 
   try {
-    if (isCodexResponsesModel(ctx.model)) {
-      if (!auth.apiKey) {
-        return recoveryCancel(ctx, event.signal, "Codex compaction recovery requires API credentials");
-      }
-      const accountId = extractChatGptAccountId(auth.apiKey);
-      if (!accountId) {
-        return recoveryCancel(ctx, event.signal, "Codex compaction recovery requires a ChatGPT account id");
-      }
-
-      const compaction = await runtime.dualCompact({
-        preparation,
-        originalPreparation,
-        model: ctx.model,
-        auth: { apiKey: auth.apiKey, headers: auth.headers, env: auth.env },
-        customInstructions: event.customInstructions,
-        signal: event.signal,
-        thinkingLevel: pi.getThinkingLevel(),
-        systemPrompt: ctx.getSystemPrompt(),
-        tools: activeToolSpecs(pi),
-        sessionId: safeSessionId(ctx),
-        branchEntries: event.branchEntries,
-        recovery: recoveryInfo,
-      });
-
-      if (!compaction) {
-        return recoveryCancel(
-          ctx,
-          event.signal,
-          event.signal.aborted ? undefined : "Codex compaction recovery summary failed",
-        );
-      }
-      return { compaction };
-    }
+    const auth = await ctx.modelRegistry.getApiKeyAndHeaders(ctx.model);
+    if (!auth.ok) return compactCancel(ctx, event.signal, auth.error || "Compaction recovery auth unavailable");
 
     const compaction = await runtime.portableCompactOnly({
       preparation,
@@ -191,30 +196,26 @@ async function handleRecoveryCompact(options: {
       customInstructions: event.customInstructions,
       signal: event.signal,
       thinkingLevel: pi.getThinkingLevel(),
-      recovery: recoveryInfo,
+      recovery,
       branchEntries: event.branchEntries,
     });
 
     if (!compaction) {
-      return recoveryCancel(ctx, event.signal, event.signal.aborted ? undefined : "Compaction recovery summary failed");
+      return compactCancel(ctx, event.signal, event.signal.aborted ? undefined : "Compaction recovery summary failed");
     }
     return { compaction };
   } catch (error) {
-    if (event.signal.aborted || isAbortError(error)) {
-      return recoveryCancel(ctx, event.signal);
-    }
-    return recoveryCancel(ctx, event.signal, error instanceof Error ? error.message : "Compaction recovery failed");
+    if (event.signal.aborted || isAbortError(error)) return compactCancel(ctx, event.signal);
+    return compactCancel(ctx, event.signal, error instanceof Error ? error.message : "Compaction recovery failed");
   }
 }
 
-function recoveryCancel(
+function compactCancel(
   ctx: Pick<ExtensionContext, "hasUI" | "ui">,
   signal: AbortSignal,
   message?: string,
 ): SessionBeforeCompactResult {
-  if (!signal.aborted && message && ctx.hasUI) {
-    ctx.ui.notify(message, "warning");
-  }
+  if (!signal.aborted && message && ctx.hasUI) ctx.ui.notify(message, "warning");
   return { cancel: true };
 }
 
