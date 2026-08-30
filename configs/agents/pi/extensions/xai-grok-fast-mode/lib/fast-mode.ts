@@ -1,11 +1,6 @@
-const XAI_PROVIDER = "xai";
-const GROK_MODEL_PREFIX = "grok-";
-const PRIORITY_SERVICE_TIER = "priority";
+import { isDirectXaiGrokModel, type ProviderModel } from "./model";
 
-type ProviderModel = {
-  provider: string;
-  id: string;
-};
+const PRIORITY_SERVICE_TIER = "priority";
 
 type JsonObject = Record<string, unknown>;
 
@@ -17,10 +12,6 @@ export function applyXaiGrokFastMode(payload: unknown, model: ProviderModel | un
     ...payload,
     service_tier: PRIORITY_SERVICE_TIER,
   };
-}
-
-function isDirectXaiGrokModel(model: ProviderModel | undefined): boolean {
-  return model?.provider === XAI_PROVIDER && model.id.startsWith(GROK_MODEL_PREFIX);
 }
 
 function isJsonObject(value: unknown): value is JsonObject {

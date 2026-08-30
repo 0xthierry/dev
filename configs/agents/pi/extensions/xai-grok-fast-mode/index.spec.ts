@@ -62,6 +62,7 @@ describe("xai-grok-fast-mode extension E2E", () => {
     // Assert
     expect(promptResponse.success).toBe(true);
     expect(eventText(agentEnd)).toContain("service_tier=priority");
+    expect(eventText(agentEnd)).toMatch(/x-grok-conv-id=(?!missing)[^"\\s]+/);
     expect(harness.stderr()).toBe("");
   }, 90_000);
 });

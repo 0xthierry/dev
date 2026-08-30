@@ -13,6 +13,7 @@ export const XAI_GROK_FAST_MODE_TEST_MODEL = "grok-4.6";
 export const XAI_GROK_FAST_MODE_TEST_API_KEY_ENV = "XAI_GROK_FAST_MODE_E2E_API_KEY";
 
 const api = "xai-grok-fast-mode-e2e-api";
+
 const usage = {
   input: 0,
   output: 0,
@@ -48,7 +49,11 @@ function streamSimple(model: Model<Api>, _context: Context, options?: SimpleStre
 
   queueMicrotask(async () => {
     const payload = await options?.onPayload?.(buildXaiPayload(), model);
-    const text = `service_tier=${readServiceTier(payload)}`;
+    const headers = options?.headers;
+    const text = [
+      `service_tier=${readStringField(payload, "service_tier")}`,
+      `x-grok-conv-id=${readStringField(headers, "x-grok-conv-id")}`,
+    ].join(" ");
     const message = buildAssistantMessage(model, text);
 
     stream.push({ type: "start", partial: { ...message, content: [] } });
@@ -79,10 +84,10 @@ function buildXaiPayload(): Record<string, unknown> {
   };
 }
 
-function readServiceTier(payload: unknown): string {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "missing";
-  const serviceTier = (payload as Record<string, unknown>).service_tier;
-  return typeof serviceTier === "string" ? serviceTier : "missing";
+function readStringField(value: unknown, field: string): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "missing";
+  const fieldValue = (value as Record<string, unknown>)[field];
+  return typeof fieldValue === "string" ? fieldValue : "missing";
 }
 
 function buildAssistantMessage(model: Model<Api>, text: string): AssistantMessage {
