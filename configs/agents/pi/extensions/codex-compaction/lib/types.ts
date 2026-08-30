@@ -7,7 +7,6 @@ export const CODEX_COMPACTION_CUSTOM_INVALIDATION = "codex-compaction-invalidate
 export const SEAM_STRIKE_THRESHOLD = 2;
 export const SUMMARY_SEARCH_WINDOW = 16;
 export const RECOVERY_PROMPT_MARGIN_TOKENS = 4096;
-export const CODEX_AUTO_COMPACTION_THRESHOLD_TOKENS = 176_800;
 export const CODEX_OPAQUE_SUMMARY_PLACEHOLDER =
   "[Opaque Codex compaction artifact — replaced only on compatible Codex provider requests.]";
 

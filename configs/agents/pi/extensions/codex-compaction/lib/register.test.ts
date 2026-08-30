@@ -2,7 +2,10 @@ import { describe, expect, mock, test } from "bun:test";
 import { createFakePi } from "../../_shared/testing/fake-pi";
 import { hashAccountId } from "./binding";
 import { type CodexCompactionRuntime, registerCodexCompactionExtension } from "./register";
-import { CODEX_AUTO_COMPACTION_THRESHOLD_TOKENS, CODEX_OPAQUE_SUMMARY_PLACEHOLDER } from "./types";
+import { CODEX_OPAQUE_SUMMARY_PLACEHOLDER } from "./types";
+
+const CODEX_CONTEXT_WINDOW_TOKENS = 272_000;
+const CODEX_AUTO_COMPACTION_THRESHOLD_TOKENS = 244_800;
 
 describe("registerCodexCompactionExtension", () => {
   test("registers remote compaction, provider injection, and early turn-end compaction handlers", () => {
@@ -203,7 +206,7 @@ describe("registerCodexCompactionExtension", () => {
     ]);
   });
 
-  test("triggers early Codex auto-compaction at exactly 176800 tokens", async () => {
+  test("triggers early Codex auto-compaction at the native 90% context threshold", async () => {
     // Arrange
     const fakePi = createFakePi();
     const compact = mock(() => undefined);
@@ -345,7 +348,7 @@ function codexModel() {
     thinkingLevelMap: { minimal: "low" },
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 200000,
+    contextWindow: CODEX_CONTEXT_WINDOW_TOKENS,
     maxTokens: 32000,
     name: "sol",
   };

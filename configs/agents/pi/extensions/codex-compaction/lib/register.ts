@@ -1,16 +1,11 @@
 import type { ExtensionAPI, ExtensionContext, SessionBeforeCompactEvent } from "@earendil-works/pi-coding-agent";
 import { hashAccountId } from "./binding";
-import { extractChatGptAccountId, isCodexResponsesModel } from "./model";
+import { codexAutoCompactionThreshold, extractChatGptAccountId, isCodexResponsesModel } from "./model";
 import { portableCompactOnly } from "./portable-recovery";
 import { type CompactionPreparation, recoverFromV1Placeholder } from "./recovery";
 import { remoteCompact } from "./remote-compaction";
 import { applyCompactionReplacement } from "./replacement";
-import {
-  CODEX_AUTO_COMPACTION_THRESHOLD_TOKENS,
-  type CodexModel,
-  type CodexRecoveryInfo,
-  type JsonObject,
-} from "./types";
+import type { CodexModel, CodexRecoveryInfo, JsonObject } from "./types";
 
 type SessionBeforeCompactResult = {
   cancel?: boolean;
@@ -36,7 +31,7 @@ export function registerCodexCompactionExtension(
     if (!isCodexResponsesModel(ctx.model) || earlyCompactionInFlight) return;
 
     const currentTokens = ctx.getContextUsage()?.tokens;
-    if (currentTokens == null || currentTokens < CODEX_AUTO_COMPACTION_THRESHOLD_TOKENS) return;
+    if (currentTokens == null || currentTokens < codexAutoCompactionThreshold(ctx.model)) return;
 
     earlyCompactionInFlight = true;
     try {

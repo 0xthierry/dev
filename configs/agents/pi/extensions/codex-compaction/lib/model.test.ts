@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  codexAutoCompactionThreshold,
   codexReasoningEffort,
   extractChatGptAccountId,
   isCodexResponsesModel,
@@ -30,6 +31,17 @@ describe("codex model helpers", () => {
 
     // Assert
     expect(supported).toEqual([true, true, true, true]);
+  });
+
+  test("derives the native Codex 90% auto-compaction threshold from the model context window", () => {
+    // Arrange
+    const codexModel = { ...model, contextWindow: 272_000 } as CodexModel;
+
+    // Act
+    const threshold = codexAutoCompactionThreshold(codexModel);
+
+    // Assert
+    expect(threshold).toBe(244_800);
   });
 
   test("maps unsupported minimal reasoning to the model's configured effort", () => {

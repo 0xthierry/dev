@@ -56,7 +56,7 @@ Replacement searches only a small input prefix and is idempotent after the place
 
 ## Early Codex threshold
 
-A `turn_end` handler uses `ctx.getContextUsage()` and calls `ctx.compact()` when Codex context reaches the exact configured extension threshold of **176,800 tokens** (`tokens >= 176800`). An in-flight guard prevents duplicate triggers until `onComplete` or `onError` fires. The resulting `session_before_compact` path is the same single-endpoint path used by manual and core-triggered compactions.
+A `turn_end` handler uses `ctx.getContextUsage()` and calls `ctx.compact()` when Codex context reaches **90% of the active model context window**, matching Codex Rust's native `context_window * 9 / 10` policy. For GPT-5.6 Sol's 272,000-token window, the threshold is **244,800 tokens**. An in-flight guard prevents duplicate triggers until `onComplete` or `onError` fires. The resulting `session_before_compact` path is the same single-endpoint path used by manual and core-triggered compactions.
 
 ## Failure behavior
 

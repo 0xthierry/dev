@@ -7,6 +7,10 @@ export function isCodexResponsesModel(model: Model<Api> | undefined): model is C
   return model?.api === "openai-codex-responses";
 }
 
+export function codexAutoCompactionThreshold(model: CodexModel): number {
+  return Math.floor((model.contextWindow * 9) / 10);
+}
+
 export function codexReasoningEffort(model: CodexModel, thinkingLevel: string): string | undefined {
   if (thinkingLevel === "off") return undefined;
 
