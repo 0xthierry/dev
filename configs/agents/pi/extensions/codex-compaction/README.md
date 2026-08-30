@@ -2,9 +2,18 @@
 
 Remote-only opaque compaction for Codex (`openai-codex-responses`) models.
 
-## One endpoint call
+## One endpoint path with bounded retries
 
-Every Codex compaction—manual, Pi threshold/overflow, early extension threshold, or legacy recovery—makes exactly one direct subscription-endpoint request to `/codex/responses` with one trailing `compaction_trigger` input item.
+Every Codex compaction—manual, Pi threshold/overflow, early extension threshold, or legacy recovery—uses only the direct subscription endpoint `/codex/responses` with one trailing `compaction_trigger` input item. Transient failures repeat that same request; they never invoke a portable summary or another model.
+
+The retry policy mirrors Codex CLI remote compaction v2:
+
+- request opening: up to four retries for transport failures and HTTP 5xx, with 200 ms exponential backoff and ±10% jitter
+- response stream: up to two full compaction retries for retryable stream failures, with 200/400 ms jittered backoff or a server-provided `Retry-After`
+- stream reads: a 300-second inactivity timeout reset by every response chunk
+- terminal responses, malformed completed artifacts, external aborts, and exhausted retries are not retried further
+
+Codex CLI can switch from WebSockets to HTTPS after stream retry exhaustion. This extension already uses direct HTTPS, so that transport fallback is not applicable.
 
 The extension does not call Pi's exported `compact()` on Codex. A successful endpoint response becomes the complete `CompactionResult`:
 
@@ -13,7 +22,7 @@ The extension does not call Pi's exported `compact()` on Codex. A successful end
 - `details.codexCompaction` stores the opaque artifact, remote usage, response id, binding, and validated recent user prefix
 - `details.readFiles` and `details.modifiedFiles` are derived from Pi's prepared file operations and merged latest metadata, without another model call
 
-The direct fetch bypasses Pi provider transport, retry policy, and proxy hooks.
+The direct fetch still bypasses Pi provider transport and proxy hooks, but applies the bounded retry and idle-timeout policy above itself.
 
 ## Persisted v2 record
 
@@ -51,7 +60,7 @@ A `turn_end` handler uses `ctx.getContextUsage()` and calls `ctx.compact()` when
 
 ## Failure behavior
 
-Endpoint, authentication, account-binding, malformed-response, and abort failures return `{ cancel: true }` from `session_before_compact`. Pi therefore does not silently make a second portable summary model call. Interactive failures notify with a warning; aborts remain quiet. No placeholder entry is persisted on a failed regular compaction.
+Endpoint, authentication, account-binding, malformed-response, and abort failures return `{ cancel: true }` from `session_before_compact`. Pi therefore does not silently make a second portable summary model call. Interactive failures notify with the final endpoint reason and attempt counts; aborts remain quiet. No placeholder entry is persisted on a failed regular compaction.
 
 ## Legacy recovery
 
@@ -61,7 +70,7 @@ Legacy v1 entries and the exact historical two-line sentinel placeholder remain 
 - Raw pre-boundary messages are budget-bounded, compaction entries are skipped, and full recovered file operations are merged.
 - Missing `firstKeptEntryId` falls back only to entries before the latest compaction, never the whole branch.
 - Truncated recovery always cancels to avoid lossy migration.
-- Compatible Codex v1 artifacts chain into the one remote request with only the original current span, avoiding recovered-message duplication.
+- Compatible Codex v1 artifacts chain into the same remote endpoint flow with only the original current span, avoiding recovered-message duplication.
 - Codex recovery endpoint failure cancels; it never invokes a portable fallback.
 - Non-Codex legacy recovery may use `portableCompactOnly()` once because it is a model-migration fallback.
 

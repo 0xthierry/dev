@@ -23,6 +23,13 @@ export type RemoteCompactRuntime = {
   fetchCodexCompaction: typeof fetchCodexCompaction;
 };
 
+export class CodexRemoteCompactionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CodexRemoteCompactionError";
+  }
+}
+
 export function createRemoteCompactRuntime(): RemoteCompactRuntime {
   return { fetchCodexCompaction };
 }
@@ -43,7 +50,7 @@ export type RemoteCompactOptions = {
   runtime?: RemoteCompactRuntime;
 };
 
-/** Performs exactly one Codex compaction-trigger request and never calls Pi's portable compact(). */
+/** Uses only the bounded-retry Codex endpoint client and never calls Pi's portable compact(). */
 export async function remoteCompact(options: RemoteCompactOptions): Promise<CompactionResult | undefined> {
   const runtime = options.runtime ?? createRemoteCompactRuntime();
   const accountId = options.auth.apiKey ? extractChatGptAccountId(options.auth.apiKey) : undefined;
@@ -73,7 +80,8 @@ export async function remoteCompact(options: RemoteCompactOptions): Promise<Comp
     sessionId: options.sessionId,
   });
 
-  if (!result.ok || options.signal?.aborted) return undefined;
+  if (options.signal?.aborted || (!result.ok && result.aborted)) return undefined;
+  if (!result.ok) throw new CodexRemoteCompactionError(formatRemoteFailure(result));
 
   return buildRemoteCompactionResult({
     remoteResult: result,
@@ -192,6 +200,15 @@ function safePreviousSummaryUserItem(previousSummary: string | undefined): JsonO
   if (previousSummary.trim() === CODEX_OPAQUE_SUMMARY_PLACEHOLDER) return [];
   if (isExactLegacyPlaceholderSummary(previousSummary)) return [];
   return [{ role: "user", content: `Previous conversation summary:\n${previousSummary}` }];
+}
+
+function formatRemoteFailure(result: Extract<Awaited<ReturnType<typeof fetchCodexCompaction>>, { ok: false }>): string {
+  const requestAttempts = result.requestAttempts ?? 1;
+  const streamAttempts = result.streamAttempts ?? 1;
+  const requestLabel = requestAttempts === 1 ? "request attempt" : "request attempts";
+  const streamLabel = streamAttempts === 1 ? "stream attempt" : "stream attempts";
+  const exhaustion = result.exhausted ? "; retries exhausted" : "";
+  return `${result.reason} (${requestAttempts} ${requestLabel} across ${streamAttempts} ${streamLabel}${exhaustion})`;
 }
 
 function discardedSpanMessages(preparation: CompactionPreparation): AgentMessage[] {

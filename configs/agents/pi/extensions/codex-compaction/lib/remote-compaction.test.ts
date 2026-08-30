@@ -163,7 +163,7 @@ describe("buildRemoteCompactionResult", () => {
 });
 
 describe("remoteCompact", () => {
-  test("uses exactly one direct endpoint call and returns its opaque result", async () => {
+  test("uses only the remote endpoint client and returns its opaque result", async () => {
     // Arrange
     const fetchFn = mock(async () => ({
       ok: true as const,
@@ -191,13 +191,20 @@ describe("remoteCompact", () => {
     expect(result?.usage).toEqual(usage(4, 1));
   });
 
-  test("returns undefined after one remote failure without a fallback model call", async () => {
+  test("throws the final endpoint reason without a fallback model call", async () => {
     // Arrange
-    const fetchFn = mock(async () => ({ ok: false as const, reason: "endpoint unavailable" }));
+    const fetchFn = mock(async () => ({
+      ok: false as const,
+      reason: "endpoint unavailable",
+      retryClass: "transport" as const,
+      requestAttempts: 15,
+      streamAttempts: 3,
+      exhausted: true,
+    }));
     const runtime: RemoteCompactRuntime = { fetchCodexCompaction: fetchFn as never };
 
     // Act
-    const result = await remoteCompact({
+    const result = remoteCompact({
       preparation: basePreparation({
         messagesToSummarize: [{ role: "user", content: "remember alpha", timestamp: 1 }],
       }),
@@ -211,7 +218,9 @@ describe("remoteCompact", () => {
 
     // Assert
     expect(fetchFn).toHaveBeenCalledTimes(1);
-    expect(result).toBeUndefined();
+    await expect(result).rejects.toThrow(
+      "endpoint unavailable (15 request attempts across 3 stream attempts; retries exhausted)",
+    );
   });
 
   test("carries prior compaction file metadata without portable compaction", async () => {

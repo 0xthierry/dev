@@ -1,30 +1,128 @@
 import { calculateCost, type ProviderHeaders, type Usage } from "@earendil-works/pi-ai";
 import { codexReasoningEffort, resolveCodexResponsesUrl } from "./model";
+import {
+  CODEX_HTTP_MAX_RETRIES,
+  CODEX_STREAM_IDLE_TIMEOUT_MS,
+  CODEX_STREAM_MAX_RETRIES,
+  retryAfterMs,
+  retryDelayMs,
+  sleepWithAbort,
+} from "./retry";
 import { isCodexCompactionItem } from "./state";
-import type { CodexCompactionItem, CodexRemoteCompactionResult, CodexRequestOptions, JsonObject } from "./types";
+import type {
+  CodexCompactionItem,
+  CodexCompactionRetryClass,
+  CodexRemoteCompactionResult,
+  CodexRequestOptions,
+  JsonObject,
+} from "./types";
 
-export async function fetchCodexCompaction(options: CodexRequestOptions): Promise<CodexRemoteCompactionResult> {
+type CodexStreamReadResult = Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>>;
+
+export type CodexClientRuntime = {
+  fetch: typeof fetch;
+  sleep: typeof sleepWithAbort;
+  random: () => number;
+  streamIdleTimeoutMs: number;
+};
+
+export function createCodexClientRuntime(): CodexClientRuntime {
+  return {
+    fetch: globalThis.fetch.bind(globalThis),
+    sleep: sleepWithAbort,
+    random: Math.random,
+    streamIdleTimeoutMs: CODEX_STREAM_IDLE_TIMEOUT_MS,
+  };
+}
+
+export async function fetchCodexCompaction(
+  options: CodexRequestOptions,
+  runtime: CodexClientRuntime = createCodexClientRuntime(),
+): Promise<CodexRemoteCompactionResult> {
+  const body = JSON.stringify(buildCodexCompactionBody(options));
+  const headers = buildCodexHeaders(options);
+  let requestAttempts = 0;
+
+  for (let streamAttempt = 0; streamAttempt <= CODEX_STREAM_MAX_RETRIES; streamAttempt += 1) {
+    let result: CodexRemoteCompactionResult | undefined;
+
+    for (let transportAttempt = 0; transportAttempt <= CODEX_HTTP_MAX_RETRIES; transportAttempt += 1) {
+      requestAttempts += 1;
+      result = await fetchCodexCompactionAttempt(options, body, headers, runtime);
+      if (result.ok || result.retryClass !== "transport") break;
+      if (transportAttempt === CODEX_HTTP_MAX_RETRIES) break;
+
+      try {
+        await runtime.sleep(retryDelayMs(transportAttempt + 1, runtime.random), options.signal);
+      } catch (error) {
+        return abortedResult(error, requestAttempts, streamAttempt + 1);
+      }
+    }
+
+    if (!result) throw new Error("Codex compaction retry loop produced no result");
+    if (result.ok) return result;
+    if (result.aborted || result.retryClass === "terminal") {
+      return withAttemptMetadata(result, requestAttempts, streamAttempt + 1, false);
+    }
+    if (streamAttempt === CODEX_STREAM_MAX_RETRIES) {
+      return withAttemptMetadata(result, requestAttempts, streamAttempt + 1, true);
+    }
+
+    const delay = result.retryAfterMs ?? retryDelayMs(streamAttempt + 1, runtime.random);
+    try {
+      await runtime.sleep(delay, options.signal);
+    } catch (error) {
+      return abortedResult(error, requestAttempts, streamAttempt + 1);
+    }
+  }
+
+  throw new Error("Codex compaction retry loop exhausted without a result");
+}
+
+async function fetchCodexCompactionAttempt(
+  options: CodexRequestOptions,
+  body: string,
+  headers: Headers,
+  runtime: CodexClientRuntime,
+): Promise<CodexRemoteCompactionResult> {
+  if (options.signal?.aborted) return abortedResult(undefined);
+
+  let response: Response;
   try {
-    const body = buildCodexCompactionBody(options);
-    const response = await fetch(resolveCodexResponsesUrl(options.model.baseUrl), {
+    response = await runtime.fetch(resolveCodexResponsesUrl(options.model.baseUrl), {
       method: "POST",
-      headers: buildCodexHeaders(options),
-      body: JSON.stringify(body),
+      headers,
+      body,
       signal: options.signal,
     });
-
-    const text = await response.text();
-    if (!response.ok) {
-      return { ok: false, reason: responseErrorText(response.status, text) };
-    }
-
-    return parseCompactionStream(text, options);
   } catch (error) {
-    if (isAbortError(error) || options.signal?.aborted) {
-      return { ok: false, reason: "aborted", aborted: true };
-    }
-    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+    if (isAbortError(error) || options.signal?.aborted) return abortedResult(error);
+    return failure(errorMessage(error), "transport");
   }
+
+  const retryDelay = retryAfterMs(response.headers);
+  let text: string;
+  try {
+    text = await readResponseText(response, runtime.streamIdleTimeoutMs, options.signal);
+  } catch (error) {
+    if (isAbortError(error) || options.signal?.aborted) return abortedResult(error);
+    return failure(errorMessage(error), response.status >= 500 ? "transport" : "stream", retryDelay);
+  }
+
+  if (!response.ok) {
+    return failure(
+      responseErrorText(response.status, text),
+      httpRetryClass(response.status, response.headers),
+      retryDelay,
+      response.status,
+    );
+  }
+
+  const result = parseCompactionStream(text, options);
+  if (!result.ok && retryDelay !== undefined && result.retryAfterMs === undefined) {
+    return { ...result, retryAfterMs: retryDelay };
+  }
+  return result;
 }
 
 export function buildCodexCompactionBody(options: CodexRequestOptions): JsonObject {
@@ -43,18 +141,9 @@ export function buildCodexCompactionBody(options: CodexRequestOptions): JsonObje
   };
 
   const sessionKey = stableSessionKey(options.sessionId);
-  if (sessionKey) {
-    body.prompt_cache_key = sessionKey;
-  }
-
-  if (options.tools && options.tools.length > 0) {
-    body.tools = options.tools;
-  }
-
-  if (reasoningEffort) {
-    body.reasoning = { effort: reasoningEffort, summary: "auto" };
-  }
-
+  if (sessionKey) body.prompt_cache_key = sessionKey;
+  if (options.tools && options.tools.length > 0) body.tools = options.tools;
+  if (reasoningEffort) body.reasoning = { effort: reasoningEffort, summary: "auto" };
   return body;
 }
 
@@ -68,17 +157,15 @@ export function parseSseEvents(text: string): JsonObject[] {
       .filter((line) => line.startsWith("data:"))
       .map((line) => line.slice(5).trimStart())
       .join("\n");
-
     if (!data || data === "[DONE]") continue;
 
     try {
       const parsed = JSON.parse(data) as unknown;
       if (isJsonObject(parsed)) events.push(parsed);
     } catch {
-      // Ignore malformed event chunks; terminal validation reports failure.
+      // A missing valid terminal event below classifies malformed/incomplete streams as retryable.
     }
   }
-
   return events;
 }
 
@@ -91,18 +178,16 @@ export function parseCompactionStream(
   for (const event of events) {
     if (event.type === "response.failed" || event.type === "error") {
       const meta = extractTerminalMeta(event, options.model);
-      return { ok: false, reason: streamFailureReason(event), ...meta };
+      return { ...failure(streamFailureReason(event), streamFailureRetryClass(event)), ...meta };
     }
     if (event.type === "response.incomplete") {
       const meta = extractTerminalMeta(event, options.model);
-      return { ok: false, reason: "Codex compaction stream ended with response.incomplete", ...meta };
+      return { ...failure("Codex compaction stream ended with response.incomplete", "stream"), ...meta };
     }
   }
 
   const completed = events.find((event) => event.type === "response.completed");
-  if (!completed) {
-    return { ok: false, reason: "Codex compaction stream missing response.completed" };
-  }
+  if (!completed) return failure("Codex compaction stream missing response.completed", "stream");
 
   const completedResponse = isJsonObject(completed.response) ? completed.response : undefined;
   const responseId =
@@ -110,11 +195,12 @@ export function parseCompactionStream(
     (typeof completed.id === "string" ? completed.id : undefined);
   const usage = convertRemoteUsage(completedResponse?.usage, options.model);
 
-  // Require explicit completed status — not cancelled/queued/in_progress/missing.
   if (completedResponse?.status !== "completed") {
     return {
-      ok: false,
-      reason: `Codex compaction completed with status ${String(completedResponse?.status ?? "missing")}`,
+      ...failure(
+        `Codex compaction completed with status ${String(completedResponse?.status ?? "missing")}`,
+        "terminal",
+      ),
       responseId,
       usage,
     };
@@ -127,24 +213,17 @@ export function parseCompactionStream(
 
   if (compactionItems.length !== 1) {
     return {
-      ok: false,
-      reason: `expected exactly one compaction item, got ${compactionItems.length}`,
+      ...failure(`expected exactly one compaction item, got ${compactionItems.length}`, "terminal"),
       responseId,
       usage,
     };
   }
 
-  return {
-    ok: true,
-    item: compactionItems[0] as CodexCompactionItem,
-    responseId,
-    usage,
-  };
+  return { ok: true, item: compactionItems[0] as CodexCompactionItem, responseId, usage };
 }
 
 export function convertRemoteUsage(raw: unknown, model: CodexRequestOptions["model"]): Usage | undefined {
   if (!isJsonObject(raw)) return undefined;
-
   const cachedTokens =
     isJsonObject(raw.input_tokens_details) && typeof raw.input_tokens_details.cached_tokens === "number"
       ? raw.input_tokens_details.cached_tokens
@@ -160,7 +239,6 @@ export function convertRemoteUsage(raw: unknown, model: CodexRequestOptions["mod
       ? raw.output_tokens_details.reasoning_tokens
       : undefined;
   const totalTokens = typeof raw.total_tokens === "number" ? raw.total_tokens : inputTokens + outputTokens;
-
   const usage: Usage = {
     input: Math.max(0, inputTokens - cachedTokens - cacheWriteTokens),
     output: outputTokens,
@@ -174,6 +252,59 @@ export function convertRemoteUsage(raw: unknown, model: CodexRequestOptions["mod
   return usage;
 }
 
+async function readResponseText(response: Response, idleTimeoutMs: number, signal?: AbortSignal): Promise<string> {
+  if (!response.body) return response.text();
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+
+  try {
+    while (true) {
+      const chunk = await readChunk(reader, idleTimeoutMs, signal);
+      if (chunk.done) break;
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function readChunk(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  idleTimeoutMs: number,
+  signal?: AbortSignal,
+): Promise<CodexStreamReadResult> {
+  if (signal?.aborted) return Promise.reject(new DOMException("The operation was aborted", "AbortError"));
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(
+      () => finish(new DOMException("Codex compaction stream idle timeout", "TimeoutError")),
+      idleTimeoutMs,
+    );
+
+    const abort = () => finish(new DOMException("The operation was aborted", "AbortError"));
+    signal?.addEventListener("abort", abort, { once: true });
+
+    reader.read().then(
+      (result) => finish(undefined, result),
+      (error) => finish(error),
+    );
+
+    function finish(error?: unknown, result?: CodexStreamReadResult): void {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      if (error) {
+        void reader.cancel(error).catch(() => undefined);
+        reject(error);
+      } else if (result) resolve(result);
+    }
+  });
+}
+
 function extractTerminalMeta(
   event: JsonObject,
   model: CodexRequestOptions["model"],
@@ -182,15 +313,13 @@ function extractTerminalMeta(
   const responseId =
     (response && typeof response.id === "string" && response.id) ||
     (typeof event.id === "string" ? event.id : undefined);
-  const usage = convertRemoteUsage(response?.usage, model);
-  return { responseId, usage };
+  return { responseId, usage: convertRemoteUsage(response?.usage, model) };
 }
 
 function buildCodexHeaders(options: CodexRequestOptions): Headers {
   const headers = new Headers();
   applyProviderHeaders(headers, options.model.headers);
   applyProviderHeaders(headers, options.headers);
-
   headers.set("Authorization", `Bearer ${options.apiKey}`);
   headers.set("chatgpt-account-id", options.accountId);
   headers.set("originator", "pi");
@@ -204,7 +333,6 @@ function buildCodexHeaders(options: CodexRequestOptions): Headers {
     headers.set("session-id", sessionKey);
     headers.set("x-client-request-id", sessionKey);
   }
-
   return headers;
 }
 
@@ -218,6 +346,73 @@ function applyProviderHeaders(headers: Headers, values: ProviderHeaders | undefi
 function stableSessionKey(sessionId: string | undefined): string | undefined {
   if (!sessionId || sessionId.trim().length === 0) return undefined;
   return sessionId.length <= 64 ? sessionId : sessionId.slice(0, 64);
+}
+
+function httpRetryClass(status: number, headers: Headers): CodexCompactionRetryClass {
+  if (status >= 500) return "transport";
+  const shouldRetry = headers.get("x-should-retry")?.toLowerCase();
+  if (shouldRetry === "true") return "stream";
+  if (shouldRetry === "false") return "terminal";
+  if (status === 400 || status === 429) return "terminal";
+  return "stream";
+}
+
+function streamFailureRetryClass(event: JsonObject): CodexCompactionRetryClass {
+  const error = isJsonObject(event.error)
+    ? event.error
+    : isJsonObject(event.response) && isJsonObject(event.response.error)
+      ? event.response.error
+      : undefined;
+  const code = typeof error?.code === "string" ? error.code.toLowerCase() : "";
+  const type = typeof error?.type === "string" ? error.type.toLowerCase() : "";
+  const terminal = [
+    "context_length",
+    "invalid_request",
+    "insufficient_quota",
+    "usage_limit",
+    "usage_not_included",
+    "policy",
+  ];
+  return terminal.some((value) => code.includes(value) || type.includes(value)) ? "terminal" : "stream";
+}
+
+function failure(
+  reason: string,
+  retryClass: CodexCompactionRetryClass,
+  retryDelay?: number,
+  status?: number,
+): Extract<CodexRemoteCompactionResult, { ok: false }> {
+  return {
+    ok: false,
+    reason,
+    retryClass,
+    ...(retryDelay !== undefined ? { retryAfterMs: retryDelay } : {}),
+    ...(status !== undefined ? { status } : {}),
+  };
+}
+
+function withAttemptMetadata(
+  result: Extract<CodexRemoteCompactionResult, { ok: false }>,
+  requestAttempts: number,
+  streamAttempts: number,
+  exhausted: boolean,
+): CodexRemoteCompactionResult {
+  return { ...result, requestAttempts, streamAttempts, ...(exhausted ? { exhausted: true } : {}) };
+}
+
+function abortedResult(
+  error?: unknown,
+  requestAttempts?: number,
+  streamAttempts?: number,
+): Extract<CodexRemoteCompactionResult, { ok: false }> {
+  return {
+    ok: false,
+    reason: isAbortError(error) ? "Codex compaction aborted" : errorMessage(error ?? "Codex compaction aborted"),
+    retryClass: "terminal",
+    aborted: true,
+    ...(requestAttempts !== undefined ? { requestAttempts } : {}),
+    ...(streamAttempts !== undefined ? { streamAttempts } : {}),
+  };
 }
 
 function responseErrorText(status: number, body: string): string {
@@ -250,6 +445,10 @@ function isAbortError(error: unknown): boolean {
   const name = "name" in error ? String(error.name) : "";
   const message = "message" in error ? String(error.message) : "";
   return name === "AbortError" || message.toLowerCase().includes("abort");
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function isJsonObject(value: unknown): value is JsonObject {

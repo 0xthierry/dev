@@ -89,6 +89,8 @@ export type CodexRequestOptions = {
   sessionId?: string;
 };
 
+export type CodexCompactionRetryClass = "transport" | "stream" | "terminal";
+
 export type CodexRemoteCompactionResult =
   | {
       ok: true;
@@ -99,9 +101,15 @@ export type CodexRemoteCompactionResult =
   | {
       ok: false;
       reason: string;
+      retryClass: CodexCompactionRetryClass;
+      retryAfterMs?: number;
+      status?: number;
       aborted?: boolean;
       responseId?: string;
       usage?: Usage;
+      requestAttempts?: number;
+      streamAttempts?: number;
+      exhausted?: boolean;
     };
 
 export type InjectionMode =

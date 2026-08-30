@@ -38,10 +38,12 @@ describe("registerCodexCompactionExtension", () => {
     expect(results[0]).toMatchObject({ compaction: { summary: CODEX_OPAQUE_SUMMARY_PLACEHOLDER } });
   });
 
-  test("cancels regular Codex compaction when the remote endpoint fails", async () => {
+  test("cancels regular Codex compaction and surfaces the final endpoint reason", async () => {
     // Arrange
     const fakePi = createFakePi();
-    const remoteCompact = mock(async () => undefined);
+    const remoteCompact = mock(async () => {
+      throw new Error("HTTP 503 after 15 request attempts; retries exhausted");
+    });
     const portableCompactOnly = mock(async () => remoteResult());
     registerCodexCompactionExtension(fakePi.pi, {
       remoteCompact: remoteCompact as CodexCompactionRuntime["remoteCompact"],
@@ -55,7 +57,7 @@ describe("registerCodexCompactionExtension", () => {
     expect(results[0]).toEqual({ cancel: true });
     expect(remoteCompact).toHaveBeenCalledTimes(1);
     expect(portableCompactOnly).toHaveBeenCalledTimes(0);
-    expect(fakePi.uiNotifications[0]?.message).toContain("portable summary fallback was not attempted");
+    expect(fakePi.uiNotifications[0]?.message).toContain("HTTP 503 after 15 request attempts; retries exhausted");
   });
 
   test("cancels regular Codex compaction when credentials are unavailable", async () => {
