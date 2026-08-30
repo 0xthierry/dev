@@ -58,6 +58,8 @@ Replacement searches only a small input prefix and is idempotent after the place
 
 A `turn_end` handler uses `ctx.getContextUsage()` and calls `ctx.compact()` when Codex context reaches **90% of the active model context window**, matching Codex Rust's native `context_window * 9 / 10` policy. For GPT-5.6 Sol's 272,000-token window, the threshold is **244,800 tokens**. An in-flight guard prevents duplicate triggers until `onComplete` or `onError` fires. The resulting `session_before_compact` path is the same single-endpoint path used by manual and core-triggered compactions.
 
+Pi's extension-triggered `ctx.compact()` uses manual compaction semantics: it aborts the active agent run and does not retry it automatically. When the threshold is reached after a tool batch, the extension therefore queues a hidden continuation after successful compaction so the interrupted tool loop resumes without requiring the user to type `continue`. Completed non-tool responses are compacted without starting another turn.
+
 ## Failure behavior
 
 Endpoint, authentication, account-binding, malformed-response, and abort failures return `{ cancel: true }` from `session_before_compact`. Pi therefore does not silently make a second portable summary model call. Interactive failures notify with the final endpoint reason and attempt counts; aborts remain quiet. No placeholder entry is persisted on a failed regular compaction.

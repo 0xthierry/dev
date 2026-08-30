@@ -17,6 +17,12 @@ export type CodexCompactionRuntime = {
   portableCompactOnly: typeof portableCompactOnly;
 };
 
+const EARLY_COMPACTION_RESUME_MESSAGE = {
+  customType: "codex-compaction-resume",
+  content: "Continue the interrupted task after context compaction.",
+  display: false,
+} as const;
+
 export function createCodexCompactionRuntime(): CodexCompactionRuntime {
   return { remoteCompact, portableCompactOnly };
 }
@@ -27,17 +33,22 @@ export function registerCodexCompactionExtension(
 ): void {
   let earlyCompactionInFlight = false;
 
-  pi.on("turn_end", (_event, ctx) => {
+  pi.on("turn_end", (event, ctx) => {
     if (!isCodexResponsesModel(ctx.model) || earlyCompactionInFlight) return;
 
     const currentTokens = ctx.getContextUsage()?.tokens;
     if (currentTokens == null || currentTokens < codexAutoCompactionThreshold(ctx.model)) return;
 
+    const shouldResumeInterruptedToolLoop =
+      event.message.role === "assistant" && event.message.stopReason === "toolUse" && event.toolResults.length > 0;
     earlyCompactionInFlight = true;
     try {
       ctx.compact({
         onComplete: () => {
           earlyCompactionInFlight = false;
+          if (shouldResumeInterruptedToolLoop) {
+            pi.sendMessage(EARLY_COMPACTION_RESUME_MESSAGE, { deliverAs: "followUp", triggerTurn: true });
+          }
         },
         onError: (error) => {
           earlyCompactionInFlight = false;

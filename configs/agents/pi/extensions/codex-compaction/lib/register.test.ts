@@ -213,21 +213,74 @@ describe("registerCodexCompactionExtension", () => {
     registerCodexCompactionExtension(fakePi.pi, completeRuntime());
 
     // Act
-    await fakePi.emit(
-      "turn_end",
-      {},
-      {
-        ...codexCtx(),
-        getContextUsage: () => ({ tokens: CODEX_AUTO_COMPACTION_THRESHOLD_TOKENS }),
-        compact,
-      },
-    );
+    await fakePi.emit("turn_end", turnEndEvent(), {
+      ...codexCtx(),
+      getContextUsage: () => ({ tokens: CODEX_AUTO_COMPACTION_THRESHOLD_TOKENS }),
+      compact,
+    });
 
     // Assert
     expect(compact).toHaveBeenCalledTimes(1);
     expect(compact).toHaveBeenCalledWith(
       expect.objectContaining({ onComplete: expect.any(Function), onError: expect.any(Function) }),
     );
+  });
+
+  test("resumes an interrupted tool loop after successful early compaction", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    let onComplete: (() => void) | undefined;
+    const compact = mock((options) => {
+      onComplete = options.onComplete;
+    });
+    registerCodexCompactionExtension(fakePi.pi, completeRuntime());
+
+    // Act
+    await fakePi.emit("turn_end", turnEndEvent(), {
+      ...codexCtx(),
+      getContextUsage: () => ({ tokens: CODEX_AUTO_COMPACTION_THRESHOLD_TOKENS }),
+      compact,
+    });
+    const messagesBeforeCompaction = [...fakePi.sentMessages];
+    onComplete?.();
+
+    // Assert
+    expect(messagesBeforeCompaction).toEqual([]);
+    expect(fakePi.sentMessages).toEqual([
+      {
+        message: {
+          customType: "codex-compaction-resume",
+          content: "Continue the interrupted task after context compaction.",
+          display: false,
+        },
+        options: { deliverAs: "followUp", triggerTurn: true },
+      },
+    ]);
+  });
+
+  test("does not start another turn after compacting a completed response", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    let onComplete: (() => void) | undefined;
+    const compact = mock((options) => {
+      onComplete = options.onComplete;
+    });
+    registerCodexCompactionExtension(fakePi.pi, completeRuntime());
+
+    // Act
+    await fakePi.emit(
+      "turn_end",
+      turnEndEvent({ message: { role: "assistant", stopReason: "stop" }, toolResults: [] }),
+      {
+        ...codexCtx(),
+        getContextUsage: () => ({ tokens: CODEX_AUTO_COMPACTION_THRESHOLD_TOKENS }),
+        compact,
+      },
+    );
+    onComplete?.();
+
+    // Assert
+    expect(fakePi.sentMessages).toEqual([]);
   });
 
   test("guards duplicate early auto-compaction while the first trigger is in flight", async () => {
@@ -245,13 +298,14 @@ describe("registerCodexCompactionExtension", () => {
     };
 
     // Act
-    await fakePi.emit("turn_end", {}, ctx);
-    await fakePi.emit("turn_end", {}, ctx);
+    await fakePi.emit("turn_end", turnEndEvent(), ctx);
+    await fakePi.emit("turn_end", turnEndEvent(), ctx);
     callbacks?.onComplete();
-    await fakePi.emit("turn_end", {}, ctx);
+    await fakePi.emit("turn_end", turnEndEvent(), ctx);
 
     // Assert
     expect(compact).toHaveBeenCalledTimes(2);
+    expect(fakePi.sentMessages).toHaveLength(1);
   });
 
   test("does not early-compact below threshold or on a non-Codex model", async () => {
@@ -261,24 +315,16 @@ describe("registerCodexCompactionExtension", () => {
     registerCodexCompactionExtension(fakePi.pi, completeRuntime());
 
     // Act
-    await fakePi.emit(
-      "turn_end",
-      {},
-      {
-        ...codexCtx(),
-        getContextUsage: () => ({ tokens: CODEX_AUTO_COMPACTION_THRESHOLD_TOKENS - 1 }),
-        compact,
-      },
-    );
-    await fakePi.emit(
-      "turn_end",
-      {},
-      {
-        ...nonCodexCtx(),
-        getContextUsage: () => ({ tokens: CODEX_AUTO_COMPACTION_THRESHOLD_TOKENS + 1 }),
-        compact,
-      },
-    );
+    await fakePi.emit("turn_end", turnEndEvent(), {
+      ...codexCtx(),
+      getContextUsage: () => ({ tokens: CODEX_AUTO_COMPACTION_THRESHOLD_TOKENS - 1 }),
+      compact,
+    });
+    await fakePi.emit("turn_end", turnEndEvent(), {
+      ...nonCodexCtx(),
+      getContextUsage: () => ({ tokens: CODEX_AUTO_COMPACTION_THRESHOLD_TOKENS + 1 }),
+      compact,
+    });
 
     // Assert
     expect(compact).toHaveBeenCalledTimes(0);
@@ -299,6 +345,15 @@ function compactEvent(overrides: Record<string, unknown> = {}) {
     branchEntries: [],
     customInstructions: undefined,
     signal: new AbortController().signal,
+    ...overrides,
+  };
+}
+
+function turnEndEvent(overrides: Record<string, unknown> = {}) {
+  return {
+    type: "turn_end",
+    message: { role: "assistant", stopReason: "toolUse" },
+    toolResults: [{ role: "toolResult", toolName: "read", isError: false }],
     ...overrides,
   };
 }
