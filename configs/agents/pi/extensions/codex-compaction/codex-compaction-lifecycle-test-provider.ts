@@ -13,6 +13,7 @@ import { registerCodexCompactionExtension } from "./lib/register";
 export const CODEX_COMPACTION_LIFECYCLE_TEST_PROVIDER = "openai-codex";
 export const CODEX_COMPACTION_LIFECYCLE_TEST_MODEL = "gpt-5.6-sol";
 export const CODEX_COMPACTION_LIFECYCLE_TEST_API_KEY_ENV = "CODEX_COMPACTION_LIFECYCLE_E2E_API_KEY";
+export const CODEX_COMPACTION_LIFECYCLE_TEST_USAGE_ENV = "CODEX_COMPACTION_LIFECYCLE_E2E_USAGE";
 export const CODEX_COMPACTION_LIFECYCLE_FINAL_TEXT = "continued automatically after compaction";
 
 const api = "openai-codex-responses";
@@ -24,14 +25,14 @@ const zeroUsage: Usage = {
   totalTokens: 0,
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 };
-const thresholdUsage: Usage = {
-  ...zeroUsage,
-  input: 246_000,
-  totalTokens: 246_000,
-};
-
 export default function (pi: ExtensionAPI) {
   let sentToolCall = false;
+  const configuredTokens = Number(process.env[CODEX_COMPACTION_LIFECYCLE_TEST_USAGE_ENV] ?? 246_000);
+  const thresholdUsage: Usage = {
+    ...zeroUsage,
+    input: configuredTokens,
+    totalTokens: configuredTokens,
+  };
 
   registerCodexCompactionExtension(pi, {
     remoteCompact: async ({ preparation }) => ({
@@ -51,7 +52,7 @@ export default function (pi: ExtensionAPI) {
     streamSimple(model: Model<Api>, _context: Context, options?: SimpleStreamOptions) {
       if (!sentToolCall) {
         sentToolCall = true;
-        return streamToolCall(model, options);
+        return streamToolCall(model, options, thresholdUsage);
       }
       if (options?.signal?.aborted) return streamAborted(model);
       return streamText(model, CODEX_COMPACTION_LIFECYCLE_FINAL_TEXT);
@@ -70,9 +71,9 @@ export default function (pi: ExtensionAPI) {
   });
 }
 
-function streamToolCall(model: Model<Api>, options: SimpleStreamOptions | undefined) {
+function streamToolCall(model: Model<Api>, options: SimpleStreamOptions | undefined, usage: Usage) {
   const toolCall = { type: "toolCall" as const, id: "read-probe", name: "read", arguments: { path: "probe.txt" } };
-  const message = assistantMessage(model, [toolCall], "toolUse", thresholdUsage);
+  const message = assistantMessage(model, [toolCall], "toolUse", usage);
   const stream = createAssistantMessageEventStream();
 
   queueMicrotask(async () => {

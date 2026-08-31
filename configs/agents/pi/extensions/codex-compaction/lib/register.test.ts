@@ -308,6 +308,62 @@ describe("registerCodexCompactionExtension", () => {
     expect(fakePi.sentMessages).toHaveLength(1);
   });
 
+  test("cancels overlapping Pi auto-compaction while early compaction is pending", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const remoteCompact = mock(async () => remoteResult());
+    const runtime: CodexCompactionRuntime = {
+      remoteCompact: remoteCompact as CodexCompactionRuntime["remoteCompact"],
+      portableCompactOnly: mock(async () => undefined) as CodexCompactionRuntime["portableCompactOnly"],
+    };
+    const compact = mock(() => undefined);
+    registerCodexCompactionExtension(fakePi.pi, runtime);
+    await fakePi.emit("turn_end", turnEndEvent(), {
+      ...codexCtx(),
+      getContextUsage: () => ({ tokens: CODEX_CONTEXT_WINDOW_TOKENS - 1 }),
+      compact,
+    });
+
+    // Act
+    const automatic = await fakePi.emit("session_before_compact", compactEvent({ reason: "threshold" }), codexCtx());
+    const manual = await fakePi.emit("session_before_compact", compactEvent({ reason: "manual" }), codexCtx());
+
+    // Assert
+    expect(automatic[0]).toEqual({ cancel: true });
+    expect(manual[0]).toMatchObject({ compaction: { summary: CODEX_OPAQUE_SUMMARY_PLACEHOLDER } });
+    expect(remoteCompact).toHaveBeenCalledTimes(1);
+  });
+
+  test("leaves retryable error and length recovery to Pi core", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const remoteCompact = mock(async () => remoteResult());
+    const compact = mock(() => undefined);
+    registerCodexCompactionExtension(fakePi.pi, {
+      remoteCompact: remoteCompact as CodexCompactionRuntime["remoteCompact"],
+      portableCompactOnly: mock(async () => undefined) as CodexCompactionRuntime["portableCompactOnly"],
+    });
+    const ctx = {
+      ...codexCtx(),
+      getContextUsage: () => ({ tokens: CODEX_CONTEXT_WINDOW_TOKENS - 1 }),
+      compact,
+    };
+
+    // Act
+    await fakePi.emit("turn_end", turnEndEvent({ message: { role: "assistant", stopReason: "error" } }), ctx);
+    await fakePi.emit("turn_end", turnEndEvent({ message: { role: "assistant", stopReason: "length" } }), ctx);
+    const overflow = await fakePi.emit(
+      "session_before_compact",
+      compactEvent({ reason: "overflow", willRetry: true }),
+      codexCtx(),
+    );
+
+    // Assert
+    expect(compact).toHaveBeenCalledTimes(0);
+    expect(overflow[0]).toMatchObject({ compaction: { summary: CODEX_OPAQUE_SUMMARY_PLACEHOLDER } });
+    expect(remoteCompact).toHaveBeenCalledTimes(1);
+  });
+
   test("does not early-compact below threshold or on a non-Codex model", async () => {
     // Arrange
     const fakePi = createFakePi();

@@ -35,6 +35,12 @@ export function registerCodexCompactionExtension(
 
   pi.on("turn_end", (event, ctx) => {
     if (!isCodexResponsesModel(ctx.model) || earlyCompactionInFlight) return;
+    if (
+      event.message.role !== "assistant" ||
+      (event.message.stopReason !== "stop" && event.message.stopReason !== "toolUse")
+    ) {
+      return;
+    }
 
     const currentTokens = ctx.getContextUsage()?.tokens;
     if (currentTokens == null || currentTokens < codexAutoCompactionThreshold(ctx.model)) return;
@@ -64,6 +70,8 @@ export function registerCodexCompactionExtension(
   });
 
   pi.on("session_before_compact", async (event, ctx) => {
+    if (earlyCompactionInFlight && event.reason !== "manual") return { cancel: true };
+
     const contextWindow =
       ctx.model && typeof ctx.model.contextWindow === "number" ? ctx.model.contextWindow : undefined;
     const recovery = recoverFromV1Placeholder(event.preparation, event.branchEntries, contextWindow);
