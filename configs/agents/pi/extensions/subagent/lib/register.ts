@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import { type ExtensionAPI, type ExtensionContext, getAgentDir } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth } from "@earendil-works/pi-tui";
 import { discoverAgents } from "./agents/discovery";
 import { appendAgentPromptSection, buildAgentPromptSection } from "./agents/prompt";
 import type { AgentDefinition, AgentDiscoveryResult } from "./agents/types";
@@ -54,6 +53,7 @@ import { registerAgentTools } from "./tools/catalog";
 import type { ExecutionInput } from "./tools/schemas";
 import type { AgentToolsRuntime } from "./tools/shared";
 import { ToolInputError } from "./tools/shared";
+import { createAgentActivityWidget } from "./ui/activity";
 
 export const PARENT_ORCHESTRATION_GUIDANCE = `## Persistent subagent orchestration
 Use persistent subagents for concrete, bounded, self-contained work with disjoint ownership.
@@ -257,17 +257,12 @@ class PiSubagentBoundaryRuntime implements SubagentBoundaryRuntime {
     }
     active.ctx.ui.setWidget(
       "subagent-activity",
-      (_tui, theme) => ({
-        render: (width) => [
-          truncateToWidth(theme.fg("muted", "Subagents"), width),
-          ...rows.map(([path, current]) => {
-            const name = path.startsWith("/root/") ? path.slice(6) : path;
-            const detail = current.state === "tool" ? current.toolName : "working";
-            return truncateToWidth(`  ${theme.fg("accent", name)} ${theme.fg("dim", `— ${detail}`)}`, width);
-          }),
-        ],
-        invalidate: () => {},
-      }),
+      (tui, theme) =>
+        createAgentActivityWidget(
+          rows.map(([agentPath, activity]) => ({ agentPath, activity })),
+          theme,
+          () => tui.requestRender(),
+        ),
       { placement: "aboveEditor" },
     );
   }

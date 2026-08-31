@@ -84,7 +84,13 @@ export interface SupervisorArtifactPort {
   read(reference: string): Promise<{ ok: true; content: string } | { ok: false; reason: string }>;
 }
 
-export type AgentActivity = { state: "working" } | { state: "tool"; toolName: string };
+interface AgentActivityDetails {
+  startedAt: number;
+  agentType: string;
+  execution: ResolvedAgentExecution;
+}
+
+export type AgentActivity = AgentActivityDetails & ({ state: "working" } | { state: "tool"; toolName: string });
 
 export interface SupervisorRuntime {
   createAgentId(): string;
@@ -237,6 +243,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
   private readonly scheduler: AgentScheduler;
   private readonly mailbox: AgentMailbox;
   private readonly processes = new Map<string, SupervisorAgentProcess>();
+  private readonly activities = new Map<string, AgentActivity>();
   private readonly tickets = new Map<string, ScheduleTicket>();
   private readonly interruptRequested = new Set<string>();
   private readonly interruptAcknowledged = new Set<string>();
@@ -593,8 +600,8 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
     let created = false;
     try {
       this.registry.startAssignment(agentPath, assignment.id);
-      this.runtime.reportAgentActivity?.(agentPath, { state: "working" });
       const record = this.registry.resolve(agentPath);
+      this.beginAgentActivity(agentPath, record.agentType, execution);
       let sessionFile = record.sessionFile;
       if (!process) {
         process = this.runtime.createProcess({
@@ -655,7 +662,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
         });
       }
       const finalization = this.finalizeAssignment(agentPath, assignment.id, submission.settlement).finally(() => {
-        this.runtime.reportAgentActivity?.(agentPath, undefined);
+        this.endAgentActivity(agentPath);
         this.notifySettlement();
       });
       void this.deliverMail(agentPath, process, signal).catch(() => {});
@@ -666,26 +673,47 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
         this.processes.delete(agentPath);
       }
       await this.failStartingAssignment(agentPath, assignment.id, "start_failed");
-      this.runtime.reportAgentActivity?.(agentPath, undefined);
+      this.endAgentActivity(agentPath);
       throw error;
     }
   }
 
+  private beginAgentActivity(agentPath: string, agentType: string, execution: ResolvedAgentExecution): void {
+    const activity: AgentActivity = {
+      state: "working",
+      startedAt: Date.now(),
+      agentType,
+      execution: copyExecution(execution),
+    };
+    this.activities.set(agentPath, activity);
+    this.runtime.reportAgentActivity?.(agentPath, activity);
+  }
+
+  private updateAgentActivity(agentPath: string, state: AgentActivity["state"], toolName?: string): void {
+    const current = this.activities.get(agentPath);
+    if (!current) return;
+    const activity: AgentActivity =
+      state === "tool" && toolName ? { ...current, state, toolName } : { ...current, state: "working" };
+    this.activities.set(agentPath, activity);
+    this.runtime.reportAgentActivity?.(agentPath, activity);
+  }
+
+  private endAgentActivity(agentPath: string): void {
+    if (!this.activities.delete(agentPath)) return;
+    this.runtime.reportAgentActivity?.(agentPath, undefined);
+  }
+
   private reportRuntimeActivity(agentPath: string, event: AgentProcessEvent): void {
     if (event.type === "exit") {
-      this.runtime.reportAgentActivity?.(agentPath, undefined);
+      this.endAgentActivity(agentPath);
       return;
     }
     if (event.name === "tool_execution_start") {
       const toolName = event.payload.toolName;
-      if (typeof toolName === "string" && toolName) {
-        this.runtime.reportAgentActivity?.(agentPath, { state: "tool", toolName });
-      }
+      if (typeof toolName === "string" && toolName) this.updateAgentActivity(agentPath, "tool", toolName);
       return;
     }
-    if (event.name === "tool_execution_end") {
-      this.runtime.reportAgentActivity?.(agentPath, { state: "working" });
-    }
+    if (event.name === "tool_execution_end") this.updateAgentActivity(agentPath, "working");
   }
 
   private async finalizeAssignment(

@@ -10,6 +10,7 @@ import type {
 import type { SubagentRuntimeEntry } from "../sessions/entries";
 import type { FinalAnswerNotification } from "./mailbox";
 import {
+  type AgentActivity,
   type CreateSupervisorProcessRequest,
   createAgentSupervisor,
   type SupervisorAgentProcess,
@@ -115,7 +116,7 @@ function harness(options?: {
   const artifactContents = new Map<string, string>();
   const processes = new Map<string, FakeProcess>();
   const deliverRootCompletion = mock(async (_notification: FinalAnswerNotification) => {});
-  const reportAgentActivity = mock((_agentPath: string, _activity: unknown) => {});
+  const reportAgentActivity = mock((_agentPath: string, _activity: AgentActivity | undefined) => {});
   const createProcess = mock((request: CreateSupervisorProcessRequest) => {
     const process = createFakeProcess(request.agentPath);
     processes.set(request.agentPath, process);
@@ -248,12 +249,28 @@ describe("PersistentAgentSupervisor", () => {
     await fake.supervisor.wait({ targets: [spawned.agentPath], timeoutMs: 1_000 });
 
     // Assert
-    expect(fake.reportAgentActivity.mock.calls).toEqual([
-      [spawned.agentPath, { state: "working" }],
-      [spawned.agentPath, { state: "tool", toolName: "read" }],
-      [spawned.agentPath, { state: "working" }],
-      [spawned.agentPath, undefined],
+    const activityUpdates = fake.reportAgentActivity.mock.calls.slice(0, 3);
+    expect(
+      activityUpdates.map(([path, activity]) => [
+        path,
+        activity?.state,
+        activity?.state === "tool" ? activity.toolName : undefined,
+      ]),
+    ).toEqual([
+      [spawned.agentPath, "working", undefined],
+      [spawned.agentPath, "tool", "read"],
+      [spawned.agentPath, "working", undefined],
     ]);
+    expect(activityUpdates.map(([, activity]) => activity?.startedAt)).toEqual([
+      activityUpdates[0]?.[1]?.startedAt,
+      activityUpdates[0]?.[1]?.startedAt,
+      activityUpdates[0]?.[1]?.startedAt,
+    ]);
+    expect(activityUpdates[0]?.[1]).toMatchObject({
+      agentType: "scout",
+      execution,
+    });
+    expect(fake.reportAgentActivity.mock.calls[3]).toEqual([spawned.agentPath, undefined]);
   });
 
   test("accepts task names and prompts above the retired policy caps", async () => {
