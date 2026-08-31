@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import { type ExtensionAPI, type ExtensionContext, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { truncateToWidth } from "@earendil-works/pi-tui";
 import { discoverAgents } from "./agents/discovery";
 import { appendAgentPromptSection, buildAgentPromptSection } from "./agents/prompt";
 import type { AgentDefinition, AgentDiscoveryResult } from "./agents/types";
@@ -40,6 +41,7 @@ import { getProjectSessionDirectory } from "./sessions/paths";
 import { recoverRuntimeMetadata } from "./sessions/recovery";
 import { type FinalAnswerNotification, formatFinalAnswerMailMessage } from "./supervisor/mailbox";
 import {
+  type AgentActivity,
   type AgentSupervisor,
   type CreateSupervisorProcessRequest,
   createAgentSupervisor,
@@ -142,6 +144,7 @@ class PiSubagentBoundaryRuntime implements SubagentBoundaryRuntime {
         createAgentId: () => randomUUID(),
         createMailId: () => randomUUID(),
         createProcess: (request) => processFactory.create(request),
+        reportAgentActivity: (agentPath, activity) => this.reportAgentActivity(token, agentPath, activity),
         deliverRootCompletion: (notification) => this.deliverRootCompletion(token, notification),
         journal: {
           append: (entry) => {
@@ -172,6 +175,7 @@ class PiSubagentBoundaryRuntime implements SubagentBoundaryRuntime {
       ipc,
       processFactory,
       sessionFiles,
+      activities: new Map(),
       redact,
       stopping: false,
     };
@@ -218,6 +222,7 @@ class PiSubagentBoundaryRuntime implements SubagentBoundaryRuntime {
     const active = this.session;
     if (!active || active.stopping) return;
     active.stopping = true;
+    if (active.ctx.hasUI) active.ctx.ui.setWidget("subagent-activity", undefined);
     await active.ipc.stop();
     await active.supervisor.shutdown();
     await active.processFactory.close();
@@ -237,6 +242,34 @@ class PiSubagentBoundaryRuntime implements SubagentBoundaryRuntime {
     if (!result.ok)
       throw new ToolInputError("artifact_access_denied", "Artifact is unavailable to the authenticated caller");
     return { ...result.page, content: active.redact(result.page.content) };
+  }
+
+  private reportAgentActivity(token: symbol, agentPath: string, activity: AgentActivity | undefined): void {
+    const active = this.session;
+    if (!active || active.token !== token || active.stopping) return;
+    if (activity) active.activities.set(agentPath, activity);
+    else active.activities.delete(agentPath);
+    if (!active.ctx.hasUI) return;
+    const rows = [...active.activities.entries()].sort(([left], [right]) => left.localeCompare(right));
+    if (rows.length === 0) {
+      active.ctx.ui.setWidget("subagent-activity", undefined);
+      return;
+    }
+    active.ctx.ui.setWidget(
+      "subagent-activity",
+      (_tui, theme) => ({
+        render: (width) => [
+          truncateToWidth(theme.fg("muted", "Subagents"), width),
+          ...rows.map(([path, current]) => {
+            const name = path.startsWith("/root/") ? path.slice(6) : path;
+            const detail = current.state === "tool" ? current.toolName : "working";
+            return truncateToWidth(`  ${theme.fg("accent", name)} ${theme.fg("dim", `— ${detail}`)}`, width);
+          }),
+        ],
+        invalidate: () => {},
+      }),
+      { placement: "aboveEditor" },
+    );
   }
 
   private deliverRootCompletion(token: symbol, notification: FinalAnswerNotification): void {
@@ -347,6 +380,7 @@ interface ActiveSession {
   ipc: IpcServer;
   processFactory: PiProcessFactory;
   sessionFiles: Map<string, string>;
+  activities: Map<string, AgentActivity>;
   redact: RedactText;
   stopping: boolean;
 }

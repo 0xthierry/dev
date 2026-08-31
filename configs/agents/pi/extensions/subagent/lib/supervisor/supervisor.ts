@@ -4,6 +4,7 @@ import type { ResolvedAgentExecution } from "../execution/profile";
 import type { AgentExecutionSettings } from "../runner/invocation";
 import type {
   AgentAssignmentRequest,
+  AgentProcessEvent,
   AgentProcessEventListener,
   AgentProcessState,
   AgentSettlement,
@@ -83,10 +84,13 @@ export interface SupervisorArtifactPort {
   read(reference: string): Promise<{ ok: true; content: string } | { ok: false; reason: string }>;
 }
 
+export type AgentActivity = { state: "working" } | { state: "tool"; toolName: string };
+
 export interface SupervisorRuntime {
   createAgentId(): string;
   createMailId(): string;
   createProcess(request: CreateSupervisorProcessRequest): SupervisorAgentProcess;
+  reportAgentActivity?(agentPath: string, activity: AgentActivity | undefined): void;
   deliverRootCompletion?(notification: FinalAnswerNotification): void | Promise<void>;
   journal: SupervisorJournalPort;
   artifacts: SupervisorArtifactPort;
@@ -589,6 +593,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
     let created = false;
     try {
       this.registry.startAssignment(agentPath, assignment.id);
+      this.runtime.reportAgentActivity?.(agentPath, { state: "working" });
       const record = this.registry.resolve(agentPath);
       let sessionFile = record.sessionFile;
       if (!process) {
@@ -601,6 +606,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
         });
         this.processes.set(agentPath, process);
         process.onEvent((event) => {
+          this.reportRuntimeActivity(agentPath, event);
           if (event.type !== "exit" || this.processes.get(agentPath) !== process) return;
           this.processes.delete(agentPath);
           if (this.scheduler.isResident(agentPath)) this.scheduler.releaseResident(agentPath);
@@ -648,9 +654,10 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
           execution: copyExecution(execution),
         });
       }
-      const finalization = this.finalizeAssignment(agentPath, assignment.id, submission.settlement).finally(() =>
-        this.notifySettlement(),
-      );
+      const finalization = this.finalizeAssignment(agentPath, assignment.id, submission.settlement).finally(() => {
+        this.runtime.reportAgentActivity?.(agentPath, undefined);
+        this.notifySettlement();
+      });
       void this.deliverMail(agentPath, process, signal).catch(() => {});
       return { settled: finalization };
     } catch (error) {
@@ -659,7 +666,25 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
         this.processes.delete(agentPath);
       }
       await this.failStartingAssignment(agentPath, assignment.id, "start_failed");
+      this.runtime.reportAgentActivity?.(agentPath, undefined);
       throw error;
+    }
+  }
+
+  private reportRuntimeActivity(agentPath: string, event: AgentProcessEvent): void {
+    if (event.type === "exit") {
+      this.runtime.reportAgentActivity?.(agentPath, undefined);
+      return;
+    }
+    if (event.name === "tool_execution_start") {
+      const toolName = event.payload.toolName;
+      if (typeof toolName === "string" && toolName) {
+        this.runtime.reportAgentActivity?.(agentPath, { state: "tool", toolName });
+      }
+      return;
+    }
+    if (event.name === "tool_execution_end") {
+      this.runtime.reportAgentActivity?.(agentPath, { state: "working" });
     }
   }
 

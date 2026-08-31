@@ -15,7 +15,8 @@ export function formatAgentResult(result: AgentToolResult<unknown>, expanded: bo
   const details = result.details as AgentToolDetails<unknown> | undefined;
   const ok = details?.ok === true;
   const marker = ok ? theme.fg("success", "✓") : theme.fg("error", "✗");
-  const summary = `${marker} ${details?.operation ?? "agent operation"} ${ok ? "completed" : "failed"}`;
+  const outcome = ok ? compactResultSummary(details?.result) : undefined;
+  const summary = `${marker} ${details?.operation ?? "agent operation"} ${outcome ?? (ok ? "completed" : "failed")}`;
   if (!expanded) return summary;
   const text = result.content.find((part) => part.type === "text")?.text;
   return text ? `${summary}\n\n${text}` : summary;
@@ -23,4 +24,20 @@ export function formatAgentResult(result: AgentToolResult<unknown>, expanded: bo
 
 export function renderAgentResult(result: AgentToolResult<unknown>, expanded: boolean, theme: Theme): Text {
   return new Text(formatAgentResult(result, expanded, theme), 0, 0);
+}
+
+function compactResultSummary(result: unknown): string | undefined {
+  if (!result || typeof result !== "object" || Array.isArray(result)) return undefined;
+  const record = result as Record<string, unknown>;
+  const status = typeof record.status === "string" ? record.status : undefined;
+  const execution = record.execution;
+  if (!execution || typeof execution !== "object" || Array.isArray(execution)) return status;
+  const profile = (execution as Record<string, unknown>).profile;
+  if (!profile || typeof profile !== "object" || Array.isArray(profile)) return status;
+  const values = profile as Record<string, unknown>;
+  const provider = typeof values.provider === "string" ? values.provider : undefined;
+  const model = typeof values.model === "string" ? values.model : undefined;
+  const effort = typeof values.effort === "string" ? values.effort : undefined;
+  if (!provider || !model || !effort) return status;
+  return `${status ? `${status} · ` : ""}provider ${provider} · model ${model} · reasoning ${effort}`;
 }

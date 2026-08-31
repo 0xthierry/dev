@@ -1,7 +1,12 @@
 import { describe, expect, mock, test } from "bun:test";
 import { ArtifactTooLargeError, MAX_ARTIFACT_BYTES } from "../artifacts/artifacts";
 import type { ResolvedAgentExecution } from "../execution/profile";
-import type { AgentProcessState, AgentSettlement } from "../runner/process";
+import type {
+  AgentProcessEvent,
+  AgentProcessEventListener,
+  AgentProcessState,
+  AgentSettlement,
+} from "../runner/process";
 import type { SubagentRuntimeEntry } from "../sessions/entries";
 import type { FinalAnswerNotification } from "./mailbox";
 import {
@@ -36,6 +41,7 @@ interface FakeProcess extends SupervisorAgentProcess {
   onEvent: ReturnType<typeof mock>;
   close: ReturnType<typeof mock>;
   assignments: DeferredSettlement[];
+  emit(event: AgentProcessEvent): void;
 }
 
 function settlement(sessionFile: string): DeferredSettlement {
@@ -68,6 +74,7 @@ function processState(sessionFile: string, streaming = true): AgentProcessState 
 function createFakeProcess(path: string): FakeProcess {
   const sessionFile = `/sessions/${path.slice(1).replaceAll("/", "-")}.jsonl`;
   const assignments: DeferredSettlement[] = [];
+  const listeners = new Set<AgentProcessEventListener>();
   const accept = mock(async () => {
     const next = settlement(sessionFile);
     assignments.push(next);
@@ -84,8 +91,14 @@ function createFakeProcess(path: string): FakeProcess {
       return { accepted: true as const, settlement: next.promise };
     }),
     interrupt: mock(async () => {}),
-    onEvent: mock(() => () => {}),
+    onEvent: mock((listener: AgentProcessEventListener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    }),
     close: mock(async () => {}),
+    emit(event) {
+      for (const listener of listeners) listener(event);
+    },
   };
 }
 
@@ -102,6 +115,7 @@ function harness(options?: {
   const artifactContents = new Map<string, string>();
   const processes = new Map<string, FakeProcess>();
   const deliverRootCompletion = mock(async (_notification: FinalAnswerNotification) => {});
+  const reportAgentActivity = mock((_agentPath: string, _activity: unknown) => {});
   const createProcess = mock((request: CreateSupervisorProcessRequest) => {
     const process = createFakeProcess(request.agentPath);
     processes.set(request.agentPath, process);
@@ -116,6 +130,7 @@ function harness(options?: {
     createAgentId: mock(() => `agent-${++agentId}`),
     createMailId: mock(() => `mail-${++mailId}`),
     createProcess,
+    reportAgentActivity,
     deliverRootCompletion,
     journal: {
       append: mock((entry: SubagentRuntimeEntry) => {
@@ -153,6 +168,7 @@ function harness(options?: {
     entries,
     processes,
     createProcess,
+    reportAgentActivity,
     deliverRootCompletion,
     artifactContents,
     artifactWrite,
@@ -204,6 +220,40 @@ describe("PersistentAgentSupervisor", () => {
     expect(fake.entries.map((entry) => entry.event)).toEqual(["spawned", "started", "completed"]);
     expect(fake.entries[1]).toMatchObject({ event: "started", generation: 1 });
     expect(fake.entries[2]).toMatchObject({ event: "completed", generation: 1 });
+  });
+
+  test("reports live child tool activity until assignment settlement", async () => {
+    // Arrange
+    const fake = harness();
+    const spawned = await fake.supervisor.spawn({
+      taskName: "review",
+      agentType: "scout",
+      prompt: "Review the code",
+      execution,
+    });
+    const process = fake.processes.get(spawned.agentPath) as FakeProcess;
+
+    // Act
+    process.emit({
+      type: "runtime",
+      name: "tool_execution_start",
+      payload: { toolName: "read", toolCallId: "call-1" },
+    });
+    process.emit({
+      type: "runtime",
+      name: "tool_execution_end",
+      payload: { toolName: "read", toolCallId: "call-1" },
+    });
+    process.assignments[0]?.resolve("done");
+    await fake.supervisor.wait({ targets: [spawned.agentPath], timeoutMs: 1_000 });
+
+    // Assert
+    expect(fake.reportAgentActivity.mock.calls).toEqual([
+      [spawned.agentPath, { state: "working" }],
+      [spawned.agentPath, { state: "tool", toolName: "read" }],
+      [spawned.agentPath, { state: "working" }],
+      [spawned.agentPath, undefined],
+    ]);
   });
 
   test("accepts task names and prompts above the retired policy caps", async () => {
