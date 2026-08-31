@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import type { AgentActivity } from "../supervisor/supervisor";
-import { formatElapsedTime, renderAgentActivity } from "./activity";
+import { formatElapsedTime, hasLiveAgentActivity, renderAgentActivity } from "./activity";
 
 const theme = {
   fg: (_color: string, text: string) => text,
@@ -34,6 +34,33 @@ describe("renderAgentActivity", () => {
     ]);
   });
 
+  test("counts live, queued, and settled agents separately and freezes settled elapsed time", () => {
+    // Arrange
+    const queuedActivity: AgentActivity = { ...workingActivity, state: "queued" };
+    const toolActivity: AgentActivity = { ...workingActivity, state: "tool", toolName: "read" };
+    const completedActivity: AgentActivity = { ...workingActivity, state: "completed", finishedAt: 4_000 };
+    const failedActivity: AgentActivity = { ...workingActivity, state: "failed", finishedAt: 4_000 };
+    const interruptedActivity: AgentActivity = { ...workingActivity, state: "interrupted", finishedAt: 4_000 };
+    const rows = [
+      { agentPath: "/root/active", activity: workingActivity },
+      { agentPath: "/root/tool", activity: toolActivity },
+      { agentPath: "/root/waiting", activity: queuedActivity },
+      { agentPath: "/root/done", activity: completedActivity },
+      { agentPath: "/root/error", activity: failedActivity },
+      { agentPath: "/root/stopped", activity: interruptedActivity },
+    ];
+
+    // Act
+    const firstRender = renderAgentActivity(rows, theme, 200, 6_000);
+    const laterRender = renderAgentActivity(rows, theme, 200, 60_000);
+
+    // Assert
+    expect(firstRender[0]).toBe("Subagents · 2 active · 1 queued · 1 completed · 1 failed · 1 interrupted");
+    expect(firstRender).toContain("  waiting — queued · 5s");
+    expect(firstRender).toContain("  done — completed · 3s");
+    expect(laterRender).toContain("  done — completed · 3s");
+  });
+
   test("shows the current tool and keeps every line within the available width", () => {
     // Arrange
     const activity: AgentActivity = { ...workingActivity, state: "tool", toolName: "lsp_diagnostics" };
@@ -44,6 +71,23 @@ describe("renderAgentActivity", () => {
     // Assert
     expect(rendered.some((line) => line.includes("lsp_diagnostics"))).toBe(true);
     expect(rendered.every((line) => visibleWidth(line) <= 32)).toBe(true);
+  });
+});
+
+describe("hasLiveAgentActivity", () => {
+  test("keeps settled rows visible only while another agent is live", () => {
+    // Arrange
+    const completed: AgentActivity = { ...workingActivity, state: "completed", finishedAt: 4_000 };
+    const settledRows = [{ agentPath: "/root/done", activity: completed }];
+    const mixedRows = [...settledRows, { agentPath: "/root/active", activity: workingActivity }];
+
+    // Act
+    const settledOnly = hasLiveAgentActivity(settledRows);
+    const mixed = hasLiveAgentActivity(mixedRows);
+
+    // Assert
+    expect(settledOnly).toBe(false);
+    expect(mixed).toBe(true);
   });
 });
 

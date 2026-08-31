@@ -38,6 +38,7 @@ export function createFakeToolsRuntime(): AgentToolsRuntime {
     interrupt: mock(async (target) => listEntry(target)),
     list: mock(async () => [listEntry("/root/task")]),
     close: mock(async (target) => ({ ...listEntry(target), status: "closed" as const })),
+    clearSettledActivities: mock(() => undefined),
     restore: mock(async () => undefined),
     shutdown: mock(async () => undefined),
   };

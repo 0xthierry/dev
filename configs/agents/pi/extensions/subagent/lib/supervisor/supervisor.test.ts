@@ -270,7 +270,16 @@ describe("PersistentAgentSupervisor", () => {
       agentType: "scout",
       execution,
     });
-    expect(fake.reportAgentActivity.mock.calls[3]).toEqual([spawned.agentPath, undefined]);
+    expect(fake.reportAgentActivity.mock.calls[3]).toEqual([
+      spawned.agentPath,
+      expect.objectContaining({ state: "completed", finishedAt: expect.any(Number) }),
+    ]);
+
+    // Act
+    fake.supervisor.clearSettledActivities();
+
+    // Assert
+    expect(fake.reportAgentActivity.mock.calls[4]).toEqual([spawned.agentPath, undefined]);
   });
 
   test("accepts task names and prompts above the retired policy caps", async () => {
@@ -341,6 +350,11 @@ describe("PersistentAgentSupervisor", () => {
 
     // Assert
     expect(process?.followup).toHaveBeenCalledTimes(1);
+    expect(
+      fake.reportAgentActivity.mock.calls
+        .filter(([path, activity]) => path === spawned.agentPath && activity)
+        .map(([, activity]) => activity?.state),
+    ).toEqual(["working", "queued", "working"]);
     expect(listed[0]?.execution).toEqual(strongerExecution);
     expect(fake.entries).toContainEqual(
       expect.objectContaining({ event: "execution_changed", execution: strongerExecution }),
@@ -371,6 +385,9 @@ describe("PersistentAgentSupervisor", () => {
     // Assert
     expect(second.status).toBe("queued");
     expect(fake.createProcess).toHaveBeenCalledTimes(1);
+    expect(fake.reportAgentActivity.mock.calls.filter(([path]) => path === second.agentPath)).toEqual([
+      [second.agentPath, expect.objectContaining({ state: "queued", agentType: "worker", execution })],
+    ]);
 
     // Act
     fake.processes.get(first.agentPath)?.assignments[0]?.resolve("done");
@@ -384,8 +401,46 @@ describe("PersistentAgentSupervisor", () => {
     const secondProcess = fake.processes.get(second.agentPath);
     for (let attempt = 0; attempt < 10 && secondProcess?.assignments.length === 0; attempt += 1) await flush();
     expect(secondProcess?.assignments).toHaveLength(1);
+    expect(
+      fake.reportAgentActivity.mock.calls
+        .filter(([path, activity]) => path === second.agentPath && activity)
+        .map(([, activity]) => activity?.state),
+    ).toEqual(["queued", "working"]);
     secondProcess?.assignments[0]?.resolve("done too");
     await fake.supervisor.wait({ targets: [second.agentPath], timeoutMs: 1_000 });
+    expect(fake.reportAgentActivity.mock.calls.at(-1)).toEqual([
+      second.agentPath,
+      expect.objectContaining({ state: "completed", finishedAt: expect.any(Number) }),
+    ]);
+  });
+
+  test("removes queued activity when a never-started agent is closed", async () => {
+    // Arrange
+    const fake = harness({ active: 1, resident: 2 });
+    await fake.supervisor.spawn({
+      taskName: "active",
+      agentType: "worker",
+      prompt: "first",
+      execution,
+    });
+    const queued = await fake.supervisor.spawn({
+      taskName: "queued",
+      agentType: "worker",
+      prompt: "second",
+      execution,
+    });
+
+    // Act
+    const closed = await fake.supervisor.close(queued.agentPath);
+
+    // Assert
+    expect(closed.status).toBe("closed");
+    expect(fake.processes.has(queued.agentPath)).toBe(false);
+    expect(
+      fake.reportAgentActivity.mock.calls
+        .filter(([path]) => path === queued.agentPath)
+        .map(([, activity]) => activity?.state),
+    ).toEqual(["queued", undefined]);
   });
 
   test("rejects full mailbox sends before writing orphan handoff artifacts", async () => {
@@ -566,6 +621,11 @@ describe("PersistentAgentSupervisor", () => {
     expect(first.status).toBe("closed");
     expect(second.status).toBe("closed");
     expect(fake.processes.get(spawned.agentPath)?.close).toHaveBeenCalledTimes(1);
+    expect(
+      fake.reportAgentActivity.mock.calls
+        .filter(([path]) => path === spawned.agentPath)
+        .map(([, activity]) => activity?.state),
+    ).toEqual(["working", "completed", undefined]);
   });
 
   test("returns a typed failed settlement when completion artifact storage fails", async () => {
@@ -603,6 +663,10 @@ describe("PersistentAgentSupervisor", () => {
       generation: 1,
       errorKind: "artifact_write_failed",
     });
+    expect(fake.reportAgentActivity.mock.calls.at(-1)).toEqual([
+      spawned.agentPath,
+      expect.objectContaining({ state: "failed", finishedAt: expect.any(Number) }),
+    ]);
   });
 
   test("notifies the parent with a bounded generic handoff when runtime and failure-artifact storage both fail", async () => {
@@ -1014,6 +1078,10 @@ describe("PersistentAgentSupervisor", () => {
     expect(result.status).toBe("interrupted");
     expect(result.assignment?.phase).toBe("settled");
     expect(fake.entries.at(-1)).toMatchObject({ event: "interrupted", generation: 1 });
+    expect(fake.reportAgentActivity.mock.calls.at(-1)).toEqual([
+      spawned.agentPath,
+      expect.objectContaining({ state: "interrupted", finishedAt: expect.any(Number) }),
+    ]);
   });
 
   test("returns the exact interrupted generation when a queued follow-up starts concurrently", async () => {

@@ -26,19 +26,39 @@ export function createAgentActivityWidget(
   };
 }
 
+export function hasLiveAgentActivity(rows: readonly AgentActivityRow[]): boolean {
+  return rows.some(
+    ({ activity }) => activity.state === "queued" || activity.state === "working" || activity.state === "tool",
+  );
+}
+
 export function renderAgentActivity(
   rows: readonly AgentActivityRow[],
   theme: Theme,
   width: number,
   now = Date.now(),
 ): string[] {
-  const activeLabel = `${rows.length} active`;
+  const stateCounts = new Map<AgentActivity["state"], number>();
+  for (const { activity } of rows) stateCounts.set(activity.state, (stateCounts.get(activity.state) ?? 0) + 1);
+  const queuedCount = stateCounts.get("queued") ?? 0;
+  const completedCount = stateCounts.get("completed") ?? 0;
+  const failedCount = stateCounts.get("failed") ?? 0;
+  const interruptedCount = stateCounts.get("interrupted") ?? 0;
+  const activeCount = (stateCounts.get("working") ?? 0) + (stateCounts.get("tool") ?? 0);
+  const summary = [
+    `${activeCount} active`,
+    ...(queuedCount > 0 ? [`${queuedCount} queued`] : []),
+    ...(completedCount > 0 ? [`${completedCount} completed`] : []),
+    ...(failedCount > 0 ? [`${failedCount} failed`] : []),
+    ...(interruptedCount > 0 ? [`${interruptedCount} interrupted`] : []),
+  ].join(" · ");
   return [
-    truncateToWidth(`${theme.fg("muted", "Subagents")} ${theme.fg("dim", `· ${activeLabel}`)}`, width),
+    truncateToWidth(`${theme.fg("muted", "Subagents")} ${theme.fg("dim", `· ${summary}`)}`, width),
     ...rows.flatMap(({ agentPath, activity }) => {
       const name = agentPath.startsWith("/root/") ? agentPath.slice(6) : agentPath;
-      const state = activity.state === "tool" ? activity.toolName : "working";
-      const elapsed = formatElapsedTime(now - activity.startedAt);
+      const state = activity.state === "tool" ? activity.toolName : activity.state;
+      const elapsedUntil = "finishedAt" in activity ? activity.finishedAt : now;
+      const elapsed = formatElapsedTime(elapsedUntil - activity.startedAt);
       const profile = activity.execution.profile;
       return [
         truncateToWidth(`  ${theme.fg("accent", name)} ${theme.fg("dim", `— ${state} · ${elapsed}`)}`, width),

@@ -486,6 +486,7 @@ function fakeSupervisor(entries: Awaited<ReturnType<AgentSupervisor["list"]>>): 
     interrupt: mock(async () => first),
     list: mock(async () => entries),
     close: mock(async () => first),
+    clearSettledActivities: mock(() => undefined),
     restore: mock(async () => {}),
     shutdown: mock(async () => {}),
   };

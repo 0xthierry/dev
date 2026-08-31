@@ -84,6 +84,7 @@ describe("registerSubagentExtension", () => {
 
     // Assert
     expect(runtime.start).toHaveBeenCalledTimes(1);
+    expect(runtime.supervisor.clearSettledActivities).toHaveBeenCalledTimes(1);
     expect(runtime.shutdown).toHaveBeenCalledTimes(1);
     expect(prompts).toEqual([{ systemPrompt: `base\n\n${PARENT_ORCHESTRATION_GUIDANCE}` }]);
   });

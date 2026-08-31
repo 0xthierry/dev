@@ -90,7 +90,13 @@ interface AgentActivityDetails {
   execution: ResolvedAgentExecution;
 }
 
-export type AgentActivity = AgentActivityDetails & ({ state: "working" } | { state: "tool"; toolName: string });
+export type AgentActivity = AgentActivityDetails &
+  (
+    | { state: "queued" }
+    | { state: "working" }
+    | { state: "tool"; toolName: string }
+    | { state: AssignmentOutcome; finishedAt: number }
+  );
 
 export interface SupervisorRuntime {
   createAgentId(): string;
@@ -234,6 +240,7 @@ export interface AgentSupervisor {
   interrupt(target: string, signal?: AbortSignal): Promise<AgentListEntry>;
   list(signal?: AbortSignal): Promise<AgentListEntry[]>;
   close(target: string, signal?: AbortSignal): Promise<AgentListEntry>;
+  clearSettledActivities(): void;
   restore(requests: readonly RestoreAgentRequest[], signal?: AbortSignal): Promise<void>;
   shutdown(signal?: AbortSignal): Promise<void>;
 }
@@ -244,6 +251,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
   private readonly mailbox: AgentMailbox;
   private readonly processes = new Map<string, SupervisorAgentProcess>();
   private readonly activities = new Map<string, AgentActivity>();
+  private readonly queuedActivities = new Map<string, { agentPath: string; activity: AgentActivity }>();
   private readonly tickets = new Map<string, ScheduleTicket>();
   private readonly interruptRequested = new Set<string>();
   private readonly interruptAcknowledged = new Set<string>();
@@ -451,7 +459,9 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
       for (const assignment of latest.assignments.filter((candidate) => candidate.phase === "queued")) {
         this.tickets.get(assignment.id)?.detachRequestSignal();
         this.scheduler.cancel(assignment.id);
+        this.queuedActivities.delete(assignment.id);
         this.registry.settleQueuedAssignment(record.agentPath, assignment.id, "interrupted");
+        this.endQueuedAgentActivity(record.agentPath);
         this.notifySettlement();
       }
       const active = this.registry
@@ -477,9 +487,16 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
         agentPath: record.agentPath,
         agentId: record.agentId,
       });
+      this.removeAgentActivity(record.agentPath);
       return listEntry(this.registry.resolve(record.agentPath));
     } finally {
       this.closingPaths.delete(record.agentPath);
+    }
+  }
+
+  clearSettledActivities(): void {
+    for (const [agentPath, activity] of this.activities) {
+      if (isSettledAgentActivity(activity)) this.removeAgentActivity(agentPath);
     }
   }
 
@@ -530,7 +547,9 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
         if (record.status === "closed") continue;
         for (const assignment of record.assignments.filter((candidate) => candidate.phase === "queued")) {
           this.scheduler.cancel(assignment.id);
+          this.queuedActivities.delete(assignment.id);
           this.registry.settleQueuedAssignment(record.agentPath, assignment.id, "interrupted");
+          this.endQueuedAgentActivity(record.agentPath);
         }
         const active = this.registry
           .resolve(record.agentPath)
@@ -585,6 +604,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
     );
     this.tickets.set(assignment.id, ticket);
     void ticket.done.finally(() => this.tickets.delete(assignment.id)).catch(() => {});
+    if (ticket.queued) this.beginQueuedAgentActivity(record, assignment, execution);
     return ticket;
   }
 
@@ -600,6 +620,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
     let created = false;
     try {
       this.registry.startAssignment(agentPath, assignment.id);
+      this.queuedActivities.delete(assignment.id);
       const record = this.registry.resolve(agentPath);
       this.beginAgentActivity(agentPath, record.agentType, execution);
       let sessionFile = record.sessionFile;
@@ -661,8 +682,13 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
           execution: copyExecution(execution),
         });
       }
-      const finalization = this.finalizeAssignment(agentPath, assignment.id, submission.settlement).finally(() => {
-        this.endAgentActivity(agentPath);
+      let finishedAt: number | undefined;
+      const observedSettlement = submission.settlement.finally(() => {
+        finishedAt = Date.now();
+      });
+      const finalization = this.finalizeAssignment(agentPath, assignment.id, observedSettlement).finally(() => {
+        const outcome = this.registry.assignmentById(agentPath, assignment.id).outcome;
+        this.finishAgentActivity(agentPath, outcome, finishedAt ?? Date.now());
         this.notifySettlement();
       });
       void this.deliverMail(agentPath, process, signal).catch(() => {});
@@ -672,10 +698,30 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
         await process?.close().catch(() => {});
         this.processes.delete(agentPath);
       }
+      const finishedAt = Date.now();
       await this.failStartingAssignment(agentPath, assignment.id, "start_failed");
-      this.endAgentActivity(agentPath);
+      const outcome = this.registry.assignmentById(agentPath, assignment.id).outcome;
+      this.finishAgentActivity(agentPath, outcome, finishedAt);
       throw error;
     }
+  }
+
+  private beginQueuedAgentActivity(
+    record: AgentRecord,
+    assignment: AssignmentRecord,
+    execution: ResolvedAgentExecution,
+  ): void {
+    const activity: AgentActivity = {
+      state: "queued",
+      startedAt: Date.now(),
+      agentType: record.agentType,
+      execution: copyExecution(execution),
+    };
+    this.queuedActivities.set(assignment.id, { agentPath: record.agentPath, activity });
+    const current = this.activities.get(record.agentPath);
+    if (current && !isSettledAgentActivity(current)) return;
+    this.activities.set(record.agentPath, activity);
+    this.runtime.reportAgentActivity?.(record.agentPath, activity);
   }
 
   private beginAgentActivity(agentPath: string, agentType: string, execution: ResolvedAgentExecution): void {
@@ -689,7 +735,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
     this.runtime.reportAgentActivity?.(agentPath, activity);
   }
 
-  private updateAgentActivity(agentPath: string, state: AgentActivity["state"], toolName?: string): void {
+  private updateAgentActivity(agentPath: string, state: "working" | "tool", toolName?: string): void {
     const current = this.activities.get(agentPath);
     if (!current) return;
     const activity: AgentActivity =
@@ -698,16 +744,56 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
     this.runtime.reportAgentActivity?.(agentPath, activity);
   }
 
-  private endAgentActivity(agentPath: string): void {
+  private endQueuedAgentActivity(agentPath: string): void {
+    if (this.activities.get(agentPath)?.state !== "queued") return;
+    this.removeAgentActivity(agentPath);
+  }
+
+  private finishAgentActivity(agentPath: string, outcome: AssignmentOutcome | undefined, finishedAt: number): void {
+    const current = this.activities.get(agentPath);
+    if (!current) return;
+    if (this.stopping || this.closingPaths.has(agentPath)) {
+      this.removeAgentActivity(agentPath);
+      return;
+    }
+    const queued = this.nextQueuedActivity(agentPath);
+    if (queued) {
+      this.activities.set(agentPath, queued);
+      this.runtime.reportAgentActivity?.(agentPath, queued);
+      return;
+    }
+    if (!outcome) {
+      this.removeAgentActivity(agentPath);
+      return;
+    }
+    const activity: AgentActivity = {
+      state: outcome,
+      startedAt: current.startedAt,
+      finishedAt,
+      agentType: current.agentType,
+      execution: current.execution,
+    };
+    this.activities.set(agentPath, activity);
+    this.runtime.reportAgentActivity?.(agentPath, activity);
+  }
+
+  private nextQueuedActivity(agentPath: string): AgentActivity | undefined {
+    const record = this.registry.resolve(agentPath);
+    for (const assignment of record.assignments) {
+      if (assignment.phase !== "queued") continue;
+      const queued = this.queuedActivities.get(assignment.id);
+      if (queued?.agentPath === agentPath) return queued.activity;
+    }
+    return undefined;
+  }
+
+  private removeAgentActivity(agentPath: string): void {
     if (!this.activities.delete(agentPath)) return;
     this.runtime.reportAgentActivity?.(agentPath, undefined);
   }
 
   private reportRuntimeActivity(agentPath: string, event: AgentProcessEvent): void {
-    if (event.type === "exit") {
-      this.endAgentActivity(agentPath);
-      return;
-    }
+    if (event.type === "exit") return;
     if (event.name === "tool_execution_start") {
       const toolName = event.payload.toolName;
       if (typeof toolName === "string" && toolName) this.updateAgentActivity(agentPath, "tool", toolName);
@@ -1262,6 +1348,12 @@ async function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<
       void promise.finally(() => signal.removeEventListener("abort", listener));
     }),
   ]);
+}
+
+function isSettledAgentActivity(
+  activity: AgentActivity,
+): activity is AgentActivity & { state: AssignmentOutcome; finishedAt: number } {
+  return activity.state === "completed" || activity.state === "failed" || activity.state === "interrupted";
 }
 
 export function registryErrorKind(error: unknown): RegistryError["kind"] | undefined {

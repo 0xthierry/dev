@@ -53,7 +53,7 @@ import { registerAgentTools } from "./tools/catalog";
 import type { ExecutionInput } from "./tools/schemas";
 import type { AgentToolsRuntime } from "./tools/shared";
 import { ToolInputError } from "./tools/shared";
-import { createAgentActivityWidget } from "./ui/activity";
+import { createAgentActivityWidget, hasLiveAgentActivity } from "./ui/activity";
 
 export const PARENT_ORCHESTRATION_GUIDANCE = `## Persistent subagent orchestration
 Use persistent subagents for concrete, bounded, self-contained work with disjoint ownership.
@@ -86,6 +86,7 @@ export function registerSubagentExtension(
       await runtime.start(pi, ctx);
       started = true;
     }
+    runtime.supervisor.clearSettledActivities();
     return { systemPrompt: appendAgentPromptSection(event.systemPrompt, await runtime.buildParentPrompt(ctx)) };
   });
   pi.on("session_shutdown", async () => {
@@ -251,18 +252,14 @@ class PiSubagentBoundaryRuntime implements SubagentBoundaryRuntime {
     else active.activities.delete(agentPath);
     if (!active.ctx.hasUI) return;
     const rows = [...active.activities.entries()].sort(([left], [right]) => left.localeCompare(right));
-    if (rows.length === 0) {
+    const activityRows = rows.map(([agentPath, activity]) => ({ agentPath, activity }));
+    if (!hasLiveAgentActivity(activityRows)) {
       active.ctx.ui.setWidget("subagent-activity", undefined);
       return;
     }
     active.ctx.ui.setWidget(
       "subagent-activity",
-      (tui, theme) =>
-        createAgentActivityWidget(
-          rows.map(([agentPath, activity]) => ({ agentPath, activity })),
-          theme,
-          () => tui.requestRender(),
-        ),
+      (tui, theme) => createAgentActivityWidget(activityRows, theme, () => tui.requestRender()),
       { placement: "aboveEditor" },
     );
   }
@@ -584,6 +581,7 @@ function delegatingSupervisor(current: () => AgentSupervisor): AgentSupervisor {
     interrupt: (target, signal) => current().interrupt(target, signal),
     list: (signal) => current().list(signal),
     close: (target, signal) => current().close(target, signal),
+    clearSettledActivities: () => current().clearSettledActivities(),
     restore: (requests, signal) => current().restore(requests, signal),
     shutdown: (signal) => current().shutdown(signal),
   };
