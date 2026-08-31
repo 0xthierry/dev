@@ -25,7 +25,7 @@
     ]
   },
   "dependencies": {
-    "@ff-labs/fff-node": "0.9.4",
+    "@ff-labs/fff-node": "0.10.6",
     "@mozilla/readability": "0.6.0",
     "impit": "0.13.1",
     "linkedom": "0.18.12",
