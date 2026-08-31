@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import { createFakePi } from "../../../_shared/testing/fake-pi";
 import { IpcClientError } from "../ipc/client";
 import type { IpcOperation } from "../ipc/protocol";
@@ -40,6 +41,37 @@ describe("registerChildRuntime", () => {
         true,
       );
     }
+  });
+
+  test("uses the shared message-aware rendering for nested communication tools", () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const fake = fakeRuntime();
+    registerChildRuntime(fakePi.pi, fake.runtime);
+    const theme = {
+      fg: (_color: string, text: string) => text,
+      bold: (text: string) => text,
+    } as unknown as Theme;
+    const renderCall = (name: "agent_send" | "agent_followup") =>
+      (
+        fakePi.tools.get(name) as unknown as {
+          renderCall(args: unknown, theme: Theme): { render(width: number): string[] };
+        }
+      ).renderCall({ target: "sibling", message: "Share status" }, theme);
+
+    // Act
+    const send = renderCall("agent_send")
+      .render(120)
+      .map((line) => line.trimEnd())
+      .join("\n");
+    const followup = renderCall("agent_followup")
+      .render(120)
+      .map((line) => line.trimEnd())
+      .join("\n");
+
+    // Assert
+    expect(send).toContain("agent_send sibling\n  Share status");
+    expect(followup).toContain("agent_followup sibling\n  Share status");
   });
 
   test("proxies each canonical tool payload without adding caller identity", async () => {

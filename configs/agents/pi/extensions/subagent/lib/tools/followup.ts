@@ -28,7 +28,8 @@ export function registerAgentFollowupTool(pi: ExtensionAPI, runtime: AgentToolsR
       });
     },
     renderCall(args, theme) {
-      return renderAgentCall("agent_followup", (args as FollowupParams | undefined)?.target, theme);
+      const params = args as FollowupParams | undefined;
+      return renderAgentCall("agent_followup", params?.target, theme, params?.message);
     },
     renderResult(result, options, theme) {
       return renderAgentResult(result, options.expanded, theme);

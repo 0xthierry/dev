@@ -55,6 +55,7 @@ export function registerAgentWaitTool(pi: ExtensionAPI, runtime: AgentToolsRunti
         "agent_wait",
         count === undefined ? undefined : `${count} target${count === 1 ? "" : "s"}`,
         theme,
+        params?.targets.join(", "),
       );
     },
     renderResult(result, options, theme) {

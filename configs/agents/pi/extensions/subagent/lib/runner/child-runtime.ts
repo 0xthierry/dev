@@ -66,7 +66,10 @@ export function registerChildRuntime(pi: ExtensionAPI, runtime: ChildProxyRuntim
     ],
     parameters: SpawnParamsSchema,
     execute: (_id, params, signal) => proxyTool(runtime, "agent_spawn", params, signal),
-    renderCall: (args, theme) => renderAgentCall("agent_spawn", (args as SpawnParams | undefined)?.task_name, theme),
+    renderCall: (args, theme) => {
+      const params = args as SpawnParams | undefined;
+      return renderAgentCall("agent_spawn", params?.task_name, theme, params?.prompt);
+    },
     renderResult: (result, options, theme) => renderAgentResult(result, options.expanded, theme),
   });
   pi.registerTool({
@@ -81,7 +84,10 @@ export function registerChildRuntime(pi: ExtensionAPI, runtime: ChildProxyRuntim
     ],
     parameters: SendParamsSchema,
     execute: (_id, params, signal) => proxyTool(runtime, "agent_send", params, signal),
-    renderCall: (args, theme) => renderAgentCall("agent_send", (args as SendParams | undefined)?.target, theme),
+    renderCall: (args, theme) => {
+      const params = args as SendParams | undefined;
+      return renderAgentCall("agent_send", params?.target, theme, params?.message);
+    },
     renderResult: (result, options, theme) => renderAgentResult(result, options.expanded, theme),
   });
   pi.registerTool({
@@ -96,7 +102,10 @@ export function registerChildRuntime(pi: ExtensionAPI, runtime: ChildProxyRuntim
     ],
     parameters: FollowupParamsSchema,
     execute: (_id, params, signal) => proxyTool(runtime, "agent_followup", params, signal),
-    renderCall: (args, theme) => renderAgentCall("agent_followup", (args as FollowupParams | undefined)?.target, theme),
+    renderCall: (args, theme) => {
+      const params = args as FollowupParams | undefined;
+      return renderAgentCall("agent_followup", params?.target, theme, params?.message);
+    },
     renderResult: (result, options, theme) => renderAgentResult(result, options.expanded, theme),
   });
   pi.registerTool({
@@ -121,6 +130,7 @@ export function registerChildRuntime(pi: ExtensionAPI, runtime: ChildProxyRuntim
         "agent_wait",
         count === undefined ? undefined : `${count} target${count === 1 ? "" : "s"}`,
         theme,
+        params?.targets.join(", "),
       );
     },
     renderResult: (result, options, theme) => renderAgentResult(result, options.expanded, theme),

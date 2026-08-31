@@ -46,7 +46,8 @@ export function registerAgentSpawnTool(pi: ExtensionAPI, runtime: AgentToolsRunt
       });
     },
     renderCall(args, theme) {
-      return renderAgentCall("agent_spawn", (args as SpawnParams | undefined)?.task_name, theme);
+      const params = args as SpawnParams | undefined;
+      return renderAgentCall("agent_spawn", params?.task_name, theme, params?.prompt);
     },
     renderResult(result, options, theme) {
       return renderAgentResult(result, options.expanded, theme);

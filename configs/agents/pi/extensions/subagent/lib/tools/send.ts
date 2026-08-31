@@ -31,7 +31,8 @@ export function registerAgentSendTool(pi: ExtensionAPI, runtime: AgentToolsRunti
       });
     },
     renderCall(args, theme) {
-      return renderAgentCall("agent_send", (args as SendParams | undefined)?.target, theme);
+      const params = args as SendParams | undefined;
+      return renderAgentCall("agent_send", params?.target, theme, params?.message);
     },
     renderResult(result, options, theme) {
       return renderAgentResult(result, options.expanded, theme);
