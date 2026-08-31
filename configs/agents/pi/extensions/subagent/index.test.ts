@@ -1,16 +1,22 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { createFakePi } from "../_shared/testing/fake-pi";
-import register from "./index";
+import registerExtension from "./index";
 
-describe("subagent extension entrypoint", () => {
-  test("registers the agent tool", () => {
-    // Arrange
-    const fakePi = createFakePi();
+test("entrypoint registers the persistent subagent boundary", () => {
+  // Arrange
+  const fakePi = createFakePi();
 
-    // Act
-    register(fakePi.pi);
+  // Act
+  registerExtension(fakePi.pi);
 
-    // Assert
-    expect(fakePi.tools.has("agent")).toBe(true);
-  });
+  // Assert
+  expect([...fakePi.tools.keys()]).toEqual([
+    "agent_spawn",
+    "agent_send",
+    "agent_followup",
+    "agent_wait",
+    "agent_interrupt",
+    "agent_list",
+    "agent_close",
+  ]);
 });

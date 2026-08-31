@@ -5,14 +5,12 @@ SCRIPT_DIR=$(unset CDPATH; cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(unset CDPATH; cd "$SCRIPT_DIR/../../../.." && pwd)
 TMP_BASE=${TMPDIR:-/tmp}
 TMP_ROOT=$TMP_BASE/pi-subagent-smoke.$$
-JSON_LOG=${PI_SUBAGENT_SMOKE_JSON_LOG:-$TMP_BASE/pi-subagent-smoke.$$.jsonl}
 SUMMARY_LOG=${PI_SUBAGENT_SMOKE_SUMMARY_LOG:-$TMP_BASE/pi-subagent-smoke.$$.log}
 PI_BIN=${PI_BIN:-pi}
 SUBAGENT_EXTENSION=$REPO_ROOT/configs/agents/pi/extensions/subagent
 FAUX_EXTENSION=$REPO_ROOT/configs/agents/pi/extensions/_shared/testing/faux-provider-extension.ts
 FAUX_PROVIDER=pi-extension-e2e-faux
 FAUX_MODEL=pi-extension-e2e-faux-model
-FAUX_TOOL_CALLS_ENV=PI_EXTENSION_E2E_FAUX_TOOL_CALLS
 
 cleanup() {
   if [ "${PI_SUBAGENT_SMOKE_KEEP_TMP:-0}" != "1" ]; then
@@ -21,7 +19,6 @@ cleanup() {
     printf 'kept temp dir: %s\n' "$TMP_ROOT"
   fi
 }
-
 trap cleanup EXIT INT TERM
 
 log() {
@@ -29,42 +26,33 @@ log() {
   printf '%s\n' "$*" >> "$SUMMARY_LOG"
 }
 
-section() {
-  log ""
-  log "==== $* ===="
-}
-
 fail() {
   log "not ok: $*"
   exit 1
 }
 
-require_command() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    fail "missing command: $1"
+assert_contains() {
+  file=$1
+  expected=$2
+  message=$3
+  if ! grep -F -- "$expected" "$file" >/dev/null 2>&1; then
+    tail -80 "$file" 2>/dev/null | tee -a "$SUMMARY_LOG" || true
+    fail "$message"
   fi
 }
 
-assert_file_contains() {
-  if ! grep -F -- "$2" "$1" >/dev/null 2>&1; then
-    log "missing expected text: $2"
-    log "--- stdout tail ($1) ---"
-    tail -80 "$1" 2>/dev/null | tee -a "$SUMMARY_LOG" || true
-    fail "$3"
-  fi
-}
-
-assert_file_not_contains() {
-  if grep -F -- "$2" "$1" >/dev/null 2>&1; then
-    log "unexpected text: $2"
-    log "--- stdout tail ($1) ---"
-    tail -80 "$1" 2>/dev/null | tee -a "$SUMMARY_LOG" || true
-    fail "$3"
+assert_not_contains() {
+  file=$1
+  unexpected=$2
+  message=$3
+  if grep -F -- "$unexpected" "$file" >/dev/null 2>&1; then
+    tail -80 "$file" 2>/dev/null | tee -a "$SUMMARY_LOG" || true
+    fail "$message"
   fi
 }
 
 run_checked() {
-  section "$*"
+  log "==== $* ===="
   if "$@" 2>&1 | tee -a "$SUMMARY_LOG"; then
     log "ok: $*"
   else
@@ -72,246 +60,141 @@ run_checked() {
   fi
 }
 
-write_standard_agents() {
-  mkdir -p "$1/agents"
-  cat > "$1/agents/echo-agent.md" <<'AGENT'
+create_installed_fixture() {
+  AGENT_DIR=$TMP_ROOT/pi-agent
+  PROJECT_DIR=$TMP_ROOT/repo
+  mkdir -p "$AGENT_DIR/extensions" "$AGENT_DIR/agents" "$PROJECT_DIR/.git"
+  ln -s "$SUBAGENT_EXTENSION" "$AGENT_DIR/extensions/subagent"
+  ln -s "$FAUX_EXTENSION" "$AGENT_DIR/extensions/faux-provider-extension.ts"
+
+  long_description=$(bun -e 'process.stdout.write("Detailed trusted local role. ".repeat(64))')
+  cat > "$AGENT_DIR/agents/smoke-worker.md" <<AGENT
 ---
-name: echo-agent
-description: Deterministic smoke echo subagent.
+name: smoke-worker
+description: $long_description
 ---
-Return the configured deterministic provider response.
+Complete the assigned deterministic smoke task.
 AGENT
-  cat > "$1/agents/review-agent.md" <<'AGENT'
----
-name: review-agent
-description: Deterministic smoke review subagent.
----
-Return the configured deterministic provider response.
-AGENT
+
+  cat > "$PROJECT_DIR/pi-subagent.json" <<CONFIG
+{
+  "runtime": {
+    "maxActiveAgents": 1,
+    "maxResidentAgents": 1,
+    "maxDepth": 3
+  },
+  "agents": {
+    "smoke-worker": {
+      "execution": {
+        "provider": "$FAUX_PROVIDER",
+        "model": "$FAUX_MODEL",
+        "effort": "off"
+      },
+      "allowInvocationOverride": {
+        "model": false,
+        "effort": true
+      }
+    }
+  }
+}
+CONFIG
 }
 
-write_custom_agents() {
-  mkdir -p "$1/agents"
-  cat > "$1/agents/live-path-finder.md" <<'AGENT'
----
-name: live-path-finder
-description: Smoke-test subagent that finds exact repository file paths for a requested implementation area.
----
-Find exact files requested by the prompt. Return concise repository-relative file paths and one short note per path. Do not edit files.
-AGENT
-  cat > "$1/agents/live-test-reviewer.md" <<'AGENT'
----
-name: live-test-reviewer
-description: Smoke-test subagent that reviews whether a validation result proves the requested behavior.
----
-Check whether the evidence in the prompt proves the behavior. Return a concise verdict and any missing evidence. Do not edit files.
-AGENT
+run_catalog_smoke() {
+  output=$TMP_ROOT/catalog.jsonl
+  plan='[{"toolCatalogAudit":{"expected":["agent_spawn","agent_send","agent_followup","agent_wait","agent_interrupt","agent_list","agent_close"],"forbidden":["agent"]}}]'
+
+  log "==== installed bundle catalog ===="
+  (
+    cd "$PROJECT_DIR"
+    env \
+      PI_CODING_AGENT_DIR="$AGENT_DIR" \
+      PI_EXTENSION_E2E_FAUX_API_KEY=test-key \
+      PI_EXTENSION_E2E_FAUX_RESPONSE_PLAN="$plan" \
+      "$PI_BIN" --mode json --no-session --approve --no-skills --no-context-files \
+        --provider "$FAUX_PROVIDER" --model "$FAUX_MODEL" \
+        -p 'Audit the installed collaboration tool catalog.'
+  ) > "$output" 2>&1 || {
+    tail -80 "$output" | tee -a "$SUMMARY_LOG" || true
+    fail "installed catalog Pi run"
+  }
+  cat "$output" >> "$SUMMARY_LOG"
+  assert_contains "$output" 'TOOL_CATALOG_AUDIT exact=true' "installed catalog is not exact"
+  assert_contains "$output" 'forbidden=none' "legacy agent tool is installed"
+  assert_not_contains "$output" 'extension_error' "installed extension failed to load"
+  log "ok: installed bundle exposes exactly seven collaboration tools and no agent"
 }
 
-link_real_pi_config() {
-  for entry in settings.json auth.json APPEND_SYSTEM.md skills prompts extensions AGENTS.md; do
-    if [ -e "$HOME/.pi/agent/$entry" ] || [ -L "$HOME/.pi/agent/$entry" ]; then
-      ln -s "$HOME/.pi/agent/$entry" "$1/$entry"
-    fi
+run_lifecycle_smoke() {
+  output=$TMP_ROOT/lifecycle.jsonl
+  root_plan='[
+    {"toolCalls":[{"name":"agent_spawn","arguments":{"task_name":"alpha","subagent_type":"smoke-worker","prompt":"Run alpha and accept steering.","fork_turns":"none"}}]},
+    {"toolCalls":[{"name":"agent_list","arguments":{}}]},
+    {"toolCalls":[{"name":"agent_send","arguments":{"target":"/root/alpha","message":"STEER-SMOKE-SENTINEL"}}]},
+    {"toolCalls":[{"name":"agent_wait","arguments":{"targets":["/root/alpha"],"timeout_seconds":30}}]},
+    {"toolCalls":[{"name":"agent_followup","arguments":{"target":"/root/alpha","message":"Run alpha follow-up.","execution":{"effort":"off"}}}]},
+    {"toolCalls":[{"name":"agent_wait","arguments":{"targets":["/root/alpha"],"timeout_seconds":30}}]},
+    {"toolCalls":[{"name":"agent_close","arguments":{"target":"/root/alpha"}}]},
+    {"toolCalls":[{"name":"agent_spawn","arguments":{"task_name":"beta","subagent_type":"smoke-worker","prompt":"Run interruptible beta.","fork_turns":"none"}}]},
+    {"toolCalls":[{"name":"agent_interrupt","arguments":{"target":"/root/beta"}}]},
+    {"toolCalls":[{"name":"agent_close","arguments":{"target":"/root/beta"}}]},
+    {"text":"PERSISTENT-SUBAGENT-SMOKE-COMPLETE"}
+  ]'
+  child_plan='[
+    {"text":"SMOKE-STREAM-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"},
+    {"contextEcho":{"sentinel":"STEER-SMOKE-SENTINEL","prefix":"STEER-SMOKE-ECHO"}},
+    {"text":"SMOKE-FOLLOWUP-COMPLETE"}
+  ]'
+  plans=$(printf '{"0":%s,"1":%s}' "$root_plan" "$child_plan")
+
+  log "==== installed persistent lifecycle ===="
+  (
+    cd "$PROJECT_DIR"
+    env \
+      PI_CODING_AGENT_DIR="$AGENT_DIR" \
+      PI_EXTENSION_E2E_FAUX_API_KEY=test-key \
+      PI_EXTENSION_E2E_FAUX_RESPONSE_PLANS_BY_DEPTH="$plans" \
+      PI_EXTENSION_E2E_FAUX_TOKENS_PER_SECOND_BY_DEPTH='{"0":10000,"1":10}' \
+      PI_SUBAGENT_CHILD_NO_EXTENSIONS=1 \
+      PI_SUBAGENT_CHILD_EXTENSIONS="$FAUX_EXTENSION" \
+      "$PI_BIN" --mode json --no-session --approve --no-skills --no-context-files \
+        --provider "$FAUX_PROVIDER" --model "$FAUX_MODEL" \
+        -p 'Run the complete deterministic persistent-subagent lifecycle.'
+  ) > "$output" 2>&1 || {
+    tail -80 "$output" | tee -a "$SUMMARY_LOG" || true
+    fail "installed lifecycle Pi run"
+  }
+  cat "$output" >> "$SUMMARY_LOG"
+
+  for tool in agent_spawn agent_list agent_send agent_wait agent_followup agent_interrupt agent_close; do
+    assert_contains "$output" "\"toolName\":\"$tool\"" "missing lifecycle tool execution: $tool"
   done
-}
-
-check_installed_agents() {
-  section "installed Pi agent directory"
-  if [ "${PI_SUBAGENT_SMOKE_SKIP_INSTALLED_CHECK:-0}" = "1" ]; then
-    log "skip: installed agent check disabled"
-    return 0
-  fi
-
-  if [ ! -d "$HOME/.pi/agent/agents" ]; then
-    fail "missing ~/.pi/agent/agents; run configs/agents/install.sh --yes first"
-  fi
-
-  if [ ! -f "$HOME/.pi/agent/agents/web-search.md" ]; then
-    fail "missing web-search in ~/.pi/agent/agents"
-  fi
-
-  log "ok: ~/.pi/agent/agents exists"
-  log "target: $(readlink "$HOME/.pi/agent/agents" 2>/dev/null || printf '%s' "$HOME/.pi/agent/agents")"
-}
-
-run_pi_json_smoke() {
-  label=$1
-  agent_kind=$2
-  session_kind=$3
-  response_text=$4
-  tool_calls=$5
-  prompt_text=$6
-  expected_text=$7
-
-  agent_dir=$(mktemp -d "$TMP_ROOT/agent-dir.XXXXXX")
-  session_dir=$(mktemp -d "$TMP_ROOT/session-dir.XXXXXX")
-  stdout_file=$TMP_ROOT/$label.stdout.jsonl
-  stderr_file=$TMP_ROOT/$label.stderr.log
-
-  if [ "$agent_kind" = "custom" ]; then
-    write_custom_agents "$agent_dir"
-  else
-    write_standard_agents "$agent_dir"
-  fi
-
-  section "Pi JSON smoke: $label"
-  log "agent_dir: $agent_dir"
-
-  if [ "$session_kind" = "saved" ]; then
-    if ! env \
-      PI_CODING_AGENT_DIR="$agent_dir" \
-      PI_EXTENSION_E2E_FAUX_API_KEY=test-key \
-      PI_EXTENSION_E2E_FAUX_RESPONSE_TEXT="$response_text" \
-      PI_EXTENSION_E2E_FAUX_TOOL_CALLS="$tool_calls" \
-      PI_SUBAGENT_CHILD_NO_EXTENSIONS=1 \
-      PI_SUBAGENT_CHILD_EXTENSIONS="$FAUX_EXTENSION" \
-      PI_SUBAGENT_CHILD_UNSET_ENV="$FAUX_TOOL_CALLS_ENV" \
-      "$PI_BIN" --mode json --session-dir "$session_dir" \
-        --no-extensions --no-skills --no-context-files \
-        -e "$SUBAGENT_EXTENSION" \
-        -e "$FAUX_EXTENSION" \
-        --tools agent \
-        --provider "$FAUX_PROVIDER" \
-        --model "$FAUX_MODEL" \
-        -p "$prompt_text" > "$stdout_file" 2> "$stderr_file"; then
-      tail -80 "$stderr_file" 2>/dev/null | tee -a "$SUMMARY_LOG" || true
-      fail "Pi JSON smoke failed: $label"
-    fi
-  else
-    if ! env \
-      PI_CODING_AGENT_DIR="$agent_dir" \
-      PI_EXTENSION_E2E_FAUX_API_KEY=test-key \
-      PI_EXTENSION_E2E_FAUX_RESPONSE_TEXT="$response_text" \
-      PI_EXTENSION_E2E_FAUX_TOOL_CALLS="$tool_calls" \
-      PI_SUBAGENT_CHILD_NO_EXTENSIONS=1 \
-      PI_SUBAGENT_CHILD_EXTENSIONS="$FAUX_EXTENSION" \
-      PI_SUBAGENT_CHILD_UNSET_ENV="$FAUX_TOOL_CALLS_ENV" \
-      "$PI_BIN" --mode json --session-dir "$session_dir" --no-session \
-        --no-extensions --no-skills --no-context-files \
-        -e "$SUBAGENT_EXTENSION" \
-        -e "$FAUX_EXTENSION" \
-        --tools agent \
-        --provider "$FAUX_PROVIDER" \
-        --model "$FAUX_MODEL" \
-        -p "$prompt_text" > "$stdout_file" 2> "$stderr_file"; then
-      tail -80 "$stderr_file" 2>/dev/null | tee -a "$SUMMARY_LOG" || true
-      fail "Pi JSON smoke failed: $label"
-    fi
-  fi
-
-  cat "$stdout_file" >> "$JSON_LOG"
-  assert_file_contains "$stdout_file" '"type":"tool_execution_end"' "missing agent tool end for $label"
-  assert_file_contains "$stdout_file" '"toolName":"agent"' "missing agent tool name for $label"
-  assert_file_contains "$stdout_file" "$expected_text" "missing expected agent result for $label"
-  assert_file_not_contains "$stdout_file" "Unknown subagent" "unknown subagent in $label"
-  assert_file_not_contains "$stdout_file" '"isError":true' "agent tool error in $label"
-
-  if [ -s "$stderr_file" ]; then
-    log "stderr for $label:"
-    tail -40 "$stderr_file" | tee -a "$SUMMARY_LOG"
-  fi
-
-  log "ok: $label"
-}
-
-run_optional_live_model_smoke() {
-  if [ "${PI_SUBAGENT_SMOKE_LIVE:-0}" != "1" ]; then
-    section "optional live model smoke"
-    log "skip: set PI_SUBAGENT_SMOKE_LIVE=1 to run a real provider/model agent call"
-    return 0
-  fi
-
-  live_model=${PI_SUBAGENT_SMOKE_LIVE_MODEL:-openai-codex/gpt-5.3-codex-spark}
-  live_thinking=${PI_SUBAGENT_SMOKE_LIVE_THINKING:-minimal}
-  agent_dir=$(mktemp -d "$TMP_ROOT/live-agent-dir.XXXXXX")
-  session_dir=$(mktemp -d "$TMP_ROOT/live-session-dir.XXXXXX")
-  stdout_file=$TMP_ROOT/live-model.stdout.jsonl
-  stderr_file=$TMP_ROOT/live-model.stderr.log
-
-  write_custom_agents "$agent_dir"
-  link_real_pi_config "$agent_dir"
-
-  section "optional live model smoke"
-  log "model: $live_model"
-  log "agent_dir: $agent_dir"
-
-  if ! env \
-    PI_CODING_AGENT_DIR="$agent_dir" \
-    PI_SUBAGENT_CHILD_NO_EXTENSIONS=1 \
-    "$PI_BIN" --mode json --session-dir "$session_dir" --no-session \
-      --no-extensions --no-skills --no-context-files \
-      -e "$SUBAGENT_EXTENSION" \
-      --tools agent \
-      --model "$live_model" \
-      --thinking "$live_thinking" \
-      -p 'From your system prompt, identify available subagents whose names start with live-. Then use the agent tool exactly once with subagent_type live-path-finder and prompt: Find files under configs/agents/pi/extensions/subagent that implement agent discovery and child Pi invocation. Return concise file paths only. After the tool result, state whether live-path-finder was found. Do not edit files.' > "$stdout_file" 2> "$stderr_file"; then
-    tail -80 "$stderr_file" 2>/dev/null | tee -a "$SUMMARY_LOG" || true
-    fail "optional live model smoke failed"
-  fi
-
-  cat "$stdout_file" >> "$JSON_LOG"
-  assert_file_contains "$stdout_file" '"type":"tool_execution_end"' "live model did not execute agent"
-  assert_file_contains "$stdout_file" '"toolName":"agent"' "live model agent tool name missing"
-  assert_file_contains "$stdout_file" "live-path-finder" "live model did not find custom agent"
-  assert_file_not_contains "$stdout_file" "Unknown subagent" "live model used an unknown subagent"
-  log "ok: optional live model smoke"
+  assert_contains "$output" 'STEER-SMOKE-ECHO STEER-SMOKE-SENTINEL' "steering did not reach the child context"
+  assert_contains "$output" 'SMOKE-FOLLOWUP-COMPLETE' "follow-up did not reuse the child"
+  assert_contains "$output" '"status":"interrupted"' "interrupt did not settle as interrupted"
+  assert_contains "$output" 'PERSISTENT-SUBAGENT-SMOKE-COMPLETE' "root lifecycle did not complete"
+  assert_not_contains "$output" '"toolName":"agent"' "legacy agent tool executed"
+  assert_not_contains "$output" '"isError":true' "lifecycle tool returned an error"
+  assert_not_contains "$output" 'extension_error' "child extension collision or load failure"
+  log "ok: all seven lifecycle tools executed through the installed bundle"
 }
 
 main() {
   mkdir -p "$TMP_ROOT"
-  : > "$JSON_LOG"
   : > "$SUMMARY_LOG"
-
   cd "$REPO_ROOT"
-  require_command bun
-  require_command "$PI_BIN"
-  require_command grep
-  require_command mktemp
 
-  section "Pi subagent smoke"
-  log "repo: $REPO_ROOT"
-  log "json_log: $JSON_LOG"
-  log "summary_log: $SUMMARY_LOG"
+  command -v bun >/dev/null 2>&1 || fail "missing command: bun"
+  command -v "$PI_BIN" >/dev/null 2>&1 || fail "missing command: $PI_BIN"
 
-  check_installed_agents
   run_checked bun run test:pi-extensions subagent
   run_checked bun run test:pi-extensions:e2e subagent
+  create_installed_fixture
+  run_catalog_smoke
+  run_lifecycle_smoke
 
-  single_calls='[{"id":"smoke-single-agent","name":"agent","arguments":{"subagent_type":"echo-agent","prompt":"Return the deterministic child response."}}]'
-  parallel_calls='[{"id":"smoke-parallel-agent","name":"agent","arguments":{"tasks":[{"subagent_type":"echo-agent","prompt":"Return deterministic child response A."},{"subagent_type":"review-agent","prompt":"Return deterministic child response B."}]}}]'
-  fork_calls='[{"id":"smoke-fork-agent","name":"agent","arguments":{"subagent_type":"echo-agent","context":"fork","prompt":"Return the deterministic forked child response."}}]'
-  custom_calls='[{"id":"smoke-custom-agent","name":"agent","arguments":{"subagent_type":"live-path-finder","prompt":"Find files under configs/agents/pi/extensions/subagent that implement agent discovery and child Pi invocation. Return concise file paths only."}}]'
-
-  run_pi_json_smoke "single-fresh" standard ephemeral \
-    "Subagent smoke child result: single fresh." \
-    "$single_calls" \
-    "Delegate one task to echo-agent." \
-    "Subagent smoke child result: single fresh."
-
-  run_pi_json_smoke "parallel-fresh" standard ephemeral \
-    "Subagent smoke child result: parallel." \
-    "$parallel_calls" \
-    "Delegate two independent tasks in parallel." \
-    "Parallel agents completed: 2/2 succeeded."
-
-  run_pi_json_smoke "single-fork" standard saved \
-    "Subagent smoke child result: fork." \
-    "$fork_calls" \
-    "Delegate one forked task to echo-agent." \
-    "Subagent smoke child result: fork."
-
-  run_pi_json_smoke "custom-agent-discovery" custom ephemeral \
-    "Subagent smoke child result: custom live-path-finder." \
-    "$custom_calls" \
-    "Delegate one task to live-path-finder." \
-    "Subagent smoke child result: custom live-path-finder."
-
-  run_optional_live_model_smoke
-
-  section "done"
-  log "ok: Pi subagent smoke passed"
-  log "json_log: $JSON_LOG"
+  log "==== done ===="
+  log "ok: Pi persistent-subagent smoke passed"
   log "summary_log: $SUMMARY_LOG"
 }
 

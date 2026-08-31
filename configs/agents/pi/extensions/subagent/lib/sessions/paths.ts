@@ -1,73 +1,43 @@
-import { open, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
-export interface AgentSessionFileMatch {
-  sessionId: string;
-  sessionFile: string;
-}
+const SESSION_DIRECTORY = "subagent-sessions";
+const ARTIFACT_DIRECTORY = "subagent-artifacts";
 
-export type AgentSessionFileLookupResult =
-  | { ok: true; match: AgentSessionFileMatch }
-  | { ok: false; reason: "not-found" | "ambiguous"; matches: AgentSessionFileMatch[] };
-
-const SESSION_HEADER_READ_BYTES = 4096;
-
-export function getProjectAgentSessionDir(cwd: string, agentDir = getAgentDir()): string {
-  return join(agentDir, "agent-sessions", encodeProjectCwd(cwd));
-}
-
-export function encodeProjectCwd(cwd: string): string {
-  const normalized = resolve(cwd);
-  const slug = normalized
+export function encodeProjectPath(cwd: string): string {
+  const slug = resolve(cwd)
     .replace(/[\\/]+/g, "-")
-    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/[^0-9A-Za-z._-]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
-
   return `--${slug || "root"}--`;
 }
 
-export async function findAgentSessionFileById(
-  sessionDir: string,
-  sessionIdOrPrefix: string,
-): Promise<AgentSessionFileLookupResult> {
-  const needle = sessionIdOrPrefix.trim();
-  if (!needle) return { ok: false, reason: "not-found", matches: [] };
-
-  let names: string[];
-  try {
-    names = await readdir(sessionDir);
-  } catch {
-    return { ok: false, reason: "not-found", matches: [] };
-  }
-
-  const matches: AgentSessionFileMatch[] = [];
-  for (const name of names) {
-    if (!name.endsWith(".jsonl")) continue;
-    const sessionFile = join(sessionDir, name);
-    const sessionId = await readSessionId(sessionFile);
-    if (sessionId?.startsWith(needle)) matches.push({ sessionId, sessionFile });
-  }
-
-  if (matches.length === 1) return { ok: true, match: matches[0] };
-  return { ok: false, reason: matches.length > 1 ? "ambiguous" : "not-found", matches };
+export function getProjectSessionDirectory(cwd: string, agentDir = getAgentDir()): string {
+  return join(agentDir, SESSION_DIRECTORY, encodeProjectPath(cwd));
 }
 
-async function readSessionId(sessionFile: string): Promise<string | undefined> {
-  let file: Awaited<ReturnType<typeof open>> | undefined;
-  try {
-    file = await open(sessionFile, "r");
-    const buffer = Buffer.alloc(SESSION_HEADER_READ_BYTES);
-    const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
-    const firstLine = buffer.toString("utf8", 0, bytesRead).split("\n", 1)[0];
-    const header = JSON.parse(firstLine) as unknown;
-    if (!header || typeof header !== "object") return undefined;
-    const id = (header as Record<string, unknown>).id;
-    return typeof id === "string" && id ? id : undefined;
-  } catch {
-    return undefined;
-  } finally {
-    await file?.close().catch(() => undefined);
-  }
+export function getProjectArtifactDirectory(cwd: string, agentDir = getAgentDir()): string {
+  return join(agentDir, ARTIFACT_DIRECTORY, encodeProjectPath(cwd));
+}
+
+export function getPrivateArtifactDirectory(cwd: string, artifactId: string, agentDir = getAgentDir()): string {
+  if (!isArtifactId(artifactId)) throw new Error("Invalid artifact id");
+  return join(getProjectArtifactDirectory(cwd, agentDir), artifactId);
+}
+
+export function artifactReference(artifactId: string): string {
+  if (!isArtifactId(artifactId)) throw new Error("Invalid artifact id");
+  return `subagent-artifact:${artifactId}`;
+}
+
+export function artifactIdFromReference(reference: string): string | undefined {
+  const prefix = "subagent-artifact:";
+  if (!reference.startsWith(prefix)) return undefined;
+  const artifactId = reference.slice(prefix.length);
+  return isArtifactId(artifactId) ? artifactId : undefined;
+}
+
+function isArtifactId(value: string): boolean {
+  return /^[0-9a-f]{32}$/i.test(value);
 }

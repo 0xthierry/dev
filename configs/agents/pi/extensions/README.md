@@ -68,7 +68,7 @@ For day-to-day use on Thierry's machines, `configs/agents/install.sh` symlinks t
 - [`create-image`](./create-image/README.md) — registers `/create-image` for prompt-to-image generation.
 - [`oracle`](./oracle/README.md) — registers `oracle` for ChatGPT Web / GPT-5.5 Pro state-of-the-art second opinions.
 - [`agent-feedback`](./agent-feedback/README.md) — registers `agent_feedback` for durable workflow feedback and verification blockers.
-- [`subagent`](./subagent/README.md) — registers a Claude-compatible `Agent` tool for foreground single and parallel child Pi subagents.
+- [`subagent`](./subagent/README.md) — registers seven persistent-agent lifecycle tools backed by authenticated Pi RPC child sessions.
 - [`statusline`](./statusline/README.md) — appends clickable PR number, git change counts, and the Cloudflare BDR quote to Pi's existing footer.
 - [`token-speed`](./token-speed/README.md) — displays real-time assistant streaming throughput in Pi's footer.
 - [`codex-fast-mode`](./codex-fast-mode/README.md) — injects Codex Fast mode's `service_tier: "priority"` for eligible ChatGPT-backed Codex requests.

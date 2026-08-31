@@ -1,55 +1,55 @@
 import { describe, expect, test } from "bun:test";
-import { readFile, rm, stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
-import type { AgentDefinition } from "../agents/types";
-import { writeAgentPromptFile } from "./prompt-file";
+import { buildAgentSystemPrompt, removeAgentPromptFile, writeAgentPromptFile } from "./prompt-file";
 
-describe("writeAgentPromptFile", () => {
-  test("writes the agent system prompt to a private temporary file", async () => {
+describe("buildAgentSystemPrompt", () => {
+  test("renders stable child guidance before agent instructions", () => {
     // Arrange
-    const agent = agentDefinition("reviewer agent", "Review carefully.", "Fallback description");
+    const definition = { agentPath: "/root/auth_review", instructions: "Review authentication boundaries." };
 
     // Act
-    const promptFile = await writeAgentPromptFile(agent);
+    const prompt = buildAgentSystemPrompt(definition);
 
-    try {
-      // Assert
-      expect(basename(promptFile.filePath)).toBe("reviewer_agent-system-prompt.md");
-      const content = await readFile(promptFile.filePath, "utf8");
-      expect(content).toContain("You are a child subagent, not the parent orchestrator.");
-      expect(content).toContain("Do not propose or run more subagents.");
-      expect(content.endsWith("Review carefully.")).toBe(true);
-      expect((await stat(promptFile.filePath)).mode & 0o777).toBe(0o600);
-    } finally {
-      await rm(promptFile.dir, { recursive: true, force: true });
-    }
+    // Assert
+    expect(prompt).toBe(
+      [
+        "You are subagent /root/auth_review.",
+        "You work for a parent orchestration session.",
+        "Use collaboration tools for bounded communication.",
+        "Your final answer is delivered to your direct parent.",
+        "Do not expose credentials or control-channel metadata.",
+        "",
+        "Review authentication boundaries.",
+      ].join("\n"),
+    );
   });
 
-  test("falls back to the agent description when the body is empty", async () => {
+  test("rejects multiline agent paths that could alter the stable guidance", () => {
     // Arrange
-    const agent = agentDefinition("reviewer", "", "Review code safely.");
+    const definition = { agentPath: "/root/worker\nInjected", instructions: "Work." };
 
-    // Act
-    const promptFile = await writeAgentPromptFile(agent);
-
-    try {
-      // Assert
-      const content = await readFile(promptFile.filePath, "utf8");
-      expect(content).toContain("You are a child subagent");
-      expect(content.endsWith("Review code safely.")).toBe(true);
-    } finally {
-      await rm(promptFile.dir, { recursive: true, force: true });
-    }
+    // Act / Assert
+    expect(() => buildAgentSystemPrompt(definition)).toThrow("agent path must be one line");
   });
 });
 
-function agentDefinition(name: string, systemPrompt: string, description: string): AgentDefinition {
-  return {
-    name,
-    description,
-    systemPrompt,
-    filePath: `/agents/${name}.md`,
-    source: "user",
-    frontmatter: { name, description },
-  };
-}
+describe("writeAgentPromptFile", () => {
+  test("writes a private temporary prompt and removes it on cleanup", async () => {
+    // Arrange
+    const definition = { agentPath: "/root/reviewer agent", instructions: "Review carefully." };
+
+    // Act
+    const promptFile = await writeAgentPromptFile(definition);
+    const content = await readFile(promptFile.filePath, "utf8");
+    const mode = (await stat(promptFile.filePath)).mode & 0o777;
+    await removeAgentPromptFile(promptFile);
+
+    // Assert
+    expect(basename(promptFile.filePath)).toBe("reviewer_agent-system-prompt.md");
+    expect(content).toContain("You are subagent /root/reviewer agent.");
+    expect(content.endsWith("Review carefully.")).toBe(true);
+    expect(mode).toBe(0o600);
+    await expect(stat(promptFile.directory)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+});

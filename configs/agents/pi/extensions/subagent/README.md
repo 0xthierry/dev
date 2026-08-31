@@ -1,142 +1,109 @@
-# Pi Subagent
+# Persistent Subagents
 
-Claude/Codex-style subagents for Pi.
+Persistent Pi-native subagents backed by resident `pi --mode rpc` child processes.
 
-This extension registers one `agent` tool that delegates focused work to child `pi` sessions. It is intentionally small: foreground execution, single-agent or independent parallel tasks, saved fresh context by default, optional forked context, resumable child sessions, and no background scheduler, memory store, pool, dashboard, or mux panes.
-
-The agent tool renders live progress in Pi's tool row. Single-agent runs show the child assistant stream and tool activity as it arrives. Parallel runs show one batch with each agent's queued/running/succeeded/failed status, recent child tool calls, and final output/usage when available. Each running agent's stats include a live elapsed timer, and completed results retain the final duration.
-
-## Agent definitions
-
-Two built-in agents are always available:
-
-- `scout` — fast, read-only codebase reconnaissance for specific, well-scoped questions. Uses `low` effort.
-- `worker` — bounded implementation agent for production changes, fixes, refactors, and validation. Uses `high` effort.
-
-Configured agents are Markdown files under project-local `.pi/agents` directories or Pi's normal agent config directory and override built-ins with the same name:
-
-```text
-.pi/agents/*.md
-~/.pi/agent/agents/*.md
+```bash
+pi install ./configs/agents/pi/extensions/subagent
 ```
 
-Project-local `.pi/agents` directories are discovered from the current working directory up to the git root and take precedence over global agents. The global directory uses `getAgentDir()/agents`, so `PI_CODING_AGENT_DIR` is respected. Files are discovered recursively and must include frontmatter:
+## Breaking tool catalog
+
+This runtime is not compatible with the retired foreground `agent` / `Agent` tool, `tasks[]` requests, or one-shot JSON runner. It registers this stable tool catalog:
+
+1. `agent_spawn` — start or queue a persistent child assignment and return after prompt acceptance.
+2. `agent_send` — steer running work or queue durable mailbox communication; it does not start a turn.
+3. `agent_followup` — serialize retained-session work, optionally changing execution at the next assignment boundary.
+4. `agent_wait` — wait for exact current assignments with `all` or `any` semantics.
+5. `agent_interrupt` — abort current work while preserving a resumable session.
+6. `agent_list` — inspect bounded tree state and effective execution provenance.
+7. `agent_close` — permanently terminate a child and release resident capacity.
+
+All seven tools are registered once in that order. Children receive the same catalog through authenticated session-scoped IPC and share the root scheduler, filesystem, and working directory. The parent entrypoint suppresses itself in child launches so an explicit child runtime owns the proxy catalog.
+
+## Agents
+
+Built-in `scout` and `worker` definitions are always available. Global Markdown definitions are read from Pi's agent directory. A trusted project may add `.pi/agents/**/*.md`:
 
 ```markdown
 ---
-name: custom-reviewer
-description: Reviews a focused code change.
-effort: medium
+name: worker
+description: Implements bounded production changes.
+provider: openai-codex
+model: gpt-5.4
+effort: high
 ---
 
-Agent system prompt goes here.
+Project-specific worker instructions.
 ```
 
-Optional `effort` frontmatter sets the default child Pi thinking level for that agent. Supported options are `off`, `minimal`, `low`, `medium`, and `high`. Retired `max` and `xhigh` values are clamped to `high` for compatibility but are not advertised as tool options. Agents without `effort` inherit the parent session's current thinking level, clamped to the supported range. Built-in agents have pinned effort values listed above. A tool call can pass `effort` to override both the agent definition and parent thinking level for that run.
+`provider` and `model` are optional but atomic: specify both or neither. Project definitions and repository configuration are ignored when Pi does not trust the project. Discovery rejects duplicates within one source, applies deterministic project-over-global-over-built-in precedence across sources, and renders a name-sorted parent catalog without absolute paths or runtime state.
 
-The child `pi` process loads Pi context files and skills through normal Pi discovery. A stable child-boundary prompt is prepended before the agent body so child sessions know the parent owns orchestration and that they must not run more subagents.
+## Execution resolution
 
-## Repo model and effort overrides
+Provider, model, and effort are assignment settings. Model and effort resolve independently:
 
-A trusted repository can optionally add `pi-subagent.json` at its git root to choose the provider, model, and default effort for any discovered or built-in agent without copying its Markdown definition:
+1. tool invocation;
+2. trusted `pi-subagent.json`;
+3. agent Markdown frontmatter;
+4. current parent execution.
+
+Provider and model must always be supplied together and the provider is never guessed from a model name. Supported effort names are `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`; the selected Pi model must support the exact requested effort. Pi's model registry validates provider/model existence and authentication at the boundary, then credentials are immediately discarded. Children confirm their effective model and effort through RPC before accepting work. Follow-up execution changes perform model/thinking updates and state verification before prompting.
+
+Example spawn override:
 
 ```json
 {
+  "task_name": "auth-review",
+  "subagent_type": "scout",
+  "prompt": "Review authentication boundaries and report exact evidence.",
+  "execution": {
+    "provider": "openai-codex",
+    "model": "gpt-5.4",
+    "effort": "high"
+  }
+}
+```
+
+## Trusted repository configuration
+
+`pi-subagent.json` supports the nested shape below. For compatibility, agent entries may also put `provider`, `model`, and `effort` directly on the agent object. Unknown trusted fields are ignored rather than disabling the extension.
+
+```json
+{
+  "runtime": {
+    "maxActiveAgents": 3,
+    "maxResidentAgents": 6,
+    "maxDepth": 3
+  },
   "agents": {
-    "scout": {
-      "provider": "google",
-      "model": "gemini-3-flash-preview",
-      "effort": "low",
-      "allowEffortOverride": false
-    },
     "worker": {
-      "provider": "openai-codex",
-      "model": "gpt-5.4",
-      "effort": "high"
+      "execution": {
+        "provider": "openai-codex",
+        "model": "gpt-5.4",
+        "effort": "high"
+      },
+      "allowInvocationOverride": {
+        "model": true,
+        "effort": false
+      }
     }
   }
 }
 ```
 
-Agent names must exactly match discovered agents. `provider` and `model` must be specified together; `effort` may be specified by itself. `allowEffortOverride` defaults to `true`. Set it to `false` to make the configured `effort` authoritative for that agent; a locked entry must define `effort`. Missing files preserve the existing behavior. Invalid JSON, unknown fields or agents, incomplete provider/model pairs, and unsupported effort values produce configuration errors instead of silently using another model.
+A differing locked invocation fails explicitly; repeating the configured value succeeds while retaining repository provenance. Incomplete provider/model pairs still fail explicitly; unrelated fields are ignored and the legacy flat execution fields remain accepted for compatibility.
 
-Overrides are read on each invocation, including resumed child sessions, so edits apply without reloading Pi. Model precedence is repo config, then the parent model. For unlocked agents, effort precedence is tool-call `effort`, repo config, agent frontmatter or built-in default, then the parent thinking level. For locked agents, configured `effort` wins over the tool call. Untrusted projects do not load `pi-subagent.json`.
+## Limits and lifecycle
 
-## Tool usage
+Defaults are three active child turns, six resident Pi processes, and depth one, so subagents cannot spawn nested subagents unless trusted repository configuration explicitly raises `runtime.maxDepth`. Trusted local configuration may raise those budgets without extension-imposed hard ceilings. Agent lifetime count, task-name length, assignment size, and wait target count likewise have no separate policy caps; task names must remain path-safe, and the encoded transport frame is the practical assignment boundary. Mailbox messages remain capped at 16 KiB because they are retained model-visible communication. Waits default to 30 seconds and have a one-hour maximum.
 
-Single task:
+Full artifacts are capped at 2 MiB. Outbound RPC commands and IPC records are capped at 2 MiB, while inbound child RPC records are capped at 16 MiB; the representable raw assignment size varies with JSON escaping. Artifact read requests may ask for up to 32 KiB, but the model-visible page is adaptively reduced to at most 3 KiB of source bytes so encoded tool output is never truncated after its cursor advances. Root and nested callers may retrieve only direct-child completion or failure artifacts; durable mailbox handoff artifacts are not readable through tools.
 
-```json
-{
-  "subagent_type": "scout",
-  "description": "Find auth files",
-  "effort": "low",
-  "prompt": "Find the files that implement login and session validation."
-}
-```
+Child completion automatically reaches its direct parent in Codex-compatible `FINAL_ANSWER` form (`Task name`, `Sender`, `Payload`). Root notifications are hidden custom context messages rather than synthetic user messages; they do not start a new root turn while idle. Nested notifications use the same envelope through the authenticated mailbox.
 
-Resume a previous child session using the `agent_id` returned by an earlier agent result:
+Sockets and child processes start lazily. Each child receives one ephemeral capability through its private launch environment. Control paths, capabilities, credentials, and raw environments never enter prompts, results, journals, logs, or artifacts. Full completion output is stored behind an opaque artifact reference; model-visible previews and aggregates are bounded.
 
-```json
-{
-  "agent_id": "019e1882-8bc8-767c-a1e6-d7c9ebd3a574",
-  "effort": "medium",
-  "prompt": "Continue that review and now inspect authorization logic."
-}
-```
-
-Parallel independent tasks:
-
-```json
-{
-  "effort": "medium",
-  "tasks": [
-    { "subagent_type": "scout", "effort": "low", "prompt": "Find auth files." },
-    { "subagent_type": "web-search", "prompt": "Find current official docs for the auth provider." }
-  ]
-}
-```
-
-Prompt children with a compact contract: goal, context/evidence, success criteria, hard constraints, validation, expected output, and stop rules. Use parallel tasks only for independent work; do not hand off urgent blocking work when the parent session's next step depends on it. In parallel mode, top-level `effort` is the default for tasks that omit `effort`; a task-level value overrides it.
-
-Parallel execution has two related implementation knobs:
-
-- `MAX_PARALLEL_AGENT_TASKS` in `lib/tools/params.ts` is the maximum accepted `tasks[]` batch size.
-- `PARALLEL_CONCURRENCY` in `lib/tools/agent-tool.ts` is the maximum number of child Pi processes running at once.
-
-Both are kept at 15 so a valid parallel batch starts without extra subagents waiting in the tool queue.
-
-Context modes:
-
-- `fresh` (default): starts an isolated saved child session.
-- `fork`: forks the current saved parent session into a saved child session. This requires the parent session to have a session file.
-- resume by `agent_id`: continues an existing saved child session with Pi's `--session` support.
-
-Child sessions are saved under Pi's agent directory in a separate namespace that mirrors Pi's normal per-project session layout:
-
-```text
-~/.pi/agent/agent-sessions/--home-thierry-dev--/<timestamp>_<child-session-id>.jsonl
-```
-
-Children hand off through their final message: each child is instructed to make its last assistant message a complete handoff report, and the harness persists that message as the `_output.md` artifact. Pi saves the canonical resumable child transcript under `agent-sessions`; the harness does not duplicate the high-volume streamed JSON event log in the artifact directory. The lightweight final files live outside the parent conversation under the child session id:
-
-```text
-~/.pi/agent/agent-sessions-artifacts/<project-key>/<child-session-id>/artifacts/<timestamp>_<agent>_input.md
-~/.pi/agent/agent-sessions-artifacts/<project-key>/<child-session-id>/artifacts/<timestamp>_<agent>_output.md
-~/.pi/agent/agent-sessions-artifacts/<project-key>/<child-session-id>/artifacts/<timestamp>_<agent>_meta.json
-```
-
-The `_output.md` file is the detailed result: the child's final message on a normal run, or — when a child exits without a final message (crash, abort, context failure) — a handoff synthesized by the harness from parsed stream state (exit reason, last assistant text, recent tool activity, stderr tail, and the resumable child session path). The parent tool result inlines reports up to 360 lines / 40 KB (sized to the p95 of observed real reports); anything larger is truncated with an explicit "Read the full report at: <path>" notice so the parent knows to read the artifact, and `details.results` carries `outputTruncated` plus the artifact paths. `PI_CODING_AGENT_DIR` is respected, so custom Pi agent directories keep child sessions and artifacts beside the rest of that Pi state.
-
-## Child process controls
-
-The extension prevents recursive `agent` registration in child subagents with `PI_SUBAGENT_DEPTH`. Child Pi processes also load a tiny runtime context filter that removes inherited parent `agent` tool calls/results from forked or resumed child model context without modifying the saved parent session.
-
-For tests or special launches, these environment variables tune child invocation:
-
-- `PI_SUBAGENT_CHILD_NO_EXTENSIONS=1` adds `--no-extensions` for child sessions.
-- `PI_SUBAGENT_CHILD_EXTENSIONS=/path/a:/path/b` adds explicit `-e` child extensions.
-- `PI_SUBAGENT_CHILD_UNSET_ENV=NAME_ONE,NAME_TWO` removes parent-only env vars before spawning children.
+On session shutdown, the boundary rejects new work, stops IPC, interrupts and terminates residents, flushes journal/artifact work, and leaves recoverable sessions unloaded. Restart replays only the active parent branch and lazily reloads a child on follow-up. Closing an agent is terminal; interrupting it preserves resumability.
 
 ## Validation
 
@@ -144,7 +111,10 @@ From the repository root:
 
 ```bash
 bun run test:pi-extensions subagent
-bun run test:pi-extensions:e2e subagent
 bun run lint:pi-extensions
 bun run typecheck:pi-extensions
+bun run test:pi-extensions:e2e subagent
+git diff --check
 ```
+
+The E2E suite loads the extension explicitly with the deterministic faux provider, including a normal isolated child-extension discovery scenario that checks parent-boundary suppression and catalog collisions. The directory also carries standalone `@0xthierry/pi-subagent` package metadata.

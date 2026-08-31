@@ -1,23 +1,27 @@
 import type { AgentDefinition } from "./types";
 
-export function buildAgentPromptSection(agents: AgentDefinition[], _agentsDir: string): string {
-  if (agents.length === 0) return "";
+const CATALOG_INTRO = [
+  "## Subagents",
+  "Use the agent tools to delegate self-contained work to a focused child Pi session.",
+  "Choose a listed subagent type and provide a compact contract with goal, context, success criteria, constraints, and validation.",
+  "Available subagents:",
+] as const;
 
-  return [
-    "## Subagents",
-    "Use the agent tool to delegate self-contained work to a focused child Pi session.",
-    "Each child starts with fresh context by default, loads Pi context files and skills through normal Pi discovery, saves its own session, and returns only its final result.",
-    "When an agent result includes an agent_id, pass agent_id with a follow-up prompt to resume that saved child session.",
-    "For independent work, pass multiple entries in agent.tasks so they can run concurrently.",
-    "Prompt children with a compact contract: goal, context/evidence, success criteria, hard constraints, validation, expected output, and stop rules.",
-    "Available subagents:",
-    ...agents.sort((a, b) => a.name.localeCompare(b.name)).map((agent) => `- ${agent.name}: ${agent.description}`),
-  ].join("\n");
+export function buildAgentPromptSection(agents: readonly AgentDefinition[]): string {
+  if (agents.length === 0) return "";
+  const catalog = [...agents]
+    .sort((left, right) => left.name.localeCompare(right.name) || left.description.localeCompare(right.description))
+    .map((agent) => `- ${agent.name}: ${singleLine(agent.description)}`);
+  return [...CATALOG_INTRO, ...catalog].join("\n");
 }
 
 export function appendAgentPromptSection(systemPrompt: string, section: string): string {
-  const trimmedSystem = systemPrompt.trimEnd();
-  if (!section.trim()) return trimmedSystem;
-  if (!trimmedSystem) return section;
-  return `${trimmedSystem}\n\n${section}`;
+  const base = systemPrompt.trimEnd();
+  const addition = section.trim();
+  if (!addition) return base;
+  return base ? `${base}\n\n${addition}` : addition;
+}
+
+function singleLine(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
 }

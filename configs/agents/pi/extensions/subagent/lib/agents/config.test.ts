@@ -1,210 +1,139 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BUILTIN_AGENTS } from "./builtins";
-import {
-  applyAgentOverrideConfig,
-  loadAgentOverrideConfig,
-  normalizeAgentOverrideConfig,
-  SUBAGENT_CONFIG_FILE_NAME,
-} from "./config";
-import type { AgentDefinition } from "./types";
+import { executionPolicyForAgent, loadRepositorySubagentConfig, parseRepositorySubagentConfig } from "./config";
 
-describe("loadAgentOverrideConfig", () => {
-  test("returns undefined when the project has no config", async () => {
+describe("parseRepositorySubagentConfig", () => {
+  test("parses the documented nested repository schema", () => {
     // Arrange
-    const projectRoot = await mkdtemp(join(tmpdir(), "pi-subagent-config-"));
+    const value = {
+      runtime: { maxActiveAgents: 4, maxResidentAgents: 8, maxDepth: 3 },
+      agents: {
+        worker: {
+          execution: { provider: "openai-codex", model: "gpt-5.4", effort: "max" },
+          allowInvocationOverride: { model: true, effort: false },
+        },
+      },
+    };
 
-    try {
-      // Act
-      const result = await loadAgentOverrideConfig(projectRoot);
+    // Act
+    const result = parseRepositorySubagentConfig(value);
 
-      // Assert
-      expect(result).toBeUndefined();
-    } finally {
-      await rm(projectRoot, { recursive: true, force: true });
-    }
+    // Assert
+    expect(result.runtime).toEqual({ maxActiveAgents: 4, maxResidentAgents: 8, maxDepth: 3 });
+    expect(result.agents.get("worker")).toEqual({
+      execution: { provider: "openai-codex", model: "gpt-5.4", effort: "max" },
+      allowInvocationOverride: { model: true, effort: false },
+    });
+    expect(executionPolicyForAgent(result, "worker")).toEqual({
+      provider: "openai-codex",
+      model: "gpt-5.4",
+      effort: "max",
+      allowInvocationOverride: { model: true, effort: false },
+    });
   });
 
-  test("loads provider, model, and effort overrides", async () => {
+  test("accepts the legacy flat execution schema and ignores unrelated trusted fields", () => {
     // Arrange
-    const projectRoot = await mkdtemp(join(tmpdir(), "pi-subagent-config-"));
-    await writeFile(
-      join(projectRoot, SUBAGENT_CONFIG_FILE_NAME),
-      JSON.stringify({
-        agents: {
-          reviewer: {
-            provider: "anthropic",
-            model: "claude-sonnet",
-            effort: "high",
-            allowEffortOverride: false,
-          },
-          scout: { effort: "low" },
+    const value = {
+      secret: true,
+      agents: {
+        worker: {
+          provider: "openai-codex",
+          model: "gpt-5.4",
+          effort: "high",
+          temperature: 0,
         },
-      }),
+      },
+    };
+
+    // Act
+    const result = parseRepositorySubagentConfig(value);
+
+    // Assert
+    expect(result.agents.get("worker")).toEqual({
+      execution: { provider: "openai-codex", model: "gpt-5.4", effort: "high" },
+      allowInvocationOverride: { model: true, effort: true },
+    });
+  });
+
+  test("still rejects an incomplete explicitly configured model", () => {
+    // Arrange
+    const incomplete = { agents: { worker: { execution: { provider: "xai" } } } };
+
+    // Act
+    const parseIncomplete = () => parseRepositorySubagentConfig(incomplete);
+
+    // Assert
+    expect(parseIncomplete).toThrow("provider and agents.worker.execution.model must be specified together");
+  });
+
+  test("does not impose runtime-cap limits on trusted policy catalogs or identifiers", () => {
+    // Arrange
+    const agents: Record<string, unknown> = Object.fromEntries(
+      Array.from({ length: 101 }, (_, index) => [`agent-${index}`, { allowInvocationOverride: { model: true } }]),
+    );
+    const longName = "n".repeat(8 * 1024);
+    const longProvider = "p".repeat(8 * 1024);
+    agents[longName] = { execution: { provider: longProvider, model: "model" } };
+
+    // Act
+    const result = parseRepositorySubagentConfig({ agents });
+
+    // Assert
+    expect(result.agents.size).toBe(102);
+    expect(result.agents.get(longName)?.execution?.provider).toBe(longProvider);
+  });
+
+  test("accepts trusted runtime budgets above the retired supervisor caps", () => {
+    // Arrange
+    const value = { runtime: { maxActiveAgents: 160, maxResidentAgents: 320, maxDepth: 80 } };
+
+    // Act
+    const result = parseRepositorySubagentConfig(value, "repo/pi-subagent.json");
+
+    // Assert
+    expect(result.runtime).toEqual({ maxActiveAgents: 160, maxResidentAgents: 320, maxDepth: 80 });
+  });
+});
+
+describe("loadRepositorySubagentConfig", () => {
+  test("loads trusted config larger than the retired file cap", async () => {
+    // Arrange
+    const root = await mkdtemp(join(tmpdir(), "subagent-config-"));
+    const provider = "p".repeat(1024 * 1024 + 1);
+    await writeFile(
+      join(root, "pi-subagent.json"),
+      JSON.stringify({ agents: { worker: { execution: { provider, model: "model" } } } }),
       "utf8",
     );
 
     try {
       // Act
-      const result = await loadAgentOverrideConfig(projectRoot);
+      const result = await loadRepositorySubagentConfig(root, true);
 
       // Assert
-      expect(result?.agents.get("reviewer")).toEqual({
-        model: { provider: "anthropic", id: "claude-sonnet" },
-        effort: "high",
-        allowEffortOverride: false,
-      });
-      expect(result?.agents.get("scout")).toEqual({ effort: "low" });
+      expect(result?.agents.get("worker")?.execution?.provider).toBe(provider);
     } finally {
-      await rm(projectRoot, { recursive: true, force: true });
+      await rm(root, { recursive: true, force: true });
     }
   });
 
-  test("reports malformed JSON with the config path", async () => {
+  test("never reads repository config when untrusted", async () => {
     // Arrange
-    const projectRoot = await mkdtemp(join(tmpdir(), "pi-subagent-config-"));
-    const configPath = join(projectRoot, SUBAGENT_CONFIG_FILE_NAME);
-    await writeFile(configPath, "{ broken", "utf8");
+    const root = await mkdtemp(join(tmpdir(), "subagent-config-"));
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, "pi-subagent.json"), "{ malformed", "utf8");
 
     try {
       // Act
-      const result = loadAgentOverrideConfig(projectRoot);
+      const result = await loadRepositorySubagentConfig(root, false);
 
       // Assert
-      await expect(result).rejects.toThrow(`Could not parse ${configPath}`);
+      expect(result).toBeUndefined();
     } finally {
-      await rm(projectRoot, { recursive: true, force: true });
+      await rm(root, { recursive: true, force: true });
     }
-  });
-});
-
-describe("normalizeAgentOverrideConfig", () => {
-  test("requires provider and model together", () => {
-    // Arrange
-    const value = { agents: { reviewer: { provider: "anthropic" } } };
-
-    // Act
-    const parse = () => normalizeAgentOverrideConfig(value, "pi-subagent.json");
-
-    // Assert
-    expect(parse).toThrow("provider and pi-subagent.json.agents.reviewer.model must be provided together");
-  });
-
-  test("clamps retired max and xhigh effort to high", () => {
-    // Arrange
-    const value = {
-      agents: {
-        maxReviewer: { effort: "max" },
-        xhighReviewer: { effort: "xhigh" },
-      },
-    };
-
-    // Act
-    const result = normalizeAgentOverrideConfig(value, "pi-subagent.json");
-
-    // Assert
-    expect(result.agents.get("maxReviewer")).toEqual({ effort: "high" });
-    expect(result.agents.get("xhighReviewer")).toEqual({ effort: "high" });
-  });
-
-  test("rejects unsupported effort levels", () => {
-    // Arrange
-    const value = { agents: { reviewer: { effort: "extreme" } } };
-
-    // Act
-    const parse = () => normalizeAgentOverrideConfig(value, "pi-subagent.json");
-
-    // Assert
-    expect(parse).toThrow("effort must be one of: off, minimal, low, medium, high");
-  });
-
-  test("requires a configured effort when effort overrides are disabled", () => {
-    // Arrange
-    const missingEffort = {
-      agents: {
-        reviewer: { provider: "anthropic", model: "claude-sonnet", allowEffortOverride: false },
-      },
-    };
-    const invalidFlag = { agents: { reviewer: { effort: "high", allowEffortOverride: "no" } } };
-
-    // Act
-    const parseMissingEffort = () => normalizeAgentOverrideConfig(missingEffort, "pi-subagent.json");
-    const parseInvalidFlag = () => normalizeAgentOverrideConfig(invalidFlag, "pi-subagent.json");
-
-    // Assert
-    expect(parseMissingEffort).toThrow("effort is required when");
-    expect(parseInvalidFlag).toThrow("allowEffortOverride must be a boolean");
-  });
-
-  test("rejects empty and unknown override fields", () => {
-    // Arrange
-    const emptyValue = { agents: { reviewer: {} } };
-    const unknownValue = { agents: { reviewer: { effort: "high", temperature: 0 } } };
-
-    // Act
-    const parseEmpty = () => normalizeAgentOverrideConfig(emptyValue, "pi-subagent.json");
-    const parseUnknown = () => normalizeAgentOverrideConfig(unknownValue, "pi-subagent.json");
-
-    // Assert
-    expect(parseEmpty).toThrow("must define provider + model, effort, or both");
-    expect(parseUnknown).toThrow("contains unknown fields: temperature");
-  });
-});
-
-describe("applyAgentOverrideConfig", () => {
-  test("clones and overrides matching agents without mutating frozen built-ins", () => {
-    // Arrange
-    const agents = [...BUILTIN_AGENTS];
-    const originalScout = agents.find((agent) => agent.name === "scout");
-    const config = normalizeAgentOverrideConfig(
-      {
-        agents: {
-          scout: {
-            provider: "google",
-            model: "gemini-flash",
-            effort: "medium",
-            allowEffortOverride: false,
-          },
-        },
-      },
-      "pi-subagent.json",
-    );
-
-    // Act
-    const result = applyAgentOverrideConfig(agents, config);
-
-    // Assert
-    const scout = result.find((agent) => agent.name === "scout");
-    expect(scout).not.toBe(originalScout);
-    expect(scout).toMatchObject({
-      model: { provider: "google", id: "gemini-flash" },
-      effort: "medium",
-      allowEffortOverride: false,
-    });
-    expect(originalScout).toMatchObject({ effort: "low" });
-    expect((originalScout as AgentDefinition).model).toBeUndefined();
-  });
-
-  test("skips overrides for agents that were not discovered and applies the rest", () => {
-    // Arrange
-    const config = normalizeAgentOverrideConfig(
-      {
-        agents: {
-          missing: { provider: "google", model: "gemini-flash" },
-          scout: { provider: "xai", model: "grok-4.5" },
-        },
-      },
-      "/repo/pi-subagent.json",
-    );
-
-    // Act
-    const applied = applyAgentOverrideConfig([...BUILTIN_AGENTS], config);
-
-    // Assert
-    const scout = applied.find((agent) => agent.name === "scout");
-    expect(scout?.model).toEqual({ provider: "xai", id: "grok-4.5" });
-    expect(applied.map((agent) => agent.name)).not.toContain("missing");
   });
 });

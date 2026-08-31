@@ -1,173 +1,150 @@
 import { type Dirent, existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
-import { delimiter, relative, resolve, sep } from "node:path";
-import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
-import { parsePiThinkingLevel } from "../thinking";
+import { relative, resolve, sep } from "node:path";
 import { BUILTIN_AGENTS } from "./builtins";
-import { applyAgentOverrideConfig, loadAgentOverrideConfig } from "./config";
-import type { AgentDefinition, AgentDiscoveryResult } from "./types";
+import { loadRepositorySubagentConfig, SUBAGENT_CONFIG_FILE_NAME, SubagentConfigError } from "./config";
+import { parseDiscoveredAgentMarkdown } from "./frontmatter";
+import { type AgentDefinition, AgentDefinitionError, type AgentDiscoveryResult, type AgentSource } from "./types";
 
 export interface AgentDiscoveryOptions {
-  agentsDir?: string;
   cwd?: string;
-  projectTrusted?: boolean;
+  projectRoot?: string;
+  projectTrusted: boolean;
+  globalAgentsDir?: string;
+  builtins?: readonly AgentDefinition[];
 }
 
-interface AgentFrontmatter extends Record<string, unknown> {
-  name?: unknown;
-  description?: unknown;
-  effort?: unknown;
-}
+export async function discoverAgents(options: AgentDiscoveryOptions): Promise<AgentDiscoveryResult> {
+  const projectRoot = options.projectRoot ?? (options.cwd ? findProjectRoot(options.cwd) : undefined);
+  const discovered: AgentDefinition[] = [];
+  if (projectRoot && options.projectTrusted) {
+    discovered.push(...(await readAgentDirectory(resolve(projectRoot, ".pi", "agents"), "project", projectRoot)));
+  }
+  if (options.globalAgentsDir) {
+    discovered.push(...(await readAgentDirectory(resolve(options.globalAgentsDir), "global")));
+  }
 
-export async function discoverAgents(options: AgentDiscoveryOptions = {}): Promise<AgentDiscoveryResult> {
-  const discovery = await discoverUserAgents(options);
-  const mergedAgents = mergeBuiltInAgents(discovery.agents);
-  const config =
-    options.cwd && options.projectTrusted
-      ? await loadAgentOverrideConfig(findProjectRoot(resolve(options.cwd)))
-      : undefined;
-
-  return {
-    agentsDir: discovery.agentsDir,
-    agentDirs: discovery.agentDirs,
-    agents: config ? applyAgentOverrideConfig(mergedAgents, config) : mergedAgents,
-  };
-}
-
-export async function discoverUserAgents(options: AgentDiscoveryOptions = {}): Promise<AgentDiscoveryResult> {
-  const agentDirs = resolveAgentDirs(options);
+  // Sources are ordered by precedence: trusted project, global, then built-in.
+  // Duplicates within one source are malformed; a higher-precedence source
+  // intentionally overrides the same role from a lower-precedence source.
   const agentsByName = new Map<string, AgentDefinition>();
+  for (const agent of discovered) {
+    if (!agentsByName.has(agent.name)) agentsByName.set(agent.name, agent);
+  }
+  for (const builtin of options.builtins ?? BUILTIN_AGENTS) {
+    if (!agentsByName.has(builtin.name)) agentsByName.set(builtin.name, cloneAgent(builtin));
+  }
+  const agents = [...agentsByName.values()].sort(compareAgents);
+  const repositoryConfig = projectRoot
+    ? await loadRepositorySubagentConfig(projectRoot, options.projectTrusted)
+    : undefined;
+  if (repositoryConfig) rejectUnknownConfiguredAgents(repositoryConfig.agents.keys(), agents);
+  return { agents, ...(repositoryConfig ? { repositoryConfig } : {}) };
+}
 
-  for (const agentsDir of agentDirs) {
-    const files = await findMarkdownFiles(agentsDir);
-    for (const filePath of files) {
-      const agent = await readAgentFile(filePath);
-      if (!agent) continue;
-      if (!agentsByName.has(agent.name)) agentsByName.set(agent.name, agent);
+export async function readAgentDirectory(
+  directory: string,
+  source: Exclude<AgentSource, "builtin">,
+  projectRoot?: string,
+): Promise<AgentDefinition[]> {
+  const files = await markdownFiles(directory);
+  const agents: AgentDefinition[] = [];
+  for (const filePath of files) {
+    const sourcePath = stableSourcePath(filePath, source, projectRoot, directory);
+    let markdown: string;
+    try {
+      markdown = await readFile(filePath, "utf8");
+    } catch {
+      throw new AgentDefinitionError("malformed_agent", sourcePath, `${sourcePath}: could not read agent definition`);
     }
+    const agent = parseDiscoveredAgentMarkdown(markdown, sourcePath, source);
+    if (agent) agents.push(agent);
   }
-
-  return {
-    agentsDir: agentDirs.join(delimiter),
-    agentDirs,
-    agents: sortAgents([...agentsByName.values()]),
-  };
+  rejectDuplicateDefinitions(agents);
+  return agents.sort(compareAgents);
 }
 
-function resolveAgentDirs(options: AgentDiscoveryOptions): string[] {
-  const configuredAgentsDir = options.agentsDir ? resolve(options.agentsDir) : resolve(getAgentDir(), "agents");
-  return uniqueDirectories([...projectAgentDirs(options.cwd), configuredAgentsDir]);
-}
-
-function projectAgentDirs(cwd: string | undefined): string[] {
-  if (!cwd) return [];
-
-  const resolvedCwd = resolve(cwd);
-  const projectRoot = findProjectRoot(resolvedCwd);
-  return ancestorDirs(projectRoot, resolvedCwd)
-    .reverse()
-    .map((dir) => resolve(dir, ".pi", "agents"))
-    .filter((dir) => existsSync(dir));
-}
-
-function uniqueDirectories(dirs: string[]): string[] {
-  const result: string[] = [];
-  const seen = new Set<string>();
-  for (const dir of dirs) {
-    const resolved = resolve(dir);
-    if (seen.has(resolved)) continue;
-    seen.add(resolved);
-    result.push(resolved);
+export function rejectDuplicateDefinitions(agents: readonly AgentDefinition[]): void {
+  const firstByName = new Map<string, AgentDefinition>();
+  for (const agent of [...agents].sort((left, right) => left.sourcePath.localeCompare(right.sourcePath))) {
+    const first = firstByName.get(agent.name);
+    if (!first) {
+      firstByName.set(agent.name, agent);
+      continue;
+    }
+    throw new AgentDefinitionError(
+      "duplicate_agent",
+      agent.sourcePath,
+      `Duplicate agent '${agent.name}' in ${first.sourcePath} and ${agent.sourcePath}`,
+      agent.name,
+    );
   }
-  return result;
 }
 
-function findProjectRoot(cwd: string): string {
-  let current = resolve(cwd);
+export function findProjectRoot(cwd: string): string {
+  const original = resolve(cwd);
+  let current = original;
   while (true) {
     if (existsSync(resolve(current, ".git"))) return current;
     const parent = resolve(current, "..");
-    if (parent === current) return cwd;
+    if (parent === current) return original;
     current = parent;
   }
 }
 
-function ancestorDirs(root: string, cwd: string): string[] {
-  const dirs = [root];
-  let current = root;
-  while (current !== cwd) {
-    const relativeChild = relative(current, cwd).split(sep)[0];
-    if (!relativeChild || relativeChild.startsWith("..")) break;
-    current = resolve(current, relativeChild);
-    dirs.push(current);
-  }
-  return dirs;
-}
-
-function mergeBuiltInAgents(userAgents: AgentDefinition[]): AgentDefinition[] {
-  const agentsByName = new Map<string, AgentDefinition>();
-  for (const agent of userAgents) agentsByName.set(agent.name, agent);
-  for (const agent of BUILTIN_AGENTS) {
-    if (!agentsByName.has(agent.name)) agentsByName.set(agent.name, agent);
-  }
-  return sortAgents([...agentsByName.values()]);
-}
-
-function sortAgents(agents: AgentDefinition[]): AgentDefinition[] {
-  return agents.sort((a, b) => a.name.localeCompare(b.name));
-}
-
-async function findMarkdownFiles(root: string): Promise<string[]> {
+async function markdownFiles(directory: string): Promise<string[]> {
   const files: string[] = [];
-
-  async function walk(directory: string): Promise<void> {
+  async function visit(current: string): Promise<void> {
     let entries: Dirent[];
     try {
-      entries = await readdir(directory, { withFileTypes: true });
-    } catch {
-      return;
+      entries = await readdir(current, { withFileTypes: true });
+    } catch (error) {
+      if (isMissing(error)) return;
+      throw error;
     }
-
+    entries.sort((left, right) => left.name.localeCompare(right.name));
     for (const entry of entries) {
       if (entry.name.startsWith(".")) continue;
-      const path = resolve(directory, entry.name);
-      if (entry.isDirectory()) {
-        await walk(path);
-        continue;
-      }
-      if ((entry.isFile() || entry.isSymbolicLink()) && entry.name.endsWith(".md")) files.push(path);
+      const path = resolve(current, entry.name);
+      if (entry.isDirectory()) await visit(path);
+      else if ((entry.isFile() || entry.isSymbolicLink()) && entry.name.endsWith(".md")) files.push(path);
     }
   }
-
-  await walk(root);
+  await visit(directory);
   return files.sort();
 }
 
-async function readAgentFile(filePath: string): Promise<AgentDefinition | undefined> {
-  let content: string;
-  try {
-    content = await readFile(filePath, "utf8");
-  } catch {
-    return undefined;
+function stableSourcePath(
+  filePath: string,
+  source: "project" | "global",
+  projectRoot?: string,
+  directory?: string,
+): string {
+  if (source === "project" && projectRoot) return normalize(relative(projectRoot, filePath));
+  const withinGlobal = relative(directory ?? "", filePath);
+  return `global://${normalize(withinGlobal)}`;
+}
+
+function normalize(path: string): string {
+  return path.split(sep).join("/");
+}
+
+function compareAgents(left: AgentDefinition, right: AgentDefinition): number {
+  return left.name.localeCompare(right.name) || left.sourcePath.localeCompare(right.sourcePath);
+}
+
+function cloneAgent(agent: AgentDefinition): AgentDefinition {
+  return { ...agent, ...(agent.execution ? { execution: { ...agent.execution } } : {}) };
+}
+
+function rejectUnknownConfiguredAgents(names: Iterable<string>, agents: readonly AgentDefinition[]): void {
+  const available = new Set(agents.map((agent) => agent.name));
+  const unknown = [...names].filter((name) => !available.has(name)).sort();
+  if (unknown.length) {
+    throw new SubagentConfigError(SUBAGENT_CONFIG_FILE_NAME, `configures unknown agents: ${unknown.join(", ")}`);
   }
+}
 
-  try {
-    const { frontmatter, body } = parseFrontmatter<AgentFrontmatter>(content);
-    if (typeof frontmatter.name !== "string" || !frontmatter.name.trim()) return undefined;
-    if (typeof frontmatter.description !== "string" || !frontmatter.description.trim()) return undefined;
-
-    const effort = parsePiThinkingLevel(frontmatter.effort);
-
-    return {
-      name: frontmatter.name.trim(),
-      description: frontmatter.description.trim(),
-      systemPrompt: body.trim(),
-      filePath,
-      source: "user",
-      frontmatter,
-      ...(effort ? { effort } : {}),
-    };
-  } catch {
-    return undefined;
-  }
+function isMissing(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
 }

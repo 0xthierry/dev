@@ -9,6 +9,7 @@ type PiRpcHarnessOptions = {
   args?: string[];
   env?: NodeJS.ProcessEnv;
   startupTimeoutMs?: number;
+  noSession?: boolean;
 };
 
 type PendingRequest = {
@@ -34,7 +35,8 @@ export type PiRpcHarness = {
 
 export async function startPiRpcHarness(options: PiRpcHarnessOptions = {}): Promise<PiRpcHarness> {
   const cwd = options.cwd ?? process.cwd();
-  const args = ["--mode", "rpc", "--no-session"];
+  const args = ["--mode", "rpc"];
+  if (options.noSession !== false) args.push("--no-session");
 
   if (options.extensionPath) {
     args.push("-e", resolve(cwd, options.extensionPath));
@@ -48,7 +50,10 @@ export async function startPiRpcHarness(options: PiRpcHarnessOptions = {}): Prom
     stdio: "pipe",
   });
 
-  return createHarness(child, options.startupTimeoutMs ?? 10_000);
+  const startupTimeoutMs = options.startupTimeoutMs ?? 10_000;
+  const harness = await createHarness(child, startupTimeoutMs);
+  await harness.request({ type: "get_state" }, startupTimeoutMs);
+  return harness;
 }
 
 function createHarness(child: ChildProcessWithoutNullStreams, startupTimeoutMs: number): Promise<PiRpcHarness> {

@@ -1,34 +1,64 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
-import type { AgentDefinition } from "../agents/types";
+
+export interface AgentPromptDefinition {
+  agentPath: string;
+  instructions: string;
+}
 
 export interface AgentPromptFile {
-  dir: string;
+  directory: string;
   filePath: string;
 }
 
-const CHILD_AGENT_BOUNDARY_PROMPT = [
-  "You are a child subagent, not the parent orchestrator.",
-  "The parent session owns decomposition, delegation, synthesis, and final user communication.",
-  "Do not propose or run more subagents. Complete the assigned task directly with the tools available in this child session.",
-  "If you need to edit files, call the actual edit/write tools instead of printing pseudo tool calls.",
-].join("\n");
+export function buildAgentSystemPrompt(definition: AgentPromptDefinition): string {
+  const agentPath = requireSingleLine(definition.agentPath, "agent path");
+  const instructions = definition.instructions.trim();
+  if (!instructions) throw new Error("Agent instructions must not be empty");
 
-export async function writeAgentPromptFile(agent: AgentDefinition): Promise<AgentPromptFile> {
-  const dir = await mkdtemp(join(tmpdir(), "pi-agent-"));
-  const filePath = join(dir, `${safePromptFileName(agent.name)}-system-prompt.md`);
-  await withFileMutationQueue(filePath, async () => {
-    await writeFile(filePath, buildChildSystemPrompt(agent), { encoding: "utf8", mode: 0o600 });
-  });
-  return { dir, filePath };
+  return [
+    `You are subagent ${agentPath}.`,
+    "You work for a parent orchestration session.",
+    "Use collaboration tools for bounded communication.",
+    "Your final answer is delivered to your direct parent.",
+    "Do not expose credentials or control-channel metadata.",
+    "",
+    instructions,
+  ].join("\n");
 }
 
-function buildChildSystemPrompt(agent: AgentDefinition): string {
-  return [CHILD_AGENT_BOUNDARY_PROMPT, agent.systemPrompt || agent.description].join("\n\n");
+export async function writeAgentPromptFile(definition: AgentPromptDefinition): Promise<AgentPromptFile> {
+  const directory = await mkdtemp(join(tmpdir(), "pi-subagent-"));
+  const fileName = `${safeFileName(definition.agentPath)}-system-prompt.md`;
+  const filePath = join(directory, fileName);
+
+  try {
+    await withFileMutationQueue(filePath, async () => {
+      await writeFile(filePath, buildAgentSystemPrompt(definition), { encoding: "utf8", mode: 0o600 });
+    });
+    return { directory, filePath };
+  } catch (error) {
+    await rm(directory, { recursive: true, force: true });
+    throw error;
+  }
 }
 
-function safePromptFileName(agentName: string): string {
-  return agentName.replace(/[^a-zA-Z0-9_.-]+/g, "_");
+export async function removeAgentPromptFile(promptFile: AgentPromptFile): Promise<void> {
+  await rm(promptFile.directory, { recursive: true, force: true });
+}
+
+function safeFileName(agentPath: string): string {
+  const value = basename(agentPath)
+    .replace(/[^0-9A-Za-z_.-]+/g, "_")
+    .replace(/^\.+$/, "agent");
+  return value || "agent";
+}
+
+function requireSingleLine(value: string, name: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) throw new Error(`Agent ${name} must not be empty`);
+  if (trimmed.includes("\n") || trimmed.includes("\r")) throw new Error(`Agent ${name} must be one line`);
+  return trimmed;
 }
