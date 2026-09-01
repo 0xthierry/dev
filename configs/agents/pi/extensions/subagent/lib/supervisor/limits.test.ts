@@ -37,7 +37,7 @@ describe("supervisor limit evidence", () => {
     };
 
     // Assert
-    expect(defaults).toEqual({ active: 3, resident: 6, depth: 1, wait: 30_000, waitMax: 3_600_000 });
+    expect(defaults).toEqual({ active: 8, resident: 16, depth: 1, wait: 30_000, waitMax: 3_600_000 });
   });
 
   test("accepts trusted machine budgets above the retired policy caps", () => {

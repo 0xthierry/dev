@@ -15,18 +15,18 @@ export const SUPERVISOR_LIMIT_EVIDENCE = {
   activeAgents: {
     resource: "simultaneous provider turns and provider spend",
     unit: "child assignments",
-    default: 3,
+    default: 8,
     minimum: 1,
     rationale:
-      "Codex v2 budgets four total turns including root; trusted local configuration may raise this without an extension policy ceiling.",
+      "Eight parallel child assignments support wider orchestration fan-out; additional assignments queue explicitly.",
   },
   residentAgents: {
     resource: "resident Pi/Node process memory and file descriptors",
     unit: "child processes",
-    default: 6,
+    default: 16,
     minimum: 1,
     rationale:
-      "Six matches the established Codex v1 open-child baseline; trusted local configuration owns any higher machine-specific budget.",
+      "Twice the active budget leaves room for idle resumable children while new queued assignments consume released active slots.",
   },
   depth: {
     resource: "multiplicative orchestration fan-out",

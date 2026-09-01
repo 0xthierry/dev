@@ -71,8 +71,8 @@ Example spawn override:
 ```json
 {
   "runtime": {
-    "maxActiveAgents": 3,
-    "maxResidentAgents": 6,
+    "maxActiveAgents": 8,
+    "maxResidentAgents": 16,
     "maxDepth": 3
   },
   "agents": {
