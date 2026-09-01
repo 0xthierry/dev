@@ -388,10 +388,10 @@ install_ai_clis() {
   log_section "AI Coding CLIs"
 
   # Claude Code (Anthropic) — standalone binary, not npm
-  install_claude_code_binary "2.1.251"
+  install_claude_code_binary "2.1.257"
 
   # Codex (OpenAI)
-  install_npm_global_cli "Codex CLI" "@openai/codex" "0.151.0"
+  install_npm_global_cli "Codex CLI" "@openai/codex" "0.152.0"
 
   # Gemini CLI (Google)
   install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.56.0"
