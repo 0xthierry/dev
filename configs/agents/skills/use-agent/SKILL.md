@@ -1,6 +1,6 @@
 ---
 name: use-agent
-description: Use only when the user explicitly asks or allows the current Claude or Pi main to orchestrate other agent harnesses over Herdr and AMQ. Teaches model-aware routing between Fable 5, Opus 5, GPT-5.6-sol, GPT-5.6-luna, GPT-5.6-terra, and Grok 4.6. Otherwise, never invoke it.
+description: Use only when the user explicitly asks or allows the current Claude or Pi main to orchestrate other agent harnesses over Herdr and AMQ. Teaches model-aware routing between Fable 5.1, GPT-5.6-sol, Grok 4.5, and Grok 4.6. Otherwise, never invoke it.
 ---
 
 # Use Agent
@@ -25,29 +25,65 @@ If the environment check fails, stop: do not inspect or control some other focus
 
 ## Understand the roster
 
-Use only this curated model/harness mapping:
+Use only this curated model/harness mapping. The roles are workflow policy, not claims that a model is intrinsically incapable of other work.
 
-| Model | Worker harness | Effort | Profile and best use |
+| Profile | Harness | Effort | Complexity, scope, and ownership |
 | --- | --- | --- | --- |
-| **Fable 5** | Claude | `high` | Treat as the most intelligent available model: a tech lead, oracle, or deep specialist. Use for ambiguous architecture, difficult root-cause analysis, high-risk decisions, and adjudicating disagreements. |
-| **Opus 5** | Claude | `high` | State-of-the-art workhorse. Use for medium-to-complex plans, implementations, debugging, and detailed or adversarial review. |
-| **GPT-5.6-sol** | Pi | `high` | State-of-the-art workhorse in the same capability tier as Opus 5. Use for medium-to-complex implementation, debugging, and adversarial review. |
-| **GPT-5.6-luna** | Pi | `high` | Fast GPT-5.6 variant. Prefer it for rapid independent plan/code review, simplification, code/example-quality passes, and bounded well-specified implementation. Give parallel replicas distinct lenses. |
-| **GPT-5.6-terra** | Pi | `high` | Fast GPT-5.6 variant. Prefer it as another independent sample for plan/code review, debugging, TDD/phase analysis, and bounded implementation when low latency matters. |
-| **Grok 4.6** | Pi | `high` | Very capable and much faster, but less intelligent than the other models in this roster. Prefer it for simpler, settled, well-bounded implementation, reconnaissance, mechanical changes, and test/fix loops. Pair it with Opus 5 and/or a GPT-5.6 variant when stronger independent review is warranted. |
+| **Fable 5.1 oracle** | Claude | `xhigh` | Highest-capability profile used by this skill. Read-only. Reserve for ambiguous architecture, stubborn root causes, high-risk decisions, specialist judgment, and adjudication after ordinary evidence or reviewers disagree. |
+| **Fable 5.1 adversary** | Claude | `high` | Read-only. Demanding plan, implementation, debugging-hypothesis, security, and correctness review. Use one explicit lens per run. |
+| **GPT-5.6-sol implementer** | Pi | `high` | Writing workhorse for demanding multi-file features, refactors, debugging, tests, integration, and test/fix loops. Give exact file ownership and a verifiable definition of done. |
+| **Grok 4.5 scout** | Pi | `high` | Fast and always read-only in this skill. Use for codebase checks: locating files and symbols, tracing call paths, inventorying dependencies/config, finding analogous patterns, and bounded verification. |
+| **Grok 4.6 adversary** | Pi | `high` | Fast, read-only adversarial reviewer and independent debugger. Pair with Fable 5.1 `high` when provider-diverse challenge is warranted. |
 
-These models come from different providers and training datasets. Their disagreement is useful: independent answers can expose blind spots that one provider or dataset misses. Independent samples from sol/luna/terra add within-family diversity, not provider diversity. For important reviews, ask models independently before showing them another model's answer; otherwise the second reviewer may anchor on the first.
+Fable 5.1 and GPT-5.6-sol are frontier models intended for complex, long-horizon work. Grok 4.6 is also a frontier coding/agentic model; this skill deliberately specializes it as the fast adversarial lane. Grok 4.5 is capable of implementation, but this skill deliberately restricts it to fast read-only reconnaissance. Do not infer these workflow restrictions from benchmark rank alone.
 
-Fable, Opus, GPT-5.6-sol, GPT-5.6-luna, and GPT-5.6-terra are separate choices, not automatic fallbacks for one another. Honor an explicit user model request. If a selected model is unavailable, report it and ask before substituting.
+These models come from different providers and training datasets. Their disagreement is useful: independent answers can expose blind spots that one provider or dataset misses. Fable 5.1 `high` and Grok 4.6 `high` are the default adversarial pair. Ask them independently before showing either model the other's answer. Grok 4.5 and Grok 4.6 add within-family diversity, not provider diversity.
+
+Fable 5.1, GPT-5.6-sol, Grok 4.5, and Grok 4.6 are separate model choices, not automatic fallbacks for one another. Fable 5.1 at `xhigh` and `high` are separate launch profiles with different roles. Honor an explicit user model or effort request. If a selected profile is unavailable, report it and ask before substituting.
+
+### Verify model surfaces
 
 Validate availability before opening a pane:
 
-| Harness | Discovery |
+| Harness | Discovery and exact invocation |
 | --- | --- |
-| Claude | Start Claude and use `/model`; `claude --help` documents aliases and full IDs such as `claude-fable-5`. |
-| Pi | `pi --list-models gpt-5.6-sol`; `pi --list-models gpt-5.6-luna`; `pi --list-models gpt-5.6-terra`; `pi --list-models grok-4.6` |
+| Claude | Require Claude Code 2.1.255 or newer. Use `/model` to confirm entitlement. Pin `--model claude-fable-5-1`; select the role with `--effort xhigh` or `--effort high`. The `fable` alias currently resolves to 5.1 but can be overridden, so recipes pin the full ID. |
+| Pi | Run `pi --list-models gpt-5.6-sol`, `pi --list-models grok-4.5`, and `pi --list-models grok-4.6`. Pin `openai-codex/gpt-5.6-sol`, `xai/grok-4.5`, or `xai/grok-4.6`, then pass `--thinking <level>`. |
 
 Catalog discovery does not prove account entitlement, credits, or provider capacity. If the worker process rejects the selected model at launch, treat it as unavailable: report the exact category without exposing credentials, and ask before substituting another model.
+
+| Model surface used here | Context exposed here | Maximum output | Important boundary |
+| --- | ---: | ---: | --- |
+| Claude Code `claude-fable-5-1` | 1,000,000 | 128,000 | Adaptive thinking is always on; latency is comparatively high. |
+| Pi `openai-codex/gpt-5.6-sol` | 272,000 | 128,000 | OpenAI documents a 1,050,000-token upstream context, but Pi intentionally defaults this route to 272K. |
+| Pi `xai/grok-4.5` | 500,000 | 500,000 catalog cap | Text/image input; reasoning cannot be disabled. |
+| Pi `xai/grok-4.6` | 500,000 | 500,000 catalog cap | Text/image input; reasoning cannot be disabled. |
+
+### Choose reasoning effort deliberately
+
+Effort labels are provider-specific controls, not comparable token budgets. Always pass the exact effort in the launch recipe; never rely on a provider default.
+
+| Model | Supported ladder on this harness | How this skill uses it |
+| --- | --- | --- |
+| **Fable 5.1** | `low`, `medium`, `high` (default), `xhigh`, `max`; always-on adaptive thinking | `high` for demanding adversarial review. `xhigh` for the oracle profile and long-horizon, capability-critical questions. Although `max` is supported and is technically the top effort, it is outside this curated roster; do not silently promote the oracle beyond the user-selected `xhigh`. Use `medium`/`low` only if the user explicitly prioritizes latency or usage and accepts reduced search/retrieval behavior. |
+| **GPT-5.6-sol through Pi** | `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; Pi maps `minimal` to OpenAI `low`, while `off` omits the reasoning field rather than explicitly sending OpenAI `none` | Use `high` for the writing lane. `low` fits tightly specified, latency-sensitive work; `medium` is the upstream balanced default; `xhigh` fits unusually difficult multi-step coding or review; `max` is only for rare quality-first tasks after `high`/`xhigh` is insufficient. This skill's standard recipe remains `high`. |
+| **Grok 4.5 through Pi** | `low`, `medium`, `high` (default); no `off`, `minimal`, `xhigh`, or `max` | This skill pins `high` for reliable read-only codebase checks. Outside this policy, xAI describes `low` for simple latency-sensitive tool use and `medium` for complex analysis or long context. Never request `xhigh`. |
+| **Grok 4.6 through Pi** | `low`, `medium`, `high` (default), `xhigh`; no `off`, `minimal`, or `max` | This skill pins `high` for the fast adversarial lane. `xhigh` is available for the hardest quality-first problems but is not the default adversarial profile; use it only on explicit request. |
+
+Higher effort generally increases reasoning tokens and latency. It does not repair a vague contract, missing evidence, excessive scope, or concurrent ownership conflicts. Prefer a bounded task and the lowest effort that passes representative evaluation; for this curated roster, keep the pinned profiles above unless the user asks to change them.
+
+### Use benchmark evidence carefully
+
+Benchmarks are directional. Scores depend on effort, harness, tool policy, benchmark version, and safeguards; do not compare similarly named but differently versioned tests as if they were one leaderboard. Representative published results:
+
+| Model | Selected evidence | Routing implication |
+| --- | --- | --- |
+| **Fable 5.1** | Anthropic reports CursorBench 3.2.0 **73.4%**, Terminal-Bench 4.0 **55.8%**, Terminal-Bench-Science 0.1 **52.6%**, and AutomationBench **31.4%**. | Strongest fit for repository-scale, long-running, ambiguous, or high-consequence reasoning. Safeguards can refuse or reroute some cyber/biology work. |
+| **GPT-5.6-sol** | OpenAI reports SWE-Bench Pro **64.6%**, DeepSWE 1.1 **72.7%**, Terminal-Bench 2.1 **88.8%**, and the AA Coding Agent Index v1.1 at **80**. | Strong writing/tool-use lane for complex professional coding, terminal workflows, and deep debugging; not a reason to omit tests or repository evidence. |
+| **Grok 4.5 `high`** | xAI's later same-harness comparison reports CursorBench 3.2 **66.7%**, DeepSWE 1.1 **54.0%**, and Terminal-Bench 3.0 **15.7%**. Its launch also emphasized high token efficiency and fast generation. | Prefer as the quick reconnaissance sample, not the final authority for difficult repository-wide conclusions. |
+| **Grok 4.6 `high`** | xAI reports CursorBench 3.2 **69.9%**, DeepSWE 1.1 **65.9%**, and Terminal-Bench 3.0 **26.0%**, improving every listed 4.5 row in its launch comparison. | Good fast independent adversary; use provider-diverse Fable review for high-risk artifacts. |
+
+Primary references: [Fable 5.1 overview and benchmarks](https://www.anthropic.com/claude/fable), [Fable effort guidance](https://platform.claude.com/docs/en/build-with-claude/effort), [GPT-5.6-sol model limits](https://developers.openai.com/api/docs/models/gpt-5.6-sol), [GPT-5.6 launch evaluations](https://openai.com/index/gpt-5-6/), [Grok reasoning levels](https://docs.x.ai/developers/model-capabilities/text/reasoning), [Grok 4.5 launch](https://x.ai/news/grok-4-5), and [Grok 4.6 launch](https://x.ai/news/grok-4-6). Revalidate these sources and the installed catalogs before changing routing policy.
 
 ## Plan the workload before launching
 
@@ -58,7 +94,7 @@ First identify the active main model from runtime/system metadata. Build the tas
 | Task | One bounded outcome, not a general mission |
 | Dependencies | What must settle before this lane starts |
 | Difficulty and risk | Routine, demanding, or architecture/adjudication |
-| Role | Architect, implementer, debugger, tester, or reviewer |
+| Role | Oracle, architect, implementer, debugger, scout, tester, or adversarial reviewer |
 | Ownership | Exact files/modules it may change, or read-only |
 | Model and handle | Why this capability or provider adds value |
 | Lifetime | One primary contract and, at most, one immediate same-artifact follow-up |
@@ -69,23 +105,23 @@ Find the critical path before adding parallelism. Increase worker count only whe
 
 Worker count and model mix are dynamic. Never launch one of every model by habit.
 
-- Use **Grok** for simpler, settled, well-bounded implementation, reconnaissance, mechanical changes, and test/fix lanes.
-- Use **GPT-5.6-luna** and **GPT-5.6-terra** for fast, independent review lanes and bounded work where low latency matters. Assign one named lens per reviewer instead of duplicating the same prompt.
-- Use **GPT-5.6-sol** or **Opus 5** for medium-to-complex implementation, difficult debugging, demanding plans, and adversarial review. They are implementation workhorses as well as reviewers.
-- Use **Fable 5** only when genuine architecture ambiguity, high-risk judgment, specialist reasoning, or adjudication justifies it.
+- Use **Grok 4.5 at `high`** for fast read-only codebase checks, reconnaissance, file and symbol discovery, pattern finding, and bounded verification. Its ownership is always read-only.
+- Use **GPT-5.6-sol at `high`** for medium-to-complex implementation, debugging, and test/fix work.
+- Use **Fable 5.1 at `high`** and **Grok 4.6 at `high`** as independent read-only adversarial reviewers. Assign each a named lens, send the artifact independently, and let the main synthesize against repository evidence.
+- Use **Fable 5.1 at `xhigh`** only as this skill's highest-capability read-only oracle when genuine architecture ambiguity, difficult root-cause analysis, high-risk judgment, specialist reasoning, or adjudication justifies it.
 - Scale any selected model horizontally from one to N replicas when tasks and file ownership are independent. N is the justified width of the runnable frontier, bounded only by useful parallelism, machine resources, and provider capacity—not an arbitrary model quota.
 - Prefer provider diversity for independent diagnosis or review. Do not show one reviewer another reviewer's conclusions before both answer.
 - Same-model replicas are useful for independent lanes, not for duplicating the same uncertainty without a designated synthesis owner.
 
 Typical fleets:
 
-- **Small simple change:** one Grok implementer; no reviewer unless risk warrants one.
-- **Several simple lanes:** N Grok workers on disjoint bounded tasks.
-- **Fast review swarm:** N GPT-5.6-luna / GPT-5.6-terra / Grok reviewers, each assigned a different named lens; the main deduplicates and verifies their findings.
-- **Several medium/complex lanes:** N GPT-5.6-sol, GPT-5.6-luna, GPT-5.6-terra, or Opus workers on disjoint modules; add a different-provider reviewer only when risk warrants it.
-- **Wide mixed feature:** Grok handles simpler settled lanes; GPT-5.6-luna/terra handle fast bounded lanes; GPT-5.6-sol and/or Opus own the most demanding implementation modules. Launch an adversarial reviewer after the implementation wave settles. No Fable unless architecture remains uncertain.
-- **Difficult bug:** GPT-5.6-sol and Opus form independent hypotheses; luna/terra can add fast independent probes. The main chooses using repository evidence; a fresh worker matched to the implementation difficulty applies the fix.
-- **High-risk design:** one Fable architecture wave, then retire it before launching the implementation wave; add an independent Opus or GPT-5.6-sol challenge only when risk warrants it.
+- **Codebase question or preflight:** one Grok 4.5 read-only scout.
+- **Several reconnaissance lanes:** N Grok 4.5 read-only scouts with distinct questions.
+- **Medium/complex implementation:** N GPT-5.6-sol workers on disjoint modules.
+- **Adversarial review:** one Fable 5.1 `high` reviewer plus one Grok 4.6 `high` reviewer, both read-only and given the artifact independently.
+- **Wide mixed feature:** Grok 4.5 scouts map the codebase; GPT-5.6-sol workers own disjoint implementation modules; Fable 5.1 `high` and Grok 4.6 `high` review after the implementation wave settles.
+- **Difficult bug:** Fable 5.1 `high` and Grok 4.6 `high` form independent read-only hypotheses; the main chooses using repository evidence, then GPT-5.6-sol applies the fix.
+- **High-risk design or unresolved disagreement:** one Fable 5.1 `xhigh` oracle wave, then retire it before implementation. Use the adversarial pair separately when the resulting artifact warrants challenge.
 - **Main already supplies one perspective:** add a different provider or a fresh isolated sample rather than duplicating the main by default.
 
 ### Bound context and rotate workers
@@ -210,16 +246,15 @@ readonly MAIN_HANDLE ROOM_ROOT
 # Before running this block, set every count from the runnable frontier.
 # Zero omits a model; N has no fixed skill-level maximum. No defaults are
 # provided because the skill must not bias fleet composition.
-: "${FABLE_REPLICAS:?set FABLE_REPLICAS from the workload plan}"
-: "${OPUS_REPLICAS:?set OPUS_REPLICAS from the workload plan}"
+: "${FABLE51_XHIGH_REPLICAS:?set FABLE51_XHIGH_REPLICAS from the workload plan}"
+: "${FABLE51_HIGH_REPLICAS:?set FABLE51_HIGH_REPLICAS from the workload plan}"
 : "${GPT56_REPLICAS:?set GPT56_REPLICAS from the workload plan}"
-: "${LUNA_REPLICAS:?set LUNA_REPLICAS from the workload plan}"
-: "${TERRA_REPLICAS:?set TERRA_REPLICAS from the workload plan}"
-: "${GROK_REPLICAS:?set GROK_REPLICAS from the workload plan}"
+: "${GROK45_REPLICAS:?set GROK45_REPLICAS from the workload plan}"
+: "${GROK46_REPLICAS:?set GROK46_REPLICAS from the workload plan}"
 
 for replica_count in \
-  "$FABLE_REPLICAS" "$OPUS_REPLICAS" "$GPT56_REPLICAS" \
-  "$LUNA_REPLICAS" "$TERRA_REPLICAS" "$GROK_REPLICAS"; do
+  "$FABLE51_XHIGH_REPLICAS" "$FABLE51_HIGH_REPLICAS" "$GPT56_REPLICAS" \
+  "$GROK45_REPLICAS" "$GROK46_REPLICAS"; do
   if [[ ! "$replica_count" =~ ^[0-9]+$ ]]; then
     printf 'error: every replica count must be a non-negative integer\n' >&2
     exit 1
@@ -236,12 +271,11 @@ replica_handles() {
 
 WORKER_HANDLES="$(
   {
-    replica_handles claude-fable "$FABLE_REPLICAS"
-    replica_handles claude-opus "$OPUS_REPLICAS"
+    replica_handles claude-fable51-xhigh "$FABLE51_XHIGH_REPLICAS"
+    replica_handles claude-fable51-high "$FABLE51_HIGH_REPLICAS"
     replica_handles pi-gpt56 "$GPT56_REPLICAS"
-    replica_handles pi-luna "$LUNA_REPLICAS"
-    replica_handles pi-terra "$TERRA_REPLICAS"
-    replica_handles pi-grok "$GROK_REPLICAS"
+    replica_handles pi-grok45 "$GROK45_REPLICAS"
+    replica_handles pi-grok46 "$GROK46_REPLICAS"
   } | paste -sd, -
 )"
 if [[ -z "$WORKER_HANDLES" ]]; then
@@ -280,7 +314,11 @@ For every recipe, choose one unused numbered `WORKER_HANDLE`, then build the sam
 
 ```bash
 build_worker_prompt() {
-  printf '%s' "You are the disposable WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately run amq drain --include-body, then send readiness with amq send --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. Accept one bounded primary contract and at most one immediate follow-up on the same artifact: a failing test from your patch, review feedback on that patch, or a clarification about your assigned artifact. Do not accept a new module, different investigation, widened ownership, or unrelated third task; report with kind status and labels blocked,rotate instead. For every AMQ notice within that boundary, run amq drain --include-body, carry out the request exactly within its ownership and constraints, and report with amq send --to $MAIN_HANDLE. Send retirement-safe completion only after all writes and validation finish, using kind status and labels done,retire. If one immediate answer would unblock the same task, use labels blocked,awaiting-input; if fresh context is better, use blocked,rotate. Include changed paths and validation for action work. For multiline reports, feed stdin or a heredoc to amq send with --body -; for a saved file use --body @path. The --body-file option does not exist. Never use amq reply. Do not self-close the pane: MAIN records and verifies your result before retirement. Do not poll or sleep while waiting: finish your turn and let amq wake notify you."
+  printf '%s' "You are the disposable WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately run amq drain --include-body, then send readiness with amq send --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. Accept one bounded primary contract and at most one immediate follow-up on the same artifact: a failing test from your patch, review feedback on that patch, or a clarification about your assigned artifact. Do not accept a new module, different investigation, widened ownership, or unrelated third task; report with kind status and labels blocked,rotate instead. For every AMQ notice within that boundary, run amq drain --include-body, carry out the request exactly within its ownership and constraints, and report with amq send --to $MAIN_HANDLE. Send retirement-safe completion only after all assigned work and validation finish, using kind status and labels done,retire. If one immediate answer would unblock the same task, use labels blocked,awaiting-input; if fresh context is better, use blocked,rotate. Include changed paths and validation for action work. For multiline reports, feed stdin or a heredoc to amq send with --body -; for a saved file use --body @path. The --body-file option does not exist. Never use amq reply. Do not self-close the pane: MAIN records and verifies your result before retirement. Do not poll or sleep while waiting: finish your turn and let amq wake notify you."
+}
+
+build_readonly_worker_prompt() {
+  printf '%s' "$(build_worker_prompt) This profile is strictly read-only. Never edit, create, delete, rename, or format files; never change git state, packages, processes, services, or external systems. Bash is available only because AMQ is the transport: beyond amq commands, use it only for non-mutating inspection and validation. Report findings and proposed changes; MAIN or a writing worker applies them."
 }
 ```
 
@@ -288,31 +326,37 @@ build_worker_prompt() {
 
 `amq coop exec --require-wake` must establish native wake before the agent starts. If it fails, do not launch with degraded delivery and do not invent a hook workaround. Run `AM_ROOT="$ROOM_ROOT" AM_ME="$MAIN_HANDLE" amq doctor --ops`, fix the wake boundary, and relaunch.
 
-## Claude worker — Fable 5, high
+## Claude worker — Fable 5.1, xhigh oracle
+
+Use the pinned Claude Code model ID `claude-fable-5-1`. This is a read-only oracle profile.
 
 ```bash
-WORKER_HANDLE="claude-fable-1" # choose any configured unused claude-fable-1..N
-WORKER_PROMPT="$(build_worker_prompt)"
+WORKER_HANDLE="claude-fable51-xhigh-1" # choose any configured unused claude-fable51-xhigh-1..N
+WORKER_PROMPT="$(build_readonly_worker_prompt)"
 WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
   amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake claude -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
-  --model claude-fable-5 \
-  --effort high \
+  --model claude-fable-5-1 \
+  --effort xhigh \
+  --tools "Bash,Read,Grep,Glob" \
   --dangerously-skip-permissions \
   "$WORKER_PROMPT")"
 printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
 ```
 
-## Claude worker — Opus 5, high
+## Claude worker — Fable 5.1, high adversarial reviewer
+
+Use the same pinned model at `high`; do not substitute the `xhigh` oracle profile automatically.
 
 ```bash
-WORKER_HANDLE="claude-opus-1" # choose any configured unused claude-opus-1..N
-WORKER_PROMPT="$(build_worker_prompt)"
+WORKER_HANDLE="claude-fable51-high-1" # choose any configured unused claude-fable51-high-1..N
+WORKER_PROMPT="$(build_readonly_worker_prompt)"
 WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
   amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake claude -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
-  --model claude-opus-5 \
+  --model claude-fable-5-1 \
   --effort high \
+  --tools "Bash,Read,Grep,Glob" \
   --dangerously-skip-permissions \
   "$WORKER_PROMPT")"
 printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
@@ -322,7 +366,7 @@ Claude's unrestricted flag is `--dangerously-skip-permissions`; do not copy anot
 
 ## Pi worker — GPT-5.6-sol, high
 
-Use Pi's direct ChatGPT-backed catalog entry `openai-codex/gpt-5.6-sol`. Pi's tools execute with the local Pi process's permissions; `--approve` trusts project-local Pi resources.
+Use Pi's direct ChatGPT-backed catalog entry `openai-codex/gpt-5.6-sol`. The upstream model supports a wider effort ladder, but this writing profile deliberately pins `high`. Pi's tools execute with the local Pi process's permissions; `--approve` trusts project-local Pi resources.
 
 ```bash
 WORKER_HANDLE="pi-gpt56-1" # choose any configured unused pi-gpt56-1..N
@@ -337,35 +381,19 @@ WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
 printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
 ```
 
-## Pi worker — GPT-5.6-luna, high
+## Pi worker — Grok 4.5, high
 
-Use Pi's direct ChatGPT-backed catalog entry `openai-codex/gpt-5.6-luna`.
+Use the direct xAI catalog entry `xai/grok-4.5` at its highest supported effort. This profile is read-only: the allowlist removes edit/write, while Bash remains available only for AMQ and non-mutating checks. Pi's tools execute with the local Pi process's permissions; `--approve` trusts project-local Pi resources.
 
 ```bash
-WORKER_HANDLE="pi-luna-1" # choose any configured unused pi-luna-1..N
-WORKER_PROMPT="$(build_worker_prompt)"
+WORKER_HANDLE="pi-grok45-1" # choose any configured unused pi-grok45-1..N
+WORKER_PROMPT="$(build_readonly_worker_prompt)"
 WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
   amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake pi -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
-  --model openai-codex/gpt-5.6-luna \
+  --model xai/grok-4.5 \
   --thinking high \
-  --approve \
-  "$WORKER_PROMPT")"
-printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
-```
-
-## Pi worker — GPT-5.6-terra, high
-
-Use Pi's direct ChatGPT-backed catalog entry `openai-codex/gpt-5.6-terra`.
-
-```bash
-WORKER_HANDLE="pi-terra-1" # choose any configured unused pi-terra-1..N
-WORKER_PROMPT="$(build_worker_prompt)"
-WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
-  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake pi -- \
-  --name "use-agent-$TOPIC-$WORKER_HANDLE" \
-  --model openai-codex/gpt-5.6-terra \
-  --thinking high \
+  --tools read,bash,grep,find,ls \
   --approve \
   "$WORKER_PROMPT")"
 printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
@@ -373,16 +401,17 @@ printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID
 
 ## Pi worker — Grok 4.6, high
 
-Use the direct xAI catalog entry `xai/grok-4.6`. Pi's tools execute with the local Pi process's permissions; `--approve` trusts project-local Pi resources.
+Use the direct xAI catalog entry `xai/grok-4.6` at `high`, not its optional `xhigh`, for the standard fast adversarial profile. This profile is read-only: the allowlist removes edit/write, while Bash remains available only for AMQ and non-mutating checks. Pi's tools execute with the local Pi process's permissions; `--approve` trusts project-local Pi resources.
 
 ```bash
-WORKER_HANDLE="pi-grok-1" # choose any configured unused pi-grok-1..N
-WORKER_PROMPT="$(build_worker_prompt)"
+WORKER_HANDLE="pi-grok46-1" # choose any configured unused pi-grok46-1..N
+WORKER_PROMPT="$(build_readonly_worker_prompt)"
 WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
   amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake pi -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
   --model xai/grok-4.6 \
   --thinking high \
+  --tools read,bash,grep,find,ls \
   --approve \
   "$WORKER_PROMPT")"
 printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
@@ -400,7 +429,7 @@ AMQ accepts these message kinds: `brainstorm`, `review_request`, `review_respons
 require_preserved_main_amq_binding "$ROOM_ROOT" || exit 1
 amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to "$WORKER_HANDLE" --kind todo \
   --subject "<short task>" \
-  --body $'Task ID: <lane-id>\nRole: <architect|implementer|debugger|tester|reviewer>\nGoal: <one bounded outcome>\nDependencies: <already-settled prerequisites>\nDecisions: <current canonical decisions>\nContext: <evidence and relevant artifact paths>\nOwnership: <exact files/modules it may change, or read-only>\nConstraints: <what must not change>\nSuccess: <acceptance criteria>\nValidation: <commands/checks>\nLifetime: one primary contract plus at most one immediate same-artifact follow-up\nReport: <findings, changed paths, validation, remaining risks, done/retire or blocked status>' \
+  --body $'Task ID: <lane-id>\nRole: <oracle|architect|implementer|debugger|scout|tester|adversarial reviewer>\nGoal: <one bounded outcome>\nDependencies: <already-settled prerequisites>\nDecisions: <current canonical decisions>\nContext: <evidence and relevant artifact paths>\nOwnership: <exact files/modules it may change, or read-only>\nConstraints: <what must not change>\nSuccess: <acceptance criteria>\nValidation: <commands/checks>\nLifetime: one primary contract plus at most one immediate same-artifact follow-up\nReport: <findings, changed paths, validation, remaining risks, done/retire or blocked status>' \
   --wait-for drained --wait-timeout 60s
 ```
 
@@ -421,16 +450,16 @@ A drained receipt proves the worker consumed the request. The later AMQ response
 For an independent review, send the same artifact and criteria to each reviewer without including the other reviewer's conclusions:
 
 ```bash
-amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to claude-opus-1 --kind review_request \
+amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to claude-fable51-high-1 --kind review_request \
   --subject "independent adversarial review" --body "<artifact and review criteria>" \
   --wait-for drained --wait-timeout 60s &
-OPUS_SEND_PID=$!
-amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to pi-gpt56-1 --kind review_request \
+FABLE51_SEND_PID=$!
+amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to pi-grok46-1 --kind review_request \
   --subject "independent adversarial review" --body "<same artifact and criteria>" \
   --wait-for drained --wait-timeout 60s &
-GPT56_SEND_PID=$!
-wait "$OPUS_SEND_PID"
-wait "$GPT56_SEND_PID"
+GROK46_SEND_PID=$!
+wait "$FABLE51_SEND_PID"
+wait "$GROK46_SEND_PID"
 ```
 
 For concurrent action work, assign disjoint file ownership and designate one integration owner for shared interfaces. Never let two workers edit the same files concurrently. The main compares reports, resolves disagreement against repository evidence, and decides what to accept.
