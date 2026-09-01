@@ -3,7 +3,7 @@ import { createFakePi } from "../_shared/testing/fake-pi";
 import registerExtension from "./index";
 
 describe("xai-grok-fast-mode extension entrypoint", () => {
-  test("registers Grok request, cache-affinity, and compaction hooks", () => {
+  test("registers Grok cache-affinity and compaction hooks", () => {
     // Arrange
     const fakePi = createFakePi();
 
@@ -11,7 +11,7 @@ describe("xai-grok-fast-mode extension entrypoint", () => {
     registerExtension(fakePi.pi);
 
     // Assert
-    expect(fakePi.handlers.has("before_provider_request")).toBe(true);
+    expect(fakePi.handlers.has("before_provider_request")).toBe(false);
     expect(fakePi.handlers.has("before_provider_headers")).toBe(true);
     expect(fakePi.handlers.has("turn_end")).toBe(true);
   });

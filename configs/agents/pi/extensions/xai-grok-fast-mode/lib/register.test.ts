@@ -11,7 +11,7 @@ type CompactCallbacks = {
 const grokModel = { provider: "xai", id: "grok-4.6", contextWindow: 500_000 };
 
 describe("registerXaiGrokFastModeExtension", () => {
-  test("registers direct xAI Grok request and context optimizations", () => {
+  test("registers direct xAI Grok cache-affinity and context optimizations", () => {
     // Arrange
     const fakePi = createFakePi();
 
@@ -19,26 +19,9 @@ describe("registerXaiGrokFastModeExtension", () => {
     registerXaiGrokFastModeExtension(fakePi.pi);
 
     // Assert
-    expect(fakePi.handlers.get("before_provider_request")?.length).toBe(1);
+    expect(fakePi.handlers.has("before_provider_request")).toBe(false);
     expect(fakePi.handlers.get("before_provider_headers")?.length).toBe(1);
     expect(fakePi.handlers.get("turn_end")?.length).toBe(1);
-  });
-
-  test("adds priority processing to direct xAI Grok payloads", async () => {
-    // Arrange
-    const fakePi = createFakePi();
-    const payload = { model: "grok-4.6", input: [], stream: true };
-    registerXaiGrokFastModeExtension(fakePi.pi);
-
-    // Act
-    const results = await fakePi.emit(
-      "before_provider_request",
-      { type: "before_provider_request", payload },
-      { model: grokModel },
-    );
-
-    // Assert
-    expect(results).toEqual([{ ...payload, service_tier: "priority" }]);
   });
 
   test("adds the stable Pi session id to direct xAI Grok headers", async () => {

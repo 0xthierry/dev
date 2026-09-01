@@ -1,12 +1,9 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { applyXaiGrokCacheAffinity } from "./cache-affinity";
 import { shouldCompactXaiGrok } from "./compaction";
-import { applyXaiGrokFastMode } from "./fast-mode";
 
 export function registerXaiGrokFastModeExtension(pi: ExtensionAPI): void {
   let earlyCompactionInFlight = false;
-
-  pi.on("before_provider_request", (event, ctx) => applyXaiGrokFastMode(event.payload, ctx.model));
 
   pi.on("before_provider_headers", (event, ctx) => {
     applyXaiGrokCacheAffinity(event.headers, ctx.model, safeSessionId(ctx));

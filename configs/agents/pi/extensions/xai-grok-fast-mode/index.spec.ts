@@ -29,7 +29,7 @@ describe("xai-grok-fast-mode extension E2E", () => {
     tempProject = undefined;
   });
 
-  test("adds priority processing to direct xAI Grok requests", async () => {
+  test("adds cache affinity without requesting priority processing", async () => {
     // Arrange
     tempProject = await mkdtemp(join(tmpdir(), "pi-xai-grok-fast-mode-e2e-"));
     harness = await startPiRpcHarness({
@@ -55,13 +55,13 @@ describe("xai-grok-fast-mode extension E2E", () => {
     // Act
     const promptResponse = await harness.request({
       type: "prompt",
-      message: "Report the provider payload service tier.",
+      message: "Report the provider payload service tier and cache-affinity header.",
     });
     const agentEnd = await harness.waitForEvent((event) => event.type === "agent_end", 60_000);
 
     // Assert
     expect(promptResponse.success).toBe(true);
-    expect(eventText(agentEnd)).toContain("service_tier=priority");
+    expect(eventText(agentEnd)).toContain("service_tier=missing");
     expect(eventText(agentEnd)).toMatch(/x-grok-conv-id=(?!missing)[^"\\s]+/);
     expect(harness.stderr()).toBe("");
   }, 90_000);
