@@ -91,6 +91,73 @@ describe("renderAgentActivity", () => {
     expect(laterRender).toContain("  done — completed · 3s");
   });
 
+  test("includes follow-ups queued behind a live agent in the summary and row", () => {
+    // Arrange
+    const activity: AgentActivity = { ...workingActivity, queuedCount: 2 };
+
+    // Act
+    const rendered = renderAgentActivity([{ agentPath: "/root/active", activity }], theme, 160, 6_000);
+
+    // Assert
+    expect(rendered[0]).toBe("Subagents · 1 active · 2 queued");
+    expect(rendered).toContain("  active — working (+2 queued) · 5s");
+  });
+
+  test("advances live elapsed time when a working row retains finishedAt", () => {
+    // Arrange
+    const activity = { ...workingActivity, finishedAt: 4_000 } as AgentActivity;
+    const rows = [{ agentPath: "/root/active", activity }];
+
+    // Act
+    const firstRender = renderAgentActivity(rows, theme, 160, 6_000);
+    const laterRender = renderAgentActivity(rows, theme, 160, 60_000);
+
+    // Assert
+    expect(firstRender).toContain("  active — working · 5s");
+    expect(laterRender).toContain("  active — working · 59s");
+  });
+
+  test("renders transitional live states without requiring an exhaustive state list", () => {
+    // Arrange
+    const liveStates = ["compacting", "retrying", "finalizing"] as const;
+    const rows = liveStates.map((state) => ({
+      agentPath: `/root/${state}`,
+      activity: { ...workingActivity, state, finishedAt: 2_000 },
+    }));
+
+    // Act
+    const rendered = renderAgentActivity(rows, theme, 160, 6_000);
+
+    // Assert
+    expect(rendered[0]).toBe("Subagents · 3 active");
+    expect(rendered).toContain("  compacting — compacting · 5s");
+    expect(rendered).toContain("  retrying — retrying · 5s");
+    expect(rendered).toContain("  finalizing — finalizing · 5s");
+  });
+
+  test("bounds displayed agents and keeps live rows ahead of settled history", () => {
+    // Arrange
+    const settledRows = Array.from({ length: 8 }, (_, index) => ({
+      agentPath: `/root/done-${index}`,
+      activity: { ...workingActivity, state: "completed", finishedAt: 4_000 } as AgentActivity,
+    }));
+    const liveRows = Array.from({ length: 2 }, (_, index) => ({
+      agentPath: `/root/active-${index}`,
+      activity: workingActivity,
+    }));
+
+    // Act
+    const rendered = renderAgentActivity([...settledRows, ...liveRows], theme, 160, 6_000);
+
+    // Assert
+    expect(rendered[0]).toBe("Subagents · 2 active · 8 completed");
+    expect(rendered).toContain("  active-0 — working · 5s");
+    expect(rendered).toContain("  active-1 — working · 5s");
+    expect(rendered).not.toContain("  done-6 — completed · 3s");
+    expect(rendered).toContain("  +2 more");
+    expect(rendered).toHaveLength(18);
+  });
+
   test("shows the current tool and keeps every line within the available width", () => {
     // Arrange
     const activity: AgentActivity = { ...workingActivity, state: "tool", toolName: "lsp_diagnostics" };
@@ -108,16 +175,20 @@ describe("hasLiveAgentActivity", () => {
   test("keeps settled rows visible only while another agent is live", () => {
     // Arrange
     const completed: AgentActivity = { ...workingActivity, state: "completed", finishedAt: 4_000 };
+    const futureLive: AgentActivity = { ...workingActivity, state: "compacting" };
     const settledRows = [{ agentPath: "/root/done", activity: completed }];
     const mixedRows = [...settledRows, { agentPath: "/root/active", activity: workingActivity }];
+    const futureRows = [{ agentPath: "/root/compacting", activity: futureLive }];
 
     // Act
     const settledOnly = hasLiveAgentActivity(settledRows);
     const mixed = hasLiveAgentActivity(mixedRows);
+    const future = hasLiveAgentActivity(futureRows);
 
     // Assert
     expect(settledOnly).toBe(false);
     expect(mixed).toBe(true);
+    expect(future).toBe(true);
   });
 });
 

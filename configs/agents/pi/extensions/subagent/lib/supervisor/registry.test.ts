@@ -102,6 +102,39 @@ describe("AgentRegistry", () => {
     expect(assignment).toMatchObject({ id: "agent-a:8", generation: 8 });
   });
 
+  test("restores settled assignment outcomes so waits remain addressable after restart", () => {
+    // Arrange
+    const registry = new AgentRegistry();
+
+    // Act
+    registry.register({
+      agentPath: "/root/a",
+      agentId: "agent-a",
+      parentPath: "/root",
+      taskName: "a",
+      agentType: "worker",
+      depth: 1,
+      execution,
+      status: "unloaded",
+      assignmentGeneration: 2,
+      assignments: [
+        { generation: 1, kind: "spawn", outcome: "completed", artifactReference: "artifact:one" },
+        { generation: 2, kind: "followup", outcome: "failed", errorKind: "rpc_request_timeout" },
+      ],
+    });
+
+    // Assert
+    expect(registry.resolve("/root/a").assignments).toEqual([
+      expect.objectContaining({ id: "agent-a:1", phase: "settled", outcome: "completed" }),
+      expect.objectContaining({
+        id: "agent-a:2",
+        phase: "settled",
+        outcome: "failed",
+        errorKind: "rpc_request_timeout",
+      }),
+    ]);
+  });
+
   test("rejects exhausted restored generations instead of producing ambiguous IDs", () => {
     // Arrange
     const registry = new AgentRegistry();

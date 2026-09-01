@@ -10,6 +10,10 @@ export const DEFAULT_STDERR_LIMIT_BYTES = MAX_STDERR_LIMIT_BYTES;
 export const DEFAULT_TERMINATION_GRACE_MS = 5_000;
 export const MIN_TERMINATION_GRACE_MS = 1;
 export const MAX_TERMINATION_GRACE_MS = 30_000;
+/** Matches Pi's own RPC client command deadline without limiting assignment duration. */
+export const DEFAULT_RPC_COMMAND_TIMEOUT_MS = 30_000;
+export const MIN_RPC_COMMAND_TIMEOUT_MS = 1;
+export const MAX_RPC_COMMAND_TIMEOUT_MS = 120_000;
 
 export interface ResidentChildExit {
   code: number | null;
@@ -38,6 +42,7 @@ export interface AgentProcessOptions {
   runtime?: AgentProcessRuntime;
   stderrLimitBytes?: number;
   terminationGraceMs?: number;
+  rpcCommandTimeoutMs?: number;
   redact?: RedactText;
 }
 
@@ -47,6 +52,7 @@ export interface AgentProcessState {
   sessionFile?: string;
   execution: AgentExecutionSettings;
   isStreaming: boolean;
+  isCompacting: boolean;
   pendingMessageCount: number;
 }
 
@@ -100,6 +106,7 @@ export class AgentProcess {
   private readonly runtime: AgentProcessRuntime;
   private readonly stderrTail: BoundedByteTail;
   private readonly terminationGraceMs: number;
+  private readonly rpcCommandTimeoutMs: number;
   private readonly redact: RedactText;
   private readonly listeners = new Set<AgentProcessEventListener>();
   private child: ResidentChildProcess | undefined;
@@ -129,6 +136,16 @@ export class AgentProcess {
         `termination grace must be an integer from ${MIN_TERMINATION_GRACE_MS} to ${MAX_TERMINATION_GRACE_MS} milliseconds`,
       );
     }
+    this.rpcCommandTimeoutMs = options.rpcCommandTimeoutMs ?? DEFAULT_RPC_COMMAND_TIMEOUT_MS;
+    if (
+      !Number.isInteger(this.rpcCommandTimeoutMs) ||
+      this.rpcCommandTimeoutMs < MIN_RPC_COMMAND_TIMEOUT_MS ||
+      this.rpcCommandTimeoutMs > MAX_RPC_COMMAND_TIMEOUT_MS
+    ) {
+      throw new RangeError(
+        `RPC command timeout must be an integer from ${MIN_RPC_COMMAND_TIMEOUT_MS} to ${MAX_RPC_COMMAND_TIMEOUT_MS} milliseconds`,
+      );
+    }
     this.redact = options.redact ?? ((value) => value);
   }
 
@@ -145,7 +162,7 @@ export class AgentProcess {
     this.removeRpcListener = this.client.onEvent((event) => this.emitRuntimeEvent(event));
 
     try {
-      const state = await this.client.getState(options);
+      const state = await this.client.getState(this.commandOptions(options.signal, options.timeoutMs));
       verifyExecution(state, this.options.execution);
       return this.mapState(state);
     } catch (error) {
@@ -161,9 +178,16 @@ export class AgentProcess {
     return this.acceptAssignment(request);
   }
 
-  send(message: string, signal?: AbortSignal): Promise<void> {
+  async send(message: string, signal?: AbortSignal): Promise<void> {
     requireMessage(message);
-    return this.requireClient().steer(message, { signal });
+    const client = this.requireClient();
+    const options = this.commandOptions(signal);
+    const state = await client.getState(options);
+    if (state.isStreaming && !state.isCompacting) {
+      await client.steer(message, options);
+      return;
+    }
+    await client.prompt(message, { ...options, streamingBehavior: "steer" });
   }
 
   followup(request: AgentAssignmentRequest): Promise<AgentSubmission> {
@@ -171,11 +195,11 @@ export class AgentProcess {
   }
 
   interrupt(signal?: AbortSignal): Promise<void> {
-    return this.requireClient().abort({ signal });
+    return this.requireClient().abort(this.commandOptions(signal));
   }
 
   async getState(signal?: AbortSignal): Promise<AgentProcessState> {
-    const state = await this.requireClient().getState({ signal });
+    const state = await this.requireClient().getState(this.commandOptions(signal));
     return this.mapState(state);
   }
 
@@ -248,7 +272,7 @@ export class AgentProcess {
       .catch(() => {});
 
     try {
-      await client.prompt(request.message, { signal: request.signal });
+      await client.prompt(request.message, this.commandOptions(request.signal));
       return { accepted: true, settlement };
     } catch (error) {
       settlementController.abort();
@@ -259,17 +283,36 @@ export class AgentProcess {
 
   private async configureExecution(execution: AgentExecutionSettings, signal?: AbortSignal): Promise<void> {
     const client = this.requireClient();
-    await client.setModel(execution.provider, execution.model, { signal });
-    await client.setThinkingLevel(execution.effort, { signal });
-    const state = await client.getState({ signal });
+    await client.setModel(execution.provider, execution.model, this.commandOptions(signal));
+    await client.setThinkingLevel(execution.effort, this.commandOptions(signal));
+    const state = await client.getState(this.commandOptions(signal));
     verifyExecution(state, execution);
   }
 
   private async finalizeAfterSettlement(client: PiRpcClient, signal: AbortSignal): Promise<AgentSettlement> {
-    await client.waitForSettled({ signal });
-    const output = await client.getLastAssistantText();
-    const state = await client.getState();
-    return { kind: "settled", output: output === null ? null : this.redact(output), state: this.mapState(state) };
+    let observedSequence = client.getSettlementSequence();
+    for (;;) {
+      await client.waitForSettled({ signal, afterSequence: observedSequence });
+      const evidenceSequence = client.getSettlementSequence();
+      const output = await client.getLastAssistantText(this.commandOptions(signal));
+      const state = await client.getState(this.commandOptions(signal));
+
+      // A newer settlement is evidence that the state/output pair may belong to
+      // an earlier continuation. Re-evaluate it immediately rather than losing it.
+      if (client.getSettlementSequence() !== evidenceSequence) {
+        observedSequence = evidenceSequence;
+        continue;
+      }
+      if (!isQuiescent(state)) {
+        observedSequence = evidenceSequence;
+        continue;
+      }
+      return { kind: "settled", output: output === null ? null : this.redact(output), state: this.mapState(state) };
+    }
+  }
+
+  private commandOptions(signal?: AbortSignal, timeoutMs = this.rpcCommandTimeoutMs): RpcRequestOptions {
+    return { signal, timeoutMs };
   }
 
   private requireClient(): PiRpcClient {
@@ -295,6 +338,7 @@ export class AgentProcess {
         effort: state.thinkingLevel,
       },
       isStreaming: state.isStreaming,
+      isCompacting: state.isCompacting,
       pendingMessageCount: state.pendingMessageCount,
     };
   }
@@ -391,6 +435,10 @@ function childTransport(child: ResidentChildProcess): RpcTransport {
         listener(exit.error ?? new AgentProcessError("process_exited", formatExit(exit)));
       }),
   };
+}
+
+function isQuiescent(state: RpcSessionState): boolean {
+  return !state.isStreaming && !state.isCompacting && state.pendingMessageCount === 0;
 }
 
 function verifyExecution(state: RpcSessionState, expected: AgentExecutionSettings): void {

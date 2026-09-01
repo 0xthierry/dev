@@ -50,6 +50,15 @@ describe("recoverRuntimeMetadata", () => {
         status: "unloaded",
         lastEvent: "completed",
         assignmentGeneration: 1,
+        assignments: [
+          {
+            generation: 1,
+            kind: "spawn",
+            phase: "settled",
+            outcome: "completed",
+            artifactReference: "subagent-artifact:0123456789abcdef0123456789abcdef",
+          },
+        ],
         artifactReference: "subagent-artifact:0123456789abcdef0123456789abcdef",
         queuedMailIds: [],
       },
@@ -147,6 +156,114 @@ describe("recoverRuntimeMetadata", () => {
     expect(recovered[0]?.failure).toBeUndefined();
   });
 
+  test("maps a legacy started event to the last durably known starting phase", () => {
+    // Arrange
+    const branch = [
+      spawned("/root/worker", "agent-2"),
+      entry("started", { agentPath: "/root/worker", agentId: "agent-2", generation: 1 }),
+    ];
+
+    // Act
+    const recovered = recoverRuntimeMetadata(branch);
+
+    // Assert
+    expect(recovered[0]?.assignments).toEqual([{ generation: 1, kind: "spawn", phase: "starting" }]);
+  });
+
+  test("recovers queued and active phases per generation without losing an older settlement", () => {
+    // Arrange
+    const branch = [
+      spawned("/root/worker", "agent-2"),
+      entry("assignment_queued", {
+        agentPath: "/root/worker",
+        agentId: "agent-2",
+        generation: 1,
+        assignmentKind: "spawn",
+      }),
+      entry("assignment_phase_changed", {
+        agentPath: "/root/worker",
+        agentId: "agent-2",
+        generation: 1,
+        phase: "running",
+      }),
+      entry("assignment_queued", {
+        agentPath: "/root/worker",
+        agentId: "agent-2",
+        generation: 2,
+        assignmentKind: "followup",
+      }),
+      entry("completed", {
+        agentPath: "/root/worker",
+        agentId: "agent-2",
+        generation: 1,
+        artifactReference: "subagent-artifact:first",
+      }),
+    ];
+
+    // Act
+    const recovered = recoverRuntimeMetadata(branch);
+
+    // Assert
+    expect(recovered[0]).toMatchObject({
+      assignmentGeneration: 2,
+      assignments: [
+        {
+          generation: 1,
+          kind: "spawn",
+          phase: "settled",
+          outcome: "completed",
+          artifactReference: "subagent-artifact:first",
+        },
+        { generation: 2, kind: "followup", phase: "queued" },
+      ],
+    });
+    expect(recovered[0]?.artifactReference).toBeUndefined();
+  });
+
+  test("recovers sanitized notification state for a settled wait result", () => {
+    // Arrange
+    const branch = [
+      spawned("/root/worker", "agent-2"),
+      entry("completed", {
+        agentPath: "/root/worker",
+        agentId: "agent-2",
+        generation: 3,
+        artifactReference: "subagent-artifact:answer",
+      }),
+      entry("notification_updated", {
+        agentPath: "/root/worker",
+        agentId: "agent-2",
+        generation: 3,
+        notification: {
+          status: "failed",
+          failure: {
+            kind: "root_callback_failed",
+            targetPath: "/root",
+            retryable: true,
+            notification: { outputPreview: "sensitive answer" },
+          },
+        },
+      }),
+    ];
+
+    // Act
+    const recovered = recoverRuntimeMetadata(branch);
+
+    // Assert
+    expect(recovered[0]?.assignments[0]).toEqual({
+      generation: 3,
+      kind: "followup",
+      phase: "settled",
+      outcome: "completed",
+      artifactReference: "subagent-artifact:answer",
+      notification: {
+        status: "failed",
+        failure: { kind: "root_callback_failed", targetPath: "/root", retryable: true },
+      },
+    });
+    expect(JSON.stringify(recovered)).not.toContain("sensitive");
+  });
+
   test("keeps the latest failed assignment outcome across reload", () => {
     // Arrange
     const branch = [
@@ -168,6 +285,15 @@ describe("recoverRuntimeMetadata", () => {
     expect(recovered[0]).toMatchObject({
       assignmentGeneration: 4,
       lastEvent: "failed",
+      assignments: [
+        {
+          generation: 4,
+          phase: "settled",
+          outcome: "failed",
+          errorKind: "runtime_failure",
+          artifactReference: "subagent-artifact:failure",
+        },
+      ],
       failure: { kind: "runtime_failure" },
       artifactReference: "subagent-artifact:failure",
     });

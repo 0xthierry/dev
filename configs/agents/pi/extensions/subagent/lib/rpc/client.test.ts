@@ -5,6 +5,7 @@ import {
   RpcClientClosedError,
   RpcProtocolViolationError,
   RpcRequestError,
+  RpcRequestTimeoutError,
   type RpcTransport,
 } from "./client";
 import { JsonlCommandTooLargeError, MAX_OUTBOUND_JSONL_BYTES } from "./jsonl";
@@ -130,6 +131,67 @@ describe("PiRpcClient", () => {
     // Assert
     expect(didSettle).toBe(true);
     await expect(textPromise).resolves.toBe("authoritative output");
+  });
+
+  test("normalizes missing assistant text to null while rejecting invalid text types", async () => {
+    // Arrange
+    const transport = new FakeRpcTransport();
+    const client = new PiRpcClient(transport);
+    const missing = client.getLastAssistantText();
+    const missingCommand = transport.command();
+
+    // Act
+    transport.emit({
+      id: missingCommand.id,
+      type: "response",
+      command: "get_last_assistant_text",
+      success: true,
+      data: {},
+    });
+    const missingResult = await missing;
+    const invalid = client.getLastAssistantText();
+    const invalidResult = invalid.catch((error: unknown) => error);
+    const invalidCommand = transport.command(1);
+    transport.emit({
+      id: invalidCommand.id,
+      type: "response",
+      command: "get_last_assistant_text",
+      success: true,
+      data: { text: 42 },
+    });
+
+    // Assert
+    expect(missingResult).toBeNull();
+    expect(await invalidResult).toBeInstanceOf(RpcProtocolViolationError);
+  });
+
+  test("bounds individual RPC commands with a typed timeout error", async () => {
+    // Arrange
+    const transport = new FakeRpcTransport();
+    const client = new PiRpcClient(transport);
+
+    // Act
+    const request = client.getState({ timeoutMs: 1 });
+    const prompt = client.prompt("work", { timeoutMs: 1 });
+
+    // Assert
+    await expect(request).rejects.toBeInstanceOf(RpcRequestTimeoutError);
+    await expect(prompt).rejects.toBeInstanceOf(RpcRequestTimeoutError);
+  });
+
+  test("replays settlement evidence that arrived after a captured sequence", async () => {
+    // Arrange
+    const transport = new FakeRpcTransport();
+    const client = new PiRpcClient(transport);
+    const sequence = client.getSettlementSequence();
+
+    // Act
+    transport.emit({ type: "agent_settled" });
+    const settled = client.waitForSettled({ afterSequence: sequence });
+
+    // Assert
+    await expect(settled).resolves.toBeUndefined();
+    expect(client.getSettlementSequence()).toBe(sequence + 1);
   });
 
   test("receives a maximum storable assistant output under worst-case JSON escaping", async () => {

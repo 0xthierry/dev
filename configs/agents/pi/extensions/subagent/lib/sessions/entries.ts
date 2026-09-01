@@ -5,10 +5,13 @@ export const SUBAGENT_RUNTIME_ENTRY_VERSION = 2 as const;
 
 export type RuntimeEventName =
   | "spawned"
+  | "assignment_queued"
+  | "assignment_phase_changed"
   | "started"
   | "completed"
   | "interrupted"
   | "failed"
+  | "notification_updated"
   | "unloaded"
   | "closed"
   | "execution_changed"
@@ -16,6 +19,21 @@ export type RuntimeEventName =
   | "mail_delivered";
 
 export type RuntimeExecutionProfile = ResolvedAgentExecution;
+export type RuntimeAssignmentKind = "spawn" | "followup";
+export type RuntimeAssignmentPhase = "queued" | "starting" | "running" | "settled";
+export type RuntimeAssignmentOutcome = "completed" | "interrupted" | "failed";
+
+export type RuntimeNotificationState =
+  | { status: "pending" }
+  | { status: "delivered"; delivery: "root" | "steered" | "queued"; mailId?: string }
+  | {
+      status: "failed";
+      failure: {
+        kind: "root_callback_failed" | "parent_unavailable" | "parent_mailbox_failed" | "shutting_down";
+        targetPath: string;
+        retryable: boolean;
+      };
+    };
 
 interface RuntimeEntryBase {
   version: typeof SUBAGENT_RUNTIME_ENTRY_VERSION;
@@ -31,14 +49,21 @@ export type SubagentRuntimeEntry =
       sessionFile: string;
       execution: RuntimeExecutionProfile;
     })
+  | (RuntimeEntryBase & { event: "assignment_queued"; generation: number; assignmentKind: RuntimeAssignmentKind })
+  | (RuntimeEntryBase & {
+      event: "assignment_phase_changed";
+      generation: number;
+      phase: "starting" | "running";
+    })
   | (RuntimeEntryBase & { event: "started"; generation: number })
   | (RuntimeEntryBase & {
       event: "completed";
       generation: number;
       artifactReference: string;
     })
-  | (RuntimeEntryBase & { event: "interrupted"; generation: number })
+  | (RuntimeEntryBase & { event: "interrupted"; generation: number; artifactReference?: string })
   | (RuntimeEntryBase & { event: "failed"; generation: number; errorKind: string; artifactReference?: string })
+  | (RuntimeEntryBase & { event: "notification_updated"; generation: number; notification: RuntimeNotificationState })
   | (RuntimeEntryBase & { event: "unloaded" })
   | (RuntimeEntryBase & { event: "closed" })
   | (RuntimeEntryBase & { event: "execution_changed"; execution: RuntimeExecutionProfile })
@@ -52,10 +77,13 @@ export interface PiCustomEntry {
 
 const EVENTS = new Set<RuntimeEventName>([
   "spawned",
+  "assignment_queued",
+  "assignment_phase_changed",
   "started",
   "completed",
   "interrupted",
   "failed",
+  "notification_updated",
   "unloaded",
   "closed",
   "execution_changed",
@@ -87,6 +115,18 @@ export function parseRuntimeEntry(value: unknown): SubagentRuntimeEntry | undefi
         ? { ...base, event: "spawned", agentType, sessionFile, execution }
         : undefined;
     }
+    case "assignment_queued": {
+      const generation = positiveInteger(data.generation);
+      const assignmentKind = assignmentKindFrom(data.assignmentKind);
+      return generation && assignmentKind
+        ? { ...base, event: "assignment_queued", generation, assignmentKind }
+        : undefined;
+    }
+    case "assignment_phase_changed": {
+      const generation = positiveInteger(data.generation);
+      const phase = assignmentActivePhaseFrom(data.phase);
+      return generation && phase ? { ...base, event: "assignment_phase_changed", generation, phase } : undefined;
+    }
     case "started": {
       const generation = positiveInteger(data.generation);
       return generation ? { ...base, event: "started", generation } : undefined;
@@ -102,7 +142,14 @@ export function parseRuntimeEntry(value: unknown): SubagentRuntimeEntry | undefi
     }
     case "interrupted": {
       const generation = positiveInteger(data.generation);
-      return generation ? { ...base, event: "interrupted", generation } : undefined;
+      const artifactReference = nonemptyOptionalString(data.artifactReference);
+      if (!generation || artifactReference === null) return undefined;
+      return {
+        ...base,
+        event: "interrupted",
+        generation,
+        ...(artifactReference ? { artifactReference } : {}),
+      };
     }
     case "failed": {
       const generation = positiveInteger(data.generation);
@@ -116,6 +163,13 @@ export function parseRuntimeEntry(value: unknown): SubagentRuntimeEntry | undefi
         errorKind,
         ...(artifactReference ? { artifactReference } : {}),
       };
+    }
+    case "notification_updated": {
+      const generation = positiveInteger(data.generation);
+      const notification = notificationStateFrom(data.notification);
+      return generation && notification
+        ? { ...base, event: "notification_updated", generation, notification }
+        : undefined;
     }
     case "execution_changed": {
       const execution = executionFrom(data.execution);
@@ -163,6 +217,54 @@ function executionFrom(value: unknown): RuntimeExecutionProfile | undefined {
 
 function executionSource(value: unknown): ExecutionSource | undefined {
   return value === "invocation" || value === "repository" || value === "agent" || value === "parent"
+    ? value
+    : undefined;
+}
+
+function assignmentKindFrom(value: unknown): RuntimeAssignmentKind | undefined {
+  return value === "spawn" || value === "followup" ? value : undefined;
+}
+
+function assignmentActivePhaseFrom(value: unknown): "starting" | "running" | undefined {
+  return value === "starting" || value === "running" ? value : undefined;
+}
+
+function notificationStateFrom(value: unknown): RuntimeNotificationState | undefined {
+  const notification = recordValue(value);
+  if (!notification) return undefined;
+  if (notification.status === "pending") return { status: "pending" };
+  if (notification.status === "delivered") {
+    const delivery = notificationDeliveryFrom(notification.delivery);
+    const mailId = nonemptyOptionalString(notification.mailId);
+    if (!delivery || mailId === null || (delivery === "queued" && !mailId)) return undefined;
+    return {
+      status: "delivered",
+      delivery,
+      ...(mailId ? { mailId } : {}),
+    };
+  }
+  if (notification.status !== "failed") return undefined;
+
+  const failure = recordValue(notification.failure);
+  const kind = notificationFailureKindFrom(failure?.kind);
+  const targetPath = nonemptyString(failure?.targetPath);
+  const retryable = failure?.retryable;
+  return kind && targetPath && typeof retryable === "boolean"
+    ? { status: "failed", failure: { kind, targetPath, retryable } }
+    : undefined;
+}
+
+function notificationDeliveryFrom(value: unknown): "root" | "steered" | "queued" | undefined {
+  return value === "root" || value === "steered" || value === "queued" ? value : undefined;
+}
+
+function notificationFailureKindFrom(
+  value: unknown,
+): "root_callback_failed" | "parent_unavailable" | "parent_mailbox_failed" | "shutting_down" | undefined {
+  return value === "root_callback_failed" ||
+    value === "parent_unavailable" ||
+    value === "parent_mailbox_failed" ||
+    value === "shutting_down"
     ? value
     : undefined;
 }

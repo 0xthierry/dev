@@ -30,6 +30,14 @@ export interface AgentRecord {
   assignments: AssignmentRecord[];
 }
 
+export interface RestoredAssignmentInput {
+  generation: number;
+  kind: AssignmentKind;
+  outcome: AssignmentOutcome;
+  artifactReference?: string;
+  errorKind?: string;
+}
+
 export interface RegisterAgentInput {
   agentPath: string;
   agentId: string;
@@ -41,6 +49,7 @@ export interface RegisterAgentInput {
   execution: ResolvedAgentExecution;
   sessionFile?: string;
   assignmentGeneration?: number;
+  assignments?: readonly RestoredAssignmentInput[];
 }
 
 export type RegistryErrorKind =
@@ -91,6 +100,28 @@ export class AgentRegistry {
     ) {
       throw new RegistryError("invalid_transition", "Assignment generation must be a non-negative integer");
     }
+    const assignmentGeneration = input.assignmentGeneration ?? 0;
+    const restoredGenerations = new Set<number>();
+    const assignments = (input.assignments ?? []).map((assignment): AssignmentRecord => {
+      if (
+        !Number.isSafeInteger(assignment.generation) ||
+        assignment.generation < 1 ||
+        assignment.generation > assignmentGeneration ||
+        restoredGenerations.has(assignment.generation)
+      ) {
+        throw new RegistryError("invalid_transition", "Restored assignments must have unique valid generations");
+      }
+      restoredGenerations.add(assignment.generation);
+      return {
+        id: `${input.agentId}:${assignment.generation}`,
+        generation: assignment.generation,
+        kind: assignment.kind,
+        phase: "settled",
+        outcome: assignment.outcome,
+        ...(assignment.artifactReference ? { artifactReference: assignment.artifactReference } : {}),
+        ...(assignment.errorKind ? { errorKind: assignment.errorKind } : {}),
+      };
+    });
     const record: AgentRecord = {
       agentPath: input.agentPath,
       agentId: input.agentId,
@@ -101,8 +132,8 @@ export class AgentRegistry {
       status: input.status ?? "queued",
       execution: copyExecution(input.execution),
       ...(input.sessionFile ? { sessionFile: input.sessionFile } : {}),
-      assignmentGeneration: input.assignmentGeneration ?? 0,
-      assignments: [],
+      assignmentGeneration,
+      assignments: assignments.sort((left, right) => left.generation - right.generation),
     };
     this.byPath.set(record.agentPath, record);
     this.pathById.set(record.agentId, record.agentPath);

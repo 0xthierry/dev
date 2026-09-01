@@ -157,6 +157,156 @@ describe("runtime journal entries", () => {
     expect(parsed.every((entry) => entry === undefined)).toBe(true);
   });
 
+  test("parses assignment lifecycle events without retaining assignment content", () => {
+    // Arrange
+    const lifecycle = [
+      {
+        event: "assignment_queued",
+        generation: 2,
+        assignmentKind: "followup",
+        prompt: "sensitive follow-up",
+      },
+      {
+        event: "assignment_phase_changed",
+        generation: 2,
+        phase: "running",
+        message: "sensitive follow-up",
+      },
+      {
+        event: "interrupted",
+        generation: 2,
+        artifactReference: "subagent-artifact:handoff",
+        outputPreview: "sensitive output",
+      },
+    ].map((data) => ({
+      version: 2,
+      agentPath: "/root/review",
+      agentId: "agent-1",
+      ...data,
+    }));
+
+    // Act
+    const parsed = lifecycle.map((data) => createRuntimeEntry(data as never));
+
+    // Assert
+    expect(parsed).toEqual([
+      {
+        version: 2,
+        event: "assignment_queued",
+        agentPath: "/root/review",
+        agentId: "agent-1",
+        generation: 2,
+        assignmentKind: "followup",
+      },
+      {
+        version: 2,
+        event: "assignment_phase_changed",
+        agentPath: "/root/review",
+        agentId: "agent-1",
+        generation: 2,
+        phase: "running",
+      },
+      {
+        version: 2,
+        event: "interrupted",
+        agentPath: "/root/review",
+        agentId: "agent-1",
+        generation: 2,
+        artifactReference: "subagent-artifact:handoff",
+      },
+    ]);
+    expect(JSON.stringify(parsed)).not.toContain("sensitive");
+  });
+
+  test("parses bounded notification state without persisting the final-answer envelope", () => {
+    // Arrange
+    const delivered = {
+      version: 2,
+      event: "notification_updated",
+      agentPath: "/root/review",
+      agentId: "agent-1",
+      generation: 1,
+      notification: {
+        status: "delivered",
+        delivery: "queued",
+        mailId: "mail-1",
+        notification: { outputPreview: "sensitive output", prompt: "sensitive prompt" },
+      },
+    };
+    const failed = {
+      ...delivered,
+      notification: {
+        status: "failed",
+        failure: {
+          kind: "parent_mailbox_failed",
+          targetPath: "/root/parent",
+          retryable: true,
+          notification: { outputPreview: "sensitive output" },
+        },
+      },
+    };
+
+    // Act
+    const parsed = [delivered, failed].map((data) => createRuntimeEntry(data as never));
+
+    // Assert
+    expect(parsed).toEqual([
+      {
+        version: 2,
+        event: "notification_updated",
+        agentPath: "/root/review",
+        agentId: "agent-1",
+        generation: 1,
+        notification: { status: "delivered", delivery: "queued", mailId: "mail-1" },
+      },
+      {
+        version: 2,
+        event: "notification_updated",
+        agentPath: "/root/review",
+        agentId: "agent-1",
+        generation: 1,
+        notification: {
+          status: "failed",
+          failure: { kind: "parent_mailbox_failed", targetPath: "/root/parent", retryable: true },
+        },
+      },
+    ]);
+    expect(JSON.stringify(parsed)).not.toContain("sensitive");
+  });
+
+  test("rejects notification and assignment states outside the typed journal vocabulary", () => {
+    // Arrange
+    const invalid = [
+      { event: "assignment_queued", generation: 1, assignmentKind: "retry" },
+      { event: "assignment_phase_changed", generation: 1, phase: "settled" },
+      {
+        event: "notification_updated",
+        generation: 1,
+        notification: { status: "delivered", delivery: "queued" },
+      },
+      {
+        event: "notification_updated",
+        generation: 1,
+        notification: {
+          status: "failed",
+          failure: { kind: "unknown", targetPath: "/root", retryable: true },
+        },
+      },
+    ];
+
+    // Act
+    const parsed = invalid.map((data) =>
+      runtimeEntryFromSessionEntry({
+        type: "custom",
+        customType: SUBAGENT_RUNTIME_ENTRY_TYPE,
+        data: { version: 2, agentPath: "/root/review", agentId: "agent-1", ...data },
+      }),
+    );
+
+    // Assert
+    expect(parsed).toEqual([undefined, undefined, undefined, undefined]);
+  });
+
   test("strips child-authored completion previews from the durable journal schema", () => {
     // Arrange
     const sessionEntry = {

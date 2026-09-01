@@ -68,7 +68,12 @@ describe("registerSubagentExtension", () => {
       "agent_close",
     ]);
     expect(fakePi.tools.has("agent")).toBe(false);
-    expect([...fakePi.handlers.keys()]).toEqual(["session_start", "before_agent_start", "session_shutdown"]);
+    expect([...fakePi.handlers.keys()]).toEqual([
+      "session_start",
+      "before_agent_start",
+      "turn_start",
+      "session_shutdown",
+    ]);
   });
 
   test("owns one active Pi lifecycle and appends only stable parent guidance", async () => {
@@ -80,11 +85,12 @@ describe("registerSubagentExtension", () => {
     // Act
     await fakePi.emit("session_start", { reason: "startup" });
     const prompts = await fakePi.emit("before_agent_start", { systemPrompt: "base" });
+    await fakePi.emit("turn_start", { turnIndex: 0, timestamp: Date.now() });
     await fakePi.emit("session_shutdown", { reason: "quit" });
 
     // Assert
     expect(runtime.start).toHaveBeenCalledTimes(1);
-    expect(runtime.supervisor.clearSettledActivities).toHaveBeenCalledTimes(1);
+    expect(runtime.supervisor.clearSettledActivities).toHaveBeenCalledTimes(2);
     expect(runtime.shutdown).toHaveBeenCalledTimes(1);
     expect(prompts).toEqual([{ systemPrompt: `base\n\n${PARENT_ORCHESTRATION_GUIDANCE}` }]);
   });

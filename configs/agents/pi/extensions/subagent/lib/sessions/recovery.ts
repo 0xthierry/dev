@@ -1,6 +1,24 @@
-import { type RuntimeEventName, type RuntimeExecutionProfile, runtimeEntryFromSessionEntry } from "./entries";
+import {
+  type RuntimeAssignmentKind,
+  type RuntimeAssignmentOutcome,
+  type RuntimeAssignmentPhase,
+  type RuntimeEventName,
+  type RuntimeExecutionProfile,
+  type RuntimeNotificationState,
+  runtimeEntryFromSessionEntry,
+} from "./entries";
 
 export type RecoveredAgentStatus = "unloaded" | "closed";
+
+export interface RecoveredAssignmentMetadata {
+  generation: number;
+  kind: RuntimeAssignmentKind;
+  phase: RuntimeAssignmentPhase;
+  outcome?: RuntimeAssignmentOutcome;
+  artifactReference?: string;
+  errorKind?: string;
+  notification?: RuntimeNotificationState;
+}
 
 export interface RecoveredAgentMetadata {
   agentPath: string;
@@ -11,6 +29,7 @@ export interface RecoveredAgentMetadata {
   status: RecoveredAgentStatus;
   lastEvent: RuntimeEventName;
   assignmentGeneration: number;
+  assignments: RecoveredAssignmentMetadata[];
   artifactReference?: string;
   failure?: { kind: string };
   queuedMailIds: string[];
@@ -34,7 +53,7 @@ export function recoverRuntimeMetadata(branchEntries: readonly unknown[]): Recov
         status: "unloaded",
         lastEvent: entry.event,
         assignmentGeneration: 0,
-        assignmentSettled: false,
+        assignments: new Map(),
         queuedMailIds: new Set(),
       });
       continue;
@@ -43,60 +62,110 @@ export function recoverRuntimeMetadata(branchEntries: readonly unknown[]): Recov
     const agent = agents.get(entry.agentPath);
     if (!agent || agent.agentId !== entry.agentId) continue;
 
-    if (isAssignmentEntry(entry)) {
-      if (entry.generation < agent.assignmentGeneration) continue;
-      if (entry.generation === agent.assignmentGeneration && agent.assignmentSettled) continue;
-      if (entry.generation > agent.assignmentGeneration) {
-        agent.assignmentGeneration = entry.generation;
-        agent.assignmentSettled = false;
-        agent.artifactReference = undefined;
-        agent.failure = undefined;
+    if (entry.event === "assignment_queued") {
+      const assignment = assignmentFor(agent, entry.generation, "queued");
+      if (assignment.phase !== "queued") continue;
+      assignment.kind = entry.assignmentKind;
+    } else if (entry.event === "assignment_phase_changed") {
+      const assignment = assignmentFor(agent, entry.generation, entry.phase);
+      if (assignment.phase === "settled" || phaseOrder(entry.phase) < phaseOrder(assignment.phase)) continue;
+      assignment.phase = entry.phase;
+    } else if (entry.event === "started") {
+      const assignment = assignmentFor(agent, entry.generation, "starting");
+      if (assignment.phase === "settled") continue;
+      if (phaseOrder(assignment.phase) < phaseOrder("starting")) assignment.phase = "starting";
+    } else if (entry.event === "completed") {
+      if (!settleAssignment(agent, entry.generation, "completed")) continue;
+      const assignment = agent.assignments.get(entry.generation);
+      if (assignment) assignment.artifactReference = entry.artifactReference;
+    } else if (entry.event === "interrupted") {
+      if (!settleAssignment(agent, entry.generation, "interrupted")) continue;
+      const assignment = agent.assignments.get(entry.generation);
+      if (assignment && entry.artifactReference) assignment.artifactReference = entry.artifactReference;
+    } else if (entry.event === "failed") {
+      if (!settleAssignment(agent, entry.generation, "failed")) continue;
+      const assignment = agent.assignments.get(entry.generation);
+      if (assignment) {
+        assignment.errorKind = entry.errorKind;
+        if (entry.artifactReference) assignment.artifactReference = entry.artifactReference;
       }
+    } else if (entry.event === "notification_updated") {
+      const assignment = agent.assignments.get(entry.generation);
+      if (!assignment || assignment.phase !== "settled") continue;
+      assignment.notification = copyNotification(entry.notification);
+    } else if (entry.event === "closed") {
+      agent.status = "closed";
+    } else if (entry.event === "execution_changed") {
+      agent.execution = entry.execution;
+    } else if (entry.event === "mail_queued") {
+      agent.queuedMailIds.add(entry.mailId);
+    } else if (entry.event === "mail_delivered") {
+      agent.queuedMailIds.delete(entry.mailId);
     }
 
     agent.lastEvent = entry.event;
-    if (entry.event === "closed") agent.status = "closed";
-    if (entry.event === "execution_changed") agent.execution = entry.execution;
-    if (entry.event === "completed") {
-      agent.assignmentSettled = true;
-      agent.artifactReference = entry.artifactReference;
-      agent.failure = undefined;
-    }
-    if (entry.event === "interrupted") agent.assignmentSettled = true;
-    if (entry.event === "failed") {
-      agent.assignmentSettled = true;
-      agent.failure = { kind: entry.errorKind };
-      agent.artifactReference = entry.artifactReference;
-    }
-    if (entry.event === "mail_queued") agent.queuedMailIds.add(entry.mailId);
-    if (entry.event === "mail_delivered") agent.queuedMailIds.delete(entry.mailId);
   }
 
   return [...agents.values()].map(freezeMetadata).sort((left, right) => left.agentPath.localeCompare(right.agentPath));
 }
 
-type AssignmentEntry = Extract<
-  NonNullable<ReturnType<typeof runtimeEntryFromSessionEntry>>,
-  { event: "started" | "completed" | "interrupted" | "failed" }
->;
+type MutableRecoveredAssignment = RecoveredAssignmentMetadata;
 
-interface MutableRecoveredAgent extends Omit<RecoveredAgentMetadata, "queuedMailIds"> {
-  assignmentSettled: boolean;
+interface MutableRecoveredAgent extends Omit<RecoveredAgentMetadata, "assignments" | "queuedMailIds"> {
+  assignments: Map<number, MutableRecoveredAssignment>;
   queuedMailIds: Set<string>;
 }
 
-function isAssignmentEntry(
-  entry: NonNullable<ReturnType<typeof runtimeEntryFromSessionEntry>>,
-): entry is AssignmentEntry {
-  return (
-    entry.event === "started" ||
-    entry.event === "completed" ||
-    entry.event === "interrupted" ||
-    entry.event === "failed"
-  );
+function assignmentFor(
+  agent: MutableRecoveredAgent,
+  generation: number,
+  initialPhase: RuntimeAssignmentPhase,
+): MutableRecoveredAssignment {
+  agent.assignmentGeneration = Math.max(agent.assignmentGeneration, generation);
+  const existing = agent.assignments.get(generation);
+  if (existing) return existing;
+  const assignment: MutableRecoveredAssignment = {
+    generation,
+    kind: generation === 1 ? "spawn" : "followup",
+    phase: initialPhase,
+  };
+  agent.assignments.set(generation, assignment);
+  return assignment;
+}
+
+function settleAssignment(
+  agent: MutableRecoveredAgent,
+  generation: number,
+  outcome: RuntimeAssignmentOutcome,
+): boolean {
+  const assignment = assignmentFor(agent, generation, "settled");
+  if (assignment.phase === "settled" && assignment.outcome) return false;
+  assignment.phase = "settled";
+  assignment.outcome = outcome;
+  assignment.artifactReference = undefined;
+  assignment.errorKind = undefined;
+  assignment.notification = undefined;
+  return true;
+}
+
+function phaseOrder(phase: RuntimeAssignmentPhase): number {
+  switch (phase) {
+    case "queued":
+      return 0;
+    case "starting":
+      return 1;
+    case "running":
+      return 2;
+    case "settled":
+      return 3;
+  }
 }
 
 function freezeMetadata(agent: MutableRecoveredAgent): RecoveredAgentMetadata {
+  const assignments = [...agent.assignments.values()]
+    .sort((left, right) => left.generation - right.generation)
+    .map(copyAssignment);
+  const latest = assignments[assignments.length - 1];
   return {
     agentPath: agent.agentPath,
     agentId: agent.agentId,
@@ -109,8 +178,33 @@ function freezeMetadata(agent: MutableRecoveredAgent): RecoveredAgentMetadata {
     status: agent.status,
     lastEvent: agent.lastEvent,
     assignmentGeneration: agent.assignmentGeneration,
-    ...(agent.artifactReference ? { artifactReference: agent.artifactReference } : {}),
-    ...(agent.failure ? { failure: { ...agent.failure } } : {}),
+    assignments,
+    ...(latest?.artifactReference ? { artifactReference: latest.artifactReference } : {}),
+    ...(latest?.errorKind ? { failure: { kind: latest.errorKind } } : {}),
     queuedMailIds: [...agent.queuedMailIds].sort(),
   };
+}
+
+function copyAssignment(assignment: MutableRecoveredAssignment): RecoveredAssignmentMetadata {
+  return {
+    generation: assignment.generation,
+    kind: assignment.kind,
+    phase: assignment.phase,
+    ...(assignment.outcome ? { outcome: assignment.outcome } : {}),
+    ...(assignment.artifactReference ? { artifactReference: assignment.artifactReference } : {}),
+    ...(assignment.errorKind ? { errorKind: assignment.errorKind } : {}),
+    ...(assignment.notification ? { notification: copyNotification(assignment.notification) } : {}),
+  };
+}
+
+function copyNotification(notification: RuntimeNotificationState): RuntimeNotificationState {
+  if (notification.status === "pending") return { status: "pending" };
+  if (notification.status === "delivered") {
+    return {
+      status: "delivered",
+      delivery: notification.delivery,
+      ...(notification.mailId ? { mailId: notification.mailId } : {}),
+    };
+  }
+  return { status: "failed", failure: { ...notification.failure } };
 }

@@ -1,6 +1,13 @@
 import { describe, expect, mock, test } from "bun:test";
+import { RpcRequestTimeoutError } from "../rpc/client";
 import type { AgentProcessRuntime, ResidentChildExit, ResidentChildProcess } from "./process";
-import { AgentProcessError, createAgentProcess, MAX_STDERR_LIMIT_BYTES, MAX_TERMINATION_GRACE_MS } from "./process";
+import {
+  AgentProcessError,
+  createAgentProcess,
+  MAX_RPC_COMMAND_TIMEOUT_MS,
+  MAX_STDERR_LIMIT_BYTES,
+  MAX_TERMINATION_GRACE_MS,
+} from "./process";
 
 class FakeResidentChild implements ResidentChildProcess {
   readonly commands: Array<Record<string, unknown>> = [];
@@ -97,11 +104,13 @@ describe("AgentProcess", () => {
     const oversizedStderr = () => processFixture(child, { stderrLimitBytes: MAX_STDERR_LIMIT_BYTES + 1 });
     const zeroGrace = () => processFixture(child, { terminationGraceMs: 0 });
     const oversizedGrace = () => processFixture(child, { terminationGraceMs: MAX_TERMINATION_GRACE_MS + 1 });
+    const oversizedRpcDeadline = () => processFixture(child, { rpcCommandTimeoutMs: MAX_RPC_COMMAND_TIMEOUT_MS + 1 });
 
     // Assert
     expect(oversizedStderr).toThrow("stderr limit");
     expect(zeroGrace).toThrow("termination grace");
     expect(oversizedGrace).toThrow("termination grace");
+    expect(oversizedRpcDeadline).toThrow("RPC command timeout");
   });
 
   test("starts one persistent child and verifies exact provider, model, and effort", async () => {
@@ -111,7 +120,7 @@ describe("AgentProcess", () => {
 
     // Act
     const startup = process.startup();
-    child.succeedLast(stateData());
+    child.succeedLast(stateData({ isCompacting: true }));
     const state = await startup;
 
     // Assert
@@ -121,6 +130,7 @@ describe("AgentProcess", () => {
       status: "running",
       sessionId: "child-session",
       execution: { provider: "openai", model: "gpt-test", effort: "high" },
+      isCompacting: true,
     });
   });
 
@@ -171,6 +181,68 @@ describe("AgentProcess", () => {
     expect(accepted.accepted).toBe(true);
     expect(beforeSettled).toBe(false);
     expect(result).toMatchObject({ kind: "settled", output: "complete handoff" });
+  });
+
+  test("waits through compaction and queued continuation settlement signals", async () => {
+    // Arrange
+    const child = new FakeResidentChild();
+    const { process } = processFixture(child);
+    await start(process, child);
+    const submission = process.submit({ message: "Implement the fix" });
+    child.succeedLast();
+    const accepted = await submission;
+    let didSettle = false;
+    accepted.settlement.then(() => {
+      didSettle = true;
+    });
+
+    // Act
+    child.emitMessage({ type: "agent_settled" });
+    await waitForCommand(child, "get_last_assistant_text");
+    child.succeedLast({ text: "before compaction" });
+    await waitForCommand(child, "get_state");
+    child.succeedLast(stateData({ isCompacting: true }));
+    await Promise.resolve();
+    expect(didSettle).toBe(false);
+
+    child.emitMessage({ type: "agent_settled" });
+    await waitForCommandCount(child, "get_last_assistant_text", 2);
+    child.succeedLast({ text: "before continuation" });
+    await waitForCommandCount(child, "get_state", 3);
+    child.succeedLast(stateData({ pendingMessageCount: 1 }));
+    await Promise.resolve();
+    expect(didSettle).toBe(false);
+
+    child.emitMessage({ type: "agent_settled" });
+    await waitForCommandCount(child, "get_last_assistant_text", 3);
+    child.succeedLast({ text: "complete handoff" });
+    await waitForCommandCount(child, "get_state", 4);
+    child.succeedLast(stateData());
+    const result = await accepted.settlement;
+
+    // Assert
+    expect(result).toMatchObject({
+      output: "complete handoff",
+      state: { isStreaming: false, isCompacting: false, pendingMessageCount: 0 },
+    });
+  });
+
+  test("bounds RPC commands without imposing an overall assignment deadline", async () => {
+    // Arrange
+    const child = new FakeResidentChild();
+    const { process } = processFixture(child, { rpcCommandTimeoutMs: 2 });
+    await start(process, child);
+    const submission = process.submit({ message: "Long-running work" });
+    child.succeedLast();
+    const accepted = await submission;
+
+    // Act
+    await Bun.sleep(5);
+    child.emitMessage({ type: "agent_settled" });
+    await waitForCommand(child, "get_last_assistant_text");
+
+    // Assert
+    await expect(accepted.settlement).rejects.toBeInstanceOf(RpcRequestTimeoutError);
   });
 
   test("changes execution before accepting a follow-up and verifies the effective state", async () => {
@@ -237,6 +309,9 @@ describe("AgentProcess", () => {
 
     // Act
     const send = process.send("Check the mailbox");
+    await waitForCommandCount(child, "get_state", 2);
+    child.succeedLast(stateData({ isStreaming: true }));
+    await waitForCommand(child, "steer");
     child.succeedLast();
     await send;
     const interrupt = process.interrupt();
@@ -245,11 +320,34 @@ describe("AgentProcess", () => {
     child.emitMessage({ type: "tool_execution_start", toolName: "read", toolCallId: "call-1" });
 
     // Assert
-    expect(child.commands.map((command) => command.type)).toEqual(["get_state", "steer", "abort"]);
+    expect(child.commands.map((command) => command.type)).toEqual(["get_state", "get_state", "steer", "abort"]);
+    expect(child.commands[2]).toMatchObject({ message: "Check the mailbox" });
     expect(listener).toHaveBeenCalledWith({
       type: "runtime",
       name: "tool_execution_start",
       payload: { toolName: "read", toolCallId: "call-1" },
+    });
+  });
+
+  test("starts a steering continuation when a send races an idle settlement", async () => {
+    // Arrange
+    const child = new FakeResidentChild();
+    const { process } = processFixture(child);
+    await start(process, child);
+
+    // Act
+    const send = process.send("Continue after settlement");
+    await waitForCommandCount(child, "get_state", 2);
+    child.succeedLast(stateData({ isStreaming: false }));
+    await waitForCommand(child, "prompt");
+    child.succeedLast();
+    await send;
+
+    // Assert
+    expect(child.commands.at(-1)).toMatchObject({
+      type: "prompt",
+      message: "Continue after settlement",
+      streamingBehavior: "steer",
     });
   });
 
@@ -383,9 +481,22 @@ async function waitForCommand(child: FakeResidentChild, type: string): Promise<v
   throw new Error(`Timed out waiting for fake RPC command ${type}`);
 }
 
+async function waitForCommandCount(child: FakeResidentChild, type: string, count: number): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    if (child.commands.filter((command) => command.type === type).length >= count) return;
+    await Promise.resolve();
+  }
+  throw new Error(`Timed out waiting for ${count} fake RPC commands of type ${type}`);
+}
+
 function processFixture(
   child: FakeResidentChild,
-  overrides: { stderrLimitBytes?: number; terminationGraceMs?: number; redact?: (value: string) => string } = {},
+  overrides: {
+    stderrLimitBytes?: number;
+    terminationGraceMs?: number;
+    rpcCommandTimeoutMs?: number;
+    redact?: (value: string) => string;
+  } = {},
 ) {
   const spawn = mock(() => child);
   const runtime: AgentProcessRuntime = { spawn };

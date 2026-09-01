@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { delimiter, resolve } from "node:path";
 import {
+  AgentInvocationError,
   type AgentInvocationRequest,
   buildAgentInvocation,
   CHILD_DEPTH_ENV,
@@ -37,6 +38,46 @@ describe("buildAgentInvocation", () => {
     ]);
     expect(invocation.args).not.toContain("-p");
     expect(invocation.env[CHILD_DEPTH_ENV]).toBe("1");
+  });
+
+  test("launches the child through the same parent Pi runtime and CLI entrypoint", () => {
+    // Arrange
+    const request = baseRequest({ kind: "fresh", sessionDirectory: "/sessions/children" });
+    request.parentRuntime = { executable: "/runtime/node", entrypoint: "/runtime/pi/dist/cli.js" };
+
+    // Act
+    const invocation = buildAgentInvocation(request);
+
+    // Assert
+    expect(invocation.command).toBe("/runtime/node");
+    expect(invocation.args.slice(0, 3)).toEqual(["/runtime/pi/dist/cli.js", "--mode", "rpc"]);
+  });
+
+  test("detects the current Pi runtime when invoked inside Pi", () => {
+    // Arrange
+    const request = baseRequest({ kind: "fresh", sessionDirectory: "/sessions/children" });
+    request.parentEnvironment = { PI_CODING_AGENT: "true" };
+
+    // Act
+    const invocation = buildAgentInvocation(request);
+
+    // Assert
+    expect(invocation.command).toBe(process.execPath);
+    expect(invocation.args[0]).toBe(process.argv[1]);
+    expect(invocation.args.slice(1, 3)).toEqual(["--mode", "rpc"]);
+  });
+
+  test("rejects an invalid explicit parent runtime with a typed error", () => {
+    // Arrange
+    const request = baseRequest({ kind: "fresh", sessionDirectory: "/sessions/children" });
+    request.parentRuntime = { executable: "", entrypoint: "/runtime/pi/dist/cli.js" };
+
+    // Act
+    const build = () => buildAgentInvocation(request);
+
+    // Assert
+    expect(build).toThrow(AgentInvocationError);
+    expect(build).toThrow("parent runtime executable must not be empty");
   });
 
   test("builds a full parent-session fork", () => {

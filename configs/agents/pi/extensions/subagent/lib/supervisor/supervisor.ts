@@ -1,17 +1,28 @@
 import { type ArtifactKind, ArtifactTooLargeError } from "../artifacts/artifacts";
 import { prepareCompletionPreview } from "../artifacts/output";
 import type { ResolvedAgentExecution } from "../execution/profile";
+import {
+  RpcClientClosedError,
+  RpcProtocolViolationError,
+  RpcRequestError,
+  RpcRequestTimeoutError,
+} from "../rpc/client";
 import type { AgentExecutionSettings } from "../runner/invocation";
-import type {
-  AgentAssignmentRequest,
-  AgentProcessEvent,
-  AgentProcessEventListener,
-  AgentProcessState,
-  AgentSettlement,
-  AgentSubmission,
+import {
+  type AgentAssignmentRequest,
+  AgentProcessError,
+  type AgentProcessEvent,
+  type AgentProcessEventListener,
+  type AgentProcessState,
+  type AgentSettlement,
+  type AgentSubmission,
 } from "../runner/process";
 import { type RedactText, redactStringValues } from "../security/redaction";
-import { SUBAGENT_RUNTIME_ENTRY_VERSION, type SubagentRuntimeEntry } from "../sessions/entries";
+import {
+  type RuntimeNotificationState,
+  SUBAGENT_RUNTIME_ENTRY_VERSION,
+  type SubagentRuntimeEntry,
+} from "../sessions/entries";
 import {
   assertConfigurableLimit,
   DEFAULT_ACTIVE_AGENTS,
@@ -95,12 +106,12 @@ interface AgentActivityDetails {
   startedAt: number;
   agentType: string;
   execution: ResolvedAgentExecution;
+  queuedCount?: number;
 }
 
 export type AgentActivity = AgentActivityDetails &
   (
-    | { state: "queued" }
-    | { state: "working" }
+    | { state: "queued" | "starting" | "working" | "compacting" | "retrying" | "finalizing" }
     | { state: "tool"; toolName: string }
     | { state: AssignmentOutcome; finishedAt: number }
   );
@@ -213,6 +224,15 @@ export interface RestoreAgentRequest {
   sessionFile: string;
   execution: ResolvedAgentExecution;
   assignmentGeneration: number;
+  assignments?: readonly {
+    generation: number;
+    kind: AssignmentRecord["kind"];
+    phase: AssignmentRecord["phase"];
+    outcome?: AssignmentOutcome;
+    artifactReference?: string;
+    errorKind?: string;
+    notification?: RuntimeNotificationState;
+  }[];
   queuedMailIds: readonly string[];
   status?: "unloaded" | "closed";
 }
@@ -259,6 +279,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
   private readonly processes = new Map<string, SupervisorAgentProcess>();
   private readonly activities = new Map<string, AgentActivity>();
   private readonly queuedActivities = new Map<string, { agentPath: string; activity: AgentActivity }>();
+  private readonly activeToolCalls = new Map<string, Map<string, string>>();
   private readonly residentRecency = new Map<string, number>();
   private readonly unloading = new Map<string, Promise<ResidentEvictionOutcome>>();
   private readonly tickets = new Map<string, ScheduleTicket>();
@@ -272,6 +293,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
   private readonly redact: RedactText;
   private residentUseSequence = 0;
   private stopping = false;
+  private shutdownOperation: Promise<void> | undefined;
 
   constructor(
     private readonly runtime: SupervisorRuntime,
@@ -373,6 +395,19 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
     }
     const execution = request.execution ?? record.execution;
     const assignment = this.registry.queueAssignment(record.agentPath, "followup");
+    try {
+      await this.persist({
+        version: SUBAGENT_RUNTIME_ENTRY_VERSION,
+        event: "assignment_queued",
+        agentPath: record.agentPath,
+        agentId: record.agentId,
+        generation: assignment.generation,
+        assignmentKind: assignment.kind,
+      });
+    } catch (error) {
+      this.registry.settleQueuedAssignment(record.agentPath, assignment.id, "failed", "journal_write_failed");
+      throw error;
+    }
     const session: SupervisorProcessSession = this.processes.has(record.agentPath)
       ? { kind: "recovered", sessionFile: record.sessionFile ?? "resident" }
       : { kind: "recovered", sessionFile: requireSessionFile(record) };
@@ -544,6 +579,8 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
     for (const request of requests) {
       throwIfAborted(signal);
       const { parentPath, taskName, depth } = splitAgentPath(request.agentPath);
+      const recoveredAssignments = request.assignments ?? [];
+      const unresolved = recoveredAssignments.filter((assignment) => assignment.phase !== "settled");
       this.registry.register({
         agentPath: request.agentPath,
         agentId: request.agentId,
@@ -555,7 +592,49 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
         execution: request.execution,
         sessionFile: request.sessionFile,
         assignmentGeneration: request.assignmentGeneration,
+        assignments: recoveredAssignments.map((assignment) => ({
+          generation: assignment.generation,
+          kind: assignment.kind,
+          outcome: assignment.outcome ?? "failed",
+          ...(assignment.artifactReference ? { artifactReference: assignment.artifactReference } : {}),
+          ...(assignment.errorKind
+            ? { errorKind: assignment.errorKind }
+            : assignment.phase !== "settled"
+              ? { errorKind: "recovery_prompt_unavailable" }
+              : {}),
+        })),
       });
+      const restoredRecord = this.registry.resolve(request.agentPath);
+      for (const assignment of unresolved) {
+        await this.persist({
+          version: SUBAGENT_RUNTIME_ENTRY_VERSION,
+          event: "failed",
+          agentPath: request.agentPath,
+          agentId: request.agentId,
+          generation: assignment.generation,
+          errorKind: "recovery_prompt_unavailable",
+        });
+      }
+      for (const recovered of recoveredAssignments) {
+        if (recovered.phase !== "settled" || !recovered.notification) continue;
+        const assignment = this.registry.assignmentById(
+          request.agentPath,
+          `${request.agentId}:${recovered.generation}`,
+        );
+        if (recovered.notification.status === "delivered") {
+          this.completionNotificationResults.set(assignment.id, { ...recovered.notification });
+        } else if (recovered.notification.status === "failed" && !recovered.notification.failure.retryable) {
+          this.completionNotificationResults.set(assignment.id, {
+            status: "failed",
+            failure: {
+              ...recovered.notification.failure,
+              notification: finalAnswerNotification(restoredRecord, assignment),
+            },
+          });
+        } else {
+          await this.notifyCompletion(restoredRecord, assignment);
+        }
+      }
       for (const mailId of request.queuedMailIds) {
         const reference = artifactReferenceFromMailId(mailId);
         if (!reference) {
@@ -575,13 +654,14 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
   }
 
   async shutdown(signal?: AbortSignal): Promise<void> {
-    if (this.stopping) {
-      await abortable(this.journalTail, signal);
+    if (this.shutdownOperation) {
+      await abortable(this.shutdownOperation, signal);
       return;
     }
     this.stopping = true;
     this.notifySettlement();
     const cleanup = (async () => {
+      const failures: unknown[] = [];
       for (const record of this.registry.list()) {
         if (record.status === "closed") continue;
         for (const assignment of record.assignments.filter((candidate) => candidate.phase === "queued")) {
@@ -621,12 +701,14 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
             event: "unloaded",
             agentPath: record.agentPath,
             agentId: record.agentId,
-          });
+          }).catch((error) => failures.push(error));
         }
       }
-      await this.scheduler.shutdown();
-      await this.journalTail;
+      await this.scheduler.shutdown().catch((error) => failures.push(error));
+      await this.journalTail.catch((error) => failures.push(error));
+      if (failures.length > 0) throw new AggregateError(failures, "Subagent supervisor cleanup failed");
     })();
+    this.shutdownOperation = cleanup;
     await abortable(cleanup, signal);
   }
 
@@ -697,6 +779,25 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
     }
   }
 
+  private async markUnexpectedlyExitedResidentUnloaded(agentPath: string): Promise<void> {
+    if (this.stopping || this.unloading.has(agentPath) || this.processes.has(agentPath)) return;
+    let record: AgentRecord;
+    try {
+      record = this.registry.resolve(agentPath);
+    } catch {
+      return;
+    }
+    const hasUnsettled = record.assignments.some((assignment) => assignment.phase !== "settled");
+    if (hasUnsettled || !isResumableStatus(record.status) || record.status === "unloaded") return;
+    this.registry.transition(agentPath, "unloaded");
+    await this.persist({
+      version: SUBAGENT_RUNTIME_ENTRY_VERSION,
+      event: "unloaded",
+      agentPath,
+      agentId: record.agentId,
+    }).catch(() => {});
+  }
+
   private scheduleAssignment(
     record: AgentRecord,
     assignment: AssignmentRecord,
@@ -765,6 +866,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
           this.residentRecency.delete(agentPath);
           if (this.unloading.has(agentPath)) return;
           if (this.scheduler.isResident(agentPath)) this.scheduler.releaseResident(agentPath);
+          void this.markUnexpectedlyExitedResidentUnloaded(agentPath);
         });
         created = true;
         const state = await process.startup({ signal });
@@ -779,8 +881,24 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
             sessionFile,
             execution: copyExecution(execution),
           });
+          await this.persist({
+            version: SUBAGENT_RUNTIME_ENTRY_VERSION,
+            event: "assignment_queued",
+            agentPath,
+            agentId: record.agentId,
+            generation: assignment.generation,
+            assignmentKind: assignment.kind,
+          });
         }
       }
+      await this.persist({
+        version: SUBAGENT_RUNTIME_ENTRY_VERSION,
+        event: "assignment_phase_changed",
+        agentPath,
+        agentId: record.agentId,
+        generation: assignment.generation,
+        phase: "starting",
+      });
       await this.persist({
         version: SUBAGENT_RUNTIME_ENTRY_VERSION,
         event: "started",
@@ -799,6 +917,15 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
         assignment.id,
         sessionFile ?? requireSessionFile(this.registry.resolve(agentPath)),
       );
+      this.updateAgentActivity(agentPath, "working");
+      await this.persist({
+        version: SUBAGENT_RUNTIME_ENTRY_VERSION,
+        event: "assignment_phase_changed",
+        agentPath,
+        agentId: record.agentId,
+        generation: assignment.generation,
+        phase: "running",
+      });
       if (!sameExecution(record.execution, execution)) {
         this.registry.updateExecution(agentPath, execution);
         await this.persist({
@@ -814,6 +941,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
       const observedSettlement = submission.settlement.finally(() => {
         finishedAt = Date.now();
         idleSequence = ++this.residentUseSequence;
+        this.updateAgentActivity(agentPath, "finalizing");
       });
       const finalization = this.finalizeAssignment(agentPath, assignment.id, observedSettlement).finally(() => {
         const outcome = this.registry.assignmentById(agentPath, assignment.id).outcome;
@@ -832,13 +960,16 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
       const finishedAt = Date.now();
       const interrupted = this.interruptAcknowledged.delete(assignment.id);
       this.interruptRequested.delete(assignment.id);
-      if (interrupted) {
-        await this.finalizeRejectedInterrupt(this.registry.resolve(agentPath), assignment.id);
-      } else {
-        await this.failStartingAssignment(agentPath, assignment.id, "start_failed");
+      try {
+        if (interrupted) {
+          await this.finalizeRejectedInterrupt(this.registry.resolve(agentPath), assignment.id);
+        } else {
+          await this.failStartingAssignment(agentPath, assignment.id, startupFailureKind(error));
+        }
+      } finally {
+        const outcome = this.registry.assignmentById(agentPath, assignment.id).outcome;
+        this.finishAgentActivity(agentPath, outcome, finishedAt);
       }
-      const outcome = this.registry.assignmentById(agentPath, assignment.id).outcome;
-      this.finishAgentActivity(agentPath, outcome, finishedAt);
       throw error;
     }
   }
@@ -855,38 +986,73 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
       execution: copyExecution(execution),
     };
     this.queuedActivities.set(assignment.id, { agentPath: record.agentPath, activity });
+    const queuedCount = this.queuedActivityCount(record.agentPath);
     const current = this.activities.get(record.agentPath);
-    if (current && !isSettledAgentActivity(current)) return;
-    this.activities.set(record.agentPath, activity);
-    this.runtime.reportAgentActivity?.(record.agentPath, activity);
+    if (current && !isSettledAgentActivity(current)) {
+      const updated: AgentActivity = { ...current, queuedCount };
+      this.activities.set(record.agentPath, updated);
+      this.runtime.reportAgentActivity?.(record.agentPath, updated);
+      return;
+    }
+    const queuedActivity: AgentActivity = {
+      ...activity,
+      ...(queuedCount > 1 ? { queuedCount: queuedCount - 1 } : {}),
+    };
+    this.activities.set(record.agentPath, queuedActivity);
+    this.runtime.reportAgentActivity?.(record.agentPath, queuedActivity);
   }
 
   private beginAgentActivity(agentPath: string, agentType: string, execution: ResolvedAgentExecution): void {
+    this.activeToolCalls.delete(agentPath);
+    const queuedCount = this.queuedActivityCount(agentPath);
     const activity: AgentActivity = {
-      state: "working",
+      state: "starting",
       startedAt: Date.now(),
       agentType,
       execution: copyExecution(execution),
+      ...(queuedCount > 0 ? { queuedCount } : {}),
     };
     this.activities.set(agentPath, activity);
     this.runtime.reportAgentActivity?.(agentPath, activity);
   }
 
-  private updateAgentActivity(agentPath: string, state: "working" | "tool", toolName?: string): void {
+  private updateAgentActivity(
+    agentPath: string,
+    state: "starting" | "working" | "compacting" | "retrying" | "finalizing" | "tool",
+    toolName?: string,
+  ): void {
     const current = this.activities.get(agentPath);
-    if (!current) return;
+    if (!current || isSettledAgentActivity(current)) return;
     const activity: AgentActivity =
-      state === "tool" && toolName ? { ...current, state, toolName } : { ...current, state: "working" };
+      state === "tool" && toolName
+        ? { ...current, state, toolName }
+        : { ...current, state: state === "tool" ? "working" : state };
     this.activities.set(agentPath, activity);
     this.runtime.reportAgentActivity?.(agentPath, activity);
   }
 
   private endQueuedAgentActivity(agentPath: string): void {
-    if (this.activities.get(agentPath)?.state !== "queued") return;
-    this.removeAgentActivity(agentPath);
+    const current = this.activities.get(agentPath);
+    if (!current) return;
+    if (current.state === "queued") {
+      const next = this.nextQueuedActivity(agentPath);
+      if (next) {
+        this.activities.set(agentPath, next);
+        this.runtime.reportAgentActivity?.(agentPath, next);
+      } else {
+        this.removeAgentActivity(agentPath);
+      }
+      return;
+    }
+    if (isSettledAgentActivity(current)) return;
+    const queuedCount = this.queuedActivityCount(agentPath);
+    const updated: AgentActivity = { ...current, queuedCount: queuedCount || undefined };
+    this.activities.set(agentPath, updated);
+    this.runtime.reportAgentActivity?.(agentPath, updated);
   }
 
   private finishAgentActivity(agentPath: string, outcome: AssignmentOutcome | undefined, finishedAt: number): void {
+    this.activeToolCalls.delete(agentPath);
     const current = this.activities.get(agentPath);
     if (!current) return;
     if (this.stopping || this.closingOperations.has(agentPath)) {
@@ -916,27 +1082,62 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
 
   private nextQueuedActivity(agentPath: string): AgentActivity | undefined {
     const record = this.registry.resolve(agentPath);
-    for (const assignment of record.assignments) {
-      if (assignment.phase !== "queued") continue;
+    const queuedAssignments = record.assignments.filter((assignment) => assignment.phase === "queued");
+    for (const assignment of queuedAssignments) {
       const queued = this.queuedActivities.get(assignment.id);
-      if (queued?.agentPath === agentPath) return queued.activity;
+      if (queued?.agentPath !== agentPath) continue;
+      return {
+        ...queued.activity,
+        ...(queuedAssignments.length > 1 ? { queuedCount: queuedAssignments.length - 1 } : {}),
+      };
     }
     return undefined;
   }
 
+  private queuedActivityCount(agentPath: string): number {
+    let count = 0;
+    for (const queued of this.queuedActivities.values()) {
+      if (queued.agentPath === agentPath) count += 1;
+    }
+    return count;
+  }
+
   private removeAgentActivity(agentPath: string): void {
+    this.activeToolCalls.delete(agentPath);
     if (!this.activities.delete(agentPath)) return;
     this.runtime.reportAgentActivity?.(agentPath, undefined);
   }
 
   private reportRuntimeActivity(agentPath: string, event: AgentProcessEvent): void {
     if (event.type === "exit") return;
+    const current = this.activities.get(agentPath);
+    if (!current || isSettledAgentActivity(current)) return;
     if (event.name === "tool_execution_start") {
       const toolName = event.payload.toolName;
-      if (typeof toolName === "string" && toolName) this.updateAgentActivity(agentPath, "tool", toolName);
+      const toolCallId = event.payload.toolCallId;
+      if (typeof toolName === "string" && toolName && typeof toolCallId === "string" && toolCallId) {
+        const calls = this.activeToolCalls.get(agentPath) ?? new Map<string, string>();
+        calls.set(toolCallId, toolName);
+        this.activeToolCalls.set(agentPath, calls);
+        this.updateAgentActivity(agentPath, "tool", toolName);
+      }
       return;
     }
-    if (event.name === "tool_execution_end") this.updateAgentActivity(agentPath, "working");
+    if (event.name === "tool_execution_end") {
+      const toolCallId = event.payload.toolCallId;
+      const calls = this.activeToolCalls.get(agentPath);
+      if (calls && typeof toolCallId === "string") calls.delete(toolCallId);
+      const remaining = calls ? [...calls.values()].at(-1) : undefined;
+      if (remaining) this.updateAgentActivity(agentPath, "tool", remaining);
+      else this.updateAgentActivity(agentPath, "working");
+      return;
+    }
+    if (event.name === "compaction_start") this.updateAgentActivity(agentPath, "compacting");
+    else if (event.name === "compaction_end") this.updateAgentActivity(agentPath, "working");
+    else if (event.name === "auto_retry_start") this.updateAgentActivity(agentPath, "retrying");
+    else if (event.name === "auto_retry_end" || event.name === "agent_start") {
+      this.updateAgentActivity(agentPath, "working");
+    }
   }
 
   private async finalizeAssignment(
@@ -948,13 +1149,20 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
     let result: AgentSettlement;
     try {
       result = await settlement;
-    } catch {
+    } catch (error) {
       const interrupted = this.interruptAcknowledged.delete(assignmentId);
       this.interruptRequested.delete(assignmentId);
       if (interrupted) {
         await this.finalizeRejectedInterrupt(record, assignmentId);
       } else {
-        await this.finalizeFailure(record, assignmentId, "runtime_failure", true);
+        await this.finalizeFailure(
+          record,
+          assignmentId,
+          runtimeFailureKind(error),
+          true,
+          undefined,
+          errorMessage(error),
+        );
       }
       return;
     }
@@ -995,6 +1203,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
             agentPath,
             agentId: record.agentId,
             generation,
+            artifactReference: artifact.reference,
           }
         : {
             version: SUBAGENT_RUNTIME_ENTRY_VERSION,
@@ -1032,6 +1241,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
       agentPath: record.agentPath,
       agentId: record.agentId,
       generation: assignment.generation,
+      ...(artifact ? { artifactReference: artifact.reference } : {}),
     });
     await this.notifyCompletion(record, settled.assignment);
   }
@@ -1039,12 +1249,13 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
   private async finalizeFailure(
     record: AgentRecord,
     assignmentId: string,
-    errorKind: "runtime_failure" | "artifact_write_failed" | "artifact_too_large",
+    errorKind: string,
     writeArtifact: boolean,
     outputPreview?: string,
+    diagnostic?: string,
   ): Promise<void> {
     const generation = this.registry.assignmentById(record.agentPath, assignmentId).generation;
-    const artifact = writeArtifact ? await this.writeFailureArtifact(record, errorKind) : undefined;
+    const artifact = writeArtifact ? await this.writeFailureArtifact(record, errorKind, diagnostic) : undefined;
     const effectiveKind = writeArtifact && !artifact ? "artifact_write_failed" : errorKind;
     const fallbackPreview =
       outputPreview ??
@@ -1097,22 +1308,26 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
       throw new Error(`Settled completion notification lacks an outcome: ${assignment.id}`);
     }
 
-    const notification: FinalAnswerNotification = {
-      messageType: FINAL_ANSWER_MESSAGE_TYPE,
+    const notification = finalAnswerNotification(record, assignment);
+    const delivery = this.persist({
+      version: SUBAGENT_RUNTIME_ENTRY_VERSION,
+      event: "notification_updated",
       agentPath: record.agentPath,
       agentId: record.agentId,
-      parentPath: record.parentPath,
-      assignmentId: assignment.id,
       generation: assignment.generation,
-      status: assignment.outcome,
-      ...(assignment.artifactReference ? { artifactReference: assignment.artifactReference } : {}),
-      ...(assignment.outputPreview ? { outputPreview: assignment.outputPreview } : {}),
-      execution: copyExecution(record.execution),
-    };
-    const delivery = Promise.resolve()
+      notification: { status: "pending" },
+    })
       .then(async () => await this.deliverCompletion(notification))
       .catch(() => notificationFailure("parent_mailbox_failed", notification.parentPath, true, notification))
-      .then((result) => {
+      .then(async (result) => {
+        await this.persist({
+          version: SUBAGENT_RUNTIME_ENTRY_VERSION,
+          event: "notification_updated",
+          agentPath: record.agentPath,
+          agentId: record.agentId,
+          generation: assignment.generation,
+          notification: runtimeNotificationState(result),
+        });
         this.completionNotificationResults.set(assignment.id, result);
         return result;
       });
@@ -1318,21 +1533,26 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
 
   private persist(entry: SubagentRuntimeEntry): Promise<void> {
     const sanitized = redactStringValues(entry, this.redact);
-    const write = this.journalTail.then(() => this.runtime.journal.append(sanitized));
-    this.journalTail = write.then(() => undefined);
+    const write = this.journalTail.catch(() => undefined).then(() => this.runtime.journal.append(sanitized));
+    this.journalTail = write.then(
+      () => undefined,
+      () => undefined,
+    );
     return write;
   }
 
   private async writeFailureArtifact(
     record: AgentRecord,
     errorKind: string,
+    diagnostic?: string,
   ): Promise<{ reference: string } | undefined> {
     try {
+      const detail = diagnostic ? `\n${this.redact(diagnostic).slice(0, 2_048)}` : "";
       return await this.runtime.artifacts.write({
         agentPath: record.agentPath,
         agentId: record.agentId,
         kind: "failure",
-        content: `Agent assignment failed (${errorKind}).`,
+        content: `Agent assignment failed (${errorKind}).${detail}`,
       });
     } catch {
       return undefined;
@@ -1420,6 +1640,40 @@ function copyExecution(execution: ResolvedAgentExecution): ResolvedAgentExecutio
   return { profile: { ...execution.profile }, source: { ...execution.source } };
 }
 
+function finalAnswerNotification(record: AgentRecord, assignment: AssignmentRecord): FinalAnswerNotification {
+  if (!assignment.outcome) throw new Error(`Settled completion notification lacks an outcome: ${assignment.id}`);
+  return {
+    messageType: FINAL_ANSWER_MESSAGE_TYPE,
+    agentPath: record.agentPath,
+    agentId: record.agentId,
+    parentPath: record.parentPath,
+    assignmentId: assignment.id,
+    generation: assignment.generation,
+    status: assignment.outcome,
+    ...(assignment.artifactReference ? { artifactReference: assignment.artifactReference } : {}),
+    ...(assignment.outputPreview ? { outputPreview: assignment.outputPreview } : {}),
+    execution: copyExecution(record.execution),
+  };
+}
+
+function runtimeNotificationState(result: CompletionNotificationDelivery): RuntimeNotificationState {
+  if (result.status === "delivered") {
+    return {
+      status: "delivered",
+      delivery: result.delivery,
+      ...(result.mailId ? { mailId: result.mailId } : {}),
+    };
+  }
+  return {
+    status: "failed",
+    failure: {
+      kind: result.failure.kind,
+      targetPath: result.failure.targetPath,
+      retryable: result.failure.retryable,
+    },
+  };
+}
+
 function copyFinalAnswerNotification(notification: FinalAnswerNotification): FinalAnswerNotification {
   return { ...notification, execution: copyExecution(notification.execution) };
 }
@@ -1491,6 +1745,25 @@ function isSettledAgentActivity(
   activity: AgentActivity,
 ): activity is AgentActivity & { state: AssignmentOutcome; finishedAt: number } {
   return activity.state === "completed" || activity.state === "failed" || activity.state === "interrupted";
+}
+
+function startupFailureKind(error: unknown): string {
+  const kind = runtimeFailureKind(error);
+  return kind === "runtime_failure" ? "start_failed" : kind;
+}
+
+function runtimeFailureKind(error: unknown): string {
+  if (error instanceof RpcRequestTimeoutError) return "rpc_request_timeout";
+  if (error instanceof RpcProtocolViolationError) return "rpc_protocol_violation";
+  if (error instanceof RpcRequestError) return "rpc_request_failed";
+  if (error instanceof RpcClientClosedError) return "rpc_transport_closed";
+  if (error instanceof AgentProcessError) return error.kind === "process_exited" ? "child_exited" : error.kind;
+  if (error instanceof DOMException && error.name === "AbortError") return "aborted";
+  return "runtime_failure";
+}
+
+function errorMessage(error: unknown): string | undefined {
+  return error instanceof Error && error.message ? error.message : undefined;
 }
 
 export function registryErrorKind(error: unknown): RegistryError["kind"] | undefined {

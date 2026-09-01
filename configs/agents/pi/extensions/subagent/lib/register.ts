@@ -89,6 +89,9 @@ export function registerSubagentExtension(
     runtime.supervisor.clearSettledActivities();
     return { systemPrompt: appendAgentPromptSection(event.systemPrompt, await runtime.buildParentPrompt(ctx)) };
   });
+  pi.on("turn_start", () => {
+    runtime.supervisor.clearSettledActivities();
+  });
   pi.on("session_shutdown", async () => {
     started = false;
     await runtime.shutdown();
@@ -109,6 +112,7 @@ export function createPiSubagentBoundaryRuntime(): SubagentBoundaryRuntime {
 class PiSubagentBoundaryRuntime implements SubagentBoundaryRuntime {
   readonly supervisor: AgentSupervisor = delegatingSupervisor(() => this.requireSession().supervisor);
   private session: ActiveSession | undefined;
+  private shutdownPromise: Promise<void> | undefined;
 
   async start(pi: ExtensionAPI, ctx: ExtensionContext): Promise<void> {
     await this.shutdown();
@@ -220,14 +224,35 @@ class PiSubagentBoundaryRuntime implements SubagentBoundaryRuntime {
   }
 
   async shutdown(): Promise<void> {
+    if (this.shutdownPromise) return await this.shutdownPromise;
     const active = this.session;
-    if (!active || active.stopping) return;
+    if (!active) return;
     active.stopping = true;
+    const operation = this.stopActiveSession(active);
+    this.shutdownPromise = operation;
+    try {
+      await operation;
+    } finally {
+      if (this.session === active) this.session = undefined;
+      if (this.shutdownPromise === operation) this.shutdownPromise = undefined;
+    }
+  }
+
+  private async stopActiveSession(active: ActiveSession): Promise<void> {
     if (active.ctx.hasUI) active.ctx.ui.setWidget("subagent-activity", undefined);
-    await active.ipc.stop();
-    await active.supervisor.shutdown();
-    await active.processFactory.close();
-    if (this.session === active) this.session = undefined;
+    const failures: unknown[] = [];
+    for (const cleanup of [
+      () => active.ipc.stop(),
+      () => active.supervisor.shutdown(),
+      () => active.processFactory.close(),
+    ]) {
+      try {
+        await cleanup();
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (failures.length > 0) throw new AggregateError(failures, "Subagent session cleanup failed");
   }
 
   private async readNestedArtifactPage(
@@ -574,6 +599,7 @@ function recoveryRequests(metadata: ReturnType<typeof recoverRuntimeMetadata>): 
     sessionFile: item.sessionFile,
     execution: item.execution,
     assignmentGeneration: item.assignmentGeneration,
+    assignments: item.assignments,
     queuedMailIds: item.queuedMailIds,
     status: item.status,
   }));

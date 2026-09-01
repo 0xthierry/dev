@@ -22,6 +22,14 @@ export interface RpcTransport {
 
 export interface RpcRequestOptions {
   signal?: AbortSignal;
+  /** Bounds one RPC command/response exchange; it is not an assignment deadline. */
+  timeoutMs?: number;
+}
+
+export interface RpcSettlementWaitOptions {
+  signal?: AbortSignal;
+  /** Resolve on the first settlement event after this sequence. Defaults to the current sequence. */
+  afterSequence?: number;
 }
 
 export interface RpcClientOptions {
@@ -38,6 +46,7 @@ interface PendingRequest {
 }
 
 interface SettlementWaiter {
+  afterSequence: number;
   resolve: () => void;
   reject: (error: Error) => void;
   removeAbortListener: () => void;
@@ -50,6 +59,16 @@ export class RpcRequestError extends Error {
     super(`Pi RPC ${command} failed: ${message}`);
     this.name = "RpcRequestError";
     this.command = command;
+  }
+}
+
+export class RpcRequestTimeoutError extends Error {
+  constructor(
+    readonly command: RpcCommandType,
+    readonly timeoutMs: number,
+  ) {
+    super(`Pi RPC ${command} timed out after ${timeoutMs} milliseconds`);
+    this.name = "RpcRequestTimeoutError";
   }
 }
 
@@ -75,6 +94,7 @@ export class PiRpcClient {
   private readonly settlementWaiters = new Set<SettlementWaiter>();
   private readonly removeTransportListeners: Array<() => void>;
   private nextRequestId = 0;
+  private settlementSequence = 0;
   private closedError: Error | undefined;
 
   constructor(
@@ -98,22 +118,39 @@ export class PiRpcClient {
   async request(command: RpcCommand, options: RpcRequestOptions = {}): Promise<RpcResponse> {
     this.throwIfClosed();
     if (options.signal?.aborted) throw abortError();
+    const timeoutMs = normalizeTimeout(options.timeoutMs);
 
     const id = `subagent-rpc-${++this.nextRequestId}`;
     const payload = { ...command, id } as RpcCommand;
 
     return new Promise<RpcResponse>((resolve, reject) => {
+      let timeout: ReturnType<typeof setTimeout> | undefined;
       const removeAbortListener = addAbortListener(options.signal, () => {
         this.pending.delete(id);
+        if (timeout) clearTimeout(timeout);
         reject(abortError());
       });
-      this.pending.set(id, { command: command.type, resolve, reject, removeAbortListener });
+      const cleanup = () => {
+        removeAbortListener();
+        if (timeout) clearTimeout(timeout);
+      };
+      this.pending.set(id, { command: command.type, resolve, reject, removeAbortListener: cleanup });
+      if (timeoutMs !== undefined) {
+        timeout = setTimeout(() => {
+          const pending = this.pending.get(id);
+          if (!pending) return;
+          this.pending.delete(id);
+          pending.removeAbortListener();
+          pending.reject(new RpcRequestTimeoutError(command.type, timeoutMs));
+        }, timeoutMs);
+        timeout.unref?.();
+      }
 
       try {
         this.transport.write(encodeJsonl(payload as unknown as JsonObject));
       } catch (error) {
         this.pending.delete(id);
-        removeAbortListener();
+        cleanup();
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
@@ -136,8 +173,8 @@ export class PiRpcClient {
     message: string,
     options: RpcRequestOptions & { streamingBehavior?: "steer" | "followUp" } = {},
   ): Promise<void> {
-    const { signal, streamingBehavior } = options;
-    await this.successfulRequest({ type: "prompt", message, streamingBehavior }, { signal });
+    const { streamingBehavior, ...requestOptions } = options;
+    await this.successfulRequest({ type: "prompt", message, streamingBehavior }, requestOptions);
   }
 
   async steer(message: string, options: RpcRequestOptions = {}): Promise<void> {
@@ -154,16 +191,28 @@ export class PiRpcClient {
 
   async getLastAssistantText(options: RpcRequestOptions = {}): Promise<string | null> {
     const response = await this.successfulRequest({ type: "get_last_assistant_text" }, options);
+    if (response.data === undefined || response.data === null) return null;
     const data = recordValue(response.data);
-    if (!data || (data.text !== null && typeof data.text !== "string")) {
+    if (!data) throw new RpcProtocolViolationError("get_last_assistant_text returned invalid data");
+    if (data.text === undefined || data.text === null) return null;
+    if (typeof data.text !== "string") {
       throw new RpcProtocolViolationError("get_last_assistant_text returned invalid data");
     }
     return data.text;
   }
 
-  waitForSettled(options: RpcRequestOptions = {}): Promise<void> {
+  getSettlementSequence(): number {
+    return this.settlementSequence;
+  }
+
+  waitForSettled(options: RpcSettlementWaitOptions = {}): Promise<void> {
     if (options.signal?.aborted) return Promise.reject(abortError());
     this.throwIfClosed();
+    const afterSequence = options.afterSequence ?? this.settlementSequence;
+    if (!Number.isSafeInteger(afterSequence) || afterSequence < 0) {
+      return Promise.reject(new RangeError("settlement sequence must be a non-negative safe integer"));
+    }
+    if (this.settlementSequence > afterSequence) return Promise.resolve();
 
     return new Promise<void>((resolve, reject) => {
       let waiter: SettlementWaiter;
@@ -171,7 +220,7 @@ export class PiRpcClient {
         this.settlementWaiters.delete(waiter);
         reject(abortError());
       });
-      waiter = { resolve, reject, removeAbortListener };
+      waiter = { afterSequence, resolve, reject, removeAbortListener };
       this.settlementWaiters.add(waiter);
     });
   }
@@ -233,11 +282,13 @@ export class PiRpcClient {
     }
 
     if (isAgentSettledEvent(message)) {
-      for (const waiter of this.settlementWaiters) {
+      this.settlementSequence += 1;
+      for (const waiter of [...this.settlementWaiters]) {
+        if (this.settlementSequence <= waiter.afterSequence) continue;
+        this.settlementWaiters.delete(waiter);
         waiter.removeAbortListener();
         waiter.resolve();
       }
-      this.settlementWaiters.clear();
     }
 
     for (const listener of [...this.eventListeners]) listener(message);
@@ -325,6 +376,14 @@ function recordValue(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+function normalizeTimeout(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new RangeError("RPC command timeout must be a positive safe integer");
+  }
+  return value;
 }
 
 function addAbortListener(signal: AbortSignal | undefined, listener: () => void): () => void {
