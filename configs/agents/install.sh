@@ -458,13 +458,34 @@ generate_codex_agent_tomls() {
   done
 }
 
+extract_codex_mcp_config() {
+  local config_path="$1"
+
+  [[ -f "$config_path" ]] || return 0
+
+  # Codex stores each server in a [mcp_servers.*] TOML table. Preserve those
+  # tables (including nested env/header tables) while the repo remains
+  # authoritative for every other Codex setting.
+  awk '
+    /^[[:space:]]*\[[^]]+\][[:space:]]*(#.*)?$/ {
+      in_mcp = ($0 ~ /^[[:space:]]*\[[[:space:]]*mcp_servers([[:space:]]*\]|\.)/)
+    }
+    in_mcp { print }
+  ' "$config_path"
+}
+
 render_codex_config() {
   local target_path="$1"
   local label="codex config.toml"
-  local instructions rendered
+  local instructions rendered preserved_mcp
 
   instructions="$(cat "$SOURCE_DEV_INSTRUCTIONS")"
   rendered="$(INSTR="$instructions" awk '{ gsub(/\{\{DEVELOPER_INSTRUCTIONS\}\}/, ENVIRON["INSTR"]); print }' "$SOURCE_CODEX_CONFIG")"
+  preserved_mcp="$(extract_codex_mcp_config "$target_path")"
+  if [[ -n "$preserved_mcp" ]]; then
+    rendered+=$'\n\n'
+    rendered+="$preserved_mcp"
+  fi
 
   if [[ -f "$target_path" ]] && [[ "$(cat "$target_path")" == "$rendered" ]]; then
     log "skip: $label already up to date"
@@ -553,13 +574,26 @@ sync_claude_settings() {
     return 0
   fi
 
-  # Build the desired settings: base settings + hooks merged in
+  # Build the desired settings: base settings + hooks merged in.
   local desired
   desired="$(jq -cS --argjson hooks "$(jq -cS '.' "$hooks_json")" '. + {hooks: $hooks}' "$base_settings")"
 
-  # Repo is authoritative: replace the target with desired, dropping any local-only keys
   if [[ -f "$settings_path" ]]; then
     local current_sorted
+
+    # Plugin installers (including Figma's MCP plugin) register enablement in
+    # settings.json. Preserve local plugin entries, while canonical values win
+    # for plugins explicitly managed by the repo. All other local-only settings
+    # are still dropped so runtime-injected env values cannot become persistent.
+    desired="$(jq -cS --argjson canonical "$desired" '
+      . as $current
+      | $canonical
+      | .enabledPlugins = (
+          (if ($current.enabledPlugins | type) == "object" then $current.enabledPlugins else {} end)
+          + (if ($canonical.enabledPlugins | type) == "object" then $canonical.enabledPlugins else {} end)
+        )
+    ' "$settings_path")"
+
     current_sorted="$(jq -cS '.' "$settings_path")"
     if [[ "$current_sorted" == "$desired" ]]; then
       log "skip: claude settings already up to date"
