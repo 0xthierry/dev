@@ -259,7 +259,7 @@ class PiSubagentBoundaryRuntime implements SubagentBoundaryRuntime {
     }
     active.ctx.ui.setWidget(
       "subagent-activity",
-      (tui, theme) => createAgentActivityWidget(activityRows, theme, () => tui.requestRender()),
+      (tui, theme) => createAgentActivityWidget(activityRows, theme, (force) => tui.requestRender(force)),
       { placement: "aboveEditor" },
     );
   }
@@ -411,6 +411,7 @@ class LazyPiAgentProcess implements SupervisorAgentProcess {
   private promptFile: AgentPromptFile | undefined;
   private readonly listeners = new Set<AgentProcessEventListener>();
   private closed = false;
+  private closePromise: Promise<void> | undefined;
   private capabilityIssued = false;
 
   constructor(
@@ -487,10 +488,16 @@ class LazyPiAgentProcess implements SupervisorAgentProcess {
   }
 
   async close(): Promise<void> {
-    if (this.closed) return;
+    if (this.closePromise) return await this.closePromise;
     this.closed = true;
-    await this.process?.close();
-    await this.cleanup();
+    this.closePromise = (async () => {
+      try {
+        await this.process?.close();
+      } finally {
+        await this.cleanup();
+      }
+    })();
+    return await this.closePromise;
   }
 
   private requireProcess(): ReturnType<typeof createAgentProcess> {

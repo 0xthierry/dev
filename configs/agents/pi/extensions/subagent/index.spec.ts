@@ -203,7 +203,7 @@ describe("persistent subagent Pi RPC E2E", () => {
     expect(event).not.toContain(stored.path);
   }, 40_000);
 
-  test("close releases resident capacity for queued work and remains terminal", async () => {
+  test("idle residents unload for runnable work and close remains terminal", async () => {
     // Arrange
     const fixture = await createFixture();
     await writeFile(
@@ -221,7 +221,7 @@ describe("persistent subagent Pi RPC E2E", () => {
       toolStep("agent_spawn", {
         task_name: "capacity-b",
         subagent_type: "worker",
-        prompt: "Queue until resident capacity is released.",
+        prompt: "Start after the idle resident is automatically unloaded.",
         execution: { effort: "off" },
       }),
       toolStep("agent_close", { target: "/root/capacity-a" }),
@@ -233,20 +233,20 @@ describe("persistent subagent Pi RPC E2E", () => {
     ];
     const harness = await startHarness(fixture, { 0: rootPlan }, { 0: 0, 1: 0 }, true, [], {
       "/root/capacity-a": [{ text: "CAPACITY-A-COMPLETE" }],
-      "/root/capacity-b": [{ text: "CAPACITY-B-STARTED-AFTER-CLOSE" }],
+      "/root/capacity-b": [{ text: "CAPACITY-B-STARTED-AFTER-EVICTION" }],
     });
 
     // Act
-    const prompt = await harness.request({ type: "prompt", message: "Exercise resident capacity and terminal close." });
+    const prompt = await harness.request({ type: "prompt", message: "Exercise resident eviction and terminal close." });
     const agentEnd = await harness.waitForEvent((event) => event.type === "agent_end", 90_000);
 
     // Assert
     expect(prompt.success).toBe(true);
     expect(eventText(agentEnd)).toContain("Capacity lifecycle complete.");
     const toolEnds = harness.events.filter((event) => event.type === "tool_execution_end");
-    expect(toolEvent(toolEnds, "agent_spawn", 1)).toContain('"status":"queued"');
+    expect(toolEvent(toolEnds, "agent_spawn", 1)).toContain('"status":"running"');
     expect(toolEvent(toolEnds, "agent_close", 0)).toContain('"status":"closed"');
-    expect(toolEvent(toolEnds, "agent_wait", 1)).toContain("CAPACITY-B-STARTED-AFTER-CLOSE");
+    expect(toolEvent(toolEnds, "agent_wait", 1)).toContain("CAPACITY-B-STARTED-AFTER-EVICTION");
     expect(toolEvent(toolEnds, "agent_followup")).toContain('"kind":"closed"');
     const listed = toolEvent(toolEnds, "agent_list");
     expect(listed).toContain('"agentPath":"/root/capacity-a"');

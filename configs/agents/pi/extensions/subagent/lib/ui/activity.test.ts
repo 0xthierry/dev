@@ -1,8 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, jest, mock, test } from "bun:test";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import type { AgentActivity } from "../supervisor/supervisor";
-import { formatElapsedTime, hasLiveAgentActivity, renderAgentActivity } from "./activity";
+import { createAgentActivityWidget, formatElapsedTime, hasLiveAgentActivity, renderAgentActivity } from "./activity";
 
 const theme = {
   fg: (_color: string, text: string) => text,
@@ -17,6 +17,36 @@ const workingActivity: AgentActivity = {
     source: { model: "parent", effort: "agent" },
   },
 };
+
+describe("createAgentActivityWidget", () => {
+  test("invalidates and forces a redraw as active elapsed time advances", () => {
+    // Arrange
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(2_000));
+    const requestRender = mock((_force?: boolean) => {});
+    const widget = createAgentActivityWidget(
+      [{ agentPath: "/root/active", activity: workingActivity }],
+      theme,
+      requestRender,
+    );
+
+    try {
+      const initial = widget.render(160);
+
+      // Act
+      jest.advanceTimersByTime(1_000);
+      const refreshed = widget.render(160);
+
+      // Assert
+      expect(initial).toContain("  active — working · 1s");
+      expect(requestRender).toHaveBeenCalledWith(true);
+      expect(refreshed).toContain("  active — working · 2s");
+    } finally {
+      widget.dispose();
+      jest.useRealTimers();
+    }
+  });
+});
 
 describe("renderAgentActivity", () => {
   test("shows active count, elapsed time, agent type, and effective execution", () => {

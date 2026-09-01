@@ -1,9 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
-import { AgentScheduler, SchedulerError } from "./scheduler";
+import { AgentScheduler, type ResidentEvictionOutcome, SchedulerError } from "./scheduler";
 
-function deferred(): { promise: Promise<void>; resolve(): void } {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
+function deferred<T = void>(): { promise: Promise<T>; resolve(value: T): void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
     resolve = done;
   });
   return { promise, resolve };
@@ -17,7 +17,8 @@ async function flush(): Promise<void> {
 describe("AgentScheduler", () => {
   test("counts active, resident, and queued resources separately", async () => {
     // Arrange
-    const scheduler = new AgentScheduler({ maxActiveAgents: 1, maxResidentAgents: 2 });
+    const reserveIdleResident = mock(() => undefined);
+    const scheduler = new AgentScheduler({ maxActiveAgents: 1, maxResidentAgents: 2 }, { reserveIdleResident });
     const firstSettlement = deferred();
     const secondSettlement = deferred();
     const firstStart = mock(async () => ({ settled: firstSettlement.promise }));
@@ -41,6 +42,7 @@ describe("AgentScheduler", () => {
     expect(second.queued).toBe(true);
     expect(scheduler.counts()).toEqual({ active: 1, resident: 1, queued: 1 });
     expect(secondStart).not.toHaveBeenCalled();
+    expect(reserveIdleResident).not.toHaveBeenCalled();
 
     // Act
     firstSettlement.resolve();
@@ -53,9 +55,14 @@ describe("AgentScheduler", () => {
     await second.done;
   });
 
-  test("does not silently evict a resident when capacity is full", async () => {
+  test("admits resident-only blockage while waiting for an idle eviction", async () => {
     // Arrange
-    const scheduler = new AgentScheduler({ maxActiveAgents: 1, maxResidentAgents: 1 });
+    const evictionRelease = deferred<ResidentEvictionOutcome>();
+    const reserveIdleResident = mock(() => ({
+      agentPath: "/root/a",
+      settled: evictionRelease.promise,
+    }));
+    const scheduler = new AgentScheduler({ maxActiveAgents: 1, maxResidentAgents: 1 }, { reserveIdleResident });
     const firstSettlement = deferred();
     const secondSettlement = deferred();
     const first = scheduler.schedule({
@@ -66,7 +73,10 @@ describe("AgentScheduler", () => {
     await first.accepted;
     firstSettlement.resolve();
     await first.done;
-    const secondStart = mock(async () => ({ settled: secondSettlement.promise }));
+    const secondStart = mock(async (_signal: AbortSignal, residencyReady: Promise<void>) => {
+      await residencyReady;
+      return { settled: secondSettlement.promise };
+    });
 
     // Act
     const second = scheduler.schedule({
@@ -77,18 +87,59 @@ describe("AgentScheduler", () => {
     await flush();
 
     // Assert
-    expect(second.queued).toBe(true);
-    expect(secondStart).not.toHaveBeenCalled();
-    expect(scheduler.counts()).toEqual({ active: 0, resident: 1, queued: 1 });
+    expect(second.queued).toBe(false);
+    expect(reserveIdleResident).toHaveBeenCalledWith("/root/b");
+    expect(secondStart).toHaveBeenCalledTimes(1);
+    expect(scheduler.counts()).toEqual({ active: 1, resident: 1, queued: 0 });
 
     // Act
-    scheduler.releaseResident("/root/a");
+    evictionRelease.resolve({ released: true });
     await second.accepted;
 
     // Assert
-    expect(secondStart).toHaveBeenCalledTimes(1);
+    expect(scheduler.isResident("/root/a")).toBe(false);
+    expect(scheduler.isResident("/root/b")).toBe(true);
     secondSettlement.resolve();
     await second.done;
+  });
+
+  test("preserves resident capacity when eviction fails", async () => {
+    // Arrange
+    const evictionFailure = new Error("close failed");
+    const scheduler = new AgentScheduler(
+      { maxActiveAgents: 1, maxResidentAgents: 1 },
+      {
+        reserveIdleResident: mock(() => ({
+          agentPath: "/root/a",
+          settled: Promise.resolve({ released: false, error: evictionFailure }),
+        })),
+      },
+    );
+    const firstSettlement = deferred();
+    const first = scheduler.schedule({
+      assignmentId: "a:1",
+      agentPath: "/root/a",
+      start: mock(async () => ({ settled: firstSettlement.promise })),
+    });
+    await first.accepted;
+    firstSettlement.resolve();
+    await first.done;
+
+    // Act
+    const second = scheduler.schedule({
+      assignmentId: "b:1",
+      agentPath: "/root/b",
+      start: mock(async (_signal, residencyReady) => {
+        await residencyReady;
+        return { settled: Promise.resolve() };
+      }),
+    });
+
+    // Assert
+    await expect(second.accepted).rejects.toBe(evictionFailure);
+    expect(scheduler.counts()).toEqual({ active: 0, resident: 1, queued: 0 });
+    expect(scheduler.isResident("/root/a")).toBe(true);
+    expect(scheduler.isResident("/root/b")).toBe(false);
   });
 
   test("serializes assignments for the same resident agent", async () => {

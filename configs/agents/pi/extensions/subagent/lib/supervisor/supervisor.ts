@@ -35,7 +35,14 @@ import {
   type AssignmentRecord,
   RegistryError,
 } from "./registry";
-import { AgentScheduler, type SchedulerLimits, type ScheduleTicket } from "./scheduler";
+import {
+  AgentScheduler,
+  type ResidentEvictionOutcome,
+  type ResidentEvictionReservation,
+  type SchedulerLimits,
+  type ScheduleTicket,
+} from "./scheduler";
+import { isResumableStatus } from "./status";
 
 export const DEFAULT_SUPERVISOR_LIMITS: SupervisorLimits = {
   maxActiveAgents: DEFAULT_ACTIVE_AGENTS,
@@ -252,15 +259,18 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
   private readonly processes = new Map<string, SupervisorAgentProcess>();
   private readonly activities = new Map<string, AgentActivity>();
   private readonly queuedActivities = new Map<string, { agentPath: string; activity: AgentActivity }>();
+  private readonly residentRecency = new Map<string, number>();
+  private readonly unloading = new Map<string, Promise<ResidentEvictionOutcome>>();
   private readonly tickets = new Map<string, ScheduleTicket>();
   private readonly interruptRequested = new Set<string>();
   private readonly interruptAcknowledged = new Set<string>();
-  private readonly closingPaths = new Set<string>();
+  private readonly closingOperations = new Map<string, Promise<AgentListEntry>>();
   private readonly settlementListeners = new Set<() => void>();
   private readonly completionNotifications = new Map<string, Promise<CompletionNotificationDelivery>>();
   private readonly completionNotificationResults = new Map<string, CompletionNotificationDelivery>();
   private journalTail: Promise<void> = Promise.resolve();
   private readonly redact: RedactText;
+  private residentUseSequence = 0;
   private stopping = false;
 
   constructor(
@@ -269,7 +279,9 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
   ) {
     validateLimits(options.limits);
     this.redact = options.redact ?? ((value) => value);
-    this.scheduler = new AgentScheduler(options.limits);
+    this.scheduler = new AgentScheduler(options.limits, {
+      reserveIdleResident: (incomingAgentPath) => this.reserveIdleResident(incomingAgentPath),
+    });
     this.mailbox = new AgentMailbox({ createMailId: () => runtime.createMailId() }, options.mailboxLimits);
   }
 
@@ -349,8 +361,16 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
     this.requireOpen();
     throwIfAborted(request.signal);
     requireMessage(request.message, "follow-up message");
-    const record = this.registry.resolve(request.target);
+    let record = this.registry.resolve(request.target);
     this.requireNotClosing(record);
+    const unloading = this.unloading.get(record.agentPath);
+    if (unloading) {
+      const outcome = await abortable(unloading, request.signal);
+      if (outcome.error !== undefined) throw outcome.error;
+      this.requireOpen();
+      record = this.registry.resolve(record.agentPath);
+      this.requireNotClosing(record);
+    }
     const execution = request.execution ?? record.execution;
     const assignment = this.registry.queueAssignment(record.agentPath, "followup");
     const session: SupervisorProcessSession = this.processes.has(record.agentPath)
@@ -414,14 +434,19 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
     const firstRequest = !this.interruptRequested.has(active.id);
     this.interruptRequested.add(active.id);
     const process = this.processes.get(record.agentPath);
-    if (firstRequest && process) {
-      try {
-        await process.interrupt();
+    if (firstRequest) {
+      if (process) {
+        try {
+          await process.interrupt();
+          this.interruptAcknowledged.add(active.id);
+        } catch (error) {
+          this.interruptRequested.delete(active.id);
+          this.interruptAcknowledged.delete(active.id);
+          throw error;
+        }
+      } else {
         this.interruptAcknowledged.add(active.id);
-      } catch (error) {
-        this.interruptRequested.delete(active.id);
-        this.interruptAcknowledged.delete(active.id);
-        throw error;
+        this.scheduler.cancel(active.id);
       }
     }
     const ticket = this.tickets.get(active.id);
@@ -444,54 +469,68 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
     throwIfAborted(signal);
     const record = this.registry.resolve(target);
     if (record.status === "closed") return listEntry(record);
-    if (this.closingPaths.has(record.agentPath)) {
-      const ticket = [...record.assignments]
-        .reverse()
-        .map((assignment) => this.tickets.get(assignment.id))
-        .find(Boolean);
-      if (ticket) await ticket.done.catch(() => {});
-      return listEntry(this.registry.resolve(record.agentPath));
-    }
+    const existing = this.closingOperations.get(record.agentPath);
+    if (existing) return await abortable(existing, signal);
 
-    this.closingPaths.add(record.agentPath);
-    try {
-      const latest = this.registry.resolve(record.agentPath);
-      for (const assignment of latest.assignments.filter((candidate) => candidate.phase === "queued")) {
-        this.tickets.get(assignment.id)?.detachRequestSignal();
-        this.scheduler.cancel(assignment.id);
-        this.queuedActivities.delete(assignment.id);
-        this.registry.settleQueuedAssignment(record.agentPath, assignment.id, "interrupted");
-        this.endQueuedAgentActivity(record.agentPath);
-        this.notifySettlement();
-      }
-      const active = this.registry
-        .resolve(record.agentPath)
-        .assignments.find((assignment) => assignment.phase === "starting" || assignment.phase === "running");
-      const process = this.processes.get(record.agentPath);
-      if (active) {
-        this.interruptRequested.add(active.id);
+    const operation = this.closeAgent(record.agentPath, signal);
+    this.closingOperations.set(record.agentPath, operation);
+    void operation
+      .finally(() => {
+        if (this.closingOperations.get(record.agentPath) === operation) {
+          this.closingOperations.delete(record.agentPath);
+        }
+      })
+      .catch(() => {});
+    return await operation;
+  }
+
+  private async closeAgent(agentPath: string, signal?: AbortSignal): Promise<AgentListEntry> {
+    const record = this.registry.resolve(agentPath);
+    const unloading = this.unloading.get(agentPath);
+    if (unloading) {
+      const outcome = await abortable(unloading, signal);
+      if (outcome.error !== undefined) throw outcome.error;
+    }
+    const latest = this.registry.resolve(agentPath);
+    for (const assignment of latest.assignments.filter((candidate) => candidate.phase === "queued")) {
+      this.tickets.get(assignment.id)?.detachRequestSignal();
+      this.scheduler.cancel(assignment.id);
+      this.queuedActivities.delete(assignment.id);
+      this.registry.settleQueuedAssignment(agentPath, assignment.id, "interrupted");
+      this.endQueuedAgentActivity(agentPath);
+      this.notifySettlement();
+    }
+    const active = this.registry
+      .resolve(agentPath)
+      .assignments.find((assignment) => assignment.phase === "starting" || assignment.phase === "running");
+    const process = this.processes.get(agentPath);
+    if (active) {
+      this.interruptRequested.add(active.id);
+      if (process) {
         await process
-          ?.interrupt()
+          .interrupt()
           .then(() => this.interruptAcknowledged.add(active.id))
           .catch(() => this.interruptRequested.delete(active.id));
+      } else {
+        this.interruptAcknowledged.add(active.id);
+        this.scheduler.cancel(active.id);
       }
-      await process?.close();
-      if (active) await this.tickets.get(active.id)?.done.catch(() => {});
-      this.processes.delete(record.agentPath);
-      if (this.scheduler.isResident(record.agentPath)) this.scheduler.releaseResident(record.agentPath);
-      const current = this.registry.resolve(record.agentPath);
-      if (current.status !== "closed") this.registry.transition(record.agentPath, "closed");
-      await this.persist({
-        version: SUBAGENT_RUNTIME_ENTRY_VERSION,
-        event: "closed",
-        agentPath: record.agentPath,
-        agentId: record.agentId,
-      });
-      this.removeAgentActivity(record.agentPath);
-      return listEntry(this.registry.resolve(record.agentPath));
-    } finally {
-      this.closingPaths.delete(record.agentPath);
     }
+    await process?.close();
+    if (active) await this.tickets.get(active.id)?.done.catch(() => {});
+    this.processes.delete(agentPath);
+    this.residentRecency.delete(agentPath);
+    if (this.scheduler.isResident(agentPath)) this.scheduler.releaseResident(agentPath);
+    const current = this.registry.resolve(agentPath);
+    if (current.status !== "closed") this.registry.transition(agentPath, "closed");
+    await this.persist({
+      version: SUBAGENT_RUNTIME_ENTRY_VERSION,
+      event: "closed",
+      agentPath,
+      agentId: record.agentId,
+    });
+    this.removeAgentActivity(agentPath);
+    return listEntry(this.registry.resolve(agentPath));
   }
 
   clearSettledActivities(): void {
@@ -556,17 +595,23 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
           .assignments.find((assignment) => assignment.phase === "starting" || assignment.phase === "running");
         if (active) this.interruptRequested.add(active.id);
         const process = this.processes.get(record.agentPath);
-        await process
-          ?.interrupt()
-          .then(() => {
-            if (active) this.interruptAcknowledged.add(active.id);
-          })
-          .catch(() => {
-            if (active) this.interruptRequested.delete(active.id);
-          });
+        if (process) {
+          await process
+            .interrupt()
+            .then(() => {
+              if (active) this.interruptAcknowledged.add(active.id);
+            })
+            .catch(() => {
+              if (active) this.interruptRequested.delete(active.id);
+            });
+        } else if (active) {
+          this.interruptAcknowledged.add(active.id);
+          this.scheduler.cancel(active.id);
+        }
         await process?.close().catch(() => {});
         if (active) await this.tickets.get(active.id)?.done.catch(() => {});
         this.processes.delete(record.agentPath);
+        this.residentRecency.delete(record.agentPath);
         if (this.scheduler.isResident(record.agentPath)) this.scheduler.releaseResident(record.agentPath);
         const current = this.registry.resolve(record.agentPath);
         if (current.status !== "closed" && current.status !== "unloaded") {
@@ -585,6 +630,73 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
     await abortable(cleanup, signal);
   }
 
+  private reserveIdleResident(incomingAgentPath: string): ResidentEvictionReservation | undefined {
+    if (this.stopping) return undefined;
+    const candidate = [...this.processes.entries()]
+      .filter(([agentPath]) => {
+        if (
+          agentPath === incomingAgentPath ||
+          this.scheduler.isActive(agentPath) ||
+          !this.scheduler.isResident(agentPath) ||
+          this.closingOperations.has(agentPath) ||
+          this.unloading.has(agentPath)
+        )
+          return false;
+        const record = this.registry.resolve(agentPath);
+        return (
+          isResumableStatus(record.status) &&
+          record.status !== "unloaded" &&
+          record.assignments.every((assignment) => assignment.phase === "settled")
+        );
+      })
+      .sort(
+        ([leftPath], [rightPath]) =>
+          (this.residentRecency.get(leftPath) ?? 0) - (this.residentRecency.get(rightPath) ?? 0) ||
+          leftPath.localeCompare(rightPath),
+      )[0];
+    if (!candidate) return undefined;
+
+    const [agentPath, process] = candidate;
+    const settled = Promise.resolve().then(async (): Promise<ResidentEvictionOutcome> => {
+      try {
+        await process.close();
+      } catch (error) {
+        return { released: false, error: error ?? new Error(`Failed to unload resident ${agentPath}`) };
+      }
+      if (this.processes.get(agentPath) === process) this.processes.delete(agentPath);
+      this.residentRecency.delete(agentPath);
+      const record = this.registry.resolve(agentPath);
+      if (record.status === "unloaded" || record.status === "closed") return { released: true };
+      this.registry.transition(agentPath, "unloaded");
+      try {
+        await this.persist({
+          version: SUBAGENT_RUNTIME_ENTRY_VERSION,
+          event: "unloaded",
+          agentPath,
+          agentId: record.agentId,
+        });
+        return { released: true };
+      } catch (error) {
+        return { released: true, error: error ?? new Error(`Failed to persist unloaded resident ${agentPath}`) };
+      }
+    });
+    this.unloading.set(agentPath, settled);
+    void settled
+      .finally(() => {
+        if (this.unloading.get(agentPath) === settled) this.unloading.delete(agentPath);
+      })
+      .catch(() => {});
+    return { agentPath, settled };
+  }
+
+  private markResidentIdle(agentPath: string, sequence: number): void {
+    if (!this.processes.has(agentPath)) return;
+    const record = this.registry.resolve(agentPath);
+    if (isResumableStatus(record.status) && record.status !== "unloaded") {
+      this.residentRecency.set(agentPath, sequence);
+    }
+  }
+
   private scheduleAssignment(
     record: AgentRecord,
     assignment: AssignmentRecord,
@@ -597,8 +709,16 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
       {
         assignmentId: assignment.id,
         agentPath: record.agentPath,
-        start: async (schedulerSignal) =>
-          await this.startAssignment(record.agentPath, assignment, message, execution, session, schedulerSignal),
+        start: async (schedulerSignal, residencyReady) =>
+          await this.startAssignment(
+            record.agentPath,
+            assignment,
+            message,
+            execution,
+            session,
+            schedulerSignal,
+            residencyReady,
+          ),
       },
       signal,
     );
@@ -615,14 +735,19 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
     execution: ResolvedAgentExecution,
     session: SupervisorProcessSession,
     signal: AbortSignal,
+    residencyReady: Promise<void>,
   ): Promise<{ settled: Promise<void> }> {
-    let process = this.processes.get(agentPath);
+    let process: SupervisorAgentProcess | undefined;
     let created = false;
     try {
       this.registry.startAssignment(agentPath, assignment.id);
       this.queuedActivities.delete(assignment.id);
       const record = this.registry.resolve(agentPath);
       this.beginAgentActivity(agentPath, record.agentType, execution);
+      await abortable(residencyReady, signal);
+      this.requireOpen();
+      throwIfAborted(signal);
+      process = this.processes.get(agentPath);
       let sessionFile = record.sessionFile;
       if (!process) {
         process = this.runtime.createProcess({
@@ -637,6 +762,8 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
           this.reportRuntimeActivity(agentPath, event);
           if (event.type !== "exit" || this.processes.get(agentPath) !== process) return;
           this.processes.delete(agentPath);
+          this.residentRecency.delete(agentPath);
+          if (this.unloading.has(agentPath)) return;
           if (this.scheduler.isResident(agentPath)) this.scheduler.releaseResident(agentPath);
         });
         created = true;
@@ -683,12 +810,15 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
         });
       }
       let finishedAt: number | undefined;
+      let idleSequence: number | undefined;
       const observedSettlement = submission.settlement.finally(() => {
         finishedAt = Date.now();
+        idleSequence = ++this.residentUseSequence;
       });
       const finalization = this.finalizeAssignment(agentPath, assignment.id, observedSettlement).finally(() => {
         const outcome = this.registry.assignmentById(agentPath, assignment.id).outcome;
         this.finishAgentActivity(agentPath, outcome, finishedAt ?? Date.now());
+        this.markResidentIdle(agentPath, idleSequence ?? ++this.residentUseSequence);
         this.notifySettlement();
       });
       void this.deliverMail(agentPath, process, signal).catch(() => {});
@@ -697,9 +827,16 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
       if (created) {
         await process?.close().catch(() => {});
         this.processes.delete(agentPath);
+        this.residentRecency.delete(agentPath);
       }
       const finishedAt = Date.now();
-      await this.failStartingAssignment(agentPath, assignment.id, "start_failed");
+      const interrupted = this.interruptAcknowledged.delete(assignment.id);
+      this.interruptRequested.delete(assignment.id);
+      if (interrupted) {
+        await this.finalizeRejectedInterrupt(this.registry.resolve(agentPath), assignment.id);
+      } else {
+        await this.failStartingAssignment(agentPath, assignment.id, "start_failed");
+      }
       const outcome = this.registry.assignmentById(agentPath, assignment.id).outcome;
       this.finishAgentActivity(agentPath, outcome, finishedAt);
       throw error;
@@ -752,7 +889,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
   private finishAgentActivity(agentPath: string, outcome: AssignmentOutcome | undefined, finishedAt: number): void {
     const current = this.activities.get(agentPath);
     if (!current) return;
-    if (this.stopping || this.closingPaths.has(agentPath)) {
+    if (this.stopping || this.closingOperations.has(agentPath)) {
       this.removeAgentActivity(agentPath);
       return;
     }
@@ -1001,7 +1138,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
     } catch {
       return notificationFailure("parent_unavailable", notification.parentPath, false, notification);
     }
-    if (parent.status === "closed" || this.closingPaths.has(parent.agentPath)) {
+    if (parent.status === "closed" || this.closingOperations.has(parent.agentPath)) {
       return notificationFailure("parent_unavailable", parent.agentPath, false, notification);
     }
 
@@ -1031,7 +1168,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
         content: encodeDurableMail(notification.agentPath, message),
       });
       const currentParent = this.registry.resolve(parent.agentPath);
-      if (currentParent.status === "closed" || this.closingPaths.has(parent.agentPath) || this.stopping) {
+      if (currentParent.status === "closed" || this.closingOperations.has(parent.agentPath) || this.stopping) {
         this.mailbox.release(reservation);
         return notificationFailure(
           this.stopping ? "shutting_down" : "parent_unavailable",
@@ -1174,7 +1311,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
   }
 
   private requireNotClosing(record: AgentRecord): void {
-    if (record.status === "closed" || this.closingPaths.has(record.agentPath)) {
+    if (record.status === "closed" || this.closingOperations.has(record.agentPath)) {
       throw new SupervisorError("closed", `Agent is closed: ${record.agentPath}`);
     }
   }
@@ -1345,7 +1482,7 @@ async function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<
     new Promise<never>((_, reject) => {
       const listener = () => reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
       signal.addEventListener("abort", listener, { once: true });
-      void promise.finally(() => signal.removeEventListener("abort", listener));
+      void promise.finally(() => signal.removeEventListener("abort", listener)).catch(() => {});
     }),
   ]);
 }

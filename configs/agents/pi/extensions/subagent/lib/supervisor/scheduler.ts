@@ -11,6 +11,17 @@ export interface SchedulerCounts {
   queued: number;
 }
 
+export type ResidentEvictionOutcome = { released: true; error?: unknown } | { released: false; error: unknown };
+
+export interface ResidentEvictionReservation {
+  agentPath: string;
+  settled: Promise<ResidentEvictionOutcome>;
+}
+
+export interface SchedulerRuntime {
+  reserveIdleResident(incomingAgentPath: string): ResidentEvictionReservation | undefined;
+}
+
 export interface ScheduledStart {
   settled: Promise<void>;
 }
@@ -18,7 +29,7 @@ export interface ScheduledStart {
 export interface SchedulerJob {
   assignmentId: string;
   agentPath: string;
-  start(signal: AbortSignal): Promise<ScheduledStart>;
+  start(signal: AbortSignal, residencyReady: Promise<void>): Promise<ScheduledStart>;
 }
 
 export interface ScheduleTicket {
@@ -57,9 +68,13 @@ export class AgentScheduler {
   private readonly entries = new Map<string, QueueEntry>();
   private readonly activeAgents = new Set<string>();
   private readonly residents = new Set<string>();
+  private readonly residentTransfers = new Set<Promise<void>>();
   private stopping = false;
 
-  constructor(readonly limits: SchedulerLimits) {
+  constructor(
+    readonly limits: SchedulerLimits,
+    private readonly runtime?: SchedulerRuntime,
+  ) {
     try {
       assertConfigurableLimit("activeAgents", limits.maxActiveAgents);
       assertConfigurableLimit("residentAgents", limits.maxResidentAgents);
@@ -93,13 +108,13 @@ export class AgentScheduler {
     this.entries.set(job.assignmentId, entry);
     this.queue.push(entry);
 
-    const startsImmediately = this.canStart(entry);
     this.pump();
+    const queued = entry.state === "queued";
     accepted.promise.catch(() => {});
     done.promise.catch(() => {});
     return {
       assignmentId: job.assignmentId,
-      queued: !startsImmediately,
+      queued,
       accepted: accepted.promise,
       done: done.promise,
       detachRequestSignal: () => {
@@ -115,6 +130,10 @@ export class AgentScheduler {
       resident: this.residents.size,
       queued: this.queue.filter((entry) => entry.state === "queued").length,
     };
+  }
+
+  isActive(agentPath: string): boolean {
+    return this.activeAgents.has(agentPath);
   }
 
   isResident(agentPath: string): boolean {
@@ -145,37 +164,61 @@ export class AgentScheduler {
     this.stopping = true;
     const pending = [...this.entries.values()].filter((entry) => entry.state !== "done");
     for (const entry of pending) this.cancel(entry.job.assignmentId);
-    const completion = Promise.allSettled(pending.map((entry) => entry.done.promise)).then(() => undefined);
+    const completion = Promise.allSettled([
+      ...pending.map((entry) => entry.done.promise),
+      ...this.residentTransfers,
+    ]).then(() => undefined);
     await abortable(completion, signal);
   }
 
   private pump(): void {
     if (this.stopping) return;
     while (this.activeAgents.size < this.limits.maxActiveAgents) {
-      const entry = this.queue.find((candidate) => candidate.state === "queued" && this.canStart(candidate));
-      if (!entry) return;
-      this.startEntry(entry);
+      const admission = this.nextAdmission();
+      if (!admission) return;
+      this.startEntry(admission.entry, admission.eviction);
     }
   }
 
-  private canStart(entry: QueueEntry): boolean {
-    if (this.stopping || this.activeAgents.size >= this.limits.maxActiveAgents) return false;
-    if (this.activeAgents.has(entry.job.agentPath)) return false;
-    if (!this.residents.has(entry.job.agentPath) && this.residents.size >= this.limits.maxResidentAgents) {
-      return false;
+  private nextAdmission(): { entry: QueueEntry; eviction?: ResidentEvictionReservation } | undefined {
+    for (const entry of this.queue) {
+      if (entry.state !== "queued" || this.activeAgents.has(entry.job.agentPath)) continue;
+      if (this.residents.has(entry.job.agentPath) || this.residents.size < this.limits.maxResidentAgents) {
+        return { entry };
+      }
+      const eviction = this.runtime?.reserveIdleResident(entry.job.agentPath);
+      if (eviction) return { entry, eviction };
     }
-    return true;
+    return undefined;
   }
 
-  private startEntry(entry: QueueEntry): void {
+  private startEntry(entry: QueueEntry, eviction?: ResidentEvictionReservation): void {
     entry.state = "starting";
     this.activeAgents.add(entry.job.agentPath);
+    let residencyReady = Promise.resolve();
     if (!this.residents.has(entry.job.agentPath)) {
-      this.residents.add(entry.job.agentPath);
-      entry.reservedResident = true;
+      if (eviction) {
+        const transfer = eviction.settled.then((outcome) => {
+          if (outcome.released) this.residents.delete(eviction.agentPath);
+          if (outcome.error !== undefined) throw outcome.error;
+          if (!outcome.released) throw new Error(`Resident eviction retained ${eviction.agentPath}`);
+          if (entry.state === "done" || this.stopping) {
+            this.pump();
+            return;
+          }
+          this.residents.add(entry.job.agentPath);
+          entry.reservedResident = true;
+        });
+        this.residentTransfers.add(transfer);
+        void transfer.finally(() => this.residentTransfers.delete(transfer)).catch(() => {});
+        residencyReady = transfer;
+      } else {
+        this.residents.add(entry.job.agentPath);
+        entry.reservedResident = true;
+      }
     }
 
-    void entry.job.start(entry.controller.signal).then(
+    void entry.job.start(entry.controller.signal, residencyReady).then(
       (started) => {
         if (entry.state === "done") return;
         entry.state = "active";
@@ -245,7 +288,7 @@ async function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<
     new Promise<never>((_, reject) => {
       const listener = () => reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
       signal.addEventListener("abort", listener, { once: true });
-      void promise.finally(() => signal.removeEventListener("abort", listener));
+      void promise.finally(() => signal.removeEventListener("abort", listener)).catch(() => {});
     }),
   ]);
 }

@@ -364,7 +364,7 @@ describe("PersistentAgentSupervisor", () => {
     expect(secondWait.completed[0]?.assignmentId).toBe("agent-1:2");
   });
 
-  test("exposes scheduler queueing and never evicts the resident child", async () => {
+  test("keeps settled residents warm while the cache has capacity", async () => {
     // Arrange
     const fake = harness({ active: 1, resident: 2 });
     const first = await fake.supervisor.spawn({
@@ -412,6 +412,147 @@ describe("PersistentAgentSupervisor", () => {
       second.agentPath,
       expect.objectContaining({ state: "completed", finishedAt: expect.any(Number) }),
     ]);
+  });
+
+  test("unloads the least-recently-used settled resident without queueing runnable work", async () => {
+    // Arrange
+    const fake = harness({ active: 1, resident: 2 });
+    const first = await fake.supervisor.spawn({
+      taskName: "first-resident",
+      agentType: "worker",
+      prompt: "first",
+      execution,
+    });
+    const firstProcess = fake.processes.get(first.agentPath) as FakeProcess;
+    firstProcess.assignments[0]?.resolve("first done");
+    await fake.supervisor.wait({ targets: [first.agentPath], timeoutMs: 1_000 });
+    const second = await fake.supervisor.spawn({
+      taskName: "second-resident",
+      agentType: "worker",
+      prompt: "second",
+      execution,
+    });
+    const secondProcess = fake.processes.get(second.agentPath) as FakeProcess;
+    secondProcess.assignments[0]?.resolve("second done");
+    await fake.supervisor.wait({ targets: [second.agentPath], timeoutMs: 1_000 });
+
+    // Act
+    const third = await fake.supervisor.spawn({
+      taskName: "queued-until-eviction",
+      agentType: "worker",
+      prompt: "third",
+      execution,
+    });
+    let thirdProcess = fake.processes.get(third.agentPath);
+    for (let attempt = 0; attempt < 10 && !thirdProcess?.assignments.length; attempt += 1) {
+      await flush();
+      thirdProcess = fake.processes.get(third.agentPath);
+    }
+    const listed = await fake.supervisor.list();
+
+    // Assert
+    expect(third.status).toBe("running");
+    expect(firstProcess.close).toHaveBeenCalledTimes(1);
+    expect(secondProcess.close).not.toHaveBeenCalled();
+    expect(listed.find((agent) => agent.agentPath === first.agentPath)?.status).toBe("unloaded");
+    expect(thirdProcess?.assignments).toHaveLength(1);
+    expect(fake.entries).toContainEqual(
+      expect.objectContaining({ event: "unloaded", agentPath: first.agentPath, agentId: first.agentId }),
+    );
+    thirdProcess?.assignments[0]?.resolve("third done");
+    await fake.supervisor.wait({ targets: [third.agentPath], timeoutMs: 1_000 });
+
+    // Act
+    const resumed = await fake.supervisor.followup({ target: first.agentPath, message: "resume oldest" });
+    const recoveredProcess = fake.processes.get(first.agentPath);
+
+    // Assert
+    expect(resumed.status).toBe("running");
+    expect(recoveredProcess).not.toBe(firstProcess);
+    expect(fake.createProcess.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({
+        agentPath: first.agentPath,
+        session: { kind: "recovered", sessionFile: `/sessions/root-${first.agentPath.slice(6)}.jsonl` },
+      }),
+    );
+    recoveredProcess?.assignments[0]?.resolve("resumed done");
+    await fake.supervisor.wait({ targets: [first.agentPath], timeoutMs: 1_000 });
+  });
+
+  test("does not release resident capacity when idle process termination fails", async () => {
+    // Arrange
+    const fake = harness({ active: 1, resident: 1 });
+    const first = await fake.supervisor.spawn({
+      taskName: "resident",
+      agentType: "worker",
+      prompt: "first",
+      execution,
+    });
+    const firstProcess = fake.processes.get(first.agentPath) as FakeProcess;
+    firstProcess.assignments[0]?.resolve("first done");
+    await fake.supervisor.wait({ targets: [first.agentPath], timeoutMs: 1_000 });
+    const closeFailure = new Error("termination failed");
+    firstProcess.close.mockImplementationOnce(async () => {
+      throw closeFailure;
+    });
+
+    // Act
+    const replacement = fake.supervisor.spawn({
+      taskName: "replacement",
+      agentType: "worker",
+      prompt: "second",
+      execution,
+    });
+
+    // Assert
+    await expect(replacement).rejects.toBe(closeFailure);
+    expect(fake.processes.get(first.agentPath)).toBe(firstProcess);
+    expect(fake.processes.has("/root/replacement")).toBe(false);
+    expect((await fake.supervisor.list()).find((agent) => agent.agentPath === first.agentPath)?.status).toBe("idle");
+    expect(fake.entries).not.toContainEqual(expect.objectContaining({ event: "unloaded", agentPath: first.agentPath }));
+  });
+
+  test("serializes concurrent close calls while an idle resident unloads", async () => {
+    // Arrange
+    const fake = harness({ active: 1, resident: 1 });
+    const first = await fake.supervisor.spawn({
+      taskName: "resident",
+      agentType: "worker",
+      prompt: "first",
+      execution,
+    });
+    const firstProcess = fake.processes.get(first.agentPath) as FakeProcess;
+    firstProcess.assignments[0]?.resolve("first done");
+    await fake.supervisor.wait({ targets: [first.agentPath], timeoutMs: 1_000 });
+    let finishClose!: () => void;
+    const closePending = new Promise<void>((resolve) => {
+      finishClose = resolve;
+    });
+    firstProcess.close.mockImplementationOnce(async () => await closePending);
+    const replacementPromise = fake.supervisor.spawn({
+      taskName: "replacement",
+      agentType: "worker",
+      prompt: "second",
+      execution,
+    });
+    await flush();
+
+    // Act
+    const firstClose = fake.supervisor.close(first.agentPath);
+    const secondClose = fake.supervisor.close(first.agentPath);
+    finishClose();
+    const [replacement, firstResult, secondResult] = await Promise.all([replacementPromise, firstClose, secondClose]);
+
+    // Assert
+    expect(firstResult.status).toBe("closed");
+    expect(secondResult.status).toBe("closed");
+    expect(firstProcess.close).toHaveBeenCalledTimes(1);
+    expect(
+      fake.entries.filter((entry) => entry.event === "closed" && entry.agentPath === first.agentPath),
+    ).toHaveLength(1);
+    const replacementProcess = fake.processes.get(replacement.agentPath);
+    replacementProcess?.assignments[0]?.resolve("replacement done");
+    await fake.supervisor.wait({ targets: [replacement.agentPath], timeoutMs: 1_000 });
   });
 
   test("removes queued activity when a never-started agent is closed", async () => {

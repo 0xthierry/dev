@@ -10,20 +10,34 @@ export interface AgentActivityRow {
 export function createAgentActivityWidget(
   rows: readonly AgentActivityRow[],
   theme: Theme,
-  requestRender: () => void,
+  requestRender: (force?: boolean) => void,
 ): {
   render(width: number): string[];
   invalidate(): void;
   dispose(): void;
 } {
-  const refresh = setInterval(requestRender, 1_000);
-  refresh.unref();
-
-  return {
-    render: (width) => renderAgentActivity(rows, theme, width),
-    invalidate: () => {},
+  let cachedWidth: number | undefined;
+  let cachedLines: string[] | undefined;
+  const component = {
+    render: (width: number) => {
+      if (cachedWidth !== width || !cachedLines) {
+        cachedWidth = width;
+        cachedLines = renderAgentActivity(rows, theme, width);
+      }
+      return cachedLines;
+    },
+    invalidate: () => {
+      cachedWidth = undefined;
+      cachedLines = undefined;
+    },
     dispose: () => clearInterval(refresh),
   };
+  const refresh = setInterval(() => {
+    component.invalidate();
+    requestRender(true);
+  }, 1_000);
+  refresh.unref();
+  return component;
 }
 
 export function hasLiveAgentActivity(rows: readonly AgentActivityRow[]): boolean {

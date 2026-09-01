@@ -26,7 +26,7 @@ export const SUPERVISOR_LIMIT_EVIDENCE = {
     default: 16,
     minimum: 1,
     rationale:
-      "Twice the active budget leaves room for idle resumable children while new queued assignments consume released active slots.",
+      "Twice the active budget leaves room for idle resumable children; the least-recently-used idle resident unloads before runnable work queues on this cap.",
   },
   depth: {
     resource: "multiplicative orchestration fan-out",
