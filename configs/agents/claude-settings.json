@@ -48,6 +48,10 @@
     ],
     "deny": [
       "AskUserQuestion",
+      "Artifact",
+      "RemoteTrigger",
+      "EnterPlanMode",
+      "ExitPlanMode",
       "Bash(rm -rf *)",
       "Bash(rm -fr *)",
       "Bash(rm -Rf *)",
@@ -74,7 +78,7 @@
     ],
     "defaultMode": "default"
   },
-  "model": "opus[1m]",
+  "model": "claude-fable-5-1",
   "enableAllProjectMcpServers": false,
   "statusLine": {
     "type": "command",
