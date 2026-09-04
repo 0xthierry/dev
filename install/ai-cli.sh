@@ -5,8 +5,8 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 AMQ_SOURCE_URL="https://github.com/avivsinai/agent-message-queue.git"
-AMQ_VERSION="v0.46.0"
-AMQ_COMMIT="b2645f5b4d379d897239cef3e10c0f4a3a26f01e"
+AMQ_VERSION="v0.77.1"
+AMQ_COMMIT="05678d46cb989b191657aaa29f4a5195f5de416c"
 
 # True when an already-installed binary reports the pinned version. Each vendor
 # prints a different shape ("plannotator 0.24.2", "2.1.219 (Claude Code)",
@@ -324,11 +324,11 @@ install_amq_from_source() {
 
   if (( ${DRY_RUN:-0} )); then
     # shellcheck disable=SC2016 # $1/$@ are intentionally expanded by the inner bash.
-    dry_run_cmd bash -c 'cd "$1" && shift && AMQ_NO_UPDATE_CHECK=1 "$@"' _ "$source_dir" "${go_cmd[@]}" build -trimpath -ldflags "-s -w -X main.version=$AMQ_VERSION" -o "$install_dir/amq" ./cmd/amq
+    dry_run_cmd bash -c 'cd "$1" && shift && AMQ_NO_UPDATE_CHECK=1 "$@"' _ "$source_dir" "${go_cmd[@]}" build -trimpath -ldflags "-s -w -X main.version=${AMQ_VERSION#v}" -o "$install_dir/amq" ./cmd/amq
   else
     (
       cd "$source_dir"
-      run_cmd env AMQ_NO_UPDATE_CHECK=1 "${go_cmd[@]}" build -trimpath -ldflags "-s -w -X main.version=$AMQ_VERSION" -o "$install_dir/amq" ./cmd/amq
+      run_cmd env AMQ_NO_UPDATE_CHECK=1 "${go_cmd[@]}" build -trimpath -ldflags "-s -w -X main.version=${AMQ_VERSION#v}" -o "$install_dir/amq" ./cmd/amq
     )
   fi
 }

@@ -62,14 +62,33 @@ describe("amq-notify extension E2E", () => {
     execFileSync("amq", ["init", "--root", root, "--agents", "pi,claude"], { env: amqEnv(root) });
 
     // Act
-    execFileSync("amq", ["send", "--root", root, "--me", "claude", "--to", "pi", "--body", "hello from e2e"], {
-      env: amqEnv(root),
-    });
+    execFileSync(
+      "amq",
+      [
+        "send",
+        "--root",
+        root,
+        "--me",
+        "claude",
+        "--to",
+        "pi",
+        "--kind",
+        "status",
+        "--labels",
+        "done,retire",
+        "--subject",
+        "complete",
+        "--body",
+        "hello from e2e",
+      ],
+      { env: amqEnv(root) },
+    );
     const agentEnd = await harness.waitForEvent((event) => event.type === "agent_end", 60_000);
     const remaining = await waitForNewInbox(root);
 
     // Assert
     expect(eventText(agentEnd)).toContain(expectedFinalResponseText);
+    expect(eventText(agentEnd)).toContain("Labels: done,retire");
     expect(remaining).toEqual([]);
     expect(harness.stderr()).toBe("");
   }, 90_000);

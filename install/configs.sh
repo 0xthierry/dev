@@ -3,6 +3,8 @@ set -euo pipefail
 
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=install/herdr.sh
+source "$(dirname "${BASH_SOURCE[0]}")/herdr.sh"
 
 apply_nvim() {
   ensure_dir "$HOME/.config"
@@ -46,10 +48,13 @@ apply_raycast() {
 apply_agents() {
   if (( ${DRY_RUN:-0} )); then
     "$REPO_ROOT/configs/agents/install.sh" --dry-run --yes
-    return 0
+  else
+    "$REPO_ROOT/configs/agents/install.sh" --yes
   fi
 
-  "$REPO_ROOT/configs/agents/install.sh" --yes
+  # Herdr writes additive hooks into the freshly rendered agent configs. Moshi
+  # runs later and composes with these hooks without making either integration stale.
+  configure_herdr_agent_integrations
 }
 
 apply_brave_linux() {

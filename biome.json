@@ -3,6 +3,8 @@
   "files": {
     "includes": [
       "configs/agents/pi/extensions/**/*.ts",
+      "!configs/agents/pi/extensions/herdr-agent-state.ts",
+      "!configs/agents/pi/extensions/moshi-hooks.ts",
       "scripts/pi-extension-tests.ts",
       "package.json",
       "tsconfig.pi-extensions.json"

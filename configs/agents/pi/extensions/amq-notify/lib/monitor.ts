@@ -6,6 +6,7 @@ export interface AmqMonitorMessage {
   subject?: string;
   priority?: string;
   kind?: string;
+  labels?: string[];
   created?: string;
   body?: string;
 }
@@ -87,6 +88,7 @@ function parseMessages(value: unknown[] | undefined): AmqMonitorMessage[] {
         subject: stringValue(candidate.subject),
         priority: stringValue(candidate.priority),
         kind: stringValue(candidate.kind),
+        labels: stringArrayValue(candidate.labels),
         created: stringValue(candidate.created),
         body: stringValue(candidate.body),
       },
@@ -108,6 +110,7 @@ function formatMonitorMessage(message: AmqMonitorMessage): string {
     `  Subject: ${message.subject || "-"}`,
     `  Priority: ${message.priority || "-"}`,
     `  Kind: ${message.kind || "-"}`,
+    `  Labels: ${message.labels?.join(",") || "-"}`,
     `  Thread: ${message.thread || "-"}`,
   ];
 

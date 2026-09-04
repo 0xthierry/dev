@@ -25,7 +25,7 @@ java = "temurin-17.0.19+10"
 dotnet = "8.0.420"
 zig = "latest"
 aws = "latest"
-"github:ogulcancelik/herdr" = "0.7.5"
+"github:herdrdev/herdr" = "0.8.2"
 
 [settings]
 experimental = false
@@ -39,18 +39,24 @@ EOF
 
 install_runtimes() {
   local mise_bin=""
+  local previous_herdr_version=""
+  local installed_herdr_version=""
+  local running_herdr_sessions=""
 
   log_section "Mise Runtimes"
-  write_mise_config
-
-  if ! (( ${DRY_RUN:-0} )) && ! mise_bin="$(resolve_mise_bin 2>/dev/null)"; then
-    log_item "Mise not installed, skipping runtimes"
-    return 0
-  fi
 
   if (( ${DRY_RUN:-0} )); then
     mise_bin="mise"
+  elif ! mise_bin="$(resolve_mise_bin 2>/dev/null)"; then
+    write_mise_config
+    log_item "Mise not installed, skipping runtimes"
+    return 0
+  else
+    previous_herdr_version="$(herdr --version 2>/dev/null | head -1 || true)"
+    running_herdr_sessions="$(herdr session list 2>/dev/null | awk '$2 == "running" { print $1 }' | paste -sd, - || true)"
   fi
+
+  write_mise_config
 
   log_item "Installing language runtimes..."
   run_cmd "$mise_bin" install
@@ -60,6 +66,11 @@ install_runtimes() {
     dry_run_cmd /bin/bash -lc "eval \"\$(mise activate bash)\""
   else
     eval "$("$mise_bin" activate bash)"
+    installed_herdr_version="$(herdr --version 2>/dev/null | head -1 || true)"
+    if [[ -n "$previous_herdr_version" && "$installed_herdr_version" != "$previous_herdr_version" && -n "$running_herdr_sessions" ]]; then
+      log_item "Herdr changed from $previous_herdr_version to $installed_herdr_version"
+      log_item "Restart running Herdr sessions to load the new binary: $running_herdr_sessions"
+    fi
   fi
 }
 

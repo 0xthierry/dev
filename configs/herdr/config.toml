@@ -133,6 +133,11 @@ command = "lazygit"
 # directory = "~/.herdr/worktrees"
 
 [ui]
+# Herdr emits this as the outer terminal OSC title. Ghostty propagates it to
+# Hyprland, whose Omarchy group bar uses it as the tab title. `{pane}` is the
+# explicit use-agent task name; `{terminal_title}` identifies ordinary agents.
+window_title = "{hostname}: {workspace} {pane} {terminal_title}"
+
 # Sidebar width (auto-scaled based on workspace names, this sets the default)
 # sidebar_width = 26
 
@@ -247,9 +252,6 @@ command = "lazygit"
 [experimental]
 # Allow launching herdr from inside a herdr-managed pane.
 # allow_nested = false
-# Experimental local Kitty graphics rendering for attached clients.
-# Requires a Kitty graphics-compatible outer terminal.
-kitty_graphics = true
 # Save recent pane screen history across full server restarts.
 pane_history = false
 # While prefix mode is active, temporarily switch the macOS host input

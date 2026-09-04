@@ -57,9 +57,10 @@ Use `--dry-run` first when changing the setup flow or validating a host:
 3. Shared env, shell, git, SSH, `mise`, and AI CLI setup
 4. Linux hosts also install and enable Docker
 5. Repo-owned config directories for the selected host
-6. Moshi host integration on hosts that include the `moshi` config target: installs `moshi-hook`, exposes Herdr at `~/.local/bin/herdr` for SSH probes, opens the Tailscale mosh UDP range with UFW, and starts the `moshi-hook` user service
-7. Agent hook dependencies from `configs/agents/hooks`
-8. Agent code review tools from `configs/agents/bin/install-cr-tools.sh`
+6. Moshi host integration on hosts that include the `moshi` config target: installs the pinned `moshi-hook`, exposes Herdr at `~/.local/bin/herdr` for SSH probes, opens the Tailscale mosh UDP range with UFW, refreshes hooks for installed/configured agents, and starts the `moshi-hook` user service after pairing
+7. Herdr integrations for installed/configured agents, with the Pi integration loaded from the pinned repository-generated extension
+8. Agent hook dependencies from `configs/agents/hooks`
+9. Agent code review tools from `configs/agents/bin/install-cr-tools.sh`
 
 The setup is intended to be idempotent and non-destructive. Existing unrelated paths are warned about and left in place instead of being overwritten.
 
@@ -94,10 +95,13 @@ ls -la ~/.pi/agent/extensions
 For Moshi + Herdr setup, verify:
 
 ```bash
-command -v moshi-hook
+moshi-hook version
+amq --version
+herdr --version
 ls -la ~/.local/bin/herdr
 systemctl --user status moshi-hook
 moshi-hook status
+herdr integration status
 herdr session list --json
 ```
 
@@ -107,6 +111,8 @@ Phone-specific Moshi steps stay manual because they require device-held secrets:
 moshi-hook host setup --host <tailscale-ip> --name <host-name> --user "$USER"
 moshi-hook pair --token <token-from-Moshi-Settings-Hooks>
 ```
+
+After pairing, rerun `./setup.sh <host>` so Moshi refreshes the installed agent hooks and starts or restarts its service.
 
 ## Troubleshooting
 

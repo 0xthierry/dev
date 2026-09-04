@@ -27,16 +27,18 @@ describe("applyCodexFastMode", () => {
     expect(result).toBeUndefined();
   });
 
-  test("does not opt unsupported Codex models into fast mode", () => {
-    // Arrange
-    const payload = codexPayload({ model: "gpt-5.4-mini" });
+  for (const model of ["gpt-5.4-mini", "gpt-6-astra"] as const) {
+    test(`does not opt unsupported ${model} Codex payloads into fast mode`, () => {
+      // Arrange
+      const payload = codexPayload({ model });
 
-    // Act
-    const result = applyCodexFastMode(payload);
+      // Act
+      const result = applyCodexFastMode(payload);
 
-    // Assert
-    expect(result).toBeUndefined();
-  });
+      // Assert
+      expect(result).toBeUndefined();
+    });
+  }
 
   test("does not change non-Codex OpenAI responses payloads", () => {
     // Arrange

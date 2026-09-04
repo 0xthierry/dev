@@ -13,6 +13,7 @@
       "./agent-feedback",
       "./subagent",
       "./statusline",
+      "./task-title",
       "./token-speed",
       "./codex-fast-mode",
       "./xai-grok-fast-mode",
@@ -21,6 +22,8 @@
       "./lsp",
       "./fff",
       "./amq-notify",
+      "./herdr-agent-state.ts",
+      "./moshi-hooks.ts",
       "./computer-use"
     ]
   },

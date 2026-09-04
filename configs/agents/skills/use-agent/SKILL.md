@@ -11,7 +11,9 @@ Only use this skill when the user explicitly asks or allows the use of another a
 
 ## Verify the installed control surfaces
 
-The installed binaries are authoritative. This repo pins and validates Herdr 0.7.5 with AMQ 0.46.0. Do not assume a newer release preserves the launch lifecycle; rerun a real Herdr sidecar launch/close smoke test before changing either pin.
+The installed binaries are authoritative. This repo pins and validates Herdr 0.8.2 with AMQ 0.77.1. Do not assume a newer release preserves the launch lifecycle; rerun a real Herdr sidecar launch/close smoke test before changing either pin.
+
+Use `herdr --skill` and AMQ's skill at the pinned tag as upgrade references only. Do not install them as competing active skills: their broad direct-agent/managed-launch workflows conflict with this skill's Herdr-wrapped, exact-room, AMQ-only coordination invariants.
 
 Before controlling Herdr, verify that the main is actually inside a Herdr-managed pane:
 
@@ -159,9 +161,9 @@ require_preserved_main_amq_binding() {
 }
 
 launch_herdr_sidecar() {
-  local split_target="$1" split_direction="$2"
+  local split_target="$1" split_direction="$2" session_title="$3"
   local split_json worker_pane_id process_json command
-  shift 2
+  shift 3
 
   require_preserved_main_amq_binding "${ROOM_ROOT:-}" || return
 
@@ -172,10 +174,22 @@ launch_herdr_sidecar() {
       return 2
       ;;
   esac
+  if [[ -z "$session_title" ]]; then
+    printf 'error: Herdr worker session title is required\n' >&2
+    return 2
+  fi
 
   split_json="$(herdr pane split --pane "$split_target" \
     --direction "$split_direction" --ratio 0.45 --cwd "$PWD" --no-focus)"
   worker_pane_id="$(printf '%s' "$split_json" | jq -er '.result.pane.pane_id')"
+
+  if ! herdr pane rename "$worker_pane_id" "$session_title" >/dev/null \
+    || ! herdr pane report-metadata "$worker_pane_id" \
+      --source user:use-agent-session --title "$session_title" \
+      --token summary="$session_title" >/dev/null; then
+    herdr pane close "$worker_pane_id" >/dev/null
+    return 1
+  fi
 
   if ! herdr pane wait-output "$worker_pane_id" \
     --regex '.+' --source visible --timeout 10000 >/dev/null; then
@@ -200,7 +214,7 @@ launch_herdr_sidecar() {
 }
 ```
 
-Herdr 0.7.5 separates layout, pane, and agent control. `pane split` creates the shell pane and returns its ID at `.result.pane.pane_id`, but the shell can still be starting when that response arrives. Wait for visible shell output and verify that the shell owns the foreground before using `pane run`; otherwise the command's submit key can arrive before the prompt is ready and leave the launch text sitting unexecuted. `pane run` then atomically submits command text in that pane. The `%q` escaping is required because it accepts shell command text and the worker prompt must remain one argument to the agent CLI.
+Herdr 0.8.2 separates layout, pane, and agent control. `pane split` creates the shell pane and returns its ID at `.result.pane.pane_id`, but the shell can still be starting when that response arrives. The helper applies the explicit `use-agent-<topic>-<handle>` title both as the manual pane name and as presentation metadata, so Herdr shows the orchestration session in pane chrome and agent views while the agent CLI receives the same value through `--name`. Wait for visible shell output and verify that the shell owns the foreground before using `pane run`; otherwise the command's submit key can arrive before the prompt is ready and leave the launch text sitting unexecuted. `pane run` then atomically submits command text in that pane. The `%q` escaping is required because it accepts shell command text and the worker prompt must remain one argument to the agent CLI.
 
 Pass an explicit target pane and `right` or `down` so a multi-worker fleet can build a usable layout instead of repeatedly narrowing the main pane. The helper prints only the created pane ID; every launch must capture it and immediately record the append-only tuple `(handle, pane_id, task, lifecycle state)`. Do not overwrite that mapping until retirement completes.
 
@@ -295,7 +309,7 @@ printf 'ROOM_ROOT=%s\nMAIN_HANDLE=%s\nWORKER_HANDLES=%s\n' \
 
 Shell state from one tool call may not survive the next. Re-declare `TOPIC`, `MAIN_HANDLE`, `ROOM_ROOT`, and both helper functions in every later launch or main-side AMQ call. When the current process exposes `AM_ROOT`, always derive `ROOM_ROOT` from it again and run `require_preserved_main_amq_binding`; never use a topic-derived or copied literal instead. Printed literal room values are acceptable only for a main whose `AM_ROOT` is unset. Do not assume an `export` in an earlier tool call persisted.
 
-Use the pinned AMQ 0.46.0 unless a newer version has passed the real Herdr lifecycle smoke test. `amq init --root ... --force` refreshes the room's configured handle list and creates missing mailboxes without consuming queued messages. Every live process needs a unique handle, including replicas of the same model and a worker using the same harness as the main. Choose any unused numbered handle; never launch the whole configured pool merely because it exists.
+Use the pinned AMQ 0.77.1 unless a newer version has passed the real Herdr lifecycle smoke test. `amq init --root ... --force` refreshes the room's configured handle list and creates missing mailboxes without consuming queued messages. Every live process needs a unique handle, including replicas of the same model and a worker using the same harness as the main. Choose any unused numbered handle; never launch the whole configured pool merely because it exists.
 
 ## Pin the current Herdr location
 
@@ -324,7 +338,7 @@ build_readonly_worker_prompt() {
 
 `done,retire` means artifact writes are complete and no further worker-owned state needs to be consumed; it is a retirement request, not an immediate kill signal. `blocked,awaiting-input` preserves the worker for one answer. `blocked,rotate` asks the main to record the partial result and replace the worker.
 
-`amq coop exec --require-wake` must establish native wake before the agent starts. If it fails, do not launch with degraded delivery and do not invent a hook workaround. Run `AM_ROOT="$ROOM_ROOT" AM_ME="$MAIN_HANDLE" amq doctor --ops`, fix the wake boundary, and relaunch.
+`amq coop exec --require-wake` must establish native wake before the agent starts. AMQ 0.72 and newer name supported harness sessions automatically, but these recipes pass `--named=false` because they provide an explicit harness `--name`; never enable both naming paths. If wake setup fails, do not launch with degraded delivery and do not invent a hook workaround. Run `AM_ROOT="$ROOM_ROOT" AM_ME="$MAIN_HANDLE" amq doctor --ops`, fix the wake boundary, and relaunch.
 
 ## Claude worker — Fable 5.1, xhigh oracle
 
@@ -334,7 +348,8 @@ Use the pinned Claude Code model ID `claude-fable-5-1`. This is a read-only orac
 WORKER_HANDLE="claude-fable51-xhigh-1" # choose any configured unused claude-fable51-xhigh-1..N
 WORKER_PROMPT="$(build_readonly_worker_prompt)"
 WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
-  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake claude -- \
+  "use-agent-$TOPIC-$WORKER_HANDLE" \
+  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake --named=false claude -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
   --model claude-fable-5-1 \
   --effort xhigh \
@@ -352,7 +367,8 @@ Use the same pinned model at `high`; do not substitute the `xhigh` oracle profil
 WORKER_HANDLE="claude-fable51-high-1" # choose any configured unused claude-fable51-high-1..N
 WORKER_PROMPT="$(build_readonly_worker_prompt)"
 WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
-  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake claude -- \
+  "use-agent-$TOPIC-$WORKER_HANDLE" \
+  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake --named=false claude -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
   --model claude-fable-5-1 \
   --effort high \
@@ -372,7 +388,8 @@ Use Pi's direct ChatGPT-backed catalog entry `openai-codex/gpt-5.6-sol`. The ups
 WORKER_HANDLE="pi-gpt56-1" # choose any configured unused pi-gpt56-1..N
 WORKER_PROMPT="$(build_worker_prompt)"
 WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
-  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake pi -- \
+  "use-agent-$TOPIC-$WORKER_HANDLE" \
+  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake --named=false pi -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
   --model openai-codex/gpt-5.6-sol \
   --thinking high \
@@ -389,7 +406,8 @@ Use the direct xAI catalog entry `xai/grok-4.5` at its highest supported effort.
 WORKER_HANDLE="pi-grok45-1" # choose any configured unused pi-grok45-1..N
 WORKER_PROMPT="$(build_readonly_worker_prompt)"
 WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
-  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake pi -- \
+  "use-agent-$TOPIC-$WORKER_HANDLE" \
+  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake --named=false pi -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
   --model xai/grok-4.5 \
   --thinking high \
@@ -407,7 +425,8 @@ Use the direct xAI catalog entry `xai/grok-4.6` at `high`, not its optional `xhi
 WORKER_HANDLE="pi-grok46-1" # choose any configured unused pi-grok46-1..N
 WORKER_PROMPT="$(build_readonly_worker_prompt)"
 WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
-  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake pi -- \
+  "use-agent-$TOPIC-$WORKER_HANDLE" \
+  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake --named=false pi -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
   --model xai/grok-4.6 \
   --thinking high \
@@ -421,19 +440,32 @@ To launch replicas, rerun only the needed recipe with another unused handle and 
 
 ## Dispatch work
 
-Wait for the worker's separate `ready` status, then send a concrete contract. Before every main-side `init`, launch, `send`, `drain`, `monitor`, `doctor`, or retirement command, run `require_preserved_main_amq_binding "$ROOM_ROOT"`. Use explicit `--root` and `--me` on main-side commands so this works from any main harness and across fresh shell tool calls. Workers launched by `coop exec` should use bare AMQ commands: it already sets their exact `AM_ROOT`, `AM_ME`, `AM_BASE_ROOT`, and `AM_SESSION` context.
+Wait for the worker's separate `ready` status, then give the detected Herdr agent the same visual handle. Define one short, single-line task title and apply it to both the pane and its presentation metadata before sending the matching AMQ subject:
+
+```bash
+TASK_TITLE="<short task>"
+herdr agent rename "$WORKER_PANE_ID" "$WORKER_HANDLE"
+herdr pane rename "$WORKER_PANE_ID" "$TASK_TITLE · $WORKER_HANDLE"
+herdr pane report-metadata "$WORKER_PANE_ID" --source user:use-agent-task \
+  --title "$TASK_TITLE" --token "summary=$TASK_TITLE"
+```
+
+This makes Ghostty and Omarchy's Hyprland group bar show what the worker is doing rather than only its model handle. The pane ID remains the authoritative lifecycle target; the visual agent alias is for navigation only. Before every main-side `init`, launch, `send`, `drain`, `monitor`, `doctor`, or retirement command, run `require_preserved_main_amq_binding "$ROOM_ROOT"`. Use explicit `--root` and `--me` on main-side commands so this works from any main harness and across fresh shell tool calls. Workers launched by `coop exec` should use bare AMQ commands: it already sets their exact `AM_ROOT`, `AM_ME`, `AM_BASE_ROOT`, and `AM_SESSION` context.
 
 AMQ accepts these message kinds: `brainstorm`, `review_request`, `review_response`, `question`, `answer`, `decision`, `status`, and `todo`. There is no `work` kind; use `todo` for action requests.
 
 ```bash
 require_preserved_main_amq_binding "$ROOM_ROOT" || exit 1
-amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to "$WORKER_HANDLE" --kind todo \
-  --subject "<short task>" \
-  --body $'Task ID: <lane-id>\nRole: <oracle|architect|implementer|debugger|scout|tester|adversarial reviewer>\nGoal: <one bounded outcome>\nDependencies: <already-settled prerequisites>\nDecisions: <current canonical decisions>\nContext: <evidence and relevant artifact paths>\nOwnership: <exact files/modules it may change, or read-only>\nConstraints: <what must not change>\nSuccess: <acceptance criteria>\nValidation: <commands/checks>\nLifetime: one primary contract plus at most one immediate same-artifact follow-up\nReport: <findings, changed paths, validation, remaining risks, done/retire or blocked status>' \
-  --wait-for drained --wait-timeout 60s
+SEND_JSON="$(
+  amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to "$WORKER_HANDLE" --kind todo \
+    --subject "$TASK_TITLE" \
+    --body $'Task ID: <lane-id>\nRole: <oracle|architect|implementer|debugger|scout|tester|adversarial reviewer>\nGoal: <one bounded outcome>\nDependencies: <already-settled prerequisites>\nDecisions: <current canonical decisions>\nContext: <evidence and relevant artifact paths>\nOwnership: <exact files/modules it may change, or read-only>\nConstraints: <what must not change>\nSuccess: <acceptance criteria>\nValidation: <commands/checks>\nLifetime: one primary contract plus at most one immediate same-artifact follow-up\nReport: <findings, changed paths, validation, remaining risks, done/retire or blocked status>' \
+    --wait-for drained --wait-timeout 60s --json
+)"
+MESSAGE_ID="$(printf '%s' "$SEND_JSON" | jq -er '.id')"
 ```
 
-AMQ 0.46 body forms are exact:
+AMQ 0.77.1 body forms are exact:
 
 ```bash
 amq send --to "$MAIN_HANDLE" --body "short report"
@@ -445,7 +477,15 @@ REPORT
 
 Use `--body -` (or omitted `--body`) for stdin and `--body @path` for a file. There is no `--body-file` option. Empty or whitespace-only resolved bodies fail closed unless `--allow-empty` is explicitly supplied.
 
-A drained receipt proves the worker consumed the request. The later AMQ response proves that the harness acted on it.
+A drained receipt proves the worker consumed the request. The later AMQ response proves that the harness acted on it. When a send, receipt, or notification times out, use AMQ 0.77.1's durable trace instead of inferring delivery from terminal output:
+
+```bash
+amq trace "$MESSAGE_ID" --root "$ROOM_ROOT" --json
+AM_ROOT="$ROOM_ROOT" AM_ME="$WORKER_HANDLE" \
+  amq doctor --root "$ROOM_ROOT" --ops --json
+```
+
+A trace notification marked `accepted` or `written` proves only dispatch/write, not that the target TUI displayed or consumed the message.
 
 For an independent review, send the same artifact and criteria to each reviewer without including the other reviewer's conclusions:
 
@@ -509,9 +549,25 @@ retire_worker() {
 retire_worker "$WORKER_HANDLE" "$WORKER_PANE_ID"
 ```
 
-The AMQ wake started by `coop exec` shares the worker pane's terminal lifecycle. Closing the recorded Herdr pane terminates the agent and its wake; the wake removes its lock during shutdown. Confirm that boundary with one post-close `doctor --ops --json` check. If a lock remains, do not poll, delete lock files, or reuse the handle: use another unused pool handle and run one bounded diagnostic later at a natural checkpoint.
+The AMQ wake started by `coop exec` shares the worker pane's terminal lifecycle. Closing the recorded Herdr pane terminates the agent and its wake; the wake removes its lock during shutdown. Confirm that boundary with one post-close `doctor --ops --json` check. If a lock remains, do not poll, delete lock files, blindly restart it, or reuse the handle. Use another unused pool handle and inspect the ownership-aware diagnostic once:
+
+```bash
+AM_ROOT="$ROOM_ROOT" AM_ME="$WORKER_HANDLE" \
+  amq wake check --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --json
+```
+
+Automation may act only when `restart_capability` is `agent_safe` and must follow `next_action`; `operator_only` belongs to the owning terminal or supervisor.
 
 Pane closure is lifecycle control, not worker communication. Never ask the worker to self-kill, never close the main pane, and never close an unrecorded pane. If the main crashes, recover by inspecting Herdr panes plus `amq doctor --ops`; workers do not invent self-timeouts.
+
+When Herdr detects the wrong owner/state or launch readiness is ambiguous, use its manifest diagnostics rather than changing the AMQ transport or scraping pane output as a response channel:
+
+```bash
+herdr server agent-manifests --json
+herdr agent explain "$WORKER_PANE_ID" --verbose
+```
+
+Keep background manifest checks enabled. `herdr server update-agent-manifests --json` is an explicit repair when diagnostics show a stale compatible manifest.
 
 ## Receive replies on any main harness
 

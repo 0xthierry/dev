@@ -12,5 +12,9 @@
     "types": ["bun"]
   },
   "include": ["configs/agents/pi/extensions/**/*.ts", "scripts/pi-extension-tests.ts", "scripts/pi-session-usage.ts"],
-  "exclude": ["configs/agents/pi/extensions/**/node_modules/**", "node_modules/**"]
+  "exclude": [
+    "configs/agents/pi/extensions/moshi-hooks.ts",
+    "configs/agents/pi/extensions/**/node_modules/**",
+    "node_modules/**"
+  ]
 }

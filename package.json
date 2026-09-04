@@ -15,6 +15,7 @@
       "./configs/agents/pi/extensions/agent-feedback",
       "./configs/agents/pi/extensions/subagent",
       "./configs/agents/pi/extensions/statusline",
+      "./configs/agents/pi/extensions/task-title",
       "./configs/agents/pi/extensions/token-speed",
       "./configs/agents/pi/extensions/codex-fast-mode",
       "./configs/agents/pi/extensions/xai-grok-fast-mode",
@@ -23,6 +24,8 @@
       "./configs/agents/pi/extensions/lsp",
       "./configs/agents/pi/extensions/fff",
       "./configs/agents/pi/extensions/amq-notify",
+      "./configs/agents/pi/extensions/herdr-agent-state.ts",
+      "./configs/agents/pi/extensions/moshi-hooks.ts",
       "./configs/agents/pi/extensions/computer-use"
     ],
     "prompts": [

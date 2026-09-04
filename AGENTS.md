@@ -28,11 +28,11 @@ The two layers don't validate each other. **Most recurring bug:** config deploye
 | `configs/nvim/` | `~/.config/nvim` | symlink |
 | `configs/hypr/` | `~/.config/hypr` | symlink (omarchy only) |
 | `configs/herdr/config.toml` | `~/.config/herdr/config.toml` | symlink |
-| Moshi host integration | `~/.local/bin/herdr`, `moshi-hook` user service, mosh firewall rule | `install/moshi.sh` |
+| Moshi host integration | `~/.local/bin/herdr`, refreshed agent hooks, `moshi-hook` user service, mosh firewall rule | `install/moshi.sh` |
 | `configs/shell/` | sourced via `~/.zshrc` / `~/.zshenv` | written by `install/shell.sh` |
 | `configs/agents/` | `~/.agents/`, `~/.claude/`, `~/.codex/`, `~/.pi/agent/` | special installer |
 
-**Agent config is special-cased.** `configs/agents/install.sh` installs shared agents/skills/hooks (Codex gets agent copies with model stripping); syncs `claude-settings.json` into `~/.claude/settings.json`; copies `codex-config.toml`; copies `pi-settings.json` into `~/.pi/agent/settings.json`; removes the legacy repo-managed `~/.pi/agent/models.json` symlink so Pi's built-in model catalog remains authoritative; links shared `configs/agents/agents` to `~/.pi/agent/agents`; symlinks each shared skill into `~/.pi/agent/skills` without rewriting skill frontmatter; links Pi-owned `configs/agents/pi/{prompts,extensions}` to `~/.pi/agent/{prompts,extensions}`; and links `configs/agents/pi/APPEND_SYSTEM.md` to `~/.pi/agent/APPEND_SYSTEM.md` for Pi-specific appended system instructions. Claude-only skills live in `configs/agents/claude/skills/` and are linked into `~/.claude/skills` only (not `~/.agents`, `~/.codex`, or `~/.pi`). Vendored Plannotator core skills live in `configs/agents/plannotator/skills/` and are linked into Claude and Codex only; Pi gets the equivalent commands from its pinned extension package. The installer no longer creates global `AGENTS.md`/`CLAUDE.md` context files for Pi, Codex, or Claude. Pi settings exclude `~/.agents`, `~/.claude`, and `~/.codex` resources so Pi only sees repo-managed Pi resources.
+**Agent config is special-cased.** `configs/agents/install.sh` installs shared agents/skills/hooks (Codex gets agent copies with model stripping); syncs `claude-settings.json` into `~/.claude/settings.json`; copies `codex-config.toml`; copies `pi-settings.json` into `~/.pi/agent/settings.json`; removes the legacy repo-managed `~/.pi/agent/models.json` symlink so Pi's built-in model catalog remains authoritative; links shared `configs/agents/agents` to `~/.pi/agent/agents`; symlinks each shared skill into `~/.pi/agent/skills` without rewriting skill frontmatter; links Pi-owned `configs/agents/pi/{prompts,extensions}` to `~/.pi/agent/{prompts,extensions}` (including pinned, vendor-generated Herdr and Moshi Pi hooks); and links `configs/agents/pi/APPEND_SYSTEM.md` to `~/.pi/agent/APPEND_SYSTEM.md` for Pi-specific appended system instructions. Claude-only skills live in `configs/agents/claude/skills/` and are linked into `~/.claude/skills` only (not `~/.agents`, `~/.codex`, or `~/.pi`). Vendored Plannotator core skills live in `configs/agents/plannotator/skills/` and are linked into Claude and Codex only; Pi gets the equivalent commands from its pinned extension package. The installer no longer creates global `AGENTS.md`/`CLAUDE.md` context files for Pi, Codex, or Claude. Pi settings exclude `~/.agents`, `~/.claude`, and `~/.codex` resources so Pi only sees repo-managed Pi resources.
 
 ## Principles
 
@@ -51,7 +51,7 @@ Names differ between Homebrew and pacman (`tree-sitter-cli` vs `tree-sitter`, `m
 |---|---|
 | Add shared CLI tool | `install/packages/common.sh` |
 | Add tool config | `configs/cli/` plus `install/tools.sh` if needed |
-| Add Moshi/Herdr host setup | `install/moshi.sh`, `configs/agents/pi/extensions/moshi-hooks.ts`, and the host's `HOST_CONFIG_TARGETS` |
+| Add Herdr/Moshi integration | `install/herdr.sh`, `install/moshi.sh`, generated hooks under `configs/agents/{hooks,pi/extensions}/`, and the host's `HOST_CONFIG_TARGETS` |
 | Add shell behavior | `configs/shell/` plus `install/shell.sh` |
 | Add shared env var | `install/env.sh` |
 | Add host-specific env, SSH, or configs | `install/hosts/{host}.sh` |
