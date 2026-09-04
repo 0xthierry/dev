@@ -66,7 +66,6 @@ COMMON_PACMAN_LINUX_PACKAGES=(
 
 COMMON_AUR_PACKAGES=(
   infisical-bin
-  stably-orca-bin
 )
 
 NEOVIM_VERSION="0.12.1"
