@@ -46,6 +46,7 @@ HOST_BREW_CASKS=(
   obs
   obsidian
   orbstack
+  stablyai/orca/orca
   rectangle
   slack
   signal
