@@ -208,28 +208,6 @@ install_cursor_agent_cli_binary() {
   restore_cursor_agent_alias
 }
 
-grok_owned_symlink() {
-  local path="$1"
-  local grok_root=""
-  local resolved_target=""
-
-  [[ -L "$path" ]] || return 1
-  grok_root="$(canonicalize_path "$HOME/.grok")"
-  resolved_target="$(resolve_symlink_target "$path")"
-  [[ "$resolved_target" == "$grok_root/"* ]]
-}
-
-remove_grok_owned_symlink() {
-  local path="$1"
-
-  if ! grok_owned_symlink "$path"; then
-    return 0
-  fi
-
-  log_item "Removing Grok CLI symlink: $path"
-  run_cmd rm -f "$path"
-}
-
 remove_grok_shell_block() {
   local shell_file="$1"
 
@@ -237,7 +215,7 @@ remove_grok_shell_block() {
     return 0
   fi
 
-  log_item "Removing Grok CLI shell configuration: $shell_file"
+  log_item "Removing Grok installer shell configuration: $shell_file"
   # shellcheck disable=SC2016 # $1/$tmp are intentionally expanded by the inner bash.
   run_cmd bash -c '
     file="$1"
@@ -252,56 +230,27 @@ remove_grok_shell_block() {
   ' _ "$shell_file"
 }
 
-uninstall_grok_npm_package() {
-  local npm_bin=""
-  local mise_bin=""
-  local -a npm_cmd=()
-
-  if npm_bin="$(command -v npm 2>/dev/null)"; then
-    npm_cmd=("$npm_bin")
-  elif mise_bin="$(resolve_mise_bin 2>/dev/null)"; then
-    npm_cmd=("$mise_bin" exec node -- npm)
-  else
-    return 0
-  fi
-
-  if (( ${DRY_RUN:-0} )); then
-    dry_run_cmd "${npm_cmd[@]}" uninstall -g @xai-official/grok
-    return 0
-  fi
-
-  if "${npm_cmd[@]}" list -g --depth=0 @xai-official/grok >/dev/null 2>&1; then
-    log_item "Uninstalling Grok CLI npm package..."
-    run_cmd "${npm_cmd[@]}" uninstall -g @xai-official/grok
-  fi
-}
-
-uninstall_grok_cli() {
-  local artifact=""
+install_grok_cli_binary() {
+  local version="$1"
+  local install_dir="$HOME/.local/bin"
   local shell_file=""
-
-  log_item "Ensuring Grok CLI is uninstalled..."
-
-  for artifact in "$HOME/.local/bin/grok" "$HOME/.local/bin/agent" /usr/local/bin/grok /usr/local/bin/agent; do
-    remove_grok_owned_symlink "$artifact"
-  done
-
-  for artifact in "$HOME/.grok/bin" "$HOME/.grok/downloads" "$HOME/.grok/completions"; do
-    if [[ -e "$artifact" || -L "$artifact" ]]; then
-      log_item "Removing Grok CLI artifact: $artifact"
-      run_cmd rm -rf "$artifact"
-    fi
-  done
 
   for shell_file in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.config/fish/config.fish"; do
     remove_grok_shell_block "$shell_file"
   done
 
-  uninstall_grok_npm_package
+  if installed_binary_is_pinned "grok" "$version"; then
+    log_item "Grok CLI: already at $version"
+    return 0
+  fi
 
-  # Preserve ~/.grok user state (auth, config, sessions), and return the generic
-  # `agent` alias to Cursor when Cursor is already present.
-  restore_cursor_agent_alias
+  ensure_dir "$install_dir"
+  log_item "Installing Grok CLI @ $version..."
+  # Install into the shared user bin directory and expose it to the installer so
+  # it does not modify shell startup files managed by this repository.
+  # shellcheck disable=SC2016 # $0 is intentionally expanded by the inner bash.
+  run_cmd env "GROK_BIN_DIR=$install_dir" "PATH=$install_dir:$PATH" \
+    bash -c 'curl -fsSL https://x.ai/cli/install.sh | bash -s -- "$0"' "$version"
 }
 
 install_agent_browser_binary() {
@@ -420,12 +369,11 @@ install_ai_clis() {
   # Factory CLI — `droid` binary
   install_factory_cli_binary
 
-  # Grok CLI is no longer part of this setup. Remove installer-managed artifacts
-  # on every host while preserving authentication, config, and session data.
-  uninstall_grok_cli
+  # Grok CLI (xAI) — install first because its installer also creates a generic
+  # `agent` alias; Cursor is installed afterwards and owns that alias.
+  install_grok_cli_binary "1.0.13"
 
-  # Cursor Agent CLI — `cursor-agent` binary; installed after Grok cleanup so
-  # Cursor owns the generic `agent` alias.
+  # Cursor Agent CLI — `cursor-agent` binary
   install_cursor_agent_cli_binary
 
   # Railway CLI — deploy/manage Railway projects
