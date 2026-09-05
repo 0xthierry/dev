@@ -1,5 +1,5 @@
 {
-  "defaultProvider": "openai-codex",
+  "defaultProvider": "cliproxyapi",
   "defaultModel": "gpt-6-astra",
   "transport": "auto",
   "defaultThinkingLevel": "medium",

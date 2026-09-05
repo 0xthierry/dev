@@ -635,6 +635,42 @@ install_claude_target() {
   sync_claude_settings "$SOURCE_CLAUDE_SETTINGS" "$claude_hooks_json" "$target_root/settings.json"
 }
 
+sync_pi_proxy_models() {
+  local target_path="$1"
+  local source_path="$SOURCE_PI_DIR/cliproxyapi-models.json"
+  local tmp_path=""
+
+  if (( DRY_RUN )); then
+    log "[dry-run] merge cliproxyapi provider into $target_path (preserve other providers)"
+    return 0
+  fi
+
+  # Never edit through a user-owned symlink. Preserve it as a backup first.
+  tmp_path="$(mktemp)"
+  if [[ -e "$target_path" ]]; then
+    if ! jq -s '
+      .[1].providers.cliproxyapi as $proxy | .[0]
+      | if type != "object" or (.providers != null and (.providers | type) != "object")
+        then error("Pi models.json must contain a providers object")
+        else .providers.cliproxyapi = $proxy end
+    ' "$target_path" "$source_path" > "$tmp_path"; then
+      rm -f "$tmp_path"
+      return 1
+    fi
+  else
+    jq '.' "$source_path" > "$tmp_path"
+  fi
+  if [[ -f "$target_path" ]] && cmp -s "$tmp_path" "$target_path"; then
+    rm -f "$tmp_path"
+    return 0
+  fi
+  if [[ -e "$target_path" || -L "$target_path" ]]; then
+    mv "$target_path" "$(next_backup_path "$target_path")"
+  fi
+  mv "$tmp_path" "$target_path"
+  log "merged: pi cliproxyapi provider (built-in catalog unchanged)"
+}
+
 install_pi_target() {
   local target_root="$1"
 
@@ -645,6 +681,7 @@ install_pi_target() {
   copy_file_if_needed "$SOURCE_PI_WEB_SEARCH_CONFIG" "$HOME/.pi/web-search.json" "pi web-search.json"
   force_link_path "$SOURCE_PI_APPEND_SYSTEM" "$target_root/APPEND_SYSTEM.md" "pi APPEND_SYSTEM.md"
   remove_managed_symlink "$SOURCE_PI_DIR/models.json" "$target_root/models.json" "legacy pi models.json override"
+  sync_pi_proxy_models "$target_root/models.json"
   force_link_path "$SOURCE_AGENTS_DIR" "$target_root/agents" "pi agents"
   force_link_pi_skill_entries "$target_root"
   force_link_path "$SOURCE_PI_PROMPTS_DIR" "$target_root/prompts" "pi prompts"

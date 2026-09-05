@@ -82,7 +82,9 @@ bash "$HELPER" init --topic auth-fix --harness pi \
   --workers pi-gpt6-astra-1,claude-fable51-xhigh-1,pi-gpt56-1
 ```
 
-This provisions mailboxes only, not processes. It uses `amq init --force` to repair room configuration without deleting queued messages, then runs `amq doctor --ops`. If updating an existing room, include all still-needed worker handles; do not drop live workers from the roster.
+This provisions mailboxes only, not processes. It uses `amq init --force` for the exact room, resolves session identity through `amq route explain`, and, for a named session, adds the planned handles to its **base configuration authority**, preserving existing base registrations. It then provisions the authoritative mailboxes with `amq doctor --fix-mailboxes` and runs bound diagnostics. Neither MAIN's room nor the notifier is retargeted. If updating an existing room, include all still-needed worker handles; do not drop live workers from the roster. One coordinator owns roster updates: do not run concurrent init/config writers.
+
+**AMQ 0.77.1 trap:** `send/reply --strict` use the named session's base roster when present. Session-only `init` and ordinary `doctor` can appear healthy while strict delivery rejects workers against another roster. `route explain` being routable is also not proof of strict roster membership. The helper uses `doctor --root <room> --base-root <authority> --json --json-schema 2` to inspect configured registrations, not discovered mailbox handles. A malformed/unavailable authority blocks provisioning; do not remove `--strict`, reset base config to just your workers, edit mailbox files, or switch to a sibling room. Launch checks effective membership before opening a pane.
 
 | Handle pattern (N is a positive integer) | Profile |
 | --- | --- |
@@ -119,7 +121,7 @@ Read-only profiles remove edit/write from the core tool allowlist and receive a 
 
 ## Dispatch and communicate
 
-The helper supplies the standard readiness/reply/retirement prompt, including read-only and Astra/Fable role constraints. MAIN must still send a self-contained task after `ready`.
+The helper supplies the standard readiness/reply/retirement prompt, including read-only and Astra/Fable role constraints. MAIN must still send a self-contained task after `ready`. On any transport command failure, workers stop and report the exact error in their terminal response; they must not bypass strict validation, inspect mailbox files, change bindings, or invent repairs. MAIN diagnoses transport. A readiness notice known to have used a non-strict workaround is not a clean launch smoke; pause dispatch and repair first.
 
 For main-side AMQ calls, re-derive the binding on every tool call:
 
@@ -236,4 +238,11 @@ shellcheck configs/agents/skills/use-agent/scripts/sidecar.sh
 python3 -B -m unittest discover -s configs/agents/skills/use-agent/scripts -p 'test_*.py'
 ```
 
-Tests mock Herdr, AMQ, and model CLIs; they do not launch sessions or prove live provider entitlement/native wake delivery. Keep model profiles and kickoff contracts in the helper, not duplicated shell recipes in this document.
+Default tests mock Herdr, AMQ, and model CLIs. Also run the opt-in real-AMQ regression when changing routing/provisioning:
+
+```bash
+USE_AGENT_REAL_AMQ="$(command -v amq)" python3 -B -m unittest discover \
+  -s configs/agents/skills/use-agent/scripts -p 'test_*.py'
+```
+
+It uses isolated temporary base/session roots, reproduces the session-only strict failure, runs the actual helper repair, verifies strict send/reply, preserves an existing registration, and confirms unknown handles still fail. It does not launch provider sessions, touch the live notifier, or prove live provider entitlement/native wake delivery. Keep model profiles and kickoff contracts in the helper, not duplicated shell recipes in this document.

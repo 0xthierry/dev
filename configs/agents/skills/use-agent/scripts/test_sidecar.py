@@ -38,9 +38,18 @@ elif name == 'herdr':
     else:
         print('{}')
 elif name == 'amq':
-    if 'doctor' in args:
+    if args[:2] == ['route', 'explain']:
+        root = args[args.index('--root') + 1]
+        print(json.dumps({'source_root': root, 'source_session': os.environ.get('CONFIG_SESSION', '')}))
+    elif 'doctor' in args:
         locks = [{'agent': 'pi-gpt6-astra-1'}] if os.environ.get('WAKE_LOCK') else []
-        print('{}' if os.environ.get('BAD_DOCTOR') else json.dumps({'ops': {'wake_locks': locks}}))
+        agents = os.environ.get('CONFIG_AGENTS', 'pi,actual-main,pi-gpt6-astra-1,pi-gpt56-1,pi-grok45-1,pi-grok46-1,claude-fable51-high-1,claude-fable51-xhigh-1').split(',')
+        print('{}' if os.environ.get('BAD_DOCTOR') else json.dumps({
+            'ops': {'wake_locks': locks},
+            'checks': [{'name': 'Config', 'status': 'error' if os.environ.get('BAD_CONFIG') else 'ok'}],
+            'mailboxes': [{'handle': a, 'provenance': 'configured'} for a in agents]
+                + [{'handle': 'unregistered-stranger', 'provenance': 'discovered'}],
+        }))
     else:
         print('{}')
 '''
@@ -86,6 +95,80 @@ class SidecarTests(unittest.TestCase):
         self.assertEqual(call[call.index('--agents') + 1], 'actual-main,pi-gpt6-astra-1,claude-fable51-xhigh-1')
         self.assertFalse(any(c[0] == 'herdr' for c in self.calls()))
 
+    def test_session_init_preserves_base_roster_without_rebinding(self):
+        r = self.run_helper('init', '--workers', 'pi-grok45-1', AM_ROOT='/base/session',
+                            CONFIG_SESSION='session', CONFIG_AGENTS='claude,pi,user,other-worker')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        inits = [c for c in self.calls() if c[:2] == ['amq', 'init']]
+        self.assertEqual(len(inits), 2)
+        self.assertEqual(inits[0][inits[0].index('--root') + 1], '/base/session')
+        self.assertEqual(inits[1][inits[1].index('--root') + 1], '/base')
+        self.assertEqual(inits[1][inits[1].index('--agents') + 1], 'claude,pi,user,other-worker,pi,pi-grok45-1')
+        self.assertIn('ROOM_ROOT=/base/session', r.stdout)
+        self.assertNotIn('unregistered-stranger', inits[1][-2])
+        doctor = [c for c in self.calls() if c[:2] == ['amq', 'doctor']][-1]
+        self.assertEqual(doctor[doctor.index('--root') + 1], '/base/session')
+        self.assertEqual(doctor[doctor.index('--base-root') + 1], '/base')
+
+    def test_missing_authoritative_handle_blocks_before_model_or_pane(self):
+        r = self.run_helper('launch', '--handle', 'pi-grok45-1', AM_ROOT='/base/session',
+                            CONFIG_SESSION='session', CONFIG_AGENTS='claude,pi,user')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('never bypass strict', r.stderr)
+        self.assertFalse(any(c[0] in ('herdr', 'pi') for c in self.calls()))
+
+    def test_invalid_authority_diagnostics_never_overwrite_base_or_launch(self):
+        for bad in ({'BAD_CONFIG': '1'}, {'BAD_DOCTOR': '1'}, {'CONFIG_SESSION': 'wrong'}):
+            with self.subTest(bad=bad):
+                self.log.unlink(missing_ok=True)
+                r = self.run_helper('init', '--workers', 'pi-grok45-1', AM_ROOT='/base/session',
+                                    **{'CONFIG_SESSION': 'session', **bad})
+                self.assertNotEqual(r.returncode, 0)
+                self.assertEqual(len([c for c in self.calls() if c[:2] == ['amq', 'init']]), 1)
+                self.assertFalse(any(c[0] == 'herdr' for c in self.calls()))
+
+    @unittest.skipUnless(os.environ.get('USE_AGENT_REAL_AMQ'), 'opt-in isolated real AMQ smoke')
+    def test_real_amq_session_roster_strict_roundtrip(self):
+        # Only temporary roots; no live notifier, credentials, mailbox polling or provider.
+        binary = Path(os.environ['USE_AGENT_REAL_AMQ']).resolve(strict=True)
+        (self.root / 'amq').unlink()
+        (self.root / 'amq').symlink_to(binary)
+        base = self.root / '.agent-mail'
+        session = base / 'smoke'
+        env = {**self.env, 'AMQ_NO_UPDATE_CHECK': '1'}
+
+        def amq(*args):
+            return subprocess.run([str(binary), *args], cwd=self.root, env=env,
+                                  capture_output=True, text=True)
+
+        r = amq('init', '--root', str(base), '--agents', 'claude,pi,user,existing-worker')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = amq('session', 'create', 'smoke', '--root', str(base), '--me', 'pi', '--json')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        # Reproduce the regression: session-only roster cannot authorize strict sends.
+        r = amq('init', '--root', str(session), '--agents', 'pi,pi-grok45-1', '--force')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = amq('send', '--root', str(session), '--me', 'pi-grok45-1', '--to', 'pi',
+                '--strict', '--body', 'must fail before repair', '--json')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('not in config.json agents', r.stderr)
+        r = self.run_helper('init', '--workers', 'pi-grok45-1', AM_ROOT=str(session),
+                            AM_ME='pi', AMQ_NO_UPDATE_CHECK='1')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = amq('send', '--root', str(session), '--me', 'pi-grok45-1', '--to', 'pi',
+                '--strict', '--body', 'strict readiness smoke', '--json')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        message_id = json.loads(r.stdout)['id']
+        r = amq('reply', '--root', str(session), '--me', 'pi', '--id', message_id,
+                '--strict', '--body', 'strict reply smoke', '--json')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = amq('send', '--root', str(session), '--me', 'existing-worker', '--to', 'pi',
+                '--strict', '--body', 'existing registration preserved', '--json')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = amq('send', '--root', str(session), '--me', 'unregistered', '--to', 'pi',
+                '--strict', '--body', 'must still fail', '--json')
+        self.assertNotEqual(r.returncode, 0)
+
     def test_bad_roster(self):
         for roster in ('pi-gpt6-astra-0', 'unknown-1', 'pi-gpt56-1,pi-gpt56-1', 'pi-gpt56-1,'):
             with self.subTest(roster=roster):
@@ -122,6 +205,8 @@ class SidecarTests(unittest.TestCase):
                 self.assertEqual(argv[argv.index(flag) + 1], effort)
                 self.assertIn('actual-main', argv[-1])
                 self.assertIn('amq reply', argv[-1])
+                self.assertIn('never remove --strict', argv[-1])
+                self.assertIn('MAIN owns transport diagnosis', argv[-1])
                 self.assertEqual('--tools' in argv, readonly)
                 if handle.startswith('pi-'):
                     self.assertIn('AMQ_NOTIFY_ROLE=worker', argv)

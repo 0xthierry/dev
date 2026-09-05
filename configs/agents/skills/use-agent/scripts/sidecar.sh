@@ -61,7 +61,7 @@ select_profile() {
 }
 
 build_worker_prompt() {
-  printf '%s' "You are the disposable WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately send readiness with amq send --strict --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. Accept one bounded primary contract and at most one immediate follow-up on the same artifact: a failing test from your patch, review feedback on that patch, or a clarification about your assigned artifact. Do not accept a new module, different investigation, widened ownership, or unrelated third task; answer the received message with kind status and labels blocked,rotate instead. A full injected AMQ notice already includes From, ID, Context, and Body; handle it directly and do not drain again. If a terminal wake only says to check AMQ, run amq drain --strict --include-body once. Preserve the ID of each message you handle and answer it with amq reply --strict --id <message-id>, which automatically preserves its thread and refs. Use amq send --strict only for readiness or a genuinely new conversation. Send retirement-safe completion only after all assigned work and validation finish, using reply kind status and labels done,retire. If one immediate answer would unblock the same task, reply with labels blocked,awaiting-input; if fresh context is better, use blocked,rotate. Include changed paths and validation for action work. For multiline reports, feed stdin or a heredoc to amq reply with --body -; for a saved file use --body @path. The --body-file option does not exist. Do not self-close the pane: MAIN records and verifies your result before retirement. Do not poll or sleep while waiting: finish your turn and let AMQ notify you."
+  printf '%s' "You are the disposable WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately send readiness with amq send --strict --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. If any AMQ command fails, stop and report its exact error in your terminal response; never remove --strict, change room/session bindings, inspect mailbox files, or run speculative transport repairs. MAIN owns transport diagnosis. Accept one bounded primary contract and at most one immediate follow-up on the same artifact: a failing test from your patch, review feedback on that patch, or a clarification about your assigned artifact. Do not accept a new module, different investigation, widened ownership, or unrelated third task; answer the received message with kind status and labels blocked,rotate instead. A full injected AMQ notice already includes From, ID, Context, and Body; handle it directly and do not drain again. If a terminal wake only says to check AMQ, run amq drain --strict --include-body once. Preserve the ID of each message you handle and answer it with amq reply --strict --id <message-id>, which automatically preserves its thread and refs. Use amq send --strict only for readiness or a genuinely new conversation. Send retirement-safe completion only after all assigned work and validation finish, using reply kind status and labels done,retire. If one immediate answer would unblock the same task, reply with labels blocked,awaiting-input; if fresh context is better, use blocked,rotate. Include changed paths and validation for action work. For multiline reports, feed stdin or a heredoc to amq reply with --body -; for a saved file use --body @path. The --body-file option does not exist. Do not self-close the pane: MAIN records and verifies your result before retirement. Do not poll or sleep while waiting: finish your turn and let AMQ notify you."
   if [[ "$WORKER_READONLY" == 1 ]]; then
     printf '%s' ' This profile is strictly read-only. Never edit, create, delete, rename, or format files; never change git state, packages, processes, services, or external systems. Bash is available only because AMQ is the transport: beyond amq commands, use it only for non-mutating inspection and validation. Report findings and proposed changes; MAIN or a writing worker applies them.'
   fi
@@ -71,6 +71,48 @@ build_worker_prompt() {
     claude-fable51-xhigh-*)
       printf '%s' " You are Astra's independent second-opinion partner, not an oracle or final adjudicator. Challenge assumptions and return evidence, counterarguments, and alternatives. Astra is the most powerful reasoning lead; MAIN retains final acceptance." ;;
   esac
+}
+
+# AMQ 0.77.1 send/reply authorize named sessions against their base roster,
+# whereas init and doctor without --base-root inspect the exact session root.
+# Resolve through AMQ, never guess the base from a directory naming convention.
+resolve_config_authority() {
+  local route source_root session
+  route="$(amq route explain --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to "$MAIN_HANDLE" --json)" \
+    || fail 'cannot resolve AMQ configuration authority; do not launch workers'
+  source_root="$(printf '%s' "$route" | jq -er '.source_root | select(type == "string" and length > 0)')" \
+    || fail 'route has no source root'
+  session="$(printf '%s' "$route" | jq -er '.source_session | select(type == "string")')" \
+    || fail 'route has no session identity'
+  CONFIG_ROOT="$source_root"
+  if [[ -n "$session" ]]; then
+    valid_identifier "$session" || fail 'route has an invalid session identity'
+    [[ "${source_root##*/}" == "$session" ]] || fail 'route session/root mismatch'
+    CONFIG_ROOT="${source_root%/*}"
+    [[ -n "$CONFIG_ROOT" && "$CONFIG_ROOT" != "$source_root" ]] || fail 'route has no session base'
+  fi
+}
+
+configured_agents() {
+  local diagnostics
+  diagnostics="$(amq doctor --root "$ROOM_ROOT" --base-root "$CONFIG_ROOT" --json --json-schema 2)" \
+    || fail 'cannot inspect authoritative AMQ roster; no roster overwrite authorized'
+  printf '%s' "$diagnostics" | jq -er '
+    select([.checks[] | select(.name == "Config" and .status == "ok")] | length == 1) | .mailboxes |
+    select(type == "array") |
+    [.[] | select(.provenance == "configured_and_discovered" or .provenance == "configured") | .handle] |
+    select(length > 0 and all(.[]; type == "string" and test("^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$"))) | join(",")' \
+    || fail 'invalid authoritative AMQ roster diagnostics; refusing overwrite'
+}
+
+verify_roster() {
+  local agents handle
+  resolve_config_authority
+  agents="$(configured_agents)" || fail 'AMQ roster inspection failed'
+  for handle in "$MAIN_HANDLE" "$WORKER_HANDLE"; do
+    [[ ",$agents," == *",$handle,"* ]] \
+      || fail "handle $handle absent from authority $CONFIG_ROOT; run helper init before launch, never bypass strict"
+  done
 }
 
 pane_id_from_json() {
@@ -134,6 +176,7 @@ cleanup_launch() {
 launch_worker() {
   local split_json pane_id process_json title prompt command
   local -a argv
+  verify_roster
   verify_worker_cli
   resolve_main
   if [[ -z "$TARGET_PANE" ]]; then TARGET_PANE="$MAIN_PANE_ID"; fi
@@ -289,9 +332,9 @@ fi
 # No external command, including CLI discovery, may precede this binding guard.
 [[ "${HERDR_ENV:-}" == 1 ]] || fail 'HERDR_ENV=1 is required; refusing to inspect or control another Herdr client'
 command -v amq >/dev/null || fail 'required CLI not found: amq'
+command -v jq >/dev/null || fail 'required CLI not found: jq'
 if [[ "$ACTION" != init ]]; then
   command -v herdr >/dev/null || fail 'required CLI not found: herdr'
-  command -v jq >/dev/null || fail 'required CLI not found: jq'
 fi
 # Main-side AMQ commands use this exact binding; coop exec overrides it for workers.
 export AM_ROOT="$ROOM_ROOT" AM_ME="$MAIN_HANDLE"
@@ -299,8 +342,18 @@ case "$ACTION" in
   init)
     amq init --root "$ROOM_ROOT" --agents "$MAIN_HANDLE,$WORKER_HANDLES" --force >&2 \
       || fail 'AMQ roster initialization failed'
-    amq doctor --ops >&2 || fail 'AMQ doctor failed after initialization'
-    printf 'ROOM_ROOT=%s\nMAIN_HANDLE=%s\nWORKER_HANDLES=%s\n' "$ROOM_ROOT" "$MAIN_HANDLE" "$WORKER_HANDLES"
+    resolve_config_authority
+    if [[ "$CONFIG_ROOT" != "$ROOM_ROOT" ]]; then
+      # Preserve every existing base registration, including other sessions.
+      # Only MAIN may provision; concurrent roster writers are not supported.
+      EXISTING_AGENTS="$(configured_agents)" || fail 'cannot preserve base registrations'
+      amq init --root "$CONFIG_ROOT" --agents "$EXISTING_AGENTS,$MAIN_HANDLE,$WORKER_HANDLES" --force >&2 \
+        || fail 'AMQ base roster initialization failed'
+    fi
+    amq doctor --root "$ROOM_ROOT" --base-root "$CONFIG_ROOT" --fix-mailboxes >&2 \
+      || fail 'AMQ authoritative mailbox provisioning failed'
+    amq doctor --root "$ROOM_ROOT" --base-root "$CONFIG_ROOT" --ops >&2 || fail 'AMQ doctor failed after initialization'
+    printf 'ROOM_ROOT=%s\nCONFIG_ROOT=%s\nMAIN_HANDLE=%s\nWORKER_HANDLES=%s\n' "$ROOM_ROOT" "$CONFIG_ROOT" "$MAIN_HANDLE" "$WORKER_HANDLES"
     ;;
   launch) launch_worker ;;
   retire) retire_worker ;;

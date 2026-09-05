@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Local Codex account pool. Credentials are read only from private user state.
+set +x
+set -euo pipefail
+umask 077
+config="$HOME/.config/cliproxyapi/config.yaml"
+key_file="$HOME/.config/cliproxyapi/api-key"
+binary="$HOME/.local/bin/cli-proxy-api"
+
+usage() {
+  printf '%s\n' 'Usage: cliproxy {login|serve|models|check|pi|codex} [arguments...]' \
+    '  login    Add/refresh one Codex account using device OAuth; repeat per account' \
+    '  serve    Run the proxy in the foreground' \
+    '  models   List model IDs currently available from the account pool' \
+    '  check    Verify authentication and report available model count (no inference)' \
+    '  pi       Start Pi using the cliproxyapi provider (arguments passed through)' \
+    '  codex    Start Codex using the cliproxyapi provider (arguments passed through)'
+}
+
+command_name="${1:-help}"
+[[ $# == 0 ]] || shift
+case "$command_name" in
+  help|-h|--help) usage; exit 0 ;;
+  login|serve|models|check|pi|codex) ;;
+  *) usage >&2; exit 2 ;;
+esac
+if [[ ! -f "$config" || ! -f "$key_file" || ! -x "$binary" ]]; then
+  printf 'CLIProxyAPI is not installed. Run bash install/cliproxyapi.sh from the setup repo.\n' >&2
+  exit 1
+fi
+case "$command_name" in
+  login) exec "$binary" --config "$config" --codex-device-login "$@" ;;
+  serve) exec "$binary" --config "$config" "$@" ;;
+esac
+CLIPROXY_API_KEY="$(< "$key_file")"
+if [[ ! "$CLIPROXY_API_KEY" =~ ^[0-9a-f]{64}$ ]]; then
+  printf 'Invalid local proxy key file; rerun the repository installer.\n' >&2
+  exit 1
+fi
+case "$command_name" in
+  pi) exec pi --provider cliproxyapi --model gpt-6-astra "$@" ;;
+  codex)
+    # Codex exec has its own config parser; root-level -c is not propagated.
+    # Place the override after the subcommand/arguments so both TUI and exec use it.
+    exec codex "$@" -c 'model_provider="cliproxyapi"'
+    ;;
+  models|check)
+    # Pass the header via stdin, never expose the key in the process argument list.
+    response="$(printf 'header = "Authorization: Bearer %s"\n' "$CLIPROXY_API_KEY" |
+      curl --config - --noproxy '*' --fail --silent --show-error --max-time 15 \
+        http://127.0.0.1:8317/v1/models)"
+    if [[ "$command_name" == models ]]; then
+      jq -er '.data | if length == 0 then error("No models: log in to a Codex account first") else .[].id end' <<< "$response"
+    else
+      jq -er '.data | length | if . == 0 then error("No models: log in to a Codex account first") else "Proxy reachable; \(.) models available. Inference/failover not tested." end' <<< "$response"
+    fi
+    ;;
+esac

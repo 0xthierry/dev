@@ -1,0 +1,35 @@
+# Rendered by install/cliproxyapi.sh; never commit the rendered key or auth files.
+host: "127.0.0.1"
+port: 8317
+auth-dir: "~/.local/share/cliproxyapi/auth"
+api-keys:
+  - "{{API_KEY}}"
+remote-management:
+  allow-remote: false
+  secret-key: ""
+  disable-control-panel: true
+plugins:
+  enabled: false
+pprof:
+  enable: false
+debug: false
+logging-to-file: false
+request-log: false
+# Also disables error-only request/response body capture.
+commercial-mode: true
+usage-statistics-enabled: false
+ws-auth: true
+routing:
+  strategy: "round-robin"
+  session-affinity: true
+  session-affinity-ttl: "1h"
+  session-affinity-subagents: true
+request-retry: 2
+max-retry-credentials: 0
+max-retry-interval: 30
+disable-cooling: false
+quota-exceeded:
+  switch-project: true
+  switch-preview-model: false
+codex:
+  stream-bootstrap-buffering: true

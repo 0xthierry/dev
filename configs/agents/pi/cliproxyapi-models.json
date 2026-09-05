@@ -1,0 +1,30 @@
+{
+  "providers": {
+    "cliproxyapi": {
+      "baseUrl": "http://127.0.0.1:8317/v1",
+      "api": "openai-responses",
+      "apiKey": "!cat \"$HOME/.config/cliproxyapi/api-key\"",
+      "authHeader": true,
+      "models": [
+        {
+          "id": "gpt-6-astra",
+          "name": "GPT-6 Astra (local Codex account pool)",
+          "reasoning": true,
+          "thinkingLevelMap": { "off": null, "minimal": null, "xhigh": "xhigh", "max": "max" },
+          "input": ["text", "image"],
+          "contextWindow": 272000,
+          "maxTokens": 32768
+        },
+        {
+          "id": "gpt-5.6-sol",
+          "name": "GPT-5.6 Sol (local Codex account pool)",
+          "reasoning": true,
+          "thinkingLevelMap": { "off": null, "minimal": null, "xhigh": "xhigh", "max": "max" },
+          "input": ["text", "image"],
+          "contextWindow": 272000,
+          "maxTokens": 32768
+        }
+      ]
+    }
+  }
+}

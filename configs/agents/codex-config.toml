@@ -1,4 +1,5 @@
 model = "gpt-6-astra"
+model_provider = "cliproxyapi"
 model_reasoning_effort = "medium"
 model_reasoning_summary = "detailed"
 model_verbosity = "medium"
@@ -14,6 +15,19 @@ web_search = "live"
 file_opener = "none"
 project_doc_max_bytes = 65536
 suppress_unstable_features_warning = true
+
+# Local Codex account pool; use -c 'model_provider="openai"' for direct access.
+[model_providers.cliproxyapi]
+name = "CLIProxyAPI (local Codex account pool)"
+base_url = "http://127.0.0.1:8317/v1"
+wire_api = "responses"
+supports_websockets = false
+request_max_retries = 1
+stream_max_retries = 1
+
+[model_providers.cliproxyapi.auth]
+command = "/bin/sh"
+args = ["-c", "cat \"$HOME/.config/cliproxyapi/api-key\""]
 
 [history]
 max_bytes = 1073741824

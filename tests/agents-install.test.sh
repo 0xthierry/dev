@@ -104,8 +104,18 @@ EOF
 }
 EOF
   cp "$test_home/.claude.json" "$claude_state_before"
+  mkdir -p "$test_home/.pi/agent"
+  printf '%s\n' '{"providers":{"local-test":{"baseUrl":"http://localhost:1234/v1"}}}' > "$test_home/.pi/agent/models.json"
 
   HOME="$test_home" "$REPO_ROOT/configs/agents/install.sh" --yes >/dev/null
+
+  assert_json "preserves unrelated Pi provider" "$test_home/.pi/agent/models.json" '.providers["local-test"].baseUrl == "http://localhost:1234/v1"'
+  assert_json "adds Pi Responses proxy provider" "$test_home/.pi/agent/models.json" '.providers.cliproxyapi.api == "openai-responses"'
+  assert_json "defaults Pi to proxy" "$test_home/.pi/agent/settings.json" '.defaultProvider == "cliproxyapi"'
+  assert_file_contains "defaults Codex to proxy" "$test_home/.codex/config.toml" 'model_provider = "cliproxyapi"'
+  assert_file_contains "Codex reads proxy key without environment export" "$test_home/.codex/config.toml" '[model_providers.cliproxyapi.auth]'
+  assert_file_contains "adds Codex proxy provider" "$test_home/.codex/config.toml" '[model_providers.cliproxyapi]'
+  cp "$test_home/.pi/agent/models.json" "$TEST_TMP_DIR/first-pi-models.json"
 
   assert_file_contains "preserves Codex Figma MCP server" "$test_home/.codex/config.toml" '[mcp_servers.figma]'
   assert_file_contains "preserves Codex nested MCP table" "$test_home/.codex/config.toml" '[mcp_servers.filesystem.env]'
@@ -137,7 +147,8 @@ EOF
   HOME="$test_home" "$REPO_ROOT/configs/agents/install.sh" --yes >/dev/null
 
   if cmp -s "$test_home/.codex/config.toml" "$first_codex_config" &&
-    cmp -s "$test_home/.claude/settings.json" "$first_claude_settings"; then
+    cmp -s "$test_home/.claude/settings.json" "$first_claude_settings" &&
+    cmp -s "$test_home/.pi/agent/models.json" "$TEST_TMP_DIR/first-pi-models.json"; then
     printf 'ok: agent config sync is idempotent\n'
   else
     fail "agent config sync is idempotent"

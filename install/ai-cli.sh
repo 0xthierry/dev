@@ -342,6 +342,11 @@ install_ai_clis() {
   # Codex (OpenAI)
   install_npm_global_cli "Codex CLI" "@openai/codex" "0.153.4"
 
+  # Local multi-account Codex gateway, the shared Pi/Codex default provider.
+  # shellcheck source=install/cliproxyapi.sh
+  source "$(dirname "${BASH_SOURCE[0]}")/cliproxyapi.sh"
+  install_cliproxyapi
+
   # Gemini CLI (Google)
   install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.56.0"
 
