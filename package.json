@@ -20,6 +20,7 @@
       "./configs/agents/pi/extensions/codex-fast-mode",
       "./configs/agents/pi/extensions/xai-grok-fast-mode",
       "./configs/agents/pi/extensions/codex-compaction",
+      "./configs/agents/pi/extensions/codex-multi-auth",
       "./configs/agents/pi/extensions/nested-agents",
       "./configs/agents/pi/extensions/lsp",
       "./configs/agents/pi/extensions/fff",
@@ -50,10 +51,14 @@
     "typebox": "1.1.36",
     "typescript": "6.0.3"
   },
+  "overrides": {
+    "hono": "4.12.34"
+  },
   "dependencies": {
     "@ff-labs/fff-node": "0.10.6",
     "@mozilla/readability": "0.6.0",
     "@types/turndown": "5.0.6",
+    "codex-multi-auth": "2.12.0",
     "impit": "0.13.1",
     "linkedom": "0.18.12",
     "p-limit": "7.3.0",

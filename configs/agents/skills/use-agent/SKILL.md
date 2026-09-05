@@ -1,644 +1,239 @@
 ---
 name: use-agent
-description: Use only when the user explicitly asks or allows the current Claude or Pi main to orchestrate other agent harnesses over Herdr and AMQ. Teaches model-aware routing between Fable 5.1, GPT-5.6-sol, Grok 4.5, and Grok 4.6. Otherwise, never invoke it.
+description: Use only when the user explicitly asks or allows the current Claude or Pi main to orchestrate other agent harnesses over Herdr and AMQ. Routes GPT-6 Astra at high as the most powerful planner, hard-task debugger, and orchestration profile; GPT-5.6-sol executes, while Fable 5.1 and Grok provide independent review and reconnaissance. Otherwise, never invoke it.
 ---
 
 # Use Agent
 
-Launch Claude or Pi workers as visible Herdr sidecars and coordinate with them through AMQ. This skill works when the **main** is itself running in Claude or Pi.
+Launch Claude or Pi workers as visible Herdr sidecars and coordinate through AMQ. Only use this skill when the user explicitly asks or allows another agent. MAIN owns the user relationship, dispatch, synthesis, verification, and final acceptance. Workers advise or act within a bounded contract.
 
-Only use this skill when the user explicitly asks or allows the use of another agent. The main owns the user relationship, orchestration, synthesis, verification, and final decision. Workers advise or act within the contract sent over AMQ.
+## Model routing
 
-## Verify the installed control surfaces
+Use only this curated mapping. Roles and capability priority are workflow policy, not benchmark claims or automatic fallback rules.
 
-The installed binaries are authoritative. This repo pins and validates Herdr 0.8.2 with AMQ 0.77.1. Do not assume a newer release preserves the launch lifecycle; rerun a real Herdr sidecar launch/close smoke test before changing either pin.
-
-Use `herdr --skill` and AMQ's skill at the pinned tag as upgrade references only. Do not install them as competing active skills: their broad direct-agent/managed-launch workflows conflict with this skill's Herdr-wrapped, exact-room, AMQ-only coordination invariants.
-
-Before controlling Herdr, verify that the main is actually inside a Herdr-managed pane:
-
-```bash
-test "${HERDR_ENV:-}" = 1
-herdr --version
-amq --version
-```
-
-If the environment check fails, stop: do not inspect or control some other focused Herdr client. When revalidating syntax after an upgrade, use `herdr pane` plus a nested command's `-h`, and use `amq <command> -h`. Do not run bare `herdr`, which launches or attaches the TUI.
-
-## Understand the roster
-
-Use only this curated model/harness mapping. The roles are workflow policy, not claims that a model is intrinsically incapable of other work.
-
-| Profile | Harness | Effort | Complexity, scope, and ownership |
+| Profile | Harness / pinned model | Effort | Role and ownership |
 | --- | --- | --- | --- |
-| **Fable 5.1 oracle** | Claude | `xhigh` | Highest-capability profile used by this skill. Read-only. Reserve for ambiguous architecture, stubborn root causes, high-risk decisions, specialist judgment, and adjudication after ordinary evidence or reviewers disagree. |
-| **Fable 5.1 adversary** | Claude | `high` | Read-only. Demanding plan, implementation, debugging-hypothesis, security, and correctness review. Use one explicit lens per run. |
-| **GPT-5.6-sol implementer** | Pi | `high` | Writing workhorse for demanding multi-file features, refactors, debugging, tests, integration, and test/fix loops. Give exact file ownership and a verifiable definition of done. |
-| **Grok 4.5 scout** | Pi | `high` | Fast and always read-only in this skill. Use for codebase checks: locating files and symbols, tracing call paths, inventorying dependencies/config, finding analogous patterns, and bounded verification. |
-| **Grok 4.6 adversary** | Pi | `high` | Fast, read-only adversarial reviewer and independent debugger. Pair with Fable 5.1 `high` when provider-diverse challenge is warranted. |
+| **GPT-6 Astra orchestrator** | Pi / `openai-codex/gpt-6-astra` | `high` | **Most powerful profile.** Leads demanding planning, architecture, hard tasks, deep debugging, decomposition, synthesis, and adjudication. Prefer orchestration over execution. Read-only as a sidecar. |
+| **Fable 5.1 second opinion** | Claude / `claude-fable-5-1` | `xhigh` | Read-only second-opinion partner to Astra. Supplies independent evidence, counterarguments, and alternatives. **Not an oracle or final adjudicator**, and never an escalation above Astra. |
+| **Fable 5.1 adversary** | Claude / `claude-fable-5-1` | `high` | Read-only demanding plan, implementation, debugging-hypothesis, security, and correctness review; one explicit lens per task. |
+| **GPT-5.6-sol implementer** | Pi / `openai-codex/gpt-5.6-sol` | `high` | Writing workhorse for demanding multi-file features, refactors, reproductions, fix application, integration, and test/fix loops. Exact file ownership required. |
+| **Grok 4.5 scout** | Pi / `xai/grok-4.5` | `high` | Fast, always read-only reconnaissance: locate files/symbols, trace call paths, inventory dependencies/config, find patterns, and perform bounded verification. |
+| **Grok 4.6 adversary** | Pi / `xai/grok-4.6` | `high` | Fast read-only adversarial reviewer and independent debugger. Pair with Fable `high` when provider-diverse artifact review is useful. |
 
-Fable 5.1 and GPT-5.6-sol are frontier models intended for complex, long-horizon work. Grok 4.6 is also a frontier coding/agentic model; this skill deliberately specializes it as the fast adversarial lane. Grok 4.5 is capable of implementation, but this skill deliberately restricts it to fast read-only reconnaissance. Do not infer these workflow restrictions from benchmark rank alone.
+When Astra is MAIN, keep demanding planning and synthesis local and delegate bounded execution to GPT-5.6-sol. Do not launch a duplicate Astra by default. With another model as MAIN, Astra returns actionable plans, debugging hypotheses, discriminating checks, decisions, or worker contracts; it does not launch its own fleet or take over MAIN's user relationship.
 
-These models come from different providers and training datasets. Their disagreement is useful: independent answers can expose blind spots that one provider or dataset misses. Fable 5.1 `high` and Grok 4.6 `high` are the default adversarial pair. Ask them independently before showing either model the other's answer. Grok 4.5 and Grok 4.6 add within-family diversity, not provider diversity.
+Astra leads demanding reasoning; Fable is its independent second-opinion partner when another perspective adds value. Fable `high` plus Grok 4.6 `high` remain the default **artifact-review** adversarial pair. Ask independent reviewers before showing either the other's conclusions. Grok 4.5 and 4.6 add within-family diversity, not provider diversity.
 
-Fable 5.1, GPT-5.6-sol, Grok 4.5, and Grok 4.6 are separate model choices, not automatic fallbacks for one another. Fable 5.1 at `xhigh` and `high` are separate launch profiles with different roles. Honor an explicit user model or effort request. If a selected profile is unavailable, report it and ask before substituting.
+Honor explicit user model/effort requests. The helper pins the profiles above and does not accept arbitrary model/effort overrides. If the user requests something outside the roster, explain that limitation rather than silently changing the request. If a model is unavailable, report the category without credentials and ask before substituting. Higher effort does not make Fable the lead or an oracle.
 
-### Verify model surfaces
+Effort controls are provider-specific, not comparable token budgets. Astra's curated setting is `high`; verify other levels before requesting them. Fable supports `low`, `medium`, `high`, `xhigh`, `max`; this skill uses `high`/`xhigh`. GPT-5.6-sol through Pi supports `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, but the writing profile pins `high`. Grok 4.5 supports `low`/`medium`/`high`, never `xhigh`; Grok 4.6 also supports `xhigh`, but the review profile pins `high`. Do not silently promote effort or rely on defaults.
 
-Validate availability before opening a pane:
+## Plan before launching
 
-| Harness | Discovery and exact invocation |
-| --- | --- |
-| Claude | Require Claude Code 2.1.255 or newer. Use `/model` to confirm entitlement. Pin `--model claude-fable-5-1`; select the role with `--effort xhigh` or `--effort high`. The `fable` alias currently resolves to 5.1 but can be overridden, so recipes pin the full ID. |
-| Pi | Run `pi --list-models gpt-5.6-sol`, `pi --list-models grok-4.5`, and `pi --list-models grok-4.6`. Pin `openai-codex/gpt-5.6-sol`, `xai/grok-4.5`, or `xai/grok-4.6`, then pass `--thinking <level>`. |
+Identify the active MAIN model from runtime/system metadata. Build the task graph and critical path before choosing workers. Keep urgent local blockers local; parallelize independent work with disjoint ownership, not speculative tasks or duplicate uncertainty.
 
-Catalog discovery does not prove account entitlement, credits, or provider capacity. If the worker process rejects the selected model at launch, treat it as unavailable: report the exact category without exposing credentials, and ask before substituting another model.
+For each lane, record:
 
-| Model surface used here | Context exposed here | Maximum output | Important boundary |
-| --- | ---: | ---: | --- |
-| Claude Code `claude-fable-5-1` | 1,000,000 | 128,000 | Adaptive thinking is always on; latency is comparatively high. |
-| Pi `openai-codex/gpt-5.6-sol` | 272,000 | 128,000 | OpenAI documents a 1,050,000-token upstream context, but Pi intentionally defaults this route to 272K. |
-| Pi `xai/grok-4.5` | 500,000 | 500,000 catalog cap | Text/image input; reasoning cannot be disabled. |
-| Pi `xai/grok-4.6` | 500,000 | 500,000 catalog cap | Text/image input; reasoning cannot be disabled. |
+- One bounded outcome and already-settled dependencies.
+- Difficulty/risk and role: planner, orchestration advisor, second opinion, architect, implementer, debugger, scout, tester, or adversarial reviewer.
+- Exact files/modules it may change, or read-only scope.
+- Why that model adds value, success criteria, and validation commands.
+- One primary contract and at most one immediate same-artifact follow-up.
 
-### Choose reasoning effort deliberately
+Typical fleets (never launch one of every model by habit):
 
-Effort labels are provider-specific controls, not comparable token budgets. Always pass the exact effort in the launch recipe; never rely on a provider default.
-
-| Model | Supported ladder on this harness | How this skill uses it |
-| --- | --- | --- |
-| **Fable 5.1** | `low`, `medium`, `high` (default), `xhigh`, `max`; always-on adaptive thinking | `high` for demanding adversarial review. `xhigh` for the oracle profile and long-horizon, capability-critical questions. Although `max` is supported and is technically the top effort, it is outside this curated roster; do not silently promote the oracle beyond the user-selected `xhigh`. Use `medium`/`low` only if the user explicitly prioritizes latency or usage and accepts reduced search/retrieval behavior. |
-| **GPT-5.6-sol through Pi** | `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; Pi maps `minimal` to OpenAI `low`, while `off` omits the reasoning field rather than explicitly sending OpenAI `none` | Use `high` for the writing lane. `low` fits tightly specified, latency-sensitive work; `medium` is the upstream balanced default; `xhigh` fits unusually difficult multi-step coding or review; `max` is only for rare quality-first tasks after `high`/`xhigh` is insufficient. This skill's standard recipe remains `high`. |
-| **Grok 4.5 through Pi** | `low`, `medium`, `high` (default); no `off`, `minimal`, `xhigh`, or `max` | This skill pins `high` for reliable read-only codebase checks. Outside this policy, xAI describes `low` for simple latency-sensitive tool use and `medium` for complex analysis or long context. Never request `xhigh`. |
-| **Grok 4.6 through Pi** | `low`, `medium`, `high` (default), `xhigh`; no `off`, `minimal`, or `max` | This skill pins `high` for the fast adversarial lane. `xhigh` is available for the hardest quality-first problems but is not the default adversarial profile; use it only on explicit request. |
-
-Higher effort generally increases reasoning tokens and latency. It does not repair a vague contract, missing evidence, excessive scope, or concurrent ownership conflicts. Prefer a bounded task and the lowest effort that passes representative evaluation; for this curated roster, keep the pinned profiles above unless the user asks to change them.
-
-### Use benchmark evidence carefully
-
-Benchmarks are directional. Scores depend on effort, harness, tool policy, benchmark version, and safeguards; do not compare similarly named but differently versioned tests as if they were one leaderboard. Representative published results:
-
-| Model | Selected evidence | Routing implication |
-| --- | --- | --- |
-| **Fable 5.1** | Anthropic reports CursorBench 3.2.0 **73.4%**, Terminal-Bench 4.0 **55.8%**, Terminal-Bench-Science 0.1 **52.6%**, and AutomationBench **31.4%**. | Strongest fit for repository-scale, long-running, ambiguous, or high-consequence reasoning. Safeguards can refuse or reroute some cyber/biology work. |
-| **GPT-5.6-sol** | OpenAI reports SWE-Bench Pro **64.6%**, DeepSWE 1.1 **72.7%**, Terminal-Bench 2.1 **88.8%**, and the AA Coding Agent Index v1.1 at **80**. | Strong writing/tool-use lane for complex professional coding, terminal workflows, and deep debugging; not a reason to omit tests or repository evidence. |
-| **Grok 4.5 `high`** | xAI's later same-harness comparison reports CursorBench 3.2 **66.7%**, DeepSWE 1.1 **54.0%**, and Terminal-Bench 3.0 **15.7%**. Its launch also emphasized high token efficiency and fast generation. | Prefer as the quick reconnaissance sample, not the final authority for difficult repository-wide conclusions. |
-| **Grok 4.6 `high`** | xAI reports CursorBench 3.2 **69.9%**, DeepSWE 1.1 **65.9%**, and Terminal-Bench 3.0 **26.0%**, improving every listed 4.5 row in its launch comparison. | Good fast independent adversary; use provider-diverse Fable review for high-risk artifacts. |
-
-Primary references: [Fable 5.1 overview and benchmarks](https://www.anthropic.com/claude/fable), [Fable effort guidance](https://platform.claude.com/docs/en/build-with-claude/effort), [GPT-5.6-sol model limits](https://developers.openai.com/api/docs/models/gpt-5.6-sol), [GPT-5.6 launch evaluations](https://openai.com/index/gpt-5-6/), [Grok reasoning levels](https://docs.x.ai/developers/model-capabilities/text/reasoning), [Grok 4.5 launch](https://x.ai/news/grok-4-5), and [Grok 4.6 launch](https://x.ai/news/grok-4-6). Revalidate these sources and the installed catalogs before changing routing policy.
-
-## Plan the workload before launching
-
-First identify the active main model from runtime/system metadata. Build the task graph and its immediately runnable frontier before choosing workers. For every proposed lane, record:
-
-| Field | Required decision |
-| --- | --- |
-| Task | One bounded outcome, not a general mission |
-| Dependencies | What must settle before this lane starts |
-| Difficulty and risk | Routine, demanding, or architecture/adjudication |
-| Role | Oracle, architect, implementer, debugger, scout, tester, or adversarial reviewer |
-| Ownership | Exact files/modules it may change, or read-only |
-| Model and handle | Why this capability or provider adds value |
-| Lifetime | One primary contract and, at most, one immediate same-artifact follow-up |
-
-Find the critical path before adding parallelism. Increase worker count only when tasks are independent, ownership is disjoint, and expected coordination cost is lower than serial execution. Launch only the runnable frontier; do not keep speculative workers idle, and do not launch a reviewer until an artifact exists to review.
-
-### Match the fleet to the workload
-
-Worker count and model mix are dynamic. Never launch one of every model by habit.
-
-- Use **Grok 4.5 at `high`** for fast read-only codebase checks, reconnaissance, file and symbol discovery, pattern finding, and bounded verification. Its ownership is always read-only.
-- Use **GPT-5.6-sol at `high`** for medium-to-complex implementation, debugging, and test/fix work.
-- Use **Fable 5.1 at `high`** and **Grok 4.6 at `high`** as independent read-only adversarial reviewers. Assign each a named lens, send the artifact independently, and let the main synthesize against repository evidence.
-- Use **Fable 5.1 at `xhigh`** only as this skill's highest-capability read-only oracle when genuine architecture ambiguity, difficult root-cause analysis, high-risk judgment, specialist reasoning, or adjudication justifies it.
-- Scale any selected model horizontally from one to N replicas when tasks and file ownership are independent. N is the justified width of the runnable frontier, bounded only by useful parallelism, machine resources, and provider capacity—not an arbitrary model quota.
-- Prefer provider diversity for independent diagnosis or review. Do not show one reviewer another reviewer's conclusions before both answer.
-- Same-model replicas are useful for independent lanes, not for duplicating the same uncertainty without a designated synthesis owner.
-
-Typical fleets:
-
-- **Codebase question or preflight:** one Grok 4.5 read-only scout.
-- **Several reconnaissance lanes:** N Grok 4.5 read-only scouts with distinct questions.
+- **Codebase question:** one Grok 4.5 scout, or N scouts with distinct questions.
+- **Demanding plan/architecture:** Astra `high` defines dependencies, ownership, risks, and validation gates; Fable `xhigh` supplies an independent second opinion when useful. Astra synthesizes against evidence; MAIN accepts and dispatches.
 - **Medium/complex implementation:** N GPT-5.6-sol workers on disjoint modules.
-- **Adversarial review:** one Fable 5.1 `high` reviewer plus one Grok 4.6 `high` reviewer, both read-only and given the artifact independently.
-- **Wide mixed feature:** Grok 4.5 scouts map the codebase; GPT-5.6-sol workers own disjoint implementation modules; Fable 5.1 `high` and Grok 4.6 `high` review after the implementation wave settles.
-- **Difficult bug:** Fable 5.1 `high` and Grok 4.6 `high` form independent read-only hypotheses; the main chooses using repository evidence, then GPT-5.6-sol applies the fix.
-- **High-risk design or unresolved disagreement:** one Fable 5.1 `xhigh` oracle wave, then retire it before implementation. Use the adversarial pair separately when the resulting artifact warrants challenge.
-- **Main already supplies one perspective:** add a different provider or a fresh isolated sample rather than duplicating the main by default.
+- **Wide feature:** Grok scouts map the codebase, Astra plans, GPT-5.6-sol implements, then Fable `high`/Grok 4.6 `high` review settled artifacts.
+- **Difficult bug:** Astra leads root-cause reasoning and discriminating checks; scouts or GPT-5.6-sol gather evidence/reproductions, then GPT-5.6-sol applies and tests the accepted fix. Add independent Fable/Grok hypotheses when useful.
+- **High-risk design/disagreement:** Astra leads adjudication against evidence, paired with Fable `xhigh` for a second opinion when warranted—not a Fable oracle.
 
-### Bound context and rotate workers
+Scale any selected profile from one to N only as justified by the runnable frontier, resources, and provider capacity. Never launch reviewers before their artifact exists or allow concurrent writers to own the same files. Designate one integration owner for shared interfaces.
 
-A worker gets one primary contract and at most one immediate follow-up tied to the same artifact. Allowed follow-ups include fixing a test exposed by its patch, applying review feedback to that patch, or answering a clarification about its assigned artifact. A new module, different investigation, widened ownership, or unrelated third task requires a fresh worker.
+## Use the bundled helper
 
-The main owns compact handoffs. Brief a replacement with only: objective, current decision, artifact paths and ownership, completed work, unresolved uncertainty, and exact next action. Do not route transcripts or ask a long-lived worker to rediscover the whole project.
-
-Handles are reservations, not running capacity. Size the handle pool to the planned concurrent frontier, launch only what the workload needs, and keep exactly one live process per handle. N is concurrent capacity, not the total number of workers over the job: after verified retirement, a handle can launch a fresh-context replacement. Every concurrently writing worker must own disjoint files; reviewers remain read-only until the implementation wave settles.
-
-## Launch stack
-
-Every worker must ultimately run this composition in a visible Herdr pane:
-
-```text
-amq coop exec ... <agent-cli> -- <agent-flags> <worker-prompt>
-```
-
-After resolving the current location, define these helpers in the same shell invocation as each worker launch. The binding guard is fail-closed: a main that inherited `AM_ROOT` may operate only on that exact room.
+**Do not reconstruct launch functions or write temporary launcher scripts.** Use [scripts/sidecar.sh](scripts/sidecar.sh), which is deployed with this skill through the existing skill-directory symlink installer. Resolve its absolute path relative to the **loaded SKILL.md**, not the current project directory. It works from any project without changing directories.
 
 ```bash
-require_preserved_main_amq_binding() {
-  local candidate_root="$1"
-
-  if [[ -z "$candidate_root" ]]; then
-    printf 'error: ROOM_ROOT is required\n' >&2
-    return 2
-  fi
-  if [[ -n "${AM_ROOT:-}" && "$candidate_root" != "$AM_ROOT" ]]; then
-    printf 'error: refusing AMQ room override: inherited AM_ROOT=%s, ROOM_ROOT=%s\n' \
-      "$AM_ROOT" "$candidate_root" >&2
-    printf 'error: use ROOM_ROOT="${AM_ROOT}"; the main notifier watches only that exact room\n' >&2
-    return 2
-  fi
-}
-
-launch_herdr_sidecar() {
-  local split_target="$1" split_direction="$2" session_title="$3"
-  local split_json worker_pane_id process_json command
-  shift 3
-
-  require_preserved_main_amq_binding "${ROOM_ROOT:-}" || return
-
-  case "$split_direction" in
-    right | down) ;;
-    *)
-      printf 'error: invalid Herdr split direction: %s\n' "$split_direction" >&2
-      return 2
-      ;;
-  esac
-  if [[ -z "$session_title" ]]; then
-    printf 'error: Herdr worker session title is required\n' >&2
-    return 2
-  fi
-
-  split_json="$(herdr pane split --pane "$split_target" \
-    --direction "$split_direction" --ratio 0.45 --cwd "$PWD" --no-focus)"
-  worker_pane_id="$(printf '%s' "$split_json" | jq -er '.result.pane.pane_id')"
-
-  if ! herdr pane rename "$worker_pane_id" "$session_title" >/dev/null \
-    || ! herdr pane report-metadata "$worker_pane_id" \
-      --source user:use-agent-session --title "$session_title" \
-      --token summary="$session_title" >/dev/null; then
-    herdr pane close "$worker_pane_id" >/dev/null
-    return 1
-  fi
-
-  if ! herdr pane wait-output "$worker_pane_id" \
-    --regex '.+' --source visible --timeout 10000 >/dev/null; then
-    herdr pane close "$worker_pane_id" >/dev/null
-    return 1
-  fi
-  process_json="$(herdr pane process-info --pane "$worker_pane_id")"
-  if ! printf '%s' "$process_json" | jq -e \
-    '.result.process_info.shell_pid as $shell | any(.result.process_info.foreground_processes[]?; .pid == $shell)' \
-    >/dev/null; then
-    printf 'error: Herdr pane %s did not reach an available shell prompt\n' "$worker_pane_id" >&2
-    herdr pane close "$worker_pane_id" >/dev/null
-    return 1
-  fi
-
-  printf -v command '%q ' "$@"
-  if ! herdr pane run "$worker_pane_id" "$command" >/dev/null; then
-    herdr pane close "$worker_pane_id" >/dev/null
-    return 1
-  fi
-  printf '%s\n' "$worker_pane_id"
-}
+# Replace with the absolute directory containing the SKILL.md you loaded.
+HELPER="<absolute-skill-directory>/scripts/sidecar.sh"
+bash "$HELPER" --help
 ```
 
-Herdr 0.8.2 separates layout, pane, and agent control. `pane split` creates the shell pane and returns its ID at `.result.pane.pane_id`, but the shell can still be starting when that response arrives. The helper applies the explicit `use-agent-<topic>-<handle>` title both as the manual pane name and as presentation metadata, so Herdr shows the orchestration session in pane chrome and agent views while the agent CLI receives the same value through `--name`. Wait for visible shell output and verify that the shell owns the foreground before using `pane run`; otherwise the command's submit key can arrive before the prompt is ready and leave the launch text sitting unexecuted. `pane run` then atomically submits command text in that pane. The `%q` escaping is required because it accepts shell command text and the worker prompt must remain one argument to the agent CLI.
+Set `HELPER` again in each tool call; shell variables do not survive separate calls. Examples use `--harness pi`; Claude MAIN must use `--harness claude`.
 
-Pass an explicit target pane and `right` or `down` so a multi-worker fleet can build a usable layout instead of repeatedly narrowing the main pane. The helper prints only the created pane ID; every launch must capture it and immediately record the append-only tuple `(handle, pane_id, task_id, task_message_id, result_message_id, lifecycle state)`. Do not overwrite that mapping until retirement completes.
+The helper implements room guards, explicit roster setup, model/effort selection, kickoff prompts, safe pane launch, and retirement checks. It **does not** decide the fleet, track your task ledger, consume replies, dispatch work, or verify completion for you.
 
-Do not replace this with `herdr agent start`. That command starts Herdr's canonical agent executable directly in an existing pane and forwards arguments to it; it cannot place `amq coop exec` in front of the executable. `pane run` is therefore the correct surface for this wrapped launch stack.
+### Preconditions and invariants
 
-Shell functions do not survive separate tool calls. Re-declare `launch_herdr_sidecar`, the room variables, and the pinned Herdr pane ID in every launch call, or keep the helper and launch recipe in one shell call.
+- MAIN must actually be inside Herdr (`HERDR_ENV=1`). If not, stop; never control some other focused client.
+- This repo pins Herdr **0.8.2** and AMQ **0.77.1**. Verify installed versions with `herdr --version` and `amq --version`. Changing either pin requires a real sidecar launch/close smoke test, not just mocked tests.
+- Claude requires Code **2.1.255+**; confirm entitlement via `/model` before launching. The helper verifies exact Pi provider/model catalog availability before creating a pane. Catalog presence does not prove credits, entitlement, or provider capacity; a launch rejection still means unavailable.
+- `herdr --skill` and AMQ's pinned-tag skill are upgrade references only, not competing active skills. For syntax, use `herdr pane` plus nested `-h` and `amq <command> -h`. Never run bare `herdr`, which starts/attaches the TUI.
+- **If `AM_ROOT` is non-empty it is authoritative.** The helper preserves it and rejects a different `--root`. It preserves inherited `AM_ME`; otherwise the harness name is MAIN's handle. Do not override those environment variables to evade guards.
+- Without `AM_ROOT`, the default room is `$PWD/.agent-mail/use-agent-<topic>`; use the same working directory/topic every call, or supply the same explicit absolute `--root` each time.
+- Changing a command's environment cannot retarget an already-running Pi notifier. It watches only its exact bound room, not sibling rooms. Never substitute another session's printed room.
 
-- Herdr creates the visible sidecar pane without stealing focus.
-- `amq coop exec` binds the worker to the exact room, establishes native wake delivery, and then replaces itself with the agent process.
-- The agent CLI receives its own model, effort, permission, and prompt flags.
-- AMQ is the only shared source of truth. Herdr terminal output is diagnostic evidence, not a worker response.
-
-Do not use `herdr agent prompt`, `herdr pane send-*`, a Herdr injector, or an extra shell launcher for worker communication.
-
-## Prepare a portable main
-
-The main can be Claude or Pi. Preserve an existing AMQ binding when the main already has one; otherwise use a deterministic room and the current harness name as its handle.
-
-**Hard room invariant:** if `AM_ROOT` is non-empty, it is authoritative for the lifetime of that main session. Never replace it with `.agent-mail/use-agent-$TOPIC`, another session's printed path, or a custom room. Pi's `amq-notify` watches only its exact bound room; it does not discover sibling rooms created later. Setting `AM_ROOT` only on an `amq` command also does not retarget the already-running notifier. A worker launched into any other room can send successfully while the main receives nothing automatically.
-
-Main-side notification differs by harness:
-
-- **Pi main:** the installed `amq-notify` extension watches its exact `AM_ROOT` mailbox and injects replies automatically.
-- **Claude main:** there is no equivalent notify integration. The main must check AMQ at natural orchestration checkpoints or run one bounded monitor while waiting. Never assume replies will appear automatically.
-
-Workers are different: every worker launched below uses `amq coop exec`, so native wake delivery notifies the worker regardless of whether it runs Claude or Pi.
-
-Set `CURRENT_HARNESS` to the harness actually running this skill:
+### 1. Provision exactly the planned handles
 
 ```bash
-TOPIC="<short-kebab-topic>"
-CURRENT_HARNESS="<claude|pi>"
-INHERITED_AM_ROOT="${AM_ROOT:-}"
-MAIN_HANDLE="${AM_ME:-$CURRENT_HARNESS}"
-ROOM_ROOT="${INHERITED_AM_ROOT:-$PWD/.agent-mail/use-agent-$TOPIC}"
-if [[ -n "$INHERITED_AM_ROOT" && "$ROOM_ROOT" != "$INHERITED_AM_ROOT" ]]; then
-  printf 'error: refusing to replace inherited AM_ROOT=%s with ROOM_ROOT=%s\n' \
-    "$INHERITED_AM_ROOT" "$ROOM_ROOT" >&2
-  exit 1
-fi
-# Prevent an accidental same-shell reassignment after the guard.
-readonly MAIN_HANDLE ROOM_ROOT
-# Before running this block, set every count from the runnable frontier.
-# Zero omits a model; N has no fixed skill-level maximum. No defaults are
-# provided because the skill must not bias fleet composition.
-: "${FABLE51_XHIGH_REPLICAS:?set FABLE51_XHIGH_REPLICAS from the workload plan}"
-: "${FABLE51_HIGH_REPLICAS:?set FABLE51_HIGH_REPLICAS from the workload plan}"
-: "${GPT56_REPLICAS:?set GPT56_REPLICAS from the workload plan}"
-: "${GROK45_REPLICAS:?set GROK45_REPLICAS from the workload plan}"
-: "${GROK46_REPLICAS:?set GROK46_REPLICAS from the workload plan}"
-
-for replica_count in \
-  "$FABLE51_XHIGH_REPLICAS" "$FABLE51_HIGH_REPLICAS" "$GPT56_REPLICAS" \
-  "$GROK45_REPLICAS" "$GROK46_REPLICAS"; do
-  if [[ ! "$replica_count" =~ ^[0-9]+$ ]]; then
-    printf 'error: every replica count must be a non-negative integer\n' >&2
-    exit 1
-  fi
-done
-unset replica_count
-
-replica_handles() {
-  local prefix="$1" count="$2" index
-  for ((index = 1; index <= count; index++)); do
-    printf '%s-%d\n' "$prefix" "$index"
-  done
-}
-
-WORKER_HANDLES="$(
-  {
-    replica_handles claude-fable51-xhigh "$FABLE51_XHIGH_REPLICAS"
-    replica_handles claude-fable51-high "$FABLE51_HIGH_REPLICAS"
-    replica_handles pi-gpt56 "$GPT56_REPLICAS"
-    replica_handles pi-grok45 "$GROK45_REPLICAS"
-    replica_handles pi-grok46 "$GROK46_REPLICAS"
-  } | paste -sd, -
-)"
-if [[ -z "$WORKER_HANDLES" ]]; then
-  printf 'error: plan at least one worker before initializing AMQ\n' >&2
-  exit 1
-fi
-
-# Provisioning a mailbox does not launch a worker. --force repairs an
-# incomplete room without deleting queued mailbox files.
-amq init --root "$ROOM_ROOT" \
-  --agents "$MAIN_HANDLE,$WORKER_HANDLES" --force
-AM_ROOT="$ROOM_ROOT" AM_ME="$MAIN_HANDLE" amq doctor --ops
-
-printf 'ROOM_ROOT=%s\nMAIN_HANDLE=%s\nWORKER_HANDLES=%s\n' \
-  "$ROOM_ROOT" "$MAIN_HANDLE" "$WORKER_HANDLES"
+bash "$HELPER" init --topic auth-fix --harness pi \
+  --workers pi-gpt6-astra-1,claude-fable51-xhigh-1,pi-gpt56-1
 ```
 
-Shell state from one tool call may not survive the next. Re-declare `TOPIC`, `MAIN_HANDLE`, `ROOM_ROOT`, and both helper functions in every later launch or main-side AMQ call. When the current process exposes `AM_ROOT`, always derive `ROOM_ROOT` from it again and run `require_preserved_main_amq_binding`; never use a topic-derived or copied literal instead. Printed literal room values are acceptable only for a main whose `AM_ROOT` is unset. Do not assume an `export` in an earlier tool call persisted.
+This provisions mailboxes only, not processes. It uses `amq init --force` to repair room configuration without deleting queued messages, then runs `amq doctor --ops`. If updating an existing room, include all still-needed worker handles; do not drop live workers from the roster.
 
-Use the pinned AMQ 0.77.1 unless a newer version has passed the real Herdr lifecycle smoke test. `amq init --root ... --force` refreshes the room's configured handle list and creates missing mailboxes without consuming queued messages. Every live process needs a unique handle, including replicas of the same model and a worker using the same harness as the main. Choose any unused numbered handle; never launch the whole configured pool merely because it exists.
+| Handle pattern (N is a positive integer) | Profile |
+| --- | --- |
+| `pi-gpt6-astra-N` | Astra `high`, read-only planner/orchestration advisor |
+| `claude-fable51-xhigh-N` | Fable `xhigh`, read-only second opinion |
+| `claude-fable51-high-N` | Fable `high`, read-only adversary |
+| `pi-gpt56-N` | GPT-5.6-sol `high`, writer |
+| `pi-grok45-N` | Grok 4.5 `high`, read-only scout |
+| `pi-grok46-N` | Grok 4.6 `high`, read-only adversary |
 
-## Pin the current Herdr location
+Handles are reservations, not capacity. Keep one live process per handle. MAIN is provisioned alongside workers and cannot collide with a worker handle. The helper does not maintain a durable handle/pane ledger: MAIN must verify a handle is configured and unused before launching, and must not concurrently launch the same handle.
 
-Resolve the pane containing the main and pass its ID on every launch. `--current` uses the calling process's `HERDR_PANE_ID`; omitting the target could select a pane focused by another Herdr client.
+### 2. Launch only the runnable frontier
 
 ```bash
-HERDR_CURRENT="$(herdr pane current --current)"
-HERDR_CURRENT_PANE_ID="$(printf '%s' "$HERDR_CURRENT" | jq -er '.result.pane.pane_id')"
+bash "$HELPER" launch --topic auth-fix --harness pi \
+  --handle pi-gpt6-astra-1
 ```
 
-Do not fall back to an unspecified or UI-focused location. If the lookup fails, report that the main is not attached to a resolvable Herdr pane and ask the user where to open the worker.
-
-## Worker kickoff contract
-
-For every recipe, choose one unused numbered `WORKER_HANDLE`, then build the same bounded prompt:
+Default split is right of MAIN's pane, resolved with `herdr pane current --current`, never the UI-focused client. For a wider fleet, choose a known explicit split target and direction:
 
 ```bash
-build_worker_prompt() {
-  printf '%s' "You are the disposable WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately send readiness with amq send --strict --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. Accept one bounded primary contract and at most one immediate follow-up on the same artifact: a failing test from your patch, review feedback on that patch, or a clarification about your assigned artifact. Do not accept a new module, different investigation, widened ownership, or unrelated third task; answer the received message with kind status and labels blocked,rotate instead. A full injected AMQ notice already includes From, ID, Context, and Body; handle it directly and do not drain again. If a terminal wake only says to check AMQ, run amq drain --strict --include-body once. Preserve the ID of each message you handle and answer it with amq reply --strict --id <message-id>, which automatically preserves its thread and refs. Use amq send --strict only for readiness or a genuinely new conversation. Send retirement-safe completion only after all assigned work and validation finish, using reply kind status and labels done,retire. If one immediate answer would unblock the same task, reply with labels blocked,awaiting-input; if fresh context is better, use blocked,rotate. Include changed paths and validation for action work. For multiline reports, feed stdin or a heredoc to amq reply with --body -; for a saved file use --body @path. The --body-file option does not exist. Do not self-close the pane: MAIN records and verifies your result before retirement. Do not poll or sleep while waiting: finish your turn and let AMQ notify you."
-}
-
-build_readonly_worker_prompt() {
-  printf '%s' "$(build_worker_prompt) This profile is strictly read-only. Never edit, create, delete, rename, or format files; never change git state, packages, processes, services, or external systems. Bash is available only because AMQ is the transport: beyond amq commands, use it only for non-mutating inspection and validation. Report findings and proposed changes; MAIN or a writing worker applies them."
-}
+bash "$HELPER" launch --topic auth-fix --harness pi \
+  --handle claude-fable51-xhigh-1 --target "<known-pane-id>" --direction down
 ```
 
-`done,retire` means artifact writes are complete and no further worker-owned state needs to be consumed; it is a retirement request, not an immediate kill signal. `blocked,awaiting-input` preserves the worker for one answer. `blocked,rotate` asks the main to record the partial result and replace the worker.
+Capture the returned room, main handle, worker handle, and pane ID. Immediately record the append-only tuple **(handle, pane_id, task_id, task_message_id, result_message_id, lifecycle state)**. A successful launch is not readiness or completion; wait for the separate AMQ `ready` message before dispatch.
 
-`amq coop exec --require-wake` must establish native wake before the agent starts. AMQ 0.72 and newer name supported harness sessions automatically, but these recipes pass `--named=false` because they provide an explicit harness `--name`; never enable both naming paths. If wake setup fails, do not launch with degraded delivery and do not invent a hook workaround. Run `AM_ROOT="$ROOM_ROOT" AM_ME="$MAIN_HANDLE" amq doctor --ops`, fix the wake boundary, and relaunch.
+The helper creates a visible no-focus pane, applies `use-agent-<topic>-<handle>` as both pane name and presentation metadata, waits for shell output, verifies shell foreground ownership, and submits a Bash-escaped command with `pane run`. On launch failure it attempts to close only the pane it just created. Inspect reported failures before reusing a handle; do not assume wake cleanup succeeded.
 
-Pi workers additionally set `AMQ_NOTIFY_ROLE=worker` explicitly and use `--wake-inject-mode none`. The role override prevents a main Pi session's inherited `AMQ_NOTIFY_ROLE=main` marker from rebinding the child to the main inbox. Their installed `amq-notify` extension consumes the inherited worker mailbox and submits each complete message through Pi's `sendUserMessage` API, while AMQ's wake remains zero-input and cannot type into the composer or an approval dialog. Do not remove either safeguard from a Pi recipe. Do not copy `none` to Claude recipes: Claude has no equivalent repository-owned API consumer, so zero-input wake would provide attention without submitting the task.
+The launch composition remains `amq coop exec ... <agent-cli> -- <flags> <prompt>`. Do not replace it with `herdr agent start`, which cannot prepend the AMQ wrapper. Pi workers explicitly receive `AMQ_NOTIFY_ROLE=worker` and `--wake-inject-mode none`, preventing inherited MAIN-role rebinding and terminal input injection. Claude must not receive that zero-input setting because it lacks the repo's Pi API mailbox consumer. `--require-wake` must succeed; never invent a degraded-delivery fallback. Explicit harness names require `--named=false` to avoid duplicate naming paths.
 
-## Claude worker — Fable 5.1, xhigh oracle
+Read-only profiles remove edit/write from the core tool allowlist and receive a strict non-mutating contract. This is **not a sandbox**: Bash and installed harness resources still run with local permissions. Pi uses `--approve` for project-resource trust; Claude uses `--dangerously-skip-permissions`. Never transfer permission flags between harnesses. AMQ is the only shared source of truth; pane output is diagnostic evidence, not a worker response. Never use `herdr agent prompt`, `pane send-*`, or an injector for worker communication.
 
-Use the pinned Claude Code model ID `claude-fable-5-1`. This is a read-only oracle profile.
+## Dispatch and communicate
+
+The helper supplies the standard readiness/reply/retirement prompt, including read-only and Astra/Fable role constraints. MAIN must still send a self-contained task after `ready`.
+
+For main-side AMQ calls, re-derive the binding on every tool call:
 
 ```bash
-WORKER_HANDLE="claude-fable51-xhigh-1" # choose any configured unused claude-fable51-xhigh-1..N
-WORKER_PROMPT="$(build_readonly_worker_prompt)"
-WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
-  "use-agent-$TOPIC-$WORKER_HANDLE" \
-  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake --named=false claude -- \
-  --name "use-agent-$TOPIC-$WORKER_HANDLE" \
-  --model claude-fable-5-1 \
-  --effort xhigh \
-  --tools "Bash,Read,Grep,Glob" \
-  --dangerously-skip-permissions \
-  "$WORKER_PROMPT")"
-printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
+# Use the same actual harness, topic, and (if unbound) room chosen at init.
+MAIN_HANDLE="${AM_ME:-pi}"
+ROOM_ROOT="${AM_ROOT:-$PWD/.agent-mail/use-agent-auth-fix}"
 ```
 
-## Claude worker — Fable 5.1, high adversarial reviewer
+Do not overwrite inherited `AM_ROOT`/`AM_ME`. If init used an explicit unbound `--root`, use that exact room instead of the default above. Workers use bare AMQ commands because `coop exec` binds their room/handle/session.
 
-Use the same pinned model at `high`; do not substitute the `xhigh` oracle profile automatically.
-
-```bash
-WORKER_HANDLE="claude-fable51-high-1" # choose any configured unused claude-fable51-high-1..N
-WORKER_PROMPT="$(build_readonly_worker_prompt)"
-WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
-  "use-agent-$TOPIC-$WORKER_HANDLE" \
-  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake --named=false claude -- \
-  --name "use-agent-$TOPIC-$WORKER_HANDLE" \
-  --model claude-fable-5-1 \
-  --effort high \
-  --tools "Bash,Read,Grep,Glob" \
-  --dangerously-skip-permissions \
-  "$WORKER_PROMPT")"
-printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
-```
-
-Claude's unrestricted flag is `--dangerously-skip-permissions`; do not copy another harness's permission flag into this recipe.
-
-## Pi worker — GPT-5.6-sol, high
-
-Use Pi's direct ChatGPT-backed catalog entry `openai-codex/gpt-5.6-sol`. The upstream model supports a wider effort ladder, but this writing profile deliberately pins `high`. Pi's tools execute with the local Pi process's permissions; `--approve` trusts project-local Pi resources.
+Apply one short single-line title before sending the matching AMQ subject:
 
 ```bash
-WORKER_HANDLE="pi-gpt56-1" # choose any configured unused pi-gpt56-1..N
-WORKER_PROMPT="$(build_worker_prompt)"
-WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
-  "use-agent-$TOPIC-$WORKER_HANDLE" \
-  env AMQ_NOTIFY_ROLE=worker \
-  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake \
-  --wake-inject-mode none --named=false pi -- \
-  --name "use-agent-$TOPIC-$WORKER_HANDLE" \
-  --model openai-codex/gpt-5.6-sol \
-  --thinking high \
-  --approve \
-  "$WORKER_PROMPT")"
-printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
-```
-
-## Pi worker — Grok 4.5, high
-
-Use the direct xAI catalog entry `xai/grok-4.5` at its highest supported effort. This profile is read-only: the allowlist removes edit/write, while Bash remains available only for AMQ and non-mutating checks. Pi's tools execute with the local Pi process's permissions; `--approve` trusts project-local Pi resources.
-
-```bash
-WORKER_HANDLE="pi-grok45-1" # choose any configured unused pi-grok45-1..N
-WORKER_PROMPT="$(build_readonly_worker_prompt)"
-WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
-  "use-agent-$TOPIC-$WORKER_HANDLE" \
-  env AMQ_NOTIFY_ROLE=worker \
-  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake \
-  --wake-inject-mode none --named=false pi -- \
-  --name "use-agent-$TOPIC-$WORKER_HANDLE" \
-  --model xai/grok-4.5 \
-  --thinking high \
-  --tools read,bash,grep,find,ls \
-  --approve \
-  "$WORKER_PROMPT")"
-printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
-```
-
-## Pi worker — Grok 4.6, high
-
-Use the direct xAI catalog entry `xai/grok-4.6` at `high`, not its optional `xhigh`, for the standard fast adversarial profile. This profile is read-only: the allowlist removes edit/write, while Bash remains available only for AMQ and non-mutating checks. Pi's tools execute with the local Pi process's permissions; `--approve` trusts project-local Pi resources.
-
-```bash
-WORKER_HANDLE="pi-grok46-1" # choose any configured unused pi-grok46-1..N
-WORKER_PROMPT="$(build_readonly_worker_prompt)"
-WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
-  "use-agent-$TOPIC-$WORKER_HANDLE" \
-  env AMQ_NOTIFY_ROLE=worker \
-  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake \
-  --wake-inject-mode none --named=false pi -- \
-  --name "use-agent-$TOPIC-$WORKER_HANDLE" \
-  --model xai/grok-4.6 \
-  --thinking high \
-  --tools read,bash,grep,find,ls \
-  --approve \
-  "$WORKER_PROMPT")"
-printf 'WORKER_HANDLE=%s\nWORKER_PANE_ID=%s\n' "$WORKER_HANDLE" "$WORKER_PANE_ID"
-```
-
-To launch replicas, rerun only the needed recipe with another unused handle and choose an explicit split target/direction that keeps panes usable. Each launch is a new bounded context; do not reuse a live handle or lose its recorded pane ID.
-
-## Dispatch work
-
-Wait for the worker's separate `ready` status, then give the detected Herdr agent the same visual handle. Define one short, single-line task title and apply it to both the pane and its presentation metadata before sending the matching AMQ subject:
-
-```bash
-TASK_TITLE="<short task>"
+WORKER_HANDLE="pi-gpt6-astra-1"
+WORKER_PANE_ID="<recorded-pane-id>"
+TASK_TITLE="Plan auth fix"
 herdr agent rename "$WORKER_PANE_ID" "$WORKER_HANDLE"
 herdr pane rename "$WORKER_PANE_ID" "$TASK_TITLE · $WORKER_HANDLE"
 herdr pane report-metadata "$WORKER_PANE_ID" --source user:use-agent-task \
   --title "$TASK_TITLE" --token "summary=$TASK_TITLE"
 ```
 
-This makes Ghostty and Omarchy's Hyprland group bar show what the worker is doing rather than only its model handle. The pane ID remains the authoritative lifecycle target; the visual agent alias is for navigation only. Before every main-side `init`, launch, `send`, `drain`, `monitor`, `doctor`, or retirement command, run `require_preserved_main_amq_binding "$ROOM_ROOT"`. Use explicit `--root` and `--me` on main-side commands so this works from any main harness and across fresh shell tool calls. Workers launched by `coop exec` should use bare AMQ commands: it already sets their exact `AM_ROOT`, `AM_ME`, `AM_BASE_ROOT`, and `AM_SESSION` context.
-
-AMQ accepts these message kinds: `brainstorm`, `review_request`, `review_response`, `question`, `answer`, `decision`, `status`, and `todo`. There is no `work` kind; use `todo` for action requests.
+Send one bounded contract. Include objective, already-settled dependencies, canonical decisions, evidence paths, exact ownership/read-only scope, constraints, success criteria, validation commands, and one-primary-plus-one-same-artifact-follow-up lifetime. Require findings, changed paths, validation, remaining risks, and retirement/blocked status in the report.
 
 ```bash
-TASK_ID="<short-lowercase-lane-id>"
-TASK_ROLE="<oracle|architect|implementer|debugger|scout|tester|adversarial-reviewer>"
-TASK_PATHS_JSON='["<owned-path-or-read-only-scope>"]'
-TASK_GOAL="<one bounded outcome>"
-TASK_DEPENDENCIES="<already-settled prerequisites>"
-TASK_DECISIONS="<current canonical decisions>"
-TASK_EVIDENCE="<evidence and relevant artifact paths>"
-TASK_OWNERSHIP="<exact files/modules it may change, or read-only>"
-TASK_CONSTRAINTS="<what must not change>"
-TASK_SUCCESS="<acceptance criteria>"
-TASK_VALIDATION="<commands/checks>"
-TASK_CONTEXT="$(
-  jq -cn \
-    --arg task_id "$TASK_ID" \
-    --arg role "$TASK_ROLE" \
-    --argjson paths "$TASK_PATHS_JSON" \
-    --arg ownership "$TASK_OWNERSHIP" \
-    --arg constraints "$TASK_CONSTRAINTS" \
-    --arg validation "$TASK_VALIDATION" \
-    '{task_id:$task_id, role:$role, paths:$paths, ownership:$ownership, constraints:$constraints, validation:$validation, lifetime:"one-primary-plus-one-same-artifact-follow-up"}'
-)"
-TASK_BODY="$(
-  printf '%s\n' \
-    "Task ID: $TASK_ID" \
-    "Role: $TASK_ROLE" \
-    "Goal: $TASK_GOAL" \
-    "Dependencies: $TASK_DEPENDENCIES" \
-    "Decisions: $TASK_DECISIONS" \
-    "Context: $TASK_EVIDENCE" \
-    "Paths: $TASK_PATHS_JSON" \
-    "Ownership: $TASK_OWNERSHIP" \
-    "Constraints: $TASK_CONSTRAINTS" \
-    "Success: $TASK_SUCCESS" \
-    "Validation: $TASK_VALIDATION" \
-    "Lifetime: one primary contract plus at most one immediate same-artifact follow-up" \
-    "Report: findings, changed paths, validation, remaining risks, done/retire or blocked status"
-)"
-
-require_preserved_main_amq_binding "$ROOM_ROOT" || exit 1
-SEND_JSON="$(
-  amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to "$WORKER_HANDLE" --strict \
-    --thread "task/$TASK_ID" --kind todo --labels "task,role:$TASK_ROLE" \
-    --subject "$TASK_TITLE" --context "$TASK_CONTEXT" --body "$TASK_BODY" \
-    --wait-for drained --wait-timeout 60s --json
-)"
-TASK_MESSAGE_ID="$(printf '%s' "$SEND_JSON" | jq -er '.id')"
+amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to "$WORKER_HANDLE" --strict \
+  --thread "task/<lane-id>" --kind todo --labels task,role:planner \
+  --subject "$TASK_TITLE" \
+  --context '{"task_id":"<lane-id>","role":"planner","paths":["<scope>"],"ownership":"read-only","constraints":"<limits>","validation":"<checks>","lifetime":"one-primary-plus-one-same-artifact-follow-up"}' \
+  --body "<self-contained contract>" --wait-for drained --wait-timeout 60s --json
 ```
 
-Keep the body self-contained for the model, while `--context` carries the same stable task identity, role, paths, ownership, constraints, and validation in machine-readable form. The explicit `task/<task-id>` thread plus reply refs makes multi-round work reconstructable with `amq thread` and `amq trace`. `--strict` turns a stale or misspelled handle into a hard dispatch failure.
+Record the returned message `id` in the ledger. `drained` proves consumption, not completion. AMQ kinds are `brainstorm`, `review_request`, `review_response`, `question`, `answer`, `decision`, `status`, `todo`; there is no `work` kind. Send independent reviewers the same artifact/criteria, each in its own bounded lane, without the other reviewer's answer. MAIN compares results against repository evidence.
 
-AMQ 0.77.1 body forms are exact:
+Always answer received messages using reply lineage, including follow-ups:
 
 ```bash
-RECEIVED_MESSAGE_ID="<id from the AMQ notice or drain output>"
-amq reply --id "$RECEIVED_MESSAGE_ID" --strict --body "short report"
-amq reply --id "$RECEIVED_MESSAGE_ID" --strict --body @report.md
-amq reply --id "$RECEIVED_MESSAGE_ID" --strict --kind status \
-  --labels done,retire --subject "completed" --body - <<'REPORT'
-Multiline report body.
+amq reply --id "<received-message-id>" --strict --body "short answer"
+amq reply --id "<received-message-id>" --strict --body @report.md
+amq reply --id "<received-message-id>" --strict --kind status \
+  --labels done,retire --subject completed --body - <<'REPORT'
+Multiline findings and validation.
 REPORT
 ```
 
-Use `--body -` (or omitted `--body`) for stdin and `--body @path` for a file. There is no `--body-file` option. Empty or whitespace-only resolved bodies fail closed unless `--allow-empty` is explicitly supplied.
+Main-side replies also need the preserved `--root "$ROOM_ROOT" --me "$MAIN_HANDLE"` when not already bound. `reply` preserves thread/refs and derives recipients; `send --strict` is only for readiness or a genuinely new conversation. Body forms are `--body -`/omitted for stdin and `--body @path` for a file. `--body-file` does not exist. Empty bodies fail closed unless explicitly allowed.
 
-A drained receipt proves the worker consumed the request. The later AMQ response proves that the harness acted on it. When a send, receipt, or notification times out, use AMQ 0.77.1's durable trace instead of inferring delivery from terminal output:
-
-```bash
-amq trace "$TASK_MESSAGE_ID" --root "$ROOM_ROOT" --json
-AM_ROOT="$ROOM_ROOT" AM_ME="$WORKER_HANDLE" \
-  amq doctor --root "$ROOM_ROOT" --ops --json
-```
-
-A trace notification marked `accepted` or `written` proves only dispatch/write, not that the target TUI displayed or consumed the message.
-
-For an independent review, send the same artifact and criteria to each reviewer without including the other reviewer's conclusions:
+A full injected AMQ notice includes From, ID, Context, and Body: handle it directly without draining again. For a terminal wake that only says to check AMQ, drain once. When delivery times out, inspect durable trace rather than guessing from the pane:
 
 ```bash
-REVIEW_TASK_ID="<review-lane-id>"
-REVIEW_THREAD="review/$REVIEW_TASK_ID"
-REVIEW_CONTEXT="$(jq -cn --arg task_id "$REVIEW_TASK_ID" \
-  '{task_id:$task_id,role:"adversarial-reviewer",paths:["<artifact-path>"],ownership:"read-only",validation:"<review criteria>"}')"
-amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to claude-fable51-high-1 --strict \
-  --thread "$REVIEW_THREAD" --kind review_request --labels task,role:adversarial-reviewer \
-  --subject "independent adversarial review" --context "$REVIEW_CONTEXT" \
-  --body "<artifact and review criteria>" --wait-for drained --wait-timeout 60s &
-FABLE51_SEND_PID=$!
-amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to pi-grok46-1 --strict \
-  --thread "$REVIEW_THREAD" --kind review_request --labels task,role:adversarial-reviewer \
-  --subject "independent adversarial review" --context "$REVIEW_CONTEXT" \
-  --body "<same artifact and criteria>" --wait-for drained --wait-timeout 60s &
-GROK46_SEND_PID=$!
-wait "$FABLE51_SEND_PID"
-wait "$GROK46_SEND_PID"
+amq trace "<task-message-id>" --root "$ROOM_ROOT" --json
+AM_ROOT="$ROOM_ROOT" AM_ME="$WORKER_HANDLE" amq doctor --root "$ROOM_ROOT" --ops --json
 ```
 
-For concurrent action work, assign disjoint file ownership and designate one integration owner for shared interfaces. Never let two workers edit the same files concurrently. The main compares reports, resolves disagreement against repository evidence, and decides what to accept.
+A trace notification marked accepted/written proves only dispatch/write, not TUI consumption.
 
-Use `amq reply --id <received-message-id> --strict` whenever answering a task result, question, review, or follow-up. It derives the recipient, thread, and refs from the received message, including routed sessions. Use `amq send --strict` only for readiness or a genuinely new conversation. The main is provisioned in the same explicit roster as every worker, so strict reply validation is authoritative.
+## Retire and rotate
 
-## Retire and rotate workers
+A worker gets one primary contract and at most one immediate same-artifact follow-up: a failing test from its patch, review feedback on that patch, or a clarification. A new module/investigation, widened ownership, or unrelated third task needs a fresh worker.
 
-Do not leave completed workers running for future unrelated tasks. After a `done,retire` report:
+- `done,retire`: writes/validation are finished; a retirement request, not an immediate kill signal.
+- `blocked,awaiting-input`: keep it only for one immediate answer that continues the same task.
+- `blocked,rotate`: record partial findings and retire for a compact fresh-context handoff.
 
-1. Record the result message ID, verify its reply lineage with `amq trace "$TASK_MESSAGE_ID"`, and update the worker tuple to `reported`.
-2. Verify the required artifacts, writes, and validation evidence. `done` is not itself permission to discard unrecorded state.
-3. If no one immediate same-artifact follow-up is needed, close only the recorded pane created for that worker.
-4. Confirm through `amq doctor --ops --json` that no wake lock remains for that handle. Only a clean check makes the handle reusable.
-5. Mark the tuple `retired`; brief a fresh worker from the compact canonical handoff when more work exists.
-
-For `blocked,awaiting-input`, keep the worker only when one answer is expected immediately and will continue the same task. For `blocked,rotate`, a long external wait, a widened task, or a context-heavy next step, record the partial result and retire it.
-
-Use this lifecycle helper with the literal handle and pane ID printed at launch:
+Before retirement, record the result message ID, verify reply lineage with `amq trace`, mark `reported`, and verify artifacts/validation. If no immediate same-artifact follow-up is needed:
 
 ```bash
-retire_worker() {
-  local worker_handle="$1" worker_pane_id="$2"
-
-  require_preserved_main_amq_binding "${ROOM_ROOT:-}" || return
-
-  # Closed pane IDs are not reused. If the worker already exited, continue to
-  # wake cleanup verification; otherwise close only its recorded pane.
-  if herdr pane get "$worker_pane_id" >/dev/null 2>&1; then
-    herdr pane close "$worker_pane_id" >/dev/null
-  fi
-
-  local ops_json
-  if ! ops_json="$(AM_ROOT="$ROOM_ROOT" AM_ME="$MAIN_HANDLE" amq doctor --ops --json)"; then
-    printf 'could not verify AMQ wake cleanup for worker handle %s\n' \
-      "$worker_handle" >&2
-    return 1
-  fi
-  if printf '%s' "$ops_json" | jq -e --arg handle "$worker_handle" \
-    '(.ops.wake_locks // []) | any(.agent == $handle)' >/dev/null; then
-    printf 'worker handle %s still has an AMQ wake claim; choose an unused pool handle\n' \
-      "$worker_handle" >&2
-    return 1
-  fi
-}
-
-retire_worker "$WORKER_HANDLE" "$WORKER_PANE_ID"
+bash "$HELPER" retire --topic auth-fix --harness pi \
+  --handle pi-gpt6-astra-1 --pane "<recorded-worker-pane-id>"
 ```
 
-The AMQ wake started by `coop exec` shares the worker pane's terminal lifecycle. Closing the recorded Herdr pane terminates the agent and its wake; the wake removes its lock during shutdown. Confirm that boundary with one post-close `doctor --ops --json` check. If a lock remains, do not poll, delete lock files, blindly restart it, or reuse the handle. Use another unused pool handle and inspect the ownership-aware diagnostic once:
+**Pass only the exact handle/pane tuple recorded at launch.** The helper rejects MAIN's current pane but cannot prove an arbitrary pane belongs to that handle. It closes the specified worker pane and performs one `amq doctor --ops --json` wake-lock check. Only successful cleanup verification permits marking `retired` and reusing the handle. Never close an unrecorded pane, ask a worker to self-kill, or assume a failed check means cleanup succeeded. If the pane is already gone or lookup fails, the helper fails closed rather than guessing it was retired; inspect Herdr and run one bound AMQ doctor check before recording cleanup manually.
+
+If a wake lock remains, do not poll, delete lock files, blindly restart, or reuse the handle. Choose another unused handle and inspect once:
 
 ```bash
 AM_ROOT="$ROOM_ROOT" AM_ME="$WORKER_HANDLE" \
   amq wake check --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --json
 ```
 
-Automation may act only when `restart_capability` is `agent_safe` and must follow `next_action`; `operator_only` belongs to the owning terminal or supervisor.
+Automation may act only when `restart_capability` is `agent_safe`, following `next_action`; `operator_only` belongs to the terminal owner/supervisor. Long waits also warrant recording partial work and retirement. Replacement handoffs contain only objective, decisions, artifact paths/ownership, completed work, unresolved uncertainty, and exact next action—not full transcripts. If MAIN crashes, recover via Herdr panes plus AMQ doctor; workers must not invent self-timeouts.
 
-Pane closure is lifecycle control, not worker communication. Never ask the worker to self-kill, never close the main pane, and never close an unrecorded pane. If the main crashes, recover by inspecting Herdr panes plus `amq doctor --ops`; workers do not invent self-timeouts.
-
-When Herdr detects the wrong owner/state or launch readiness is ambiguous, use its manifest diagnostics rather than changing the AMQ transport or scraping pane output as a response channel:
+For stale owner/state or ambiguous launch readiness, keep background manifest checks enabled and inspect:
 
 ```bash
 herdr server agent-manifests --json
-herdr agent explain "$WORKER_PANE_ID" --verbose
+herdr agent explain "<recorded-worker-pane-id>" --verbose
 ```
 
-Keep background manifest checks enabled. `herdr server update-agent-manifests --json` is an explicit repair when diagnostics show a stale compatible manifest.
+`herdr server update-agent-manifests --json` is an explicit repair only for a diagnosed stale compatible manifest.
 
-## Receive replies on any main harness
+## Receive replies
 
-- **Pi main with `amq-notify`:** finish the turn. The extension injects replies automatically; do not manually check unless the user explicitly asks.
-- **Main already launched through `amq coop exec`:** native wake submits a notice. On notice, run `amq drain --strict --include-body`.
-- **Plain Claude main:** replies are not injected automatically. Check AMQ periodically at natural orchestration checkpoints—for example, after preparing local validation or before making a decision that depends on a worker:
+- **Pi MAIN with `amq-notify`:** finish the turn; replies arrive automatically in the exact bound room. Do not manually check unless the user explicitly asks.
+- **MAIN launched through `amq coop exec`:** consume full injected notices directly; if wake only asks you to check, drain once.
+- **Plain Claude MAIN:** no equivalent notifier. Check at natural orchestration checkpoints, or use one bounded monitor when deliberately waiting:
 
 ```bash
 amq drain --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --strict --include-body
-```
-
-When deliberately waiting for a result, use one bounded monitor instead of repeatedly draining:
-
-```bash
+# Alternative when intentionally waiting; not an additional polling step:
 amq monitor --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --strict --include-body --timeout 30m
 ```
 
-Claude mains must continue checking until every expected worker reports `done,retire`, `blocked,awaiting-input`, or `blocked,rotate`; silence in the harness UI is not evidence that no message arrived. Do not use a tight polling loop, sleep between checks, inspect `.agent-mail` files, or treat visible Herdr output as the reply. Readiness is not completion. Record and verify each final report, then follow the retirement policy instead of keeping workers alive by default.
+Claude MAIN must continue checking at checkpoints until every expected worker reports done/blocked. No tight polling, sleeps, `.agent-mail` filesystem probes, or pane-output-as-reply substitutes. Readiness is not completion. Record, verify, and retire workers rather than keeping them idle for unrelated work.
+
+## Helper maintenance
+
+From the repository root:
+
+```bash
+bash -n configs/agents/skills/use-agent/scripts/sidecar.sh
+shellcheck configs/agents/skills/use-agent/scripts/sidecar.sh
+python3 -B -m unittest discover -s configs/agents/skills/use-agent/scripts -p 'test_*.py'
+```
+
+Tests mock Herdr, AMQ, and model CLIs; they do not launch sessions or prove live provider entitlement/native wake delivery. Keep model profiles and kickoff contracts in the helper, not duplicated shell recipes in this document.

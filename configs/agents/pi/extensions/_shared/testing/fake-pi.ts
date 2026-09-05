@@ -47,6 +47,7 @@ export type FakePi = {
   handlers: Map<string, Handler[]>;
   activeTools: Set<string>;
   registeredFlags: Map<string, unknown>;
+  providers: Map<string, unknown>;
   appendedEntries: Array<{ customType: string; data?: unknown }>;
   messageRenderers: Map<string, unknown>;
   sentMessages: Array<{ message: unknown; options?: unknown }>;
@@ -65,6 +66,7 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
   const handlers = new Map<string, Handler[]>();
   const activeTools = new Set<string>();
   const registeredFlags = new Map<string, unknown>();
+  const providers = new Map<string, unknown>();
   const appendedEntries: FakePi["appendedEntries"] = [];
   const messageRenderers = new Map<string, unknown>();
   const sentMessages: FakePi["sentMessages"] = [];
@@ -123,6 +125,14 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
 
     getFlag(name: string) {
       return options.flags?.[name];
+    },
+
+    registerProvider(name: string, config: unknown) {
+      providers.set(name, config);
+    },
+
+    unregisterProvider(name: string) {
+      providers.delete(name);
     },
 
     appendEntry(customType: string, data?: unknown) {
@@ -201,6 +211,7 @@ export function createFakePi(options: FakePiOptions = {}): FakePi {
     handlers,
     activeTools,
     registeredFlags,
+    providers,
     appendedEntries,
     messageRenderers,
     sentMessages,

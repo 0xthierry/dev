@@ -77,6 +77,53 @@ install_npm_global_cli() {
   run_cmd "${install_cmd[@]}"
 }
 
+install_codex_multi_auth_cli() {
+  local version="$1"
+  local safe_hono_version="4.12.34"
+  local npm_bin=""
+  local mise_bin=""
+  local global_root=""
+  local package_root=""
+  local installed_hono=""
+  local -a npm_cmd=()
+
+  CODEX_MULTI_AUTH_APP_BIND_INSTALL=0 \
+    CODEX_MULTI_AUTH_APP_LAUNCHER_INSTALL=0 \
+    install_npm_global_cli "Codex Multi Auth" "codex-multi-auth" "$version"
+
+  if npm_bin="$(command -v npm 2>/dev/null)"; then
+    npm_cmd=("$npm_bin")
+  elif mise_bin="$(resolve_mise_bin 2>/dev/null)"; then
+    npm_cmd=("$mise_bin" exec node -- npm)
+  else
+    printf 'error: npm is unavailable and mise is not installed; cannot secure Codex Multi Auth\n' >&2
+    return 1
+  fi
+
+  global_root="$("${npm_cmd[@]}" root -g)"
+  package_root="$global_root/codex-multi-auth"
+  installed_hono="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "$package_root/node_modules/hono/package.json" 2>/dev/null | head -1)"
+  if [[ "$installed_hono" == "$safe_hono_version" ]]; then
+    log_item "Codex Multi Auth Hono dependency: already at $safe_hono_version"
+    return 0
+  fi
+
+  log_item "Securing Codex Multi Auth Hono dependency @ $safe_hono_version..."
+  # The pinned upstream release fixes Hono at 4.12.33, which is affected by
+  # multiple request-processing advisories. Patch the installed package's exact
+  # dependency and matching override before resolving production dependencies.
+  run_cmd "${npm_cmd[@]}" pkg set \
+    --prefix "$package_root" \
+    "dependencies.hono=$safe_hono_version" \
+    "overrides.hono=$safe_hono_version"
+  run_cmd "${npm_cmd[@]}" install \
+    --prefix "$package_root" \
+    --package-lock=false \
+    --ignore-scripts \
+    --omit=dev
+}
+
 install_claude_code_binary() {
   local version="$1"
   if installed_binary_is_pinned "claude" "$version"; then
@@ -339,8 +386,9 @@ install_ai_clis() {
   # Claude Code (Anthropic) — standalone binary, not npm
   install_claude_code_binary "2.1.260"
 
-  # Codex (OpenAI)
+  # Codex (OpenAI) plus the pinned multi-account wrapper/account manager.
   install_npm_global_cli "Codex CLI" "@openai/codex" "0.153.2"
+  install_codex_multi_auth_cli "2.12.0"
 
   # Gemini CLI (Google)
   install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.56.0"
