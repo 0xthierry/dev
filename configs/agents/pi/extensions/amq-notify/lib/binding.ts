@@ -9,6 +9,23 @@ export interface Binding {
   me: string;
 }
 
+export type AmqNotifyRole = "main" | "worker";
+
+export function resolveAmqNotifyRole(
+  configuredRole: string | undefined,
+  inheritedRoot: string | undefined,
+): AmqNotifyRole {
+  const configured = configuredRole?.trim();
+  if (configured === "main" || configured === "worker") return configured;
+  return inheritedRoot?.trim() ? "worker" : "main";
+}
+
+export function resolveWorkerBinding(root: string | undefined, me: string | undefined): Binding | undefined {
+  const normalizedRoot = root?.trim();
+  const normalizedMe = me?.trim();
+  return normalizedRoot && normalizedMe ? { root: normalizedRoot, me: normalizedMe } : undefined;
+}
+
 // Resolve which AMQ room this pi session talks on. The room name is persisted as a
 // custom session entry, so /reload (rebind) and a full stop+resume (new process)
 // both restore the SAME room and reconnect to an existing worker, instead of minting

@@ -7,6 +7,7 @@ export interface AmqMonitorMessage {
   priority?: string;
   kind?: string;
   labels?: string[];
+  context?: Record<string, unknown>;
   created?: string;
   body?: string;
 }
@@ -89,6 +90,7 @@ function parseMessages(value: unknown[] | undefined): AmqMonitorMessage[] {
         priority: stringValue(candidate.priority),
         kind: stringValue(candidate.kind),
         labels: stringArrayValue(candidate.labels),
+        context: objectValue(candidate.context),
         created: stringValue(candidate.created),
         body: stringValue(candidate.body),
       },
@@ -112,6 +114,7 @@ function formatMonitorMessage(message: AmqMonitorMessage): string {
     `  Kind: ${message.kind || "-"}`,
     `  Labels: ${message.labels?.join(",") || "-"}`,
     `  Thread: ${message.thread || "-"}`,
+    `  Context: ${message.context ? JSON.stringify(message.context) : "-"}`,
   ];
 
   const body = message.body?.trimEnd();
@@ -130,4 +133,10 @@ function stringArrayValue(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const strings = value.filter((item): item is string => typeof item === "string");
   return strings.length > 0 ? strings : undefined;
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }

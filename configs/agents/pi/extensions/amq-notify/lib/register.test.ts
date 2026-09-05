@@ -154,10 +154,48 @@ test("a rebound instance (reload/resume) reuses the persisted room and keeps del
   }
 });
 
-test("a coop-exec worker (inherited AM_ROOT) stays out of the way", async () => {
+test("a coop-exec worker watches its inherited room without replacing the binding", async () => {
   // Arrange
-  const prev = { root: process.env.AM_ROOT, role: process.env.AMQ_NOTIFY_ROLE };
-  process.env.AM_ROOT = "/tmp/coop-session";
+  const prev = { root: process.env.AM_ROOT, me: process.env.AM_ME, role: process.env.AMQ_NOTIFY_ROLE };
+  const workerRoot = `${TEST_CWD}/coop-session`;
+  mkdirSync(workerRoot, { recursive: true });
+  process.env.AM_ROOT = workerRoot;
+  process.env.AM_ME = "pi-worker";
+  delete process.env.AMQ_NOTIFY_ROLE;
+
+  try {
+    const session = makeSession();
+    const worker = makeInstance(session);
+
+    // Act
+    worker.register();
+    worker.start("startup");
+    await tick(25);
+
+    // Assert
+    expect(worker.sent).toHaveLength(1);
+    expect(worker.sent[0]?.text).toContain("Handle the assigned task");
+    expect(bindingEntries(session)).toHaveLength(0);
+    expect(process.env.AM_ROOT).toBe(workerRoot);
+    expect(process.env.AM_ME).toBe("pi-worker");
+    expect(worker.execCalls.some((call) => call.args[0] === "monitor" && call.args.includes("--strict"))).toBe(true);
+    expect(worker.execCalls.some((call) => call.args[0] === "read" && call.args.includes("--strict"))).toBe(true);
+    worker.shutdown();
+  } finally {
+    if (prev.root !== undefined) process.env.AM_ROOT = prev.root;
+    else delete process.env.AM_ROOT;
+    if (prev.me !== undefined) process.env.AM_ME = prev.me;
+    else delete process.env.AM_ME;
+    if (prev.role !== undefined) process.env.AMQ_NOTIFY_ROLE = prev.role;
+    else delete process.env.AMQ_NOTIFY_ROLE;
+  }
+});
+
+test("reports an incomplete inherited worker binding without minting a replacement room", async () => {
+  // Arrange
+  const prev = { root: process.env.AM_ROOT, me: process.env.AM_ME, role: process.env.AMQ_NOTIFY_ROLE };
+  process.env.AM_ROOT = `${TEST_CWD}/incomplete-worker`;
+  delete process.env.AM_ME;
   delete process.env.AMQ_NOTIFY_ROLE;
 
   try {
@@ -170,12 +208,16 @@ test("a coop-exec worker (inherited AM_ROOT) stays out of the way", async () => 
     await tick(10);
 
     // Assert
-    expect(worker.sent.length).toBe(0);
-    expect(bindingEntries(session).length).toBe(0);
-    expect(process.env.AM_ROOT).toBe("/tmp/coop-session");
+    expect(worker.sent).toHaveLength(0);
+    expect(bindingEntries(session)).toHaveLength(0);
+    expect(worker.notifications).toEqual([
+      { message: "AMQ worker notifier requires inherited AM_ROOT and AM_ME", level: "error" },
+    ]);
   } finally {
     if (prev.root !== undefined) process.env.AM_ROOT = prev.root;
     else delete process.env.AM_ROOT;
+    if (prev.me !== undefined) process.env.AM_ME = prev.me;
+    else delete process.env.AM_ME;
     if (prev.role !== undefined) process.env.AMQ_NOTIFY_ROLE = prev.role;
     else delete process.env.AMQ_NOTIFY_ROLE;
   }
@@ -264,6 +306,8 @@ test("adds stable wait guidance to the system prompt", () => {
     expect(result.systemPrompt).toContain("By default");
     expect(result.systemPrompt).toContain("If the user explicitly asks/orders you to manually check AMQ, obey");
     expect(result.systemPrompt).toContain("Do not substitute filesystem probes for an AMQ check");
+    expect(result.systemPrompt).toContain("amq reply --id <message-id> --strict");
+    expect(result.systemPrompt).toContain("amq send --strict");
   } finally {
     if (prev.root !== undefined) process.env.AM_ROOT = prev.root;
     else delete process.env.AM_ROOT;

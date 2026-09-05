@@ -216,7 +216,7 @@ launch_herdr_sidecar() {
 
 Herdr 0.8.2 separates layout, pane, and agent control. `pane split` creates the shell pane and returns its ID at `.result.pane.pane_id`, but the shell can still be starting when that response arrives. The helper applies the explicit `use-agent-<topic>-<handle>` title both as the manual pane name and as presentation metadata, so Herdr shows the orchestration session in pane chrome and agent views while the agent CLI receives the same value through `--name`. Wait for visible shell output and verify that the shell owns the foreground before using `pane run`; otherwise the command's submit key can arrive before the prompt is ready and leave the launch text sitting unexecuted. `pane run` then atomically submits command text in that pane. The `%q` escaping is required because it accepts shell command text and the worker prompt must remain one argument to the agent CLI.
 
-Pass an explicit target pane and `right` or `down` so a multi-worker fleet can build a usable layout instead of repeatedly narrowing the main pane. The helper prints only the created pane ID; every launch must capture it and immediately record the append-only tuple `(handle, pane_id, task, lifecycle state)`. Do not overwrite that mapping until retirement completes.
+Pass an explicit target pane and `right` or `down` so a multi-worker fleet can build a usable layout instead of repeatedly narrowing the main pane. The helper prints only the created pane ID; every launch must capture it and immediately record the append-only tuple `(handle, pane_id, task_id, task_message_id, result_message_id, lifecycle state)`. Do not overwrite that mapping until retirement completes.
 
 Do not replace this with `herdr agent start`. That command starts Herdr's canonical agent executable directly in an existing pane and forwards arguments to it; it cannot place `amq coop exec` in front of the executable. `pane run` is therefore the correct surface for this wrapped launch stack.
 
@@ -328,7 +328,7 @@ For every recipe, choose one unused numbered `WORKER_HANDLE`, then build the sam
 
 ```bash
 build_worker_prompt() {
-  printf '%s' "You are the disposable WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately run amq drain --include-body, then send readiness with amq send --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. Accept one bounded primary contract and at most one immediate follow-up on the same artifact: a failing test from your patch, review feedback on that patch, or a clarification about your assigned artifact. Do not accept a new module, different investigation, widened ownership, or unrelated third task; report with kind status and labels blocked,rotate instead. For every AMQ notice within that boundary, run amq drain --include-body, carry out the request exactly within its ownership and constraints, and report with amq send --to $MAIN_HANDLE. Send retirement-safe completion only after all assigned work and validation finish, using kind status and labels done,retire. If one immediate answer would unblock the same task, use labels blocked,awaiting-input; if fresh context is better, use blocked,rotate. Include changed paths and validation for action work. For multiline reports, feed stdin or a heredoc to amq send with --body -; for a saved file use --body @path. The --body-file option does not exist. Never use amq reply. Do not self-close the pane: MAIN records and verifies your result before retirement. Do not poll or sleep while waiting: finish your turn and let amq wake notify you."
+  printf '%s' "You are the disposable WORKER sidecar $WORKER_HANDLE paired with MAIN $MAIN_HANDLE. AMQ is the only shared source of truth. Immediately send readiness with amq send --strict --to $MAIN_HANDLE --kind status --labels ready --subject ready --body 'ready'. Accept one bounded primary contract and at most one immediate follow-up on the same artifact: a failing test from your patch, review feedback on that patch, or a clarification about your assigned artifact. Do not accept a new module, different investigation, widened ownership, or unrelated third task; answer the received message with kind status and labels blocked,rotate instead. A full injected AMQ notice already includes From, ID, Context, and Body; handle it directly and do not drain again. If a terminal wake only says to check AMQ, run amq drain --strict --include-body once. Preserve the ID of each message you handle and answer it with amq reply --strict --id <message-id>, which automatically preserves its thread and refs. Use amq send --strict only for readiness or a genuinely new conversation. Send retirement-safe completion only after all assigned work and validation finish, using reply kind status and labels done,retire. If one immediate answer would unblock the same task, reply with labels blocked,awaiting-input; if fresh context is better, use blocked,rotate. Include changed paths and validation for action work. For multiline reports, feed stdin or a heredoc to amq reply with --body -; for a saved file use --body @path. The --body-file option does not exist. Do not self-close the pane: MAIN records and verifies your result before retirement. Do not poll or sleep while waiting: finish your turn and let AMQ notify you."
 }
 
 build_readonly_worker_prompt() {
@@ -339,6 +339,8 @@ build_readonly_worker_prompt() {
 `done,retire` means artifact writes are complete and no further worker-owned state needs to be consumed; it is a retirement request, not an immediate kill signal. `blocked,awaiting-input` preserves the worker for one answer. `blocked,rotate` asks the main to record the partial result and replace the worker.
 
 `amq coop exec --require-wake` must establish native wake before the agent starts. AMQ 0.72 and newer name supported harness sessions automatically, but these recipes pass `--named=false` because they provide an explicit harness `--name`; never enable both naming paths. If wake setup fails, do not launch with degraded delivery and do not invent a hook workaround. Run `AM_ROOT="$ROOM_ROOT" AM_ME="$MAIN_HANDLE" amq doctor --ops`, fix the wake boundary, and relaunch.
+
+Pi workers additionally set `AMQ_NOTIFY_ROLE=worker` explicitly and use `--wake-inject-mode none`. The role override prevents a main Pi session's inherited `AMQ_NOTIFY_ROLE=main` marker from rebinding the child to the main inbox. Their installed `amq-notify` extension consumes the inherited worker mailbox and submits each complete message through Pi's `sendUserMessage` API, while AMQ's wake remains zero-input and cannot type into the composer or an approval dialog. Do not remove either safeguard from a Pi recipe. Do not copy `none` to Claude recipes: Claude has no equivalent repository-owned API consumer, so zero-input wake would provide attention without submitting the task.
 
 ## Claude worker — Fable 5.1, xhigh oracle
 
@@ -389,7 +391,9 @@ WORKER_HANDLE="pi-gpt56-1" # choose any configured unused pi-gpt56-1..N
 WORKER_PROMPT="$(build_worker_prompt)"
 WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
   "use-agent-$TOPIC-$WORKER_HANDLE" \
-  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake --named=false pi -- \
+  env AMQ_NOTIFY_ROLE=worker \
+  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake \
+  --wake-inject-mode none --named=false pi -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
   --model openai-codex/gpt-5.6-sol \
   --thinking high \
@@ -407,7 +411,9 @@ WORKER_HANDLE="pi-grok45-1" # choose any configured unused pi-grok45-1..N
 WORKER_PROMPT="$(build_readonly_worker_prompt)"
 WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
   "use-agent-$TOPIC-$WORKER_HANDLE" \
-  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake --named=false pi -- \
+  env AMQ_NOTIFY_ROLE=worker \
+  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake \
+  --wake-inject-mode none --named=false pi -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
   --model xai/grok-4.5 \
   --thinking high \
@@ -426,7 +432,9 @@ WORKER_HANDLE="pi-grok46-1" # choose any configured unused pi-grok46-1..N
 WORKER_PROMPT="$(build_readonly_worker_prompt)"
 WORKER_PANE_ID="$(launch_herdr_sidecar "$HERDR_CURRENT_PANE_ID" right \
   "use-agent-$TOPIC-$WORKER_HANDLE" \
-  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake --named=false pi -- \
+  env AMQ_NOTIFY_ROLE=worker \
+  amq coop exec --root "$ROOM_ROOT" --me "$WORKER_HANDLE" --require-wake \
+  --wake-inject-mode none --named=false pi -- \
   --name "use-agent-$TOPIC-$WORKER_HANDLE" \
   --model xai/grok-4.6 \
   --thinking high \
@@ -455,22 +463,64 @@ This makes Ghostty and Omarchy's Hyprland group bar show what the worker is doin
 AMQ accepts these message kinds: `brainstorm`, `review_request`, `review_response`, `question`, `answer`, `decision`, `status`, and `todo`. There is no `work` kind; use `todo` for action requests.
 
 ```bash
+TASK_ID="<short-lowercase-lane-id>"
+TASK_ROLE="<oracle|architect|implementer|debugger|scout|tester|adversarial-reviewer>"
+TASK_PATHS_JSON='["<owned-path-or-read-only-scope>"]'
+TASK_GOAL="<one bounded outcome>"
+TASK_DEPENDENCIES="<already-settled prerequisites>"
+TASK_DECISIONS="<current canonical decisions>"
+TASK_EVIDENCE="<evidence and relevant artifact paths>"
+TASK_OWNERSHIP="<exact files/modules it may change, or read-only>"
+TASK_CONSTRAINTS="<what must not change>"
+TASK_SUCCESS="<acceptance criteria>"
+TASK_VALIDATION="<commands/checks>"
+TASK_CONTEXT="$(
+  jq -cn \
+    --arg task_id "$TASK_ID" \
+    --arg role "$TASK_ROLE" \
+    --argjson paths "$TASK_PATHS_JSON" \
+    --arg ownership "$TASK_OWNERSHIP" \
+    --arg constraints "$TASK_CONSTRAINTS" \
+    --arg validation "$TASK_VALIDATION" \
+    '{task_id:$task_id, role:$role, paths:$paths, ownership:$ownership, constraints:$constraints, validation:$validation, lifetime:"one-primary-plus-one-same-artifact-follow-up"}'
+)"
+TASK_BODY="$(
+  printf '%s\n' \
+    "Task ID: $TASK_ID" \
+    "Role: $TASK_ROLE" \
+    "Goal: $TASK_GOAL" \
+    "Dependencies: $TASK_DEPENDENCIES" \
+    "Decisions: $TASK_DECISIONS" \
+    "Context: $TASK_EVIDENCE" \
+    "Paths: $TASK_PATHS_JSON" \
+    "Ownership: $TASK_OWNERSHIP" \
+    "Constraints: $TASK_CONSTRAINTS" \
+    "Success: $TASK_SUCCESS" \
+    "Validation: $TASK_VALIDATION" \
+    "Lifetime: one primary contract plus at most one immediate same-artifact follow-up" \
+    "Report: findings, changed paths, validation, remaining risks, done/retire or blocked status"
+)"
+
 require_preserved_main_amq_binding "$ROOM_ROOT" || exit 1
 SEND_JSON="$(
-  amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to "$WORKER_HANDLE" --kind todo \
-    --subject "$TASK_TITLE" \
-    --body $'Task ID: <lane-id>\nRole: <oracle|architect|implementer|debugger|scout|tester|adversarial reviewer>\nGoal: <one bounded outcome>\nDependencies: <already-settled prerequisites>\nDecisions: <current canonical decisions>\nContext: <evidence and relevant artifact paths>\nOwnership: <exact files/modules it may change, or read-only>\nConstraints: <what must not change>\nSuccess: <acceptance criteria>\nValidation: <commands/checks>\nLifetime: one primary contract plus at most one immediate same-artifact follow-up\nReport: <findings, changed paths, validation, remaining risks, done/retire or blocked status>' \
+  amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to "$WORKER_HANDLE" --strict \
+    --thread "task/$TASK_ID" --kind todo --labels "task,role:$TASK_ROLE" \
+    --subject "$TASK_TITLE" --context "$TASK_CONTEXT" --body "$TASK_BODY" \
     --wait-for drained --wait-timeout 60s --json
 )"
-MESSAGE_ID="$(printf '%s' "$SEND_JSON" | jq -er '.id')"
+TASK_MESSAGE_ID="$(printf '%s' "$SEND_JSON" | jq -er '.id')"
 ```
+
+Keep the body self-contained for the model, while `--context` carries the same stable task identity, role, paths, ownership, constraints, and validation in machine-readable form. The explicit `task/<task-id>` thread plus reply refs makes multi-round work reconstructable with `amq thread` and `amq trace`. `--strict` turns a stale or misspelled handle into a hard dispatch failure.
 
 AMQ 0.77.1 body forms are exact:
 
 ```bash
-amq send --to "$MAIN_HANDLE" --body "short report"
-amq send --to "$MAIN_HANDLE" --body @report.md
-amq send --to "$MAIN_HANDLE" --kind status --labels done,retire --subject "completed" --body - <<'REPORT'
+RECEIVED_MESSAGE_ID="<id from the AMQ notice or drain output>"
+amq reply --id "$RECEIVED_MESSAGE_ID" --strict --body "short report"
+amq reply --id "$RECEIVED_MESSAGE_ID" --strict --body @report.md
+amq reply --id "$RECEIVED_MESSAGE_ID" --strict --kind status \
+  --labels done,retire --subject "completed" --body - <<'REPORT'
 Multiline report body.
 REPORT
 ```
@@ -480,7 +530,7 @@ Use `--body -` (or omitted `--body`) for stdin and `--body @path` for a file. Th
 A drained receipt proves the worker consumed the request. The later AMQ response proves that the harness acted on it. When a send, receipt, or notification times out, use AMQ 0.77.1's durable trace instead of inferring delivery from terminal output:
 
 ```bash
-amq trace "$MESSAGE_ID" --root "$ROOM_ROOT" --json
+amq trace "$TASK_MESSAGE_ID" --root "$ROOM_ROOT" --json
 AM_ROOT="$ROOM_ROOT" AM_ME="$WORKER_HANDLE" \
   amq doctor --root "$ROOM_ROOT" --ops --json
 ```
@@ -490,13 +540,19 @@ A trace notification marked `accepted` or `written` proves only dispatch/write, 
 For an independent review, send the same artifact and criteria to each reviewer without including the other reviewer's conclusions:
 
 ```bash
-amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to claude-fable51-high-1 --kind review_request \
-  --subject "independent adversarial review" --body "<artifact and review criteria>" \
-  --wait-for drained --wait-timeout 60s &
+REVIEW_TASK_ID="<review-lane-id>"
+REVIEW_THREAD="review/$REVIEW_TASK_ID"
+REVIEW_CONTEXT="$(jq -cn --arg task_id "$REVIEW_TASK_ID" \
+  '{task_id:$task_id,role:"adversarial-reviewer",paths:["<artifact-path>"],ownership:"read-only",validation:"<review criteria>"}')"
+amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to claude-fable51-high-1 --strict \
+  --thread "$REVIEW_THREAD" --kind review_request --labels task,role:adversarial-reviewer \
+  --subject "independent adversarial review" --context "$REVIEW_CONTEXT" \
+  --body "<artifact and review criteria>" --wait-for drained --wait-timeout 60s &
 FABLE51_SEND_PID=$!
-amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to pi-grok46-1 --kind review_request \
-  --subject "independent adversarial review" --body "<same artifact and criteria>" \
-  --wait-for drained --wait-timeout 60s &
+amq send --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --to pi-grok46-1 --strict \
+  --thread "$REVIEW_THREAD" --kind review_request --labels task,role:adversarial-reviewer \
+  --subject "independent adversarial review" --context "$REVIEW_CONTEXT" \
+  --body "<same artifact and criteria>" --wait-for drained --wait-timeout 60s &
 GROK46_SEND_PID=$!
 wait "$FABLE51_SEND_PID"
 wait "$GROK46_SEND_PID"
@@ -504,13 +560,13 @@ wait "$GROK46_SEND_PID"
 
 For concurrent action work, assign disjoint file ownership and designate one integration owner for shared interfaces. Never let two workers edit the same files concurrently. The main compares reports, resolves disagreement against repository evidence, and decides what to accept.
 
-Use `amq send`, never `amq reply`; the main is not necessarily a registered coop participant.
+Use `amq reply --id <received-message-id> --strict` whenever answering a task result, question, review, or follow-up. It derives the recipient, thread, and refs from the received message, including routed sessions. Use `amq send --strict` only for readiness or a genuinely new conversation. The main is provisioned in the same explicit roster as every worker, so strict reply validation is authoritative.
 
 ## Retire and rotate workers
 
 Do not leave completed workers running for future unrelated tasks. After a `done,retire` report:
 
-1. Record the AMQ result and update the worker tuple to `reported`.
+1. Record the result message ID, verify its reply lineage with `amq trace "$TASK_MESSAGE_ID"`, and update the worker tuple to `reported`.
 2. Verify the required artifacts, writes, and validation evidence. `done` is not itself permission to discard unrecorded state.
 3. If no one immediate same-artifact follow-up is needed, close only the recorded pane created for that worker.
 4. Confirm through `amq doctor --ops --json` that no wake lock remains for that handle. Only a clean check makes the handle reusable.
@@ -572,17 +628,17 @@ Keep background manifest checks enabled. `herdr server update-agent-manifests --
 ## Receive replies on any main harness
 
 - **Pi main with `amq-notify`:** finish the turn. The extension injects replies automatically; do not manually check unless the user explicitly asks.
-- **Main already launched through `amq coop exec`:** native wake submits a notice. On notice, run `amq drain --include-body`.
+- **Main already launched through `amq coop exec`:** native wake submits a notice. On notice, run `amq drain --strict --include-body`.
 - **Plain Claude main:** replies are not injected automatically. Check AMQ periodically at natural orchestration checkpoints—for example, after preparing local validation or before making a decision that depends on a worker:
 
 ```bash
-amq drain --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --include-body
+amq drain --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --strict --include-body
 ```
 
 When deliberately waiting for a result, use one bounded monitor instead of repeatedly draining:
 
 ```bash
-amq monitor --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --include-body --timeout 30m
+amq monitor --root "$ROOM_ROOT" --me "$MAIN_HANDLE" --strict --include-body --timeout 30m
 ```
 
 Claude mains must continue checking until every expected worker reports `done,retire`, `blocked,awaiting-input`, or `blocked,rotate`; silence in the harness UI is not evidence that no message arrived. Do not use a tight polling loop, sleep between checks, inspect `.agent-mail` files, or treat visible Herdr output as the reply. Readiness is not completion. Record and verify each final report, then follow the retirement policy instead of keeping workers alive by default.

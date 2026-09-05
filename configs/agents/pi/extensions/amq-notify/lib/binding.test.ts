@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { BINDING_ENTRY, resolveBinding } from "./binding";
+import { BINDING_ENTRY, resolveAmqNotifyRole, resolveBinding, resolveWorkerBinding } from "./binding";
 
 type Entry = { type: string; customType?: string; data?: unknown };
 
@@ -18,6 +18,38 @@ function createRuntime(entries: Entry[] = []) {
 
   return { pi, ctx, appended };
 }
+
+describe("AMQ notifier process binding", () => {
+  test("classifies inherited AMQ roots as workers and preserves explicit roles", () => {
+    // Arrange
+    const inheritedRoot = "/repo/.agent-mail/session";
+
+    // Act
+    const inferredWorker = resolveAmqNotifyRole(undefined, inheritedRoot);
+    const explicitWorker = resolveAmqNotifyRole("worker", inheritedRoot);
+    const persistedMain = resolveAmqNotifyRole("main", inheritedRoot);
+    const invalidFallback = resolveAmqNotifyRole("invalid", undefined);
+
+    // Assert
+    expect(inferredWorker).toBe("worker");
+    expect(explicitWorker).toBe("worker");
+    expect(persistedMain).toBe("main");
+    expect(invalidFallback).toBe("main");
+  });
+
+  test("accepts only complete inherited worker bindings", () => {
+    // Arrange
+    const root = "/repo/.agent-mail/session";
+
+    // Act
+    const complete = resolveWorkerBinding(root, "pi-worker");
+    const missingHandle = resolveWorkerBinding(root, " ");
+
+    // Assert
+    expect(complete).toEqual({ root, me: "pi-worker" });
+    expect(missingHandle).toBeUndefined();
+  });
+});
 
 describe("resolveBinding", () => {
   test("restores the latest persisted binding outside forks", () => {

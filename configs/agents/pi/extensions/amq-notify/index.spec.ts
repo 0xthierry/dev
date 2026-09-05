@@ -28,7 +28,7 @@ describe("amq-notify extension E2E", () => {
     tempDir = undefined;
   });
 
-  test("injects an incoming AMQ message into Pi and acknowledges it", async () => {
+  test("injects an incoming AMQ message into a Pi main and acknowledges it", async () => {
     // Arrange
     tempDir = await mkdtemp(join(tmpdir(), "amq-notify-e2e-"));
     const debugPath = join(tempDir, "amq-notify.log");
@@ -62,16 +62,42 @@ describe("amq-notify extension E2E", () => {
     execFileSync("amq", ["init", "--root", root, "--agents", "pi,claude"], { env: amqEnv(root) });
 
     // Act
-    execFileSync(
+    const task = execFileSync(
       "amq",
       [
         "send",
         "--root",
         root,
         "--me",
-        "claude",
-        "--to",
         "pi",
+        "--to",
+        "claude",
+        "--strict",
+        "--kind",
+        "todo",
+        "--subject",
+        "main e2e task",
+        "--body",
+        "reply when complete",
+        "--json",
+      ],
+      { encoding: "utf8", env: amqEnv(root) },
+    );
+    const taskId = (JSON.parse(task) as { id: string }).id;
+    execFileSync("amq", ["drain", "--root", root, "--me", "claude", "--strict", "--include-body"], {
+      env: amqEnv(root),
+    });
+    execFileSync(
+      "amq",
+      [
+        "reply",
+        "--root",
+        root,
+        "--me",
+        "claude",
+        "--id",
+        taskId,
+        "--strict",
         "--kind",
         "status",
         "--labels",
@@ -85,10 +111,90 @@ describe("amq-notify extension E2E", () => {
     );
     const agentEnd = await harness.waitForEvent((event) => event.type === "agent_end", 60_000);
     const remaining = await waitForNewInbox(root);
+    const trace = execFileSync("amq", ["trace", taskId, "--root", root, "--json"], {
+      encoding: "utf8",
+      env: amqEnv(root),
+    });
 
     // Assert
-    expect(eventText(agentEnd)).toContain(expectedFinalResponseText);
-    expect(eventText(agentEnd)).toContain("Labels: done,retire");
+    const text = eventText(agentEnd);
+    expect(text).toContain(expectedFinalResponseText);
+    expect(text).toContain("Labels: done,retire");
+    expect(trace).toContain("references_target");
+    expect(remaining).toEqual([]);
+    expect(harness.stderr()).toBe("");
+  }, 90_000);
+
+  test("delivers a structured task through a Pi worker's inherited AMQ binding", async () => {
+    // Arrange
+    tempDir = await mkdtemp(join(tmpdir(), "amq-notify-worker-e2e-"));
+    const root = join(tempDir, ".agent-mail", "worker-room");
+    const debugPath = join(tempDir, "amq-notify-worker.log");
+    execFileSync("amq", ["init", "--root", root, "--agents", "main,pi-worker"], { env: amqEnv(root) });
+    harness = await startPiRpcHarness({
+      cwd: tempDir,
+      args: [
+        "--no-extensions",
+        "--no-skills",
+        "--no-context-files",
+        "-e",
+        extensionPath,
+        "-e",
+        fauxProviderExtensionPath,
+        "--provider",
+        FAUX_PROVIDER_NAME,
+        "--model",
+        FAUX_MODEL_ID,
+      ],
+      env: {
+        AM_ROOT: root,
+        AM_ME: "pi-worker",
+        AMQ_NOTIFY_ROLE: "",
+        AMQ_NOTIFY_DEBUG: debugPath,
+        AMQ_NO_UPDATE_CHECK: "1",
+        [FAUX_API_KEY_ENV]: "test-key",
+        [FAUX_RESPONSE_TEXT_ENV]: expectedFinalResponseText,
+      },
+      startupTimeoutMs: 20_000,
+    });
+    await waitForDebugPattern(debugPath, /register role=worker/);
+
+    // Act
+    execFileSync(
+      "amq",
+      [
+        "send",
+        "--root",
+        root,
+        "--me",
+        "main",
+        "--to",
+        "pi-worker",
+        "--strict",
+        "--thread",
+        "task/worker-e2e",
+        "--kind",
+        "todo",
+        "--labels",
+        "task,role:reviewer",
+        "--subject",
+        "review worker delivery",
+        "--context",
+        '{"task_id":"worker-e2e","role":"reviewer","paths":["src/"]}',
+        "--body",
+        "Review the worker notification path.",
+      ],
+      { env: amqEnv(root) },
+    );
+    const agentEnd = await harness.waitForEvent((event) => event.type === "agent_end", 60_000);
+    const remaining = await waitForNewInbox(root, "pi-worker");
+
+    // Assert
+    const text = eventText(agentEnd);
+    expect(text).toContain(expectedFinalResponseText);
+    expect(text).toContain("Handle the assigned task");
+    expect(text).toContain("Thread: task/worker-e2e");
+    expect(text).toContain('\\"task_id\\":\\"worker-e2e\\"');
     expect(remaining).toEqual([]);
     expect(harness.stderr()).toBe("");
   }, 90_000);
@@ -106,6 +212,16 @@ async function waitForDebugRoot(debugPath: string): Promise<string> {
   throw new Error(`Timed out waiting for amq-notify debug root at ${debugPath}`);
 }
 
+async function waitForDebugPattern(debugPath: string, pattern: RegExp): Promise<void> {
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    if (pattern.test(await readDebugLog(debugPath))) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  throw new Error(`Timed out waiting for ${pattern} in ${debugPath}`);
+}
+
 async function readDebugLog(debugPath: string): Promise<string> {
   try {
     return await readFile(debugPath, "utf8");
@@ -114,11 +230,11 @@ async function readDebugLog(debugPath: string): Promise<string> {
   }
 }
 
-async function waitForNewInbox(root: string): Promise<unknown[]> {
+async function waitForNewInbox(root: string, me = "pi"): Promise<unknown[]> {
   const deadline = Date.now() + 10_000;
   let messages: unknown[] = [];
   while (Date.now() < deadline) {
-    const output = execFileSync("amq", ["list", "--root", root, "--me", "pi", "--new", "--json"], {
+    const output = execFileSync("amq", ["list", "--root", root, "--me", me, "--new", "--json"], {
       encoding: "utf8",
       env: amqEnv(root),
     });
