@@ -108,17 +108,6 @@ claude() {
   command claude --append-system-prompt-file ~/.agents/developer-instructions.txt "$@"
 }
 
-# Keep `codex` familiar while routing interactive sessions through the
-# repository-pinned multi-account wrapper. The official binary remains the
-# fallback during first-time setup.
-codex() {
-  if command -v codex-multi-auth-codex >/dev/null 2>&1; then
-    command codex-multi-auth-codex "$@"
-  else
-    command codex "$@"
-  fi
-}
-
 alias dstop='docker ps -q | xargs -r docker stop'
 
 mkcd() {

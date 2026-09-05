@@ -3,7 +3,6 @@ model_reasoning_effort = "medium"
 model_reasoning_summary = "detailed"
 model_verbosity = "medium"
 personality = "pragmatic"
-cli_auth_credentials_store = "file"
 developer_instructions = """
 {{DEVELOPER_INSTRUCTIONS}}
 """

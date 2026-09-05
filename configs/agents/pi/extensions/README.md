@@ -51,7 +51,6 @@ pi install ./configs/agents/pi/extensions/token-speed
 pi install ./configs/agents/pi/extensions/codex-fast-mode
 pi install ./configs/agents/pi/extensions/xai-grok-fast-mode
 pi install ./configs/agents/pi/extensions/codex-compaction
-pi install ./configs/agents/pi/extensions/codex-multi-auth
 pi install ./configs/agents/pi/extensions/nested-agents
 pi install ./configs/agents/pi/extensions/lsp
 pi install ./configs/agents/pi/extensions/fff
@@ -78,7 +77,6 @@ For day-to-day use on Thierry's machines, `configs/agents/install.sh` symlinks t
 - [`codex-fast-mode`](./codex-fast-mode/README.md) — injects Codex Fast mode's `service_tier: "priority"` for eligible ChatGPT-backed Codex requests.
 - [`xai-grok-fast-mode`](./xai-grok-fast-mode/README.md) — injects xAI Priority Processing's `service_tier: "priority"` for direct xAI Grok requests.
 - [`codex-compaction`](./codex-compaction/README.md) — uses Codex native opaque compaction for `/compact` on directly authenticated ChatGPT-backed Codex models.
-- [`codex-multi-auth`](./codex-multi-auth/README.md) — transparently routes Pi's Codex models through an authenticated loopback multi-account proxy when a managed account pool exists.
 - [`nested-agents`](./nested-agents/README.md) — dynamically loads nested `AGENTS.md` / `CLAUDE.md` files when the agent touches files under those directories.
 - [`lsp`](./lsp/README.md) — exposes configured Language Server Protocol diagnostics and source fixes to Pi tools.
 - [`fff`](./fff/README.md) — overrides `grep`, `find`, and `multi_grep` with FFF-backed search and autocomplete.
