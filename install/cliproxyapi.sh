@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pinned local OAuth proxy. Installation deliberately never starts a service.
+# Pinned local OAuth proxy. macOS setup enables and starts the user LaunchAgent.
 set -euo pipefail
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -83,7 +83,7 @@ configure_cliproxyapi() {
   local os="$1"
   if (( ${DRY_RUN:-0} )); then
     log_item "[dry-run] Persist private API key and render CLIProxyAPI config (key never displayed)"
-    log_item "[dry-run] Install $os user service definition, without enabling or starting it"
+    log_item "[dry-run] Install $os user service definition"
     return 0
   fi
 
@@ -179,9 +179,7 @@ else:
         "ProgramArguments": [binary, "-config", config],
         "WorkingDirectory": str(state_dir),
         "EnvironmentVariables": {"HOME": str(home)},
-        # A newly installed LaunchAgent must not start at the next login until
-        # the user explicitly enables it with launchctl enable.
-        "Disabled": True,
+        "Disabled": False,
         "RunAtLoad": True,
         "KeepAlive": {"SuccessfulExit": False},
         "ThrottleInterval": 5,
@@ -190,8 +188,27 @@ else:
         "StandardErrorPath": str(state_dir / "stderr.log"),
     }
     write_private(home / "Library/LaunchAgents/dev.cliproxyapi.plist", plistlib.dumps(service), 0o600)
-print("  CLIProxyAPI: private config and service definition installed (service not started)")
+print("  CLIProxyAPI: private config and service definition installed")
 PY
+}
+
+enable_cliproxyapi_macos() {
+  local domain service
+  domain="gui/$(id -u)" || return
+  service="$domain/dev.cliproxyapi"
+  if (( ${DRY_RUN:-0} )); then
+    log_item "[dry-run] Enable and start CLIProxyAPI macOS LaunchAgent (leave an already loaded service running)"
+    return 0
+  fi
+
+  # Clear a persisted disabled override, including one from an older install.
+  launchctl enable "$service" || return
+  if launchctl print "$service" >/dev/null 2>&1; then
+    log_item "CLIProxyAPI: macOS LaunchAgent enabled and already loaded"
+  else
+    launchctl bootstrap "$domain" "$HOME/Library/LaunchAgents/dev.cliproxyapi.plist" || return
+    log_item "CLIProxyAPI: macOS LaunchAgent enabled and started"
+  fi
 }
 
 install_cliproxyapi() {
@@ -211,7 +228,10 @@ install_cliproxyapi() {
   install_cliproxyapi_binary "$platform" "$checksum" || return
   configure_cliproxyapi "$os" || return
   ensure_dir "$HOME/.local/bin" || return
-  safe_link_path "$CLIPROXYAPI_REPO_ROOT/scripts/cliproxy" "$HOME/.local/bin/cliproxy" "CLIProxyAPI helper"
+  safe_link_path "$CLIPROXYAPI_REPO_ROOT/scripts/cliproxy" "$HOME/.local/bin/cliproxy" "CLIProxyAPI helper" || return
+  if [[ "$os" == darwin ]]; then
+    enable_cliproxyapi_macos || return
+  fi
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

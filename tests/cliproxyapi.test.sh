@@ -96,7 +96,8 @@ home = pathlib.Path(sys.argv[1])
 with (home / "Library/LaunchAgents/dev.cliproxyapi.plist").open("rb") as stream:
     service = plistlib.load(stream)
 assert service["Label"] == "dev.cliproxyapi"
-assert service["Disabled"] is True
+assert service["Disabled"] is False
+assert service["RunAtLoad"] is True
 assert service["ProgramArguments"] == [str(home / ".local/bin/cli-proxy-api"), "-config", str(home / ".config/cliproxyapi/config.yaml")]
 assert service["EnvironmentVariables"]["HOME"] == str(home)
 PY
@@ -112,6 +113,35 @@ cmp "$TEST_TMP/original-binary" "$HOME/.local/bin/cli-proxy-api"
 grep -q 'SHA256 mismatch' "$TEST_TMP/mismatch.log"
 [[ "$(< "$HOME/.local/share/cliproxyapi/version")" == '7.2.151 linux_amd64' ]]
 echo 'ok: checksum rejection preserves existing binary and marker'
+
+# macOS activation is automatic, idempotent, and propagates launchctl failures.
+launchctl() {
+  printf '%s\n' "$*" >> "$TEST_TMP/launchctl.log"
+  case "$1" in
+    enable) return "${ENABLE_RESULT:-0}" ;;
+    print) [[ -f "$TEST_TMP/loaded" ]] ;;
+    bootstrap)
+      [[ "$2" == "gui/$(id -u)" ]]
+      [[ "$3" == "$HOME/Library/LaunchAgents/dev.cliproxyapi.plist" ]]
+      if [[ "${BOOTSTRAP_RESULT:-0}" != 0 ]]; then return "$BOOTSTRAP_RESULT"; fi
+      touch "$TEST_TMP/loaded"
+      ;;
+    *) return 99 ;;
+  esac
+}
+TEST_OS=Darwin TEST_ARCH=aarch64 DRY_RUN=0 install_cliproxyapi >> "$TEST_TMP/install.log" 2>&1
+TEST_OS=Darwin TEST_ARCH=aarch64 DRY_RUN=0 install_cliproxyapi >> "$TEST_TMP/install.log" 2>&1
+[[ "$(grep -c '^enable ' "$TEST_TMP/launchctl.log")" -eq 2 ]]
+[[ "$(grep -c '^bootstrap ' "$TEST_TMP/launchctl.log")" -eq 1 ]]
+[[ "$(grep -c '^print ' "$TEST_TMP/launchctl.log")" -eq 2 ]]
+if ENABLE_RESULT=1 enable_cliproxyapi_macos >> "$TEST_TMP/install.log" 2>&1; then
+  echo 'not ok: enable failure ignored' >&2; exit 1
+fi
+rm "$TEST_TMP/loaded"
+if BOOTSTRAP_RESULT=1 enable_cliproxyapi_macos >> "$TEST_TMP/install.log" 2>&1; then
+  echo 'not ok: bootstrap failure ignored' >&2; exit 1
+fi
+echo 'ok: macOS setup enables and bootstraps once; activation errors propagate'
 
 printf 'invalid\n' > "$HOME/.config/cliproxyapi/api-key"
 if configure_cliproxyapi linux > "$TEST_TMP/invalid.log" 2>&1; then

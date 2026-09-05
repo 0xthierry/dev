@@ -32,7 +32,12 @@ security settings if required). It works on SSH hosts without forwarding a callb
 port. Repeating login with the same account refreshes that account, not pool size.
 No credentials are imported from Pi/Codex or synchronized across machines.
 
-Start in a separate terminal with `cliproxy serve`, or activate the installed service:
+On macOS, setup automatically enables and starts the LaunchAgent, including startup
+at future logins. Stop any manually running `cliproxy serve` before running setup so
+it can use port 8317. Repeated setup leaves an already loaded service running.
+
+On Linux, start in a separate terminal with `cliproxy serve`, or activate the installed
+service. The macOS commands below are only needed for manual activation:
 
 ```bash
 # Linux (dev / omarchy)
@@ -44,8 +49,8 @@ launchctl enable "gui/$(id -u)/dev.cliproxyapi"
 launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/dev.cliproxyapi.plist"
 ```
 
-Installation alone does not activate the service. Linux user-service lifetime depends
-on the user's login/linger configuration; setup does not change system-wide linger.
+Linux installation alone does not activate the service. Linux user-service lifetime
+depends on the user's login/linger configuration; setup does not change system-wide linger.
 After upgrading/reconfiguring an already running service, restart it explicitly.
 
 ## Use
