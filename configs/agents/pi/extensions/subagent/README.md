@@ -64,6 +64,89 @@ Example spawn override:
 }
 ```
 
+## Model routing evidence
+
+The `agent_spawn` description contains a stable, advisory provider/model selection
+policy; `agent_followup` refers to the same policy. This does **not** change execution
+defaults, install providers, bypass repository locks, or promise authentication on
+another machine. An omitted execution override still follows normal resolution.
+
+### Recommended use
+
+| Exact provider / model | Recommended work | Rationale and limitation |
+|---|---|---|
+| `cliproxyapi` / `gpt-5.6-sol` | Baseline for well-specified implementation, tests, refactors, routine debugging, straightforward plans | Established coding capability and lower API token prices; a pragmatic baseline, not a proven subscription-cost winner |
+| `cliproxyapi` / `gpt-6-astra` | Complex implementation, difficult debugging, constrained architecture/planning, demanding verification | Better measured coding efficiency and stronger complex analytical results; not restricted to review and not automatically necessary for every plan |
+| `xai` / `grok-4.6` | Substantive implementation, terminal/tool-heavy tasks, research, independent cross-provider review | Strong independent agentic results and better aggregate results than 4.5 at unchanged uncached API prices |
+| `xai` / `grok-4.5` | Availability fallback, retained-session continuation, or measured cache-heavy advantage | Cheaper cached input, but no evidence that it is universally faster or cheaper per completed task; prefer 4.6 for new Grok assignments |
+
+**Effort is a practical policy, not a benchmark finding:** start at low for narrow
+reconnaissance, medium for bounded work, and high for complex work or demanding
+verification. Reserve xhigh/max for justified escalation. Public headline comparisons
+do not establish the optimal effort for these specific roles in Pi. A model review
+still requires evidence, tests, and parent verification; confidence is not proof.
+
+The repository's pool models support low/medium/high/xhigh/max. Pi 0.85.0's inspected
+Grok catalog supports low/medium/high for 4.5 and additionally xhigh for 4.6. Follow
+Pi's exact supported levels even if upstream documentation later adds more options.
+
+### Directly checked public evidence (2026-09-05)
+
+- **[Artificial Analysis: Astra, September 3](https://artificialanalysis.ai/articles/benchmarking-gpt-6-astra):**
+  Astra in Codex scored **67** on the Coding Agent Index. At max effort it scored
+  **2 points above Sol max at approximately the same API task cost**, using roughly
+  **one-third as many tokens**. This supports using Astra for difficult implementation,
+  not treating it as an expensive review-only model. On the separate Intelligence
+  Index **v4.1.1**, both scored 61 and Astra cost **75% more per task**; cost advantage
+  depended on the workload. AA-Omniscience hallucination rates fell from 92% to 51%
+  on that particular evaluation, not a general code-verification accuracy measure.
+- **[Artificial Analysis: Index v4.2, September 4](https://artificialanalysis.ai/articles/artificial-analysis-intelligence-index-v4-2):**
+  The updated index puts Astra **4 points above Sol**; GDP.pdf all-pass rates are
+  **33.2% versus 28.2%**, and AA-Briefcase improves roughly **85 Elo**. This strengthens
+  the case for complex synthesis/planning, but these are not dedicated debugging
+  or patch-review benchmarks. The index changes tasks, weighting, and grading;
+  do not describe the earlier 61-point tie as the current index result.
+- **[Artificial Analysis: Grok 4.6, August 12](https://artificialanalysis.ai/articles/grok-4-6-benchmarks-and-analysis):**
+  Grok 4.6 scored **61**, five points above 4.5, on that dated Intelligence Index;
+  **88.4%** on Terminal-Bench **v2.1**; **1753 Elo** on GDPval-AA v2; and cost
+  **$0.84 per Intelligence Index task**. Its comparison used Sol's older $5/$30
+  pricing, not today's $4/$20. These dated results support Grok as a real agentic
+  alternative, not an exact current ranking against Astra in Pi.
+
+These are independently published evaluations that were read, **not benchmarks run
+locally**. Do not compare different index versions, Terminal-Bench versions, harnesses,
+reasoning levels, or historical prices as if they were one controlled experiment.
+No same-task, same-harness Pi comparison of all four was performed. We have no measured
+subscription-allowance conversion or universal latency ordering. Track completed-task
+quality, wall time, retries, allowance consumption, and cache reuse before tightening
+these recommendations.
+
+### Official specifications and API price references
+
+USD per million tokens, standard short-context requests, checked 2026-09-05:
+
+| Official model documentation | Input | Cached input | Output |
+|---|---:|---:|---:|
+| [GPT-5.6 Sol](https://developers.openai.com/api/docs/models/gpt-5.6-sol.md) | $4 | $0.40 | $20 |
+| [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra.md) | $10 | $1 | $50 |
+| [Grok 4.5](https://docs.x.ai/developers/models/grok-4.5) | $2 | $0.30 | $6 |
+| [Grok 4.6](https://docs.x.ai/developers/models/grok-4.6) | $2 | $0.50 | $6 |
+
+OpenAI applies higher full-request rates above 272K input tokens; xAI documents a
+higher-context pricing tier above 200K. Cache writes, tools, fast/priority modes,
+and other service tiers may have additional/different prices. Sol's quoted rates
+are promotional, documented through at least November 21, 2026. Headline token
+prices alone do not determine cost per successful task.
+
+**Subscription routing is separate from API pricing.** `cliproxyapi` is this repo's
+local Codex subscription pool; `openai-codex` is a direct subscription alternative,
+not another pool. Prefer `xai` with configured Grok subscription OAuth rather than
+an OpenRouter route. Pi supports both OAuth and API-key auth for xAI, so the provider
+ID alone does not prove subscription billing. `openai`, `openrouter`, and API-key
+routes are not automatic subscription fallbacks. Authentication and entitlements
+must be available on the machine that spawns the child. Zero/missing cost metadata
+for a subscription route means unrepresented cost, not free or unlimited usage.
+
 ## Trusted repository configuration
 
 `pi-subagent.json` supports the nested shape below. For compatibility, agent entries may also put `provider`, `model`, and `effort` directly on the agent object. Unknown trusted fields are ignored rather than disabling the extension.

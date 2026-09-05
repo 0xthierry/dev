@@ -9,7 +9,7 @@ export function registerAgentFollowupTool(pi: ExtensionAPI, runtime: AgentToolsR
     name: "agent_followup",
     label: "follow up agent",
     description:
-      "Assign the next task while retaining the child session: idle starts, active queues, and unloaded reloads. Optional execution is applied and verified only at the assignment boundary.",
+      "Assign the next task while retaining the child session: idle starts, active queues, and unloaded reloads. Optional execution is applied and verified only at the assignment boundary. For model selection, follow the provider/model/effort guidance in agent_spawn; omitted execution retains the child's current profile.",
     promptSnippet: "Assign retained-session follow-up work whose prior context materially helps.",
     promptGuidelines: [
       "agent_followup: Use retained-session follow-up only when the agent's prior context materially helps the next assignment.",

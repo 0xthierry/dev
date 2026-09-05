@@ -33,6 +33,32 @@ test("keeps every flattened guideline attributable and prompts stable", () => {
   }
 });
 
+test("exposes stable model routing preferences without replacing execution policy", () => {
+  // Arrange
+  const first = createFakePi();
+  const second = createFakePi();
+
+  // Act
+  registerAgentTools(first.pi, createFakeToolsRuntime());
+  registerAgentTools(second.pi, createFakeToolsRuntime());
+  const description = first.tools.get("agent_spawn")?.description ?? "";
+
+  // Assert
+  expect(description).toBe(second.tools.get("agent_spawn")?.description ?? "");
+  expect(description).toContain("cliproxyapi / gpt-5.6-sol: preferred baseline for well-specified implementation");
+  expect(description).toContain("cliproxyapi / gpt-6-astra: prefer for complex end-to-end implementation");
+  expect(description).toContain("do not reserve Astra only for review");
+  expect(description).toContain("xai / grok-4.6: strong alternative for implementation");
+  expect(description).toContain("xai / grok-4.5: fallback");
+  expect(description).toContain("Effort policy, not a benchmark-proven optimum");
+  expect(description).toContain("Prefer 4.6 for new Grok assignments");
+  expect(description).toContain("repository locks");
+  expect(description).toContain("separate billing");
+  expect(description).toContain("do not establish a universal Pi ranking");
+  expect(description).toContain("do not mean free or unlimited");
+  expect(first.tools.get("agent_followup")?.description).toContain("guidance in agent_spawn");
+});
+
 test("documents the critical lifecycle semantics in the stable catalog", () => {
   // Arrange
   const fakePi = createFakePi();

@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { SUBAGENT_MODEL_GUIDANCE } from "./model-guidance";
 import { renderAgentCall, renderAgentResult } from "./render";
 import { type SpawnParams, SpawnParamsSchema } from "./schemas";
 import type { AgentToolsRuntime } from "./shared";
@@ -9,7 +10,8 @@ export function registerAgentSpawnTool(pi: ExtensionAPI, runtime: AgentToolsRunt
     name: "agent_spawn",
     label: "spawn agent",
     description:
-      "Start one persistent child below the caller. Returns after supervisor admission: running means the child accepted the prompt, while queued means capacity delayed child startup and prompt acceptance. Neither means completion. The result includes exact path, ID, assignment identity, and effective execution profile plus resolution sources.",
+      "Start one persistent child below the caller. Returns after supervisor admission: running means the child accepted the prompt, while queued means capacity delayed child startup and prompt acceptance. Neither means completion. The result includes exact path, ID, assignment identity, and effective execution profile plus resolution sources.\n\n" +
+      SUBAGENT_MODEL_GUIDANCE,
     promptSnippet: "Start one persistent child; running is prompt-accepted, while queued is admitted but not started.",
     promptGuidelines: [
       "agent_spawn: Delegate only concrete bounded work and give the child a self-contained contract with disjoint ownership.",
