@@ -387,7 +387,7 @@ install_ai_clis() {
   install_claude_code_binary "2.1.260"
 
   # Codex (OpenAI) plus the pinned multi-account wrapper/account manager.
-  install_npm_global_cli "Codex CLI" "@openai/codex" "0.153.2"
+  install_npm_global_cli "Codex CLI" "@openai/codex" "0.153.4"
   install_codex_multi_auth_cli "2.12.0"
 
   # Gemini CLI (Google)
