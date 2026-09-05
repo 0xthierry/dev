@@ -8,7 +8,7 @@ trap 'rm -rf "$TEST_TMP"' EXIT
 export HOME="$TEST_TMP/home with spaces"
 CLIPROXYAPI_REPO_ROOT="$TEST_TMP/repo"
 mkdir -p "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi" "$CLIPROXYAPI_REPO_ROOT/scripts"
-printf 'host: "127.0.0.1"\napi-keys: ["{{API_KEY}}"]\nauth-dir: "~/.local/share/cliproxyapi/auth"\n' > "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi/config.yaml"
+cp "$REPO_ROOT/configs/cliproxyapi/config.yaml" "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi/config.yaml"
 printf '#!/bin/sh\n' > "$CLIPROXYAPI_REPO_ROOT/scripts/cliproxy"
 
 # No real network, binary execution, or service actions are permitted.
@@ -64,6 +64,15 @@ config_dir = home / ".config/cliproxyapi"
 key = (config_dir / "api-key").read_text().strip()
 assert re.fullmatch("[0-9a-f]{64}", key)
 assert key not in (tmp / "install.log").read_text()
+assert not (config_dir / "management-key").exists()
+config = (config_dir / "config.yaml").read_text()
+assert 'secret-key: ""' in config
+assert "{{" not in config
+assert 'host: "127.0.0.1"' in config
+assert "allow-remote: false" in config
+assert "disable-control-panel: true" in config
+assert "disable-auto-update-panel: true" in config
+assert "usage-statistics-enabled: true" in config
 for path in (config_dir / "api-key", config_dir / "config.yaml"):
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 assert stat.S_IMODE((home / ".local/share/cliproxyapi/auth").stat().st_mode) == 0o700

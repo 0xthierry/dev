@@ -102,7 +102,7 @@ xhigh/max, and disables unsupported off/minimal; Pi has no ultra level.
 - Bootstrap buffering allows some failures inside HTTP 200 streams to fail over before
   output begins. Mid-stream failures and account-bound reasoning history are not
   guaranteed to recover transparently. This is not unlimited quota.
-- Listener: `127.0.0.1:8317`; authenticated API and WebSockets, management UI/API,
+- Listener: `127.0.0.1:8317`; authenticated API and WebSockets; management UI/API,
   plugins and profiling disabled. Never expose the listener publicly.
 - Private config/key: `~/.config/cliproxyapi/{config.yaml,api-key}` (0600).
 - OAuth state: `~/.local/share/cliproxyapi/auth/` (directory 0700, service/helper umask 077).
@@ -112,6 +112,15 @@ xhigh/max, and disables unsupported off/minimal; Pi has no ultra level.
   `commercial-mode`. Application diagnostics still exist; treat logs as private.
 - Official v7.2.151 binaries are pinned with platform SHA256 hashes in
   `install/cliproxyapi.sh`. Review upstream changes before updating the pin.
+
+## Usage statistics and management
+
+Usage statistics remain enabled, but the management API and UI are disabled
+(empty management secret and disabled control panel). Statistics do not
+reconstruct past usage or represent total subscription quota remaining across
+other clients, and no management dashboard is available while management is disabled.
+Previously generated management-key files are retained but unused; fresh installs
+do not generate a management key unless the template requests one.
 
 ## Verify / troubleshoot
 

@@ -82,13 +82,13 @@ PY
 configure_cliproxyapi() {
   local os="$1"
   if (( ${DRY_RUN:-0} )); then
-    log_item "[dry-run] Persist private API key and render CLIProxyAPI config (key never displayed)"
+    log_item "[dry-run] Persist private API and management keys and render CLIProxyAPI config (keys never displayed)"
     log_item "[dry-run] Install $os user service definition"
     return 0
   fi
 
   # All secret handling stays inside Python: no shell variables, command-line
-  # arguments, environment values, or log output ever contain the API key.
+  # arguments, environment values, or log output ever contain either key.
   python3 - "$HOME" "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi/config.yaml" "$os" <<'PY'
 import os
 import pathlib
@@ -139,21 +139,29 @@ def write_private(path, content, mode=0o600):
             os.unlink(name)
 
 
-key_file = config_dir / "api-key"
-if key_file.is_symlink():
-    sys.exit("error: CLIProxyAPI API key must not be a symlink")
-if key_file.exists():
-    key_file.chmod(0o600)
-    key = key_file.read_text().strip()
-    if not re.fullmatch(r"[0-9a-f]{64}", key):
-        sys.exit("error: existing CLIProxyAPI API key is invalid; refusing to replace it")
-else:
-    key = secrets.token_hex(32)
-    # Exclusive creation avoids silently replacing a concurrently created key.
-    fd = os.open(key_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w") as stream:
-        stream.write(key + "\n")
-write_private(config_dir / "config.yaml", template.replace("{{API_KEY}}", key).encode())
+def private_key(name):
+    key_file = config_dir / name
+    if key_file.is_symlink():
+        sys.exit("error: CLIProxyAPI " + name + " must not be a symlink")
+    if key_file.exists():
+        key_file.chmod(0o600)
+        key = key_file.read_text().strip()
+        if not re.fullmatch(r"[0-9a-f]{64}", key):
+            sys.exit("error: existing CLIProxyAPI " + name + " is invalid; refusing to replace it")
+    else:
+        key = secrets.token_hex(32)
+        # Exclusive creation avoids silently replacing a concurrently created key.
+        fd = os.open(key_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as stream:
+            stream.write(key + "\n")
+    return key
+
+
+key = private_key("api-key")
+rendered = template.replace("{{API_KEY}}", key)
+if "{{MANAGEMENT_KEY}}" in rendered:
+    rendered = rendered.replace("{{MANAGEMENT_KEY}}", private_key("management-key"))
+write_private(config_dir / "config.yaml", rendered.encode())
 
 binary = str(home / ".local/bin/cli-proxy-api")
 config = str(config_dir / "config.yaml")
