@@ -357,10 +357,10 @@ install_ai_clis() {
   install_plannotator_binary "v0.24.2"
 
   # Agent Slack (Stably) — standalone binary
-  install_agent_slack_binary "0.9.3"
+  install_agent_slack_binary "0.10.2"
 
   # Agent Browser — npm package (crates.io lags behind)
-  install_agent_browser_binary "0.33.0"
+  install_agent_browser_binary "0.36.0"
 
   # Agent Message Queue — local file-based inter-agent bus, built from a pinned source tag+commit
   install_amq_from_source

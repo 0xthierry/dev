@@ -1,11 +1,16 @@
 ---
 name: agent-slack
-description: "Use when working with Slack: read/search/send messages, inspect channels/threads/users, add reactions, manage canvases, or mark read."
+description: "Slack CLI for agents: read URLs/threads/history/unreads/later/canvases/workflows, create/edit canvases from Markdown, search messages/files, download attachments, lookup users, list/create/invite channels, open DMs, compose messages, manage Slack-native drafts, schedule sends, and explicit sends/edits/deletes/reactions/mark-read/uploads."
 ---
 
-# Slack automation with `agent-slack`
+# agent-slack
 
-`agent-slack` is a CLI binary on `$PATH`. Invoke directly (e.g. `agent-slack user list`).
+Vendored from `stablyai/agent-slack` tag `v0.10.2` (`skills/agent-slack`), with local installation and outbound-footer rules.
+
+Use `agent-slack` from `$PATH`. Installation and version updates are managed by this machine-setup repository's `install/ai-cli.sh` and `./setup.sh <host>`; do not install or update it ad hoc.
+
+Run `agent-slack --help` or the relevant subcommand help before guessing a command or flag.
+If a capability named here is absent from installed help, report version skew instead of guessing. Do not self-update the CLI without explicit authorization.
 
 ## REQUIRED: outbound message footer
 
@@ -15,242 +20,40 @@ When sending or drafting any Slack message on Thierry's behalf, always append th
 _sent from pi_
 ```
 
-For `agent-slack message send`, include the footer in the `<text>` argument. For `agent-slack message draft`, ensure the final editor content includes the footer before sending. This applies to channel posts, DMs, group DMs, thread replies, and messages with attachments.
+Include it in sends, scheduled messages, native draft creation/updates, and the browser compose editor. Preserve it when editing messages. This applies to channel posts, DMs, group DMs, thread replies, and messages with attachments. For Block Kit messages, include a visible footer in the blocks as well as the fallback text.
 
-## Installation
+## Safety
 
-If `agent-slack` is not found on `$PATH`, install it:
+- Read and search freely.
+- Perform write actions only when explicitly requested: sends, edits, deletes, reactions, invitations, channel or canvas creation/editing, mark-read operations, scheduling or canceling delivery, uploads, Later state/reminder changes, DM/group-DM creation, and `workflow run`. Workflow runs can execute downstream actions.
+- For compose- or review-only requests, return proposed text without invoking Slack, or use `message draft create` to add a Slack-native draft the user can review and send (nothing is posted). `message compose` is send-capable; use it only when the user explicitly asks to open the interactive editor. In CI or another noninteractive environment, do not invoke it without separate authorization to send immediately: CI skips the editor and sends supplied text.
+- With `AGENT_SLACK_SAFE_MODE=1` (or the global `--safe-mode` flag) set, safe mode is enforced at the tool level: `message send` is redirected to the draft editor and `message edit`/`message delete` are blocked. Use it when nothing should post without human review.
 
-- `curl -fsSL https://raw.githubusercontent.com/stablyai/agent-slack/main/install.sh | sh` (recommended)
-- `npm i -g agent-slack` (requires Node >= 22.5)
-- `nix run github:stablyai/agent-slack -- <args>` (no install needed, prefix all commands)
+## Workflow
 
-## CRITICAL: Bash command formatting rules
+1. Run `agent-slack auth whoami`. If needed, import credentials with `auth import-desktop`, `auth import-brave`, `auth import-chrome`, or `auth import-firefox`, then run `auth test`.
+2. Prefer a Slack message URL when one is available. It carries the workspace, channel, and timestamp needed by most message operations.
+3. Choose the narrowest read operation: `message get` for one message, `message list` for a full thread or channel history, and `search messages` or `search files` for discovery.
+4. Use output limits such as `--limit`, `--max-body-chars`, and `--max-content-chars` to avoid unnecessary context.
+5. For a requested write, execute only the requested mutation and verify the resulting JSON metadata.
 
-Claude Code's permission checker has security heuristics that force manual approval prompts. Avoid these patterns to keep commands auto-allowed. See: https://github.com/anthropics/claude-code/issues/34379
+For scheduled writes, prefer `--schedule` with an ISO 8601 timestamp and explicit offset when timezone matters. Named `--schedule-in` phrases use the executing environment's local timezone; confirm that it matches the user's intent.
 
-1. **No `#` anywhere in the command string.** Treated as a comment delimiter even inside quotes. Use bare channel names (`general` not `#general`). No `#` comments in inline scripts — use the Bash tool's `description` parameter instead.
-2. **No `''` (consecutive single quotes) or `""` (consecutive double quotes).** Triggers "potential obfuscation" check. Avoid Python empty string literals like `d.get('key', '')` — use `d.get('key')` instead.
-3. **Only `| jq` for filtering — no python3, no other commands.** `python3 -c` is not in the allow list and triggers prompts. `jq` with single-quote-only expressions (no `"` inside) is safe:
-   - WRONG: `agent-slack search ... | python3 -c "..."` (not allowed)
-   - WRONG: `agent-slack search ... | jq '.a + "x"'` (mixed quotes)
-   - RIGHT: `agent-slack search ... | jq '.a'`
-   - RIGHT: `agent-slack search ... | jq '.messages[] | .ts'`
-4. **No `||` or `&&` chains.** Run multiple agent-slack commands as separate Bash tool calls.
-5. **No file redirects (`>`, `>>`).** Process JSON output directly, don't write to files.
+Named `later remind --in` values such as `tomorrow` or `monday` also use the executing environment's local timezone at 9:00. Confirm that timezone or pass an explicit Unix timestamp.
 
-## Quick start (auth)
+Use `--no-unfurl` with `message send` or `message compose` when the user wants Slack link and media previews suppressed. It cannot be combined with `message send --attach`.
 
-Authentication is automatic on macOS and Windows (Slack Desktop first, then Chrome/Firefox fallbacks on macOS).
+Ordinary `message send` and `message edit` calls auto-convert lists. `message send --blocks` and `message edit --blocks` use supplied Block Kit blocks, while `message send --attach` sends its initial comment without automatic list conversion. Inside auto-converted lists, use Slack's `<URL|label>` syntax because CommonMark `[label](URL)` links are not converted into labeled link elements.
 
-If credentials aren’t available, run one of:
+Slack-native drafts (`message draft list|create|update|delete`) manage drafts that appear in the user's Slack client; `create` posts nothing. `create` and `update` accept repeatable `--attach <path>`; on `update` the files are added to the draft's existing attachments rather than replacing them. They use undocumented session endpoints and require browser-style auth (xoxc/xoxd).
 
-- Slack Desktop import (macOS/Windows):
+`canvas edit` uses Slack's public `canvases.edit` API and applies exactly one operation per call. The
+default `replace` operation replaces the whole canvas; section-targeted inserts/replacements and
+deletes require the section ID returned by Slack's Canvas tooling, while `rename` takes `--title`.
+Content operations take exactly one `--file` or `--markdown` source. It requires a standard token
+with `canvases:write`; imported browser credentials can create standalone canvases but cannot edit.
 
-```bash
-agent-slack auth import-desktop
-agent-slack auth test
-```
+## Conditional references
 
-- Chrome fallback:
-
-```bash
-agent-slack auth import-chrome
-agent-slack auth test
-```
-
-- Firefox fallback:
-
-```bash
-agent-slack auth import-firefox
-agent-slack auth test
-```
-
-- Or set env vars (browser tokens; avoid pasting these into chat logs):
-
-```bash
-export SLACK_TOKEN="xoxc-..."
-export SLACK_COOKIE_D="xoxd-..."
-agent-slack auth test
-```
-
-- Or set a standard token:
-
-```bash
-export SLACK_TOKEN="xoxb-..."  # or xoxp-...
-agent-slack auth test
-```
-
-Check configured workspaces:
-
-```bash
-agent-slack auth whoami
-```
-
-## Canonical workflow (given a Slack message URL)
-
-1. Fetch a single message (plus thread summary, if any):
-
-```bash
-agent-slack message get "https://workspace.slack.com/archives/C123/p1700000000000000"
-```
-
-2. If you need the full thread:
-
-```bash
-agent-slack message list "https://workspace.slack.com/archives/C123/p1700000000000000"
-```
-
-## Browse recent channel messages
-
-To see what's been posted recently in a channel (channel history):
-
-```bash
-agent-slack message list "general" --limit 20
-agent-slack message list "C0123ABC" --limit 10
-agent-slack message list "general" --with-reaction eyes --oldest "1770165109.000000" --limit 20
-agent-slack message list "general" --without-reaction dart --oldest "1770165109.000000" --limit 20
-```
-
-This returns the most recent messages in chronological order. Use `--limit` to control how many (default 25).
-When using `--with-reaction` or `--without-reaction`, you must also pass `--oldest` to bound scanning.
-
-## Attachments (snippets/images/files)
-
-`message get/list` and `search` auto-download attachments and include file metadata in JSON output (typically under `message.files[]` / `files[]`), including `name` when available and `path` for the local download. Failed message attachment downloads keep the attachment entry, preserve a local `.download-error.txt` path, and include `message.files[].error` for `message get/list` or `messages[].files[].error` for `search messages|all`; `search files` skips files whose download fails.
-
-## Draft a message (browser editor)
-
-Opens a Slack-like rich-text editor in the browser for composing messages with formatting toolbar (bold, italic, strikethrough, links, lists, quotes, code, code blocks). After sending, shows a "View in Slack" link.
-
-```bash
-agent-slack message draft "general"
-agent-slack message draft "general" "initial text
-_sent from pi_"
-agent-slack message draft "https://workspace.slack.com/archives/C123/p1700000000000000"
-```
-
-If using the browser editor without initial text, add the required `_sent from pi_` footer as the final line before sending.
-
-## Send, edit, delete, or react
-
-```bash
-agent-slack message send "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this.
-_sent from pi_"
-agent-slack message send "alerts-staging" "here's the report
-_sent from pi_" --attach ./report.md
-agent-slack message edit "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this today."
-agent-slack message delete "https://workspace.slack.com/archives/C123/p1700000000000000"
-
-agent-slack message send "general" "Here's the plan:
-- Step 1: do the thing
-- Step 2: verify it worked
-  - Sub-step: check logs
-_sent from pi_"
-agent-slack message react add "https://workspace.slack.com/archives/C123/p1700000000000000" "eyes"
-agent-slack message react remove "https://workspace.slack.com/archives/C123/p1700000000000000" "eyes"
-```
-
-Channel mode for edit/delete requires `--ts`:
-
-```bash
-agent-slack message edit "general" "Updated text" --workspace "myteam" --ts "1770165109.628379"
-agent-slack message delete "general" --workspace "myteam" --ts "1770165109.628379"
-```
-
-Attach options for `message send`:
-
-- `--attach <path>` upload a local file (repeatable)
-
-## List channels + create/invite users
-
-```bash
-agent-slack channel list
-agent-slack channel list --user "@alice" --limit 50
-agent-slack channel list --all --limit 100
-agent-slack channel new --name "incident-war-room"
-agent-slack channel new --name "incident-leads" --private
-agent-slack channel invite --channel "incident-war-room" --users "U01AAAA,@alice,bob@example.com"
-agent-slack channel invite --channel "incident-war-room" --users "partner@vendor.com" --external
-agent-slack channel invite --channel "incident-war-room" --users "partner@vendor.com" --external --allow-external-user-invites
-```
-
-For `--external`, invite targets must be emails. By default, invitees are external-limited; add
-`--allow-external-user-invites` to allow them to invite other users.
-
-## Search (messages + files)
-
-Prefer channel-scoped search for reliability:
-
-```bash
-agent-slack search all "smoke tests failed" --channel "alerts" --after 2026-01-01 --before 2026-02-01
-agent-slack search messages "stably test" --user "@alice" --channel general
-agent-slack search files "testing" --content-type snippet --limit 10
-```
-
-## Multi-workspace guardrail (important)
-
-If you have multiple workspaces configured and you use a channel **name** (e.g. `general`), pass `--workspace` (or set `SLACK_WORKSPACE_URL`) to avoid ambiguity:
-
-```bash
-agent-slack message get "general" --workspace "https://myteam.slack.com" --ts "1770165109.628379"
-agent-slack message get "general" --workspace "myteam" --ts "1770165109.628379"
-```
-
-## DM / group DM channels
-
-Get the channel ID for a DM or group DM, useful for sending messages to a group of users:
-
-```bash
-agent-slack user dm-open @alice @bob
-agent-slack user dm-open U01AAAA U02BBBB U03CCCC
-```
-
-## Mark as read
-
-Mark a channel, DM, or group DM as read up to a given message:
-
-```bash
-agent-slack channel mark "https://workspace.slack.com/archives/C123/p1700000000000000"
-agent-slack channel mark "general" --workspace "myteam" --ts "1770165109.628379"
-agent-slack channel mark "D0A04PB2QBW" --workspace "myteam" --ts "1770165109.628379"
-```
-
-To make a specific message appear unread, set `--ts` to just before it (subtract `0.000001`). This moves the read cursor so that message and everything after it appear as new:
-
-```bash
-agent-slack channel mark "general" --workspace "myteam" --ts "1770165109.628378"
-```
-
-## Workflows
-
-Discover and run Slack workflows bookmarked in channels:
-
-```bash
-# List workflows in a channel
-agent-slack workflow list "#ops"
-
-# Preview trigger metadata (no side effects)
-agent-slack workflow preview "Ft123ABC"
-
-# Get workflow definition including form fields and steps
-agent-slack workflow get "Ft123ABC"
-agent-slack workflow get "Wf456DEF"
-
-# Trip a workflow trigger
-agent-slack workflow run "Ft123ABC" --channel "#ops"
-```
-
-## Canvas + Users
-
-```bash
-agent-slack canvas get "https://workspace.slack.com/docs/T123/F456"
-agent-slack user list --workspace "https://workspace.slack.com" --limit 100
-agent-slack user get "@alice" --workspace "https://workspace.slack.com"
-```
-
-## References
-
-- [references/commands.md](references/commands.md): full command map + all flags
-- [references/targets.md](references/targets.md): URL vs `#channel` targeting rules
-- [references/output.md](references/output.md): JSON output shapes + download paths
+- Read [references/targets.md](references/targets.md) only when choosing between a message URL, channel, or user target, or when resolving multiple workspaces.
+- Read [references/output.md](references/output.md) only when handling returned message or canvas metadata, resolved users, or downloaded and failed attachments.
