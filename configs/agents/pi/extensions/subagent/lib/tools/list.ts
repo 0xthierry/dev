@@ -9,14 +9,9 @@ export function registerAgentListTool(pi: ExtensionAPI, runtime: AgentToolsRunti
     name: "agent_list",
     label: "list agents",
     description:
-      "Return a compact tree-ordered snapshot of agents with status, assignment, effective provider/model/effort, and resolution provenance; excludes prompts and control/auth metadata.",
-    promptSnippet: "Inspect a compact tree snapshot of persistent agents and execution provenance.",
-    promptGuidelines: [
-      "agent_list: Use the compact tree snapshot for observation, not synchronization or completion polling.",
-      "agent_list: The snapshot contains current assignments and effective execution provenance.",
-      "agent_list: Output excludes raw prompts, authentication, headers, environment data, PIDs, socket paths, and tokens.",
-      "agent_list: Use agent_wait for settlement instead of polling agent_list.",
-    ],
+      "Inspect agents' IDs, canonical paths, statuses, current tasks, and effective provider/model/effort. Returns a compact snapshot without prompts or credentials.",
+    promptSnippet: "Inspect agents' statuses, tasks, and effective settings.",
+    promptGuidelines: ["agent_list: Inspect when needed; do not poll for completion. Use agent_wait when blocked."],
     parameters: ListParamsSchema,
     async execute(_id, _params, signal) {
       return toolBoundary("agent_list", () => runtime.supervisor.list(signal));

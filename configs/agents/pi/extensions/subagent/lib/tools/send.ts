@@ -10,14 +10,9 @@ export function registerAgentSendTool(pi: ExtensionAPI, runtime: AgentToolsRunti
     name: "agent_send",
     label: "send to agent",
     description:
-      "Send up to 16 KiB to an exact agent ID or canonical path. Steers running work or queues durable mail for a resumable agent; never starts an assignment or changes execution.",
-    promptSnippet: "Steer running work or queue bounded durable mail for an exact existing agent.",
-    promptGuidelines: [
-      "agent_send: Use an exact ID or canonical path returned by an agent tool; prefixes are never guessed.",
-      "agent_send: A running target is steered, while an idle, interrupted, failed, or unloaded resumable target receives durable mailbox communication.",
-      "agent_send: Communication is limited to 16 KiB and never starts an assignment or model turn.",
-      "agent_send: Use agent_followup, not agent_send, for a new assignment or execution change.",
-    ],
+      "Send a message to an existing agent. Steers running work or saves the message for a resumable agent; does not start a task.",
+    promptSnippet: "Steer an agent or save a message without starting a task.",
+    promptGuidelines: ["agent_send: Use agent_followup for a new task or execution change."],
     parameters: SendParamsSchema,
     async execute(_id, params, signal) {
       return toolBoundary("agent_send", () => {

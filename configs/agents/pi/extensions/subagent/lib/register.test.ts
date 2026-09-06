@@ -115,14 +115,15 @@ describe("registerSubagentExtension", () => {
 
     // Act
     const clauses = [
-      "critical-path work must stay local",
-      "do not hand off an urgent blocker",
-      "Spawn independent work in the background",
-      "continue useful local work",
-      "wait only when a result becomes a dependency",
-      "Avoid duplicate lanes",
-      "Review child evidence and changes",
-      "Provider and model are atomic",
+      "Keep immediate blockers and tightly coupled work local",
+      "prefer a bounded implementation task",
+      "continue useful, non-overlapping work",
+      "no useful independent work remains",
+      "Do not repeat the delegated task yourself",
+      "Review returned changes and evidence",
+      "preserve other agents' changes",
+      "complete required project checks",
+      "The parent owns integration and the final answer",
     ];
 
     // Assert

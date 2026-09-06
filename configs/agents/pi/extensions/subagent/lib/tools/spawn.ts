@@ -10,18 +10,13 @@ export function registerAgentSpawnTool(pi: ExtensionAPI, runtime: AgentToolsRunt
     name: "agent_spawn",
     label: "spawn agent",
     description:
-      "Start one persistent child below the caller. Returns after supervisor admission: running means the child accepted the prompt, while queued means capacity delayed child startup and prompt acceptance. Neither means completion. The result includes exact path, ID, assignment identity, and effective execution profile plus resolution sources.\n\n" +
+      "Start a persistent agent for a concrete, bounded task alongside useful local work. Returns its ID, canonical path, and effective settings. Running means the prompt was accepted; queued means startup is waiting for capacity. Neither means completion; the final result is delivered to you.\n\n" +
       SUBAGENT_MODEL_GUIDANCE,
-    promptSnippet: "Start one persistent child; running is prompt-accepted, while queued is admitted but not started.",
+    promptSnippet: "Delegate a bounded task to a persistent agent while you continue useful local work.",
     promptGuidelines: [
-      "agent_spawn: Delegate only concrete bounded work and give the child a self-contained contract with disjoint ownership.",
-      "agent_spawn: Choose a path-safe task_name unique below the caller for the parent-session lifetime.",
-      "agent_spawn: Omitted context or fork_turns none starts isolated; fork_turns all requires a saved parent session.",
-      "agent_spawn: Provider and model must be supplied together; effort resolves independently, and locked repository conflicts fail.",
-      "agent_spawn: Execution precedence is invocation, trusted repository, agent definition, then parent; inspect the returned exact effective profile and sources.",
-      "agent_spawn: A running result means the child accepted the prompt; a queued result means only the supervisor admitted the assignment and child startup remains pending for capacity.",
-      "agent_spawn: Neither running nor queued means completion; work proceeds in the background and artifact-backed completion goes to the direct parent.",
-      "agent_spawn: Use agent_wait when settlement is required instead of treating admission or prompt acceptance as completion.",
+      "agent_spawn: Give a self-contained task with disjoint ownership, constraints, validation, and expected output.",
+      "agent_spawn: No conversation history is copied by default; context.fork_turns all copies the saved parent context.",
+      "agent_spawn: Inspect returned effective settings rather than assuming your requested overrides took effect.",
     ],
     parameters: SpawnParamsSchema,
     async execute(_id, params, signal, _update, ctx) {

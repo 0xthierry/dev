@@ -9,12 +9,10 @@ export function registerAgentInterruptTool(pi: ExtensionAPI, runtime: AgentTools
     name: "agent_interrupt",
     label: "interrupt agent",
     description:
-      "Abort active work while preserving the resumable child session. Idle or already interrupted targets are idempotent; once issued, cleanup finishes even if the caller aborts.",
-    promptSnippet: "Abort active work while preserving the agent for later follow-up.",
+      "Stop an agent's active work while preserving its session for later follow-up. Safe to repeat; once issued, cleanup finishes even if the caller aborts.",
+    promptSnippet: "Stop active work but keep the agent's session.",
     promptGuidelines: [
-      "agent_interrupt: Abort the active assignment while preserving the persistent session for later agent_followup.",
-      "agent_interrupt: Idle and already interrupted targets are idempotent, and cleanup finishes once interruption is issued even if the caller aborts.",
-      "agent_interrupt: Use agent_close instead when permanent shutdown and capacity release are required.",
+      "agent_interrupt: Use agent_followup to resume with another task, or agent_close for permanent shutdown.",
     ],
     parameters: TargetParamsSchema,
     async execute(_id, params, signal) {

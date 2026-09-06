@@ -88,10 +88,30 @@ special ChatGPT transport. Consequently the repo's Codex-native compaction and
 fast-mode extensions do not apply to this provider; normal Pi compaction remains
 available. Codex uses SSE rather than WebSockets to avoid connection-bound response
 chaining across accounts. Model access still depends on account entitlements.
-The two Pi entries use conservative 272K context / 32K output settings; proxy limits
-and actual model limits may differ. Subscription usage has no per-token cost estimate
-in these custom entries. Pi maps low/medium/high by default, explicitly enables
-xhigh/max, and disables unsupported off/minimal; Pi has no ultra level.
+The repo-managed Pi catalog maps all eight `openai-codex` models in Pi 0.85.1:
+
+- `cliproxyapi/gpt-5.3-codex-spark`
+- `cliproxyapi/gpt-5.4`
+- `cliproxyapi/gpt-5.4-mini`
+- `cliproxyapi/gpt-5.5`
+- `cliproxyapi/gpt-5.6-luna`
+- `cliproxyapi/gpt-5.6-sol`
+- `cliproxyapi/gpt-5.6-terra`
+- `cliproxyapi/gpt-6-astra`
+
+This is a pinned mapping in `configs/agents/pi/cliproxyapi-models.json`, not automatic
+model discovery. Recheck the full Codex catalog when updating Pi. Spark is text-only
+with 128K context; the others accept images and use 272K context. All retain the
+proxy's conservative 32K output cap. Proxy limits and actual model limits may differ.
+Reasoning mappings retain the proxy's disabled off/minimal settings and expose only
+the extended levels declared for each model in Pi's Codex catalog. Subscription
+usage has no per-token cost estimate in these custom entries.
+
+A Pi mapping does not grant upstream access. At verification, `cliproxy models`
+advertised six of these models but not `gpt-5.4` or `gpt-5.4-mini`; those two mappings
+remain selectable for accounts/proxy versions that expose them. Image-generation
+and internal review IDs advertised by the proxy are not general Codex chat models
+and are not included.
 
 ## Routing and security
 

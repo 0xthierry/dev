@@ -111,6 +111,25 @@ EOF
 
   assert_json "preserves unrelated Pi provider" "$test_home/.pi/agent/models.json" '.providers["local-test"].baseUrl == "http://localhost:1234/v1"'
   assert_json "adds Pi Responses proxy provider" "$test_home/.pi/agent/models.json" '.providers.cliproxyapi.api == "openai-responses"'
+  assert_json "maps the complete pinned Codex catalog without duplicates" "$test_home/.pi/agent/models.json" '
+    [.providers.cliproxyapi.models[].id] | sort == [
+      "gpt-5.3-codex-spark", "gpt-5.4", "gpt-5.4-mini", "gpt-5.5",
+      "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-astra"
+    ]'
+  assert_json "preserves Spark text-only input and smaller context" "$test_home/.pi/agent/models.json" '
+    .providers.cliproxyapi.models[] | select(.id == "gpt-5.3-codex-spark") |
+    .input == ["text"] and .contextWindow == 128000'
+  assert_json "preserves image input and context for other Codex models" "$test_home/.pi/agent/models.json" '
+    [.providers.cliproxyapi.models[] | select(.id != "gpt-5.3-codex-spark")] |
+    all(.input == ["text", "image"] and .contextWindow == 272000)'
+  assert_json "keeps conservative proxy output and reasoning settings" "$test_home/.pi/agent/models.json" '
+    .providers.cliproxyapi.models | all(
+      .maxTokens == 32768 and .reasoning == true and
+      .thinkingLevelMap.off == null and .thinkingLevelMap.minimal == null and
+      .thinkingLevelMap.xhigh == "xhigh" and
+      (if (.id | test("^gpt-(5[.]6-|6-)")) then .thinkingLevelMap.max == "max"
+       else (.thinkingLevelMap | has("max") | not) end)
+    )'
   assert_json "defaults Pi to proxy" "$test_home/.pi/agent/settings.json" '.defaultProvider == "cliproxyapi"'
   assert_file_contains "defaults Codex to proxy" "$test_home/.codex/config.toml" 'model_provider = "cliproxyapi"'
   assert_file_contains "Codex reads proxy key without environment export" "$test_home/.codex/config.toml" '[model_providers.cliproxyapi.auth]'

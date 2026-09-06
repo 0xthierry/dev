@@ -1,8 +1,10 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { createFakePi } from "../../../_shared/testing/fake-pi";
+import { ORCHESTRATION_GUIDANCE } from "../agents/orchestration-guidance";
 import { IpcClientError } from "../ipc/client";
 import type { IpcOperation } from "../ipc/protocol";
+import { SUBAGENT_MODEL_GUIDANCE } from "../tools/model-guidance";
 import {
   CHILD_AGENT_TOOL_NAMES,
   CHILD_COLLABORATION_GUIDANCE,
@@ -41,6 +43,27 @@ describe("registerChildRuntime", () => {
         true,
       );
     }
+  });
+
+  test("gives nested agents the shared model selection and orchestration policy", () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const fake = fakeRuntime();
+
+    // Act
+    registerChildRuntime(fakePi.pi, fake.runtime);
+    const spawn = fakePi.tools.get("agent_spawn");
+    const followup = fakePi.tools.get("agent_followup");
+
+    // Assert
+    expect(spawn?.description).toEndWith(SUBAGENT_MODEL_GUIDANCE);
+    expect(spawn?.description).toContain("Running means the prompt was accepted; queued means startup is waiting");
+    expect(spawn?.description).toContain("Neither means completion");
+    expect(spawn?.description).toContain("final result is delivered to you");
+    expect(followup?.description).toContain("guidance in agent_spawn");
+    expect(followup?.description).toContain("Execution changes apply at the next task boundary");
+    expect(CHILD_COLLABORATION_GUIDANCE).toEndWith(ORCHESTRATION_GUIDANCE);
+    expect(CHILD_COLLABORATION_GUIDANCE).toContain("Your final answer is delivered to your direct parent");
   });
 
   test("uses the shared message-aware rendering for nested communication tools", () => {

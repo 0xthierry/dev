@@ -1,10 +1,15 @@
-// Stable advisory policy; never a live availability catalog or an execution override.
-// Sources, benchmark versions, prices, and limitations: ../../README.md#model-routing-evidence.
-export const SUBAGENT_MODEL_GUIDANCE = `Provider/model selection (advisory; configured auth, availability, and repository locks still apply):
-- cliproxyapi / gpt-5.6-sol: preferred baseline for well-specified implementation, tests, refactors, routine debugging, and straightforward plans. Strong coding baseline with lower API token prices than Astra, but not proven cheaper per completed coding task or under subscriptions.
-- cliproxyapi / gpt-6-astra: prefer for complex end-to-end implementation, difficult debugging, architecture/planning with many constraints, and demanding verification. Independent Codex benchmarks found higher coding scores at similar task cost to Sol through token efficiency; do not reserve Astra only for review. General reasoning gains and economics are mixed, so do not escalate every planning task automatically.
-- xai / grok-4.6: strong alternative for implementation, terminal/tool-heavy tasks, research, and independent cross-provider review. Independent evaluations show improved agentic performance over 4.5 at unchanged uncached API token prices. Use for substantive work, not only fallback; require evidence and tests for review conclusions.
-- xai / grok-4.5: fallback when 4.6 is unavailable, a retained-session continuation, or a measured cache-heavy workload favors it. Lower cached-input API pricing alone does not establish lower task cost, faster execution, or better subscription economics. Prefer 4.6 for new Grok assignments absent contrary evidence.
-- Effort policy, not a benchmark-proven optimum: low for narrow reconnaissance; medium for bounded implementation and ordinary planning/debugging; high for complex work or demanding verification; xhigh/max only for justified escalation. The cited headline comparisons do not validate these exact role/effort combinations. Pi supports low/medium/high/xhigh/max for these cliproxyapi models, low/medium/high for Grok 4.5, and low/medium/high/xhigh for Grok 4.6.
-- Prefer the configured subscription routes: cliproxyapi is the local Codex account pool; openai-codex is an explicitly chosen direct-subscription alternative, not another pool; xai supports Grok subscription OAuth. openai, openrouter, and API-key routes have separate billing and are not automatic subscription fallbacks. Verify auth rather than inferring subscription billing from a provider ID.
-- Compare completed-task quality, latency, retries, allowance consumption, and cache reuse, not token price alone. Published benchmarks use other harnesses and do not establish a universal Pi ranking. Missing/zero Pi cost estimates do not mean free or unlimited usage. Supply provider and model together and inspect the returned effective execution profile.`;
+// Stable advisory instructions; execution resolution and model capabilities remain unchanged.
+// Evidence and routing details: ../../README.md#model-routing-evidence.
+export const SUBAGENT_MODEL_GUIDANCE = `Model selection:
+
+- cliproxyapi/gpt-6-astra is the default for implementation, debugging, planning, and review. Use low for well-scoped changes with clear requirements, medium when the task requires reasoning across several components, and high for difficult root-cause analysis, complex architecture, or security/concurrency review.
+
+- cliproxyapi/gpt-5.6-luna is the default for read-only codebase reconnaissance. Use medium to locate relevant files and symbols, trace call paths, map dependencies, find existing implementation patterns, and summarize how a component works. Give it a specific question and require file paths and supporting evidence. Use cliproxyapi/gpt-6-astra when the task requires choosing a design, diagnosing a difficult bug, judging correctness, or making changes.
+
+- cliproxyapi/gpt-5.6-sol is an implementation fallback when cliproxyapi/gpt-6-astra cannot start because it is unavailable or rate-limited and substitution is allowed. Use low for a small, well-specified patch, medium for a bounded multi-file change, and high for complex implementation or debugging. Also use it when the user explicitly requests it.
+
+- xai/grok-4.6 is the preferred independent-provider reviewer. Use medium for bounded reviews and high for difficult debugging hypotheses or security/correctness review. Give it the artifact and a specific review question; require evidence. It can also perform implementation or research when explicitly selected.
+
+Honor explicit user choices and repository settings. Choose by the delegated task, not by the parent's model. A parent using cliproxyapi/gpt-6-astra may delegate implementation to another agent using the same model when their work does not overlap.
+
+To select a model, supply provider and model together, and set effort explicitly. Omitted settings follow repository configuration, agent defaults, then the parent. Repository locks still apply. Check the effective settings returned by the tool.`;

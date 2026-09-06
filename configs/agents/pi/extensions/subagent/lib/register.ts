@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import { type ExtensionAPI, type ExtensionContext, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { discoverAgents } from "./agents/discovery";
+import { ORCHESTRATION_GUIDANCE } from "./agents/orchestration-guidance";
 import { appendAgentPromptSection, buildAgentPromptSection } from "./agents/prompt";
 import type { AgentDefinition, AgentDiscoveryResult } from "./agents/types";
 import {
@@ -55,13 +56,7 @@ import type { AgentToolsRuntime } from "./tools/shared";
 import { ToolInputError } from "./tools/shared";
 import { createAgentActivityWidget, hasLiveAgentActivity } from "./ui/activity";
 
-export const PARENT_ORCHESTRATION_GUIDANCE = `## Persistent subagent orchestration
-Use persistent subagents for concrete, bounded, self-contained work with disjoint ownership.
-Before delegating, decide what immediate critical-path work must stay local; do not hand off an urgent blocker when your next step depends on its result.
-Spawn independent work in the background, continue useful local work, communicate deliberately, and wait only when a result becomes a dependency.
-Avoid duplicate lanes. Review child evidence and changes before integrating them.
-Use exact agent IDs or canonical paths returned by agent tools. Communication does not start an assignment; follow-up does.
-Provider and model are atomic. Model and effort resolve independently by invocation, trusted repository, agent definition, then parent execution.`;
+export const PARENT_ORCHESTRATION_GUIDANCE = ORCHESTRATION_GUIDANCE;
 
 export interface SubagentBoundaryRuntime extends AgentToolsRuntime {
   start(pi: ExtensionAPI, ctx: ExtensionContext): Promise<void>;

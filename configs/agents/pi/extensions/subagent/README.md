@@ -20,6 +20,21 @@ This runtime is not compatible with the retired foreground `agent` / `Agent` too
 
 All seven tools are registered once in that order. Children receive the same catalog through authenticated session-scoped IPC and share the root scheduler, filesystem, and working directory. The parent entrypoint suppresses itself in child launches so an explicit child runtime owns the proxy catalog.
 
+## Delegation workflow
+
+Delegate independent work when it saves time or improves quality. Decide what you
+will do locally before spawning, keep immediate blockers local, and prefer bounded
+implementation over exploration when a worker can make the change directly.
+Agents share a filesystem: give them non-overlapping write scopes and require them
+to preserve others' changes. Continue useful local work, review returned evidence
+and patches, and run proportionate validation plus required project checks.
+Reuse retained context for related tasks; start fresh for unrelated work and close
+agents no longer needed. The parent owns integration and the final answer.
+
+The stable shared instructions live in `lib/agents/orchestration-guidance.ts`;
+model selection lives in `lib/tools/model-guidance.ts`. Parent and child runtimes
+consume these sources without per-turn model catalogs or volatile prompt content.
+
 ## Agents
 
 Built-in `scout` and `worker` definitions are always available. Global Markdown definitions are read from Pi's agent directory. A trusted project may add `.pi/agents/**/*.md`:
@@ -28,9 +43,9 @@ Built-in `scout` and `worker` definitions are always available. Global Markdown 
 ---
 name: worker
 description: Implements bounded production changes.
-provider: openai-codex
-model: gpt-5.4
-effort: high
+provider: cliproxyapi
+model: gpt-6-astra
+effort: low
 ---
 
 Project-specific worker instructions.
@@ -47,7 +62,7 @@ Provider, model, and effort are assignment settings. Model and effort resolve in
 3. agent Markdown frontmatter;
 4. current parent execution.
 
-Provider and model must always be supplied together and the provider is never guessed from a model name. Supported effort names are `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`; the selected Pi model must support the exact requested effort. Pi's model registry validates provider/model existence and authentication at the boundary, then credentials are immediately discarded. Children confirm their effective model and effort through RPC before accepting work. Follow-up execution changes perform model/thinking updates and state verification before prompting.
+Provider and model must always be supplied together and the provider is never guessed from a model name. The selected Pi model must support the exact requested effort. Routing recommendations use `low`, `medium`, and `high`; the runtime retains Pi's broader effort support for explicit requests and existing configurations. Pi's model registry validates provider/model existence and authentication at the boundary, then credentials are immediately discarded. Children confirm their effective model and effort through RPC before accepting work. Follow-up execution changes perform model/thinking updates and state verification before prompting.
 
 Example spawn override:
 
@@ -57,8 +72,8 @@ Example spawn override:
   "subagent_type": "scout",
   "prompt": "Review authentication boundaries and report exact evidence.",
   "execution": {
-    "provider": "openai-codex",
-    "model": "gpt-5.4",
+    "provider": "cliproxyapi",
+    "model": "gpt-6-astra",
     "effort": "high"
   }
 }
@@ -75,26 +90,58 @@ another machine. An omitted execution override still follows normal resolution.
 
 | Exact provider / model | Recommended work | Rationale and limitation |
 |---|---|---|
-| `cliproxyapi` / `gpt-5.6-sol` | Baseline for well-specified implementation, tests, refactors, routine debugging, straightforward plans | Established coding capability and lower API token prices; a pragmatic baseline, not a proven subscription-cost winner |
-| `cliproxyapi` / `gpt-6-astra` | Complex implementation, difficult debugging, constrained architecture/planning, demanding verification | Better measured coding efficiency and stronger complex analytical results; not restricted to review and not automatically necessary for every plan |
-| `xai` / `grok-4.6` | Substantive implementation, terminal/tool-heavy tasks, research, independent cross-provider review | Strong independent agentic results and better aggregate results than 4.5 at unchanged uncached API prices |
-| `xai` / `grok-4.5` | Availability fallback, retained-session continuation, or measured cache-heavy advantage | Cheaper cached input, but no evidence that it is universally faster or cheaper per completed task; prefer 4.6 for new Grok assignments |
+| `cliproxyapi/gpt-6-astra` | Default for implementation, debugging, planning, and review | Low for well-scoped changes; medium for reasoning across components; high for difficult root-cause analysis, complex architecture, or security/concurrency review |
+| `cliproxyapi/gpt-5.6-luna` | Default for read-only codebase reconnaissance | Medium for locating files/symbols, tracing call paths, mapping dependencies, finding patterns, and explaining components; require paths and evidence |
+| `cliproxyapi/gpt-5.6-sol` | Implementation fallback when Astra is unavailable or rate-limited and substitution is allowed; explicit user requests | Low for small patches, medium for bounded multi-file changes, high for complex implementation/debugging |
+| `xai/grok-4.6` | Preferred independent-provider reviewer; implementation/research when explicitly selected | Medium for bounded reviews; high for difficult debugging hypotheses or security/correctness review; provide an artifact and a specific question |
 
-**Effort is a practical policy, not a benchmark finding:** start at low for narrow
-reconnaissance, medium for bounded work, and high for complex work or demanding
-verification. Reserve xhigh/max for justified escalation. Public headline comparisons
-do not establish the optimal effort for these specific roles in Pi. A model review
-still requires evidence, tests, and parent verification; confidence is not proof.
+Use `cliproxyapi/gpt-6-astra` instead of the reconnaissance profile when the task
+requires design decisions, difficult diagnosis, correctness judgments, or edits.
+An Astra parent can delegate implementation to another Astra with non-overlapping
+ownership. Honor user choices and repository locks; set provider, model, and effort
+explicitly to select a profile and inspect the returned effective settings.
 
-The repository's pool models support low/medium/high/xhigh/max. Pi 0.85.0's inspected
-Grok catalog supports low/medium/high for 4.5 and additionally xhigh for 4.6. Follow
-Pi's exact supported levels even if upstream documentation later adds more options.
+**Effort is workflow policy, not a benchmark-proven optimum.** The recommendations
+use only low, medium, and high. They do not change runtime defaults or accepted
+schema values. Existing agent defaults still apply when effort is omitted.
+
+The repo-managed `configs/agents/pi/cliproxyapi-models.json` maps the full pinned
+Pi Codex catalog, including the models recommended here. Deploy catalog changes
+through the agent installer; catalog presence alone does not prove upstream
+availability. See `configs/cliproxyapi/README.md` for the complete mapping.
+
+### Prompt design and current routing basis
+
+- [Codex subagent tool definitions](https://github.com/openai/codex/blob/main/codex-rs/core/src/tools/handlers/multi_agents_spec.rs)
+  motivate decision-oriented instructions: delegate independent bounded work,
+  continue useful local work, and explain each tool's practical behavior.
+  Pi's own lifecycle semantics remain authoritative; Codex's defaults and tool
+  behavior are not copied blindly.
+- [OpenAI's latest-model guide](https://developers.openai.com/api/docs/guides/latest-model)
+  describes stronger software-engineering results and fewer output tokens for
+  Astra in several evaluations. Its prompting advice supports explicit delegation
+  and proportionate verification. It does not prescribe a universal low-effort
+  migration: it advises preserving effective effort except when moving from its
+  non-reasoning/lightest settings.
+- [Codex's model catalog](https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json)
+  describes Luna as a fast, affordable agentic coding model, with medium as its
+  default effort; Astra's default is low. Assigning Luna to read-only reconnaissance
+  is this repository's workflow policy.
+- The user-provided Terminal-Bench 4.0 chart shows the lowest-cost Astra point at
+  approximately 50% accuracy and $5, above Sol's best plotted point at approximately
+  38% and $8. Individual effort labels, error bars, and cost aggregation are absent
+  from the screenshot. This supports revisiting the execution default, but is not
+  a locally reproduced Pi benchmark or proof of subscription savings.
+
+Benchmark details and pricing belong here, not in the model-facing tool prompt.
+Both parent and nested tools receive the same model-selection guidance.
 
 ### Directly checked public evidence (2026-09-05)
 
 - **[Artificial Analysis: Astra, September 3](https://artificialanalysis.ai/articles/benchmarking-gpt-6-astra):**
-  Astra in Codex scored **67** on the Coding Agent Index. At max effort it scored
-  **2 points above Sol max at approximately the same API task cost**, using roughly
+  Astra in Codex scored **67** on the Coding Agent Index. In the reported
+  highest-effort comparison it scored **2 points above Sol at approximately the
+  same API task cost**, using roughly
   **one-third as many tokens**. This supports using Astra for difficult implementation,
   not treating it as an expensive review-only model. On the separate Intelligence
   Index **v4.1.1**, both scored 61 and Astra cost **75% more per task**; cost advantage
@@ -138,15 +185,6 @@ and other service tiers may have additional/different prices. Sol's quoted rates
 are promotional, documented through at least November 21, 2026. Headline token
 prices alone do not determine cost per successful task.
 
-**Subscription routing is separate from API pricing.** `cliproxyapi` is this repo's
-local Codex subscription pool; `openai-codex` is a direct subscription alternative,
-not another pool. Prefer `xai` with configured Grok subscription OAuth rather than
-an OpenRouter route. Pi supports both OAuth and API-key auth for xAI, so the provider
-ID alone does not prove subscription billing. `openai`, `openrouter`, and API-key
-routes are not automatic subscription fallbacks. Authentication and entitlements
-must be available on the machine that spawns the child. Zero/missing cost metadata
-for a subscription route means unrepresented cost, not free or unlimited usage.
-
 ## Trusted repository configuration
 
 `pi-subagent.json` supports the nested shape below. For compatibility, agent entries may also put `provider`, `model`, and `effort` directly on the agent object. Unknown trusted fields are ignored rather than disabling the extension.
@@ -161,9 +199,9 @@ for a subscription route means unrepresented cost, not free or unlimited usage.
   "agents": {
     "worker": {
       "execution": {
-        "provider": "openai-codex",
-        "model": "gpt-5.4",
-        "effort": "high"
+        "provider": "cliproxyapi",
+        "model": "gpt-6-astra",
+        "effort": "low"
       },
       "allowInvocationOverride": {
         "model": true,

@@ -10,8 +10,7 @@ import { REASONING_EFFORTS } from "../execution/profile";
 import { DEFAULT_WAIT_TIMEOUT_MS, MAX_WAIT_TIMEOUT_MS } from "../supervisor/limits";
 
 const EffortSchema = StringEnum(REASONING_EFFORTS, {
-  description:
-    "Independent assignment effort override. Resolution precedence is invocation > trusted repository > agent > parent; a conflicting locked override fails.",
+  description: "Reasoning effort override, independent of provider/model. See agent_spawn for selection guidance.",
 });
 export const ExecutionSchema = Type.Union(
   [
@@ -27,11 +26,11 @@ export const ExecutionSchema = Type.Union(
   ],
   {
     description:
-      "Optional execution overrides. Provider and model are atomic; effort resolves independently by invocation > trusted repository > agent > parent, and locked conflicts fail.",
+      "Optional settings: supply provider/model together; effort is independent. Precedence: invocation > trusted repository > agent > parent. Conflicting repository locks fail.",
   },
 );
 export const ForkTurnsSchema = StringEnum(["none", "all"] as const, {
-  description: '"none" starts isolated; "all" forks the saved parent session.',
+  description: '"none" copies no conversation history (default); "all" copies the saved parent context.',
   default: "none",
 });
 export const WaitConditionSchema = StringEnum(["all", "any"] as const, {
@@ -55,7 +54,7 @@ export const SpawnParamsSchema = Type.Object({
 export const SendParamsSchema = Type.Object({
   target: Type.String({ description: "Exact agent ID or canonical agent path." }),
   message: Type.String({
-    description: "Communication of at most 16 KiB; steers running work or enters the durable resumable mailbox.",
+    description: "Message of at most 16 KiB (UTF-8 bytes).",
   }),
 });
 export const FollowupParamsSchema = Type.Object({
@@ -76,7 +75,7 @@ export const WaitParamsSchema = Type.Object(
         minimum: 0,
         maximum: MAX_WAIT_TIMEOUT_MS / 1000,
         default: DEFAULT_WAIT_TIMEOUT_MS / 1000,
-        description: "Wait timeout in whole seconds; timeout never interrupts agents.",
+        description: "Wait timeout in whole seconds: default 30, maximum 3600 (one hour). Does not stop agents.",
       }),
     ),
   },
@@ -98,7 +97,7 @@ export const AgentWaitParamsSchema = Type.Union([
           minimum: 4,
           maximum: MAX_ARTIFACT_PAGE_BYTES,
           default: DEFAULT_ARTIFACT_PAGE_BYTES,
-          description: "Page byte bound.",
+          description: "Page byte limit: default 16384 (16 KiB), maximum 32768 (32 KiB).",
         }),
       ),
       page_lines: Type.Optional(
@@ -106,7 +105,7 @@ export const AgentWaitParamsSchema = Type.Union([
           minimum: 1,
           maximum: MAX_ARTIFACT_PAGE_LINES,
           default: DEFAULT_ARTIFACT_PAGE_LINES,
-          description: "Page line bound.",
+          description: "Page line limit: default 120, maximum 200.",
         }),
       ),
     },
