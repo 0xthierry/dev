@@ -29,39 +29,46 @@ describe("codex-fast-mode extension E2E", () => {
     tempProject = undefined;
   });
 
-  test("adds priority service_tier to Codex-shaped provider payloads", async () => {
-    // Arrange
-    tempProject = await mkdtemp(join(tmpdir(), "pi-codex-fast-mode-e2e-"));
-    harness = await startPiRpcHarness({
-      cwd: tempProject,
-      args: [
-        "--no-extensions",
-        "--no-skills",
-        "--no-context-files",
-        "-e",
-        extensionPath,
-        "-e",
-        testProviderPath,
-        "--provider",
-        CODEX_FAST_MODE_TEST_PROVIDER,
-        "--model",
-        CODEX_FAST_MODE_TEST_MODEL,
-      ],
-      env: {
-        [CODEX_FAST_MODE_TEST_API_KEY_ENV]: "test-key",
-      },
-    });
+  for (const [model, expectedTier] of [
+    ["gpt-5.6", "priority"],
+    ["gpt-5.6-sol", "missing"],
+    ["gpt-6-astra", "missing"],
+  ] as const) {
+    test(`uses service_tier=${expectedTier} for ${model} Codex-shaped payloads`, async () => {
+      // Arrange
+      tempProject = await mkdtemp(join(tmpdir(), "pi-codex-fast-mode-e2e-"));
+      harness = await startPiRpcHarness({
+        cwd: tempProject,
+        args: [
+          "--no-extensions",
+          "--no-skills",
+          "--no-context-files",
+          "-e",
+          extensionPath,
+          "-e",
+          testProviderPath,
+          "--provider",
+          CODEX_FAST_MODE_TEST_PROVIDER,
+          "--model",
+          CODEX_FAST_MODE_TEST_MODEL,
+        ],
+        env: {
+          [CODEX_FAST_MODE_TEST_API_KEY_ENV]: "test-key",
+          CODEX_FAST_MODE_E2E_PAYLOAD_MODEL: model,
+        },
+      });
 
-    // Act
-    const promptResponse = await harness.request({
-      type: "prompt",
-      message: "Report the provider payload service tier.",
-    });
-    const agentEnd = await harness.waitForEvent((event) => event.type === "agent_end", 60_000);
+      // Act
+      const promptResponse = await harness.request({
+        type: "prompt",
+        message: "Report the provider payload service tier.",
+      });
+      const agentEnd = await harness.waitForEvent((event) => event.type === "agent_end", 60_000);
 
-    // Assert
-    expect(promptResponse.success).toBe(true);
-    expect(eventText(agentEnd)).toContain("service_tier=priority");
-    expect(harness.stderr()).toBe("");
-  }, 90_000);
+      // Assert
+      expect(promptResponse.success).toBe(true);
+      expect(eventText(agentEnd)).toContain(`service_tier=${expectedTier}`);
+      expect(harness.stderr()).toBe("");
+    }, 90_000);
+  }
 });

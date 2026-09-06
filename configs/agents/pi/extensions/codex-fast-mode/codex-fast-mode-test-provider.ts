@@ -47,7 +47,8 @@ function streamSimple(model: Model<Api>, _context: Context, options?: SimpleStre
   const stream = createAssistantMessageEventStream();
 
   queueMicrotask(async () => {
-    const payload = await options?.onPayload?.(buildCodexPayload(options?.sessionId), model);
+    const originalPayload = buildCodexPayload(options?.sessionId);
+    const payload = (await options?.onPayload?.(originalPayload, model)) ?? originalPayload;
     const text = `service_tier=${readServiceTier(payload)}`;
     const message = buildAssistantMessage(model, text);
 
@@ -73,7 +74,7 @@ function streamSimple(model: Model<Api>, _context: Context, options?: SimpleStre
 
 function buildCodexPayload(sessionId: string | undefined): Record<string, unknown> {
   return {
-    model: "gpt-5.6-sol",
+    model: process.env.CODEX_FAST_MODE_E2E_PAYLOAD_MODEL ?? "gpt-5.6",
     store: false,
     stream: true,
     instructions: "You are a helpful assistant.",
