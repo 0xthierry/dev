@@ -13,10 +13,10 @@ Use only this curated mapping. Roles and capability priority are workflow policy
 
 | Profile | Harness / pinned model | Effort | Role and ownership |
 | --- | --- | --- | --- |
-| **GPT-6 Astra orchestrator** | Pi / `openai-codex/gpt-6-astra` | `high` | **Most powerful profile.** Leads demanding planning, architecture, hard tasks, deep debugging, decomposition, synthesis, and adjudication. Prefer orchestration over execution. Read-only as a sidecar. |
+| **GPT-6 Astra orchestrator** | Pi / `cliproxyapi/gpt-6-astra` | `high` | **Most powerful profile.** Leads demanding planning, architecture, hard tasks, deep debugging, decomposition, synthesis, and adjudication. Prefer orchestration over execution. Read-only as a sidecar. |
 | **Fable 5.1 second opinion** | Claude / `claude-fable-5-1` | `xhigh` | Read-only second-opinion partner to Astra. Supplies independent evidence, counterarguments, and alternatives. **Not an oracle or final adjudicator**, and never an escalation above Astra. |
 | **Fable 5.1 adversary** | Claude / `claude-fable-5-1` | `high` | Read-only demanding plan, implementation, debugging-hypothesis, security, and correctness review; one explicit lens per task. |
-| **GPT-5.6-sol implementer** | Pi / `openai-codex/gpt-5.6-sol` | `high` | Writing workhorse for demanding multi-file features, refactors, reproductions, fix application, integration, and test/fix loops. Exact file ownership required. |
+| **GPT-5.6-sol implementer** | Pi / `cliproxyapi/gpt-5.6-sol` | `high` | Writing workhorse for demanding multi-file features, refactors, reproductions, fix application, integration, and test/fix loops. Exact file ownership required. |
 | **Grok 4.5 scout** | Pi / `xai/grok-4.5` | `high` | Fast, always read-only reconnaissance: locate files/symbols, trace call paths, inventory dependencies/config, find patterns, and perform bounded verification. |
 | **Grok 4.6 adversary** | Pi / `xai/grok-4.6` | `high` | Fast read-only adversarial reviewer and independent debugger. Pair with Fable `high` when provider-diverse artifact review is useful. |
 

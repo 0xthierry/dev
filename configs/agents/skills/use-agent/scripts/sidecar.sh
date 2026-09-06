@@ -49,8 +49,8 @@ select_profile() {
   WORKER_EFFORT=high
   WORKER_READONLY=1
   case "$prefix" in
-    pi-gpt6-astra) WORKER_MODEL=openai-codex/gpt-6-astra ;;
-    pi-gpt56) WORKER_MODEL=openai-codex/gpt-5.6-sol; WORKER_READONLY=0 ;;
+    pi-gpt6-astra) WORKER_MODEL=cliproxyapi/gpt-6-astra ;;
+    pi-gpt56) WORKER_MODEL=cliproxyapi/gpt-5.6-sol; WORKER_READONLY=0 ;;
     pi-grok45) WORKER_MODEL=xai/grok-4.5 ;;
     pi-grok46) WORKER_MODEL=xai/grok-4.6 ;;
     claude-fable51-xhigh)

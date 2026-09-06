@@ -22,7 +22,7 @@ if os.environ.get('FAIL_COMMAND') == name + ' ' + ' '.join(args[:2]):
 if name == 'pi':
     print('provider model context max-out thinking images')
     if not os.environ.get('MISSING_MODEL'):
-        for provider, model in [('openai-codex','gpt-6-astra'), ('openai-codex','gpt-5.6-sol'), ('xai','grok-4.5'), ('xai','grok-4.6')]:
+        for provider, model in [('cliproxyapi','gpt-6-astra'), ('cliproxyapi','gpt-5.6-sol'), ('xai','grok-4.5'), ('xai','grok-4.6')]:
             print(provider, model, '272K 128K yes yes')
 elif name == 'claude':
     print(os.environ.get('CLAUDE_VERSION', '2.1.255 (Claude Code)'))
@@ -178,8 +178,8 @@ class SidecarTests(unittest.TestCase):
 
     def test_profiles_and_prompt_quoting(self):
         profiles = [
-            ('pi-gpt6-astra-1', 'openai-codex/gpt-6-astra', 'high', True),
-            ('pi-gpt56-1', 'openai-codex/gpt-5.6-sol', 'high', False),
+            ('pi-gpt6-astra-1', 'cliproxyapi/gpt-6-astra', 'high', True),
+            ('pi-gpt56-1', 'cliproxyapi/gpt-5.6-sol', 'high', False),
             ('pi-grok45-1', 'xai/grok-4.5', 'high', True),
             ('pi-grok46-1', 'xai/grok-4.6', 'high', True),
             ('claude-fable51-xhigh-1', 'claude-fable-5-1', 'xhigh', True),
