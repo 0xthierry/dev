@@ -9,6 +9,7 @@ SKIPPED_COUNT=0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_AGENTS_DIR="$SCRIPT_DIR/agents"
+SOURCE_GLOBAL_INSTRUCTIONS="$SCRIPT_DIR/AGENTS.md"
 SOURCE_SKILLS_DIR="$SCRIPT_DIR/skills"
 SOURCE_CLAUDE_SKILLS_DIR="$SCRIPT_DIR/claude/skills"
 SOURCE_HOOKS_DIR="$SCRIPT_DIR/hooks"
@@ -427,6 +428,7 @@ install_agents_home_target() {
   log "Installing into $HOME/.agents ($target_root)"
   force_link_agent_entries "$target_root"
   force_link_skill_entries "$target_root"
+  force_link_path "$SOURCE_GLOBAL_INSTRUCTIONS" "$target_root/AGENTS.md" ".agents AGENTS.md"
   force_link_path "$SOURCE_HOOKS_DIR" "$target_root/hooks" ".agents hooks"
   force_link_path "$SOURCE_BIN_DIR" "$target_root/bin" ".agents bin"
   force_link_path "$SOURCE_DEV_INSTRUCTIONS" "$target_root/developer-instructions.txt" ".agents developer-instructions.txt"
@@ -548,6 +550,7 @@ install_codex_target() {
   log ""
   log "Installing into ~/.codex ($target_root)"
   generate_codex_agent_tomls "$target_root"
+  force_link_path "$SOURCE_GLOBAL_INSTRUCTIONS" "$target_root/AGENTS.md" "codex AGENTS.md"
   force_link_skill_entries "$target_root"
   force_link_skill_entries "$target_root" "$SOURCE_PLANNOTATOR_SKILLS_DIR"
   render_codex_config "$target_root/config.toml"
@@ -620,6 +623,7 @@ install_claude_target() {
   local claude_hooks_json="$SOURCE_HOOKS_DIR/claude-hooks.json"
 
   install_target "$target_root" "$HOME/.claude"
+  force_link_path "$SOURCE_GLOBAL_INSTRUCTIONS" "$target_root/CLAUDE.md" "claude CLAUDE.md"
   force_link_skill_entries "$target_root" "$SOURCE_PLANNOTATOR_SKILLS_DIR"
   # Claude-only skills (not shared with ~/.agents, ~/.codex, or ~/.pi)
   force_link_skill_entries "$target_root" "$SOURCE_CLAUDE_SKILLS_DIR"
@@ -679,6 +683,7 @@ install_pi_target() {
   ensure_dir "$target_root"
   copy_file_if_needed "$SOURCE_PI_SETTINGS" "$target_root/settings.json" "pi settings.json"
   copy_file_if_needed "$SOURCE_PI_WEB_SEARCH_CONFIG" "$HOME/.pi/web-search.json" "pi web-search.json"
+  force_link_path "$SOURCE_GLOBAL_INSTRUCTIONS" "$target_root/AGENTS.md" "pi AGENTS.md"
   force_link_path "$SOURCE_PI_APPEND_SYSTEM" "$target_root/APPEND_SYSTEM.md" "pi APPEND_SYSTEM.md"
   remove_managed_symlink "$SOURCE_PI_DIR/models.json" "$target_root/models.json" "legacy pi models.json override"
   sync_pi_proxy_models "$target_root/models.json"
@@ -716,6 +721,11 @@ main() {
 
   if [[ ! -d "$SOURCE_AGENTS_DIR" ]]; then
     warn "Missing source agents directory: $SOURCE_AGENTS_DIR"
+    exit 1
+  fi
+
+  if [[ ! -f "$SOURCE_GLOBAL_INSTRUCTIONS" ]]; then
+    warn "Missing source global instructions file: $SOURCE_GLOBAL_INSTRUCTIONS"
     exit 1
   fi
 

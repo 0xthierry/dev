@@ -107,7 +107,34 @@ EOF
   mkdir -p "$test_home/.pi/agent"
   printf '%s\n' '{"providers":{"local-test":{"baseUrl":"http://localhost:1234/v1"}}}' > "$test_home/.pi/agent/models.json"
 
+  # Arrange: preserve both user-owned files and symlinks when deploying global instructions.
+  printf '%s\n' 'Existing Codex instructions' > "$test_home/.codex/AGENTS.md"
+  printf '%s\n' 'Existing Claude instructions' > "$TEST_TMP_DIR/claude-instructions.md"
+  ln -s "$TEST_TMP_DIR/claude-instructions.md" "$test_home/.claude/CLAUDE.md"
+
+  # Act / Assert: dry-run must not replace instructions or deploy new resources.
+  HOME="$test_home" "$REPO_ROOT/configs/agents/install.sh" --yes --dry-run > "$TEST_TMP_DIR/dry-run.log"
+  assert_file_contains "dry-run preserves Codex instructions" "$test_home/.codex/AGENTS.md" 'Existing Codex instructions'
+  [[ ! -e "$test_home/.pi/agent/AGENTS.md" ]] || fail "dry-run created global Pi instructions"
+  [[ ! -e "$test_home/.pi/agent/skills/writing-pr" ]] || fail "dry-run installed writing-pr"
+  assert_file_contains "dry-run includes global instructions" "$TEST_TMP_DIR/dry-run.log" 'pi AGENTS.md'
+
+  # Act
   HOME="$test_home" "$REPO_ROOT/configs/agents/install.sh" --yes >/dev/null
+
+  # Assert
+  local target
+  for target in .agents/AGENTS.md .codex/AGENTS.md .claude/CLAUDE.md .pi/agent/AGENTS.md; do
+    [[ -L "$test_home/$target" ]] || fail "missing global instructions link: $target"
+    [[ "$(readlink "$test_home/$target")" == "$REPO_ROOT/configs/agents/AGENTS.md" ]] || fail "wrong global instructions source: $target"
+  done
+  assert_file_contains "backs up existing Codex instructions" "$test_home/.codex/AGENTS.md.bak" 'Existing Codex instructions'
+  [[ -L "$test_home/.claude/CLAUDE.md.bak" ]] || fail "did not preserve Claude instructions symlink"
+  assert_file_contains "preserves Claude symlink target" "$TEST_TMP_DIR/claude-instructions.md" 'Existing Claude instructions'
+  for target in .agents .codex .claude .pi/agent; do
+    [[ "$(readlink "$test_home/$target/skills/writing-pr")" == "$REPO_ROOT/configs/agents/skills/writing-pr" ]] || fail "missing writing-pr skill link: $target"
+    assert_file_contains "deploys writing-pr into $target" "$test_home/$target/skills/writing-pr/SKILL.md" 'name: writing-pr'
+  done
 
   assert_json "preserves unrelated Pi provider" "$test_home/.pi/agent/models.json" '.providers["local-test"].baseUrl == "http://localhost:1234/v1"'
   assert_json "adds Pi Responses proxy provider" "$test_home/.pi/agent/models.json" '.providers.cliproxyapi.api == "openai-responses"'
@@ -164,6 +191,14 @@ EOF
   cp "$test_home/.codex/config.toml" "$first_codex_config"
   cp "$test_home/.claude/settings.json" "$first_claude_settings"
   HOME="$test_home" "$REPO_ROOT/configs/agents/install.sh" --yes >/dev/null
+
+  # Assert: re-running setup must leave the links and their first backups unchanged.
+  for target in .agents/AGENTS.md .codex/AGENTS.md .claude/CLAUDE.md .pi/agent/AGENTS.md; do
+    [[ "$(readlink "$test_home/$target")" == "$REPO_ROOT/configs/agents/AGENTS.md" ]] || fail "global instructions link changed: $target"
+    [[ ! -e "$test_home/$target.bak.1" && ! -L "$test_home/$target.bak.1" ]] || fail "repeated global instructions backup: $target"
+  done
+  assert_file_contains "retains original Codex backup" "$test_home/.codex/AGENTS.md.bak" 'Existing Codex instructions'
+  assert_file_contains "retains original Claude backup" "$test_home/.claude/CLAUDE.md.bak" 'Existing Claude instructions'
 
   if cmp -s "$test_home/.codex/config.toml" "$first_codex_config" &&
     cmp -s "$test_home/.claude/settings.json" "$first_claude_settings" &&
