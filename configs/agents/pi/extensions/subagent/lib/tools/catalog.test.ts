@@ -48,7 +48,11 @@ test("exposes stable model routing preferences without replacing execution polic
   expect(description).toBe(second.tools.get("agent_spawn")?.description ?? "");
   expect(description).toEndWith(SUBAGENT_MODEL_GUIDANCE);
   expect(description).toContain("cliproxyapi/gpt-6-astra is the default for implementation");
-  expect(description).toContain("cliproxyapi/gpt-5.6-luna is the default for read-only codebase reconnaissance");
+  expect(description).toContain("Use low or medium for most implementation tasks");
+  expect(description).toContain("High is usually unnecessary for implementation");
+  expect(description).toContain(
+    "cliproxyapi/gpt-5.6-luna or xai/grok-4.5 are the defaults for read-only codebase reconnaissance",
+  );
   expect(description).toContain("cliproxyapi/gpt-5.6-sol is an implementation fallback");
   expect(description).toContain("xai/grok-4.6 is the preferred independent-provider reviewer");
   expect(description).toContain("Repository locks still apply");

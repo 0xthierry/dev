@@ -90,8 +90,8 @@ another machine. An omitted execution override still follows normal resolution.
 
 | Exact provider / model | Recommended work | Rationale and limitation |
 |---|---|---|
-| `cliproxyapi/gpt-6-astra` | Default for implementation, debugging, planning, and review | Low for well-scoped changes; medium for reasoning across components; high for difficult root-cause analysis, complex architecture, or security/concurrency review |
-| `cliproxyapi/gpt-5.6-luna` | Default for read-only codebase reconnaissance | Medium for locating files/symbols, tracing call paths, mapping dependencies, finding patterns, and explaining components; require paths and evidence |
+| `cliproxyapi/gpt-6-astra` | Default for implementation, debugging, planning, and review | Low or medium for most implementation: low for well-scoped changes, medium for reasoning across components. High is usually unnecessary; reserve it for unusually difficult root-cause analysis, complex architecture, or high-risk security/concurrency review |
+| `cliproxyapi/gpt-5.6-luna` or `xai/grok-4.5` | Defaults for read-only codebase reconnaissance | Medium for locating files/symbols, tracing call paths, mapping dependencies, finding patterns, and explaining components; require paths and evidence |
 | `cliproxyapi/gpt-5.6-sol` | Implementation fallback when Astra is unavailable or rate-limited and substitution is allowed; explicit user requests | Low for small patches, medium for bounded multi-file changes, high for complex implementation/debugging |
 | `xai/grok-4.6` | Preferred independent-provider reviewer; implementation/research when explicitly selected | Medium for bounded reviews; high for difficult debugging hypotheses or security/correctness review; provide an artifact and a specific question |
 
