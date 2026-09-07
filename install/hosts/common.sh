@@ -117,6 +117,9 @@ apply_host_configs() {
       herdr)
         apply_herdr
         ;;
+      voxtype)
+        apply_voxtype
+        ;;
       moshi)
         apply_moshi
         ;;

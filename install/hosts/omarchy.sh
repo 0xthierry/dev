@@ -16,6 +16,7 @@ HOST_CONFIG_TARGETS=(
   moshi
   cameractrls
   brave
+  voxtype
 )
 
 # shellcheck disable=SC2034
@@ -56,10 +57,10 @@ HOST_AUR_PACKAGES=(
   brave-bin
   chatgpt-desktop
   figma-linux
-  handy-bin
   linear-desktop-bin
   slack-desktop
   spotify
+  voxtype-bin
 )
 
 setup_host_prereqs() {
@@ -598,163 +599,133 @@ cleanup_ai_launcher_duplicates() {
   fi
 }
 
-start_handy_hidden() {
-  if (( ${DRY_RUN:-0} )); then
-    dry_run_cmd uwsm-app -- handy --start-hidden
-    return 0
-  fi
-
-  nohup uwsm-app -- handy --start-hidden >/dev/null 2>&1 &
-}
-
-configure_handy_shortcuts() {
-  local settings_dir="$HOME/.local/share/com.pais.handy"
-  local settings_file="$settings_dir/settings_store.json"
-  local tmp=""
+stop_handy_if_running() {
   local attempt=0
 
-  log_item "Reserving Handy's built-in shortcuts on F23/F24; Hyprland F9 owns push-to-talk"
+  if ! pgrep -x handy >/dev/null 2>&1; then
+    return 0
+  fi
 
+  log_item "Stopping Handy so Voxtype owns dictation"
+  run_cmd pkill --signal TERM --exact handy
   if (( ${DRY_RUN:-0} )); then
     return 0
   fi
 
-  if ! check_installed jq; then
-    log_item "jq unavailable; cannot neutralize Handy's modifier shortcuts"
-    return 0
-  fi
+  for attempt in {1..50}; do
+    pgrep -x handy >/dev/null 2>&1 || return 0
+    sleep 0.1
+  done
 
-  if [[ -f "$settings_file" ]] && jq -e '
-    .settings.bindings.transcribe.default_binding == "f24" and
-    .settings.bindings.transcribe.current_binding == "f24" and
-    .settings.bindings.transcribe_with_post_process.default_binding == "f23" and
-    .settings.bindings.transcribe_with_post_process.current_binding == "f23"
-  ' "$settings_file" >/dev/null 2>&1; then
-    log_item "Handy built-in modifier shortcuts: already neutralized"
-    return 0
-  fi
-
-  if [[ -f "$settings_file" ]] && ! jq -e '
-    type == "object" and
-    ((.settings // {}) | type == "object") and
-    ((.settings.bindings // {}) | type == "object") and
-    ((.settings.bindings.transcribe // {}) | type == "object") and
-    ((.settings.bindings.transcribe_with_post_process // {}) | type == "object")
-  ' "$settings_file" >/dev/null; then
-    log_item "ERROR: $settings_file has an unexpected structure; refusing to modify it"
-    return 1
-  fi
-
-  ensure_dir "$settings_dir"
-  tmp="$(mktemp)"
-
-  if [[ -f "$settings_file" ]]; then
-    jq '
-      .settings = (.settings // {}) |
-      .settings.bindings = (.settings.bindings // {}) |
-      .settings.bindings.transcribe = (
-        (.settings.bindings.transcribe // {
-          "id": "transcribe",
-          "name": "Transcribe",
-          "description": "Converts your speech into text."
-        }) + {
-          "default_binding": "f24",
-          "current_binding": "f24"
-        }
-      ) |
-      .settings.bindings.transcribe_with_post_process = (
-        (.settings.bindings.transcribe_with_post_process // {
-          "id": "transcribe_with_post_process",
-          "name": "Transcribe with Post-Processing",
-          "description": "Converts your speech into text and applies AI post-processing."
-        }) + {
-          "default_binding": "f23",
-          "current_binding": "f23"
-        }
-      )
-    ' "$settings_file" > "$tmp"
-    chmod --reference="$settings_file" "$tmp"
-  else
-    jq -n '
-      {
-        "settings": {
-          "bindings": {
-            "transcribe": {
-              "id": "transcribe",
-              "name": "Transcribe",
-              "description": "Converts your speech into text.",
-              "default_binding": "f24",
-              "current_binding": "f24"
-            },
-            "transcribe_with_post_process": {
-              "id": "transcribe_with_post_process",
-              "name": "Transcribe with Post-Processing",
-              "description": "Converts your speech into text and applies AI post-processing.",
-              "default_binding": "f23",
-              "current_binding": "f23"
-            }
-          }
-        }
-      }
-    ' > "$tmp"
-    chmod 600 "$tmp"
-  fi
-
-  # Handy keeps settings in memory. Stop it before replacing the store so it
-  # cannot restore the unsafe shortcut during shutdown.
-  if pgrep -x handy >/dev/null 2>&1; then
-    if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
-      rm -f "$tmp"
-      log_item "Handy is running outside this Hyprland environment; shortcut update deferred"
-      return 0
-    fi
-
-    log_item "Restarting Handy to apply safe shortcuts"
-    run_cmd pkill --signal TERM --exact handy
-    for attempt in {1..50}; do
-      pgrep -x handy >/dev/null 2>&1 || break
-      sleep 0.1
-    done
-    if pgrep -x handy >/dev/null 2>&1; then
-      rm -f "$tmp"
-      log_item "ERROR: Handy did not stop; refusing to replace its live settings store"
-      return 1
-    fi
-  fi
-
-  run_cmd mv "$tmp" "$settings_file"
+  log_item "Handy did not stop; continuing with package removal"
 }
 
-configure_handy() {
-  log_section "Handy Dictation"
+remove_handy_if_installed() {
+  local -a packages=()
+  local pkg=""
 
-  if (( ! ${DRY_RUN:-0} )) && ! check_installed handy; then
-    log_item "handy not available after package installation; skipping runtime setup"
+  stop_handy_if_running
+
+  for pkg in handy-bin handy; do
+    if [[ "$(pacman -Qq "$pkg" 2>/dev/null)" == "$pkg" ]]; then
+      packages+=("$pkg")
+    fi
+  done
+
+  if (( ${#packages[@]} == 0 )); then
+    log_item "Handy: not installed"
     return 0
   fi
 
-  # Keep the old package and user data, but stop its background service now that
-  # Handy owns the dictation shortcuts.
-  if (( ${DRY_RUN:-0} )) || {
-    check_installed systemctl && systemctl --user cat voxtype.service >/dev/null 2>&1
-  }; then
-    log_item "Disabling legacy Voxtype user service"
-    run_cmd systemctl --user disable --now voxtype.service
-  fi
+  log_item "Uninstalling ${packages[*]}"
+  run_cmd sudo pacman -Rns --noconfirm "${packages[@]}"
+}
 
-  configure_handy_shortcuts
+pull_voxtype_cleanup_model() {
+  if ! check_installed ollama; then
+    log_item "ollama not available; Voxtype will fall back to raw transcripts"
+    return 0
+  fi
 
   if (( ${DRY_RUN:-0} )); then
-    log_item "Starting Handy hidden with Hyprland"
-    start_handy_hidden
-  elif [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
-    log_item "Handy will start hidden at the next Hyprland login"
-  elif pgrep -x handy >/dev/null 2>&1; then
-    log_item "Handy: running"
-  else
-    log_item "Starting Handy hidden; complete onboarding on first launch"
-    start_handy_hidden
+    dry_run_cmd ollama pull gemma3:4b
+    return 0
   fi
+
+  if ollama show gemma3:4b >/dev/null 2>&1; then
+    log_item "gemma3:4b: already pulled"
+  else
+    log_item "Pulling gemma3:4b for dictation grammar cleanup"
+    run_cmd ollama pull gemma3:4b
+  fi
+
+  # Warm the model so the first F9 press is not a cold load.
+  if curl -sS --fail --max-time 60 \
+    -H 'Content-Type: application/json' \
+    -d '{"model":"gemma3:4b","stream":false,"keep_alive":"30m","messages":[{"role":"user","content":"."}]}' \
+    http://127.0.0.1:11434/api/chat >/dev/null 2>&1; then
+    log_item "gemma3:4b: warmed"
+  else
+    log_item "gemma3:4b: will load on first dictation"
+  fi
+}
+
+voxtype_gpu_is_cpu() {
+  voxtype setup gpu --status 2>/dev/null | grep -q 'Active backend:.*CPU'
+}
+
+configure_voxtype() {
+  local parakeet_dir="$HOME/.local/share/voxtype/models/parakeet-tdt-0.6b-v3"
+
+  log_section "Voxtype Dictation"
+
+  remove_handy_if_installed
+
+  if ! check_installed voxtype && (( ! ${DRY_RUN:-0} )); then
+    log_item "voxtype not available after package installation; skipping runtime setup"
+    return 0
+  fi
+
+  if [[ -d "$parakeet_dir" ]]; then
+    log_item "Parakeet model: already installed"
+  else
+    log_item "Downloading Parakeet TDT 0.6B v3"
+    run_cmd voxtype setup --download --model parakeet-tdt-0.6b-v3 --quiet --no-post-install
+  fi
+
+  if check_installed voxtype && ! voxtype_gpu_is_cpu; then
+    log_item "Voxtype GPU: already enabled"
+  else
+    log_item "Enabling Voxtype GPU acceleration if available"
+    if (( ${DRY_RUN:-0} )); then
+      dry_run_cmd sudo voxtype setup gpu --enable
+    elif sudo voxtype setup gpu --enable; then
+      log_item "Voxtype GPU: enabled"
+    else
+      log_item "Voxtype GPU: left unchanged (run sudo voxtype setup gpu --enable)"
+    fi
+  fi
+
+  if systemctl --user cat voxtype.service >/dev/null 2>&1; then
+    log_item "Voxtype systemd unit: already installed"
+  else
+    run_cmd voxtype setup systemd
+  fi
+
+  pull_voxtype_cleanup_model
+
+  if ! check_installed systemctl && (( ! ${DRY_RUN:-0} )); then
+    return 0
+  fi
+
+  if systemctl --user is-enabled --quiet voxtype.service 2>/dev/null \
+    && systemctl --user is-active --quiet voxtype.service 2>/dev/null; then
+    log_item "Voxtype service: already enabled and running"
+    return 0
+  fi
+
+  run_cmd systemctl --user daemon-reload
+  run_cmd systemctl --user enable --now voxtype.service
 }
 
 setup_host_machine_state() {
@@ -768,7 +739,7 @@ setup_host_machine_state() {
   configure_secret_service
   apply_host_configs
   cleanup_ai_launcher_duplicates
-  configure_handy
+  configure_voxtype
   reload_hyprland_if_running
 }
 

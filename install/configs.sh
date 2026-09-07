@@ -40,6 +40,16 @@ apply_herdr() {
   safe_link_path "$REPO_ROOT/configs/herdr/config.toml" "$HOME/.config/herdr/config.toml" "herdr config"
 }
 
+apply_voxtype() {
+  ensure_dir "$HOME/.config/voxtype"
+  ensure_dir "$HOME/.local/bin"
+  ensure_dir "$HOME/.config/systemd/user/voxtype.service.d"
+
+  safe_link_path "$REPO_ROOT/configs/voxtype/config.toml" "$HOME/.config/voxtype/config.toml" "voxtype config"
+  safe_link_path "$REPO_ROOT/configs/voxtype/post-process.sh" "$HOME/.local/bin/voxtype-post-process" "voxtype post-process"
+  safe_link_path "$REPO_ROOT/configs/voxtype/systemd-path.conf" "$HOME/.config/systemd/user/voxtype.service.d/path.conf" "voxtype systemd PATH"
+}
+
 apply_raycast() {
   ensure_dir "$HOME/.config/raycast"
   safe_link_path "$REPO_ROOT/configs/raycast/script-commands" "$HOME/.config/raycast/script-commands" "raycast script commands"
