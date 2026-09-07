@@ -56,6 +56,35 @@ describe("registerWebSearchTool", () => {
     expect(fake.appendedEntries).toHaveLength(1);
   });
 
+  test.each([[], ["", "   "]])("falls back to query when queries has no usable entries: %j", async (queries) => {
+    // Arrange
+    const fake = createFakePi();
+    const fakeRuntime = runtime();
+    registerWebSearchTool(fake.pi, fakeRuntime);
+
+    // Act
+    const result = (await fake.runTool("web_search", { query: "EC2 nested virtualization", queries })) as ToolResult;
+
+    // Assert
+    expect(fakeRuntime.search).toHaveBeenCalledWith("EC2 nested virtualization", expect.any(Object));
+    expect(result.details).toMatchObject({ queries: ["EC2 nested virtualization"], successfulQueries: 1 });
+  });
+
+  test("prefers usable batch queries over the single query", async () => {
+    // Arrange
+    const fake = createFakePi();
+    const fakeRuntime = runtime();
+    registerWebSearchTool(fake.pi, fakeRuntime);
+
+    // Act
+    const result = (await fake.runTool("web_search", { query: "ignored", queries: [" docs ", ""] })) as ToolResult;
+
+    // Assert
+    expect(fakeRuntime.search).toHaveBeenCalledTimes(1);
+    expect(fakeRuntime.search).toHaveBeenCalledWith("docs", expect.any(Object));
+    expect(result.details.queries).toEqual(["docs"]);
+  });
+
   test("throws a structured validation error when no query is provided", async () => {
     // Arrange
     const fake = createFakePi();
@@ -63,7 +92,7 @@ describe("registerWebSearchTool", () => {
     registerWebSearchTool(fake.pi, fakeRuntime);
 
     // Act
-    const error = await fake.runTool("web_search", {}).catch((thrown) => thrown);
+    const error = await fake.runTool("web_search", { query: "  ", queries: [] }).catch((thrown) => thrown);
 
     // Assert
     expect(error).toBeInstanceOf(WebAccessToolError);

@@ -91,7 +91,7 @@ export function planYouTubeFrameRequest(options: FetchOptions, duration: number 
       plan: {
         label: `${formatSeconds(spec.start)}-${formatSeconds(spec.end)}`,
         title: `Frames ${options.timestamp}`,
-        timestamps: computeRangeTimestamps(spec.start, spec.end, options.frames ?? DEFAULT_RANGE_FRAMES),
+        timestamps: computeRangeTimestamps(spec.start, spec.end, options.frames || DEFAULT_RANGE_FRAMES),
       },
     };
   }

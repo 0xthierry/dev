@@ -24,7 +24,8 @@ export function registerWebSearchTool(pi: ExtensionAPI, runtime: WebAccessRuntim
       "Use for current web research. Prefer multiple focused queries for broader research, use domain filters when the user names trusted or unwanted sites, and cite returned source URLs.",
     parameters: WEB_SEARCH_PARAMETERS,
     async execute(_toolCallId, params, signal, onUpdate) {
-      const queryList = normalizeQueryList(params.queries ?? params.query);
+      const batchQueries = normalizeQueryList(params.queries);
+      const queryList = batchQueries.length ? batchQueries : normalizeQueryList(params.query);
       if (queryList.length === 0) {
         failTool(noSearchQueryError({ hasQuery: Boolean(params.query), hasQueries: Boolean(params.queries) }));
       }

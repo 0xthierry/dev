@@ -60,14 +60,15 @@ export const FETCH_CONTENT_PARAMETERS = Type.Object({
   timestamp: Type.Optional(
     Type.String({
       description:
-        "YouTube frame timestamp or range, e.g. 23:41 or 23:41-25:00. Use when visual evidence at a moment is needed.",
+        "YouTube frame timestamp or range, e.g. 23:41 or 23:41-25:00. Use an empty string or omit for ordinary pages and video summaries/transcripts. Set only when video frames are explicitly requested.",
     }),
   ),
   frames: Type.Optional(
     Type.Integer({
-      minimum: 1,
+      minimum: 0,
       maximum: 12,
-      description: "Number of YouTube frames to extract. Use with timestamp or when sampling a video visually.",
+      description:
+        "Number of YouTube frames to extract (1-12). Use 0 or omit for ordinary pages and video summaries/transcripts. A positive count activates frame extraction; 0 leaves the count unspecified when timestamp is set.",
     }),
   ),
   model: Type.Optional(

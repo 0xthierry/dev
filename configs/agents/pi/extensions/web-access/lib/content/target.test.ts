@@ -2,6 +2,32 @@ import { describe, expect, test } from "bun:test";
 import { classifyFetchTarget } from "./target";
 
 describe("classifyFetchTarget", () => {
+  test.each([
+    "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Hibernate.html",
+    "https://github.com/firecracker-microvm/firecracker/blob/main/docs/getting-started.md",
+    "https://www.youtube.com/watch?v=rb5SlUg0CWU",
+  ])("keeps zero frames and an empty timestamp on the content path: %s", (url) => {
+    // Arrange
+    const options = { frames: 0, timestamp: "" };
+
+    // Act
+    const result = classifyFetchTarget(url, options);
+
+    // Assert
+    expect(result).toMatchObject({ ok: true, target: { requestKind: "content" } });
+  });
+
+  test("rejects an explicit frame count for ordinary pages", () => {
+    // Arrange
+    const url = "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Hibernate.html";
+
+    // Act
+    const result = classifyFetchTarget(url, { frames: 1, timestamp: "" });
+
+    // Assert
+    expect(result).toMatchObject({ ok: false, result: { errorDetails: { code: "TIMESTAMP_REQUIRES_YOUTUBE" } } });
+  });
+
   test("turns unsupported inputs into typed content errors", () => {
     // Arrange
     const invalid = "not a url";

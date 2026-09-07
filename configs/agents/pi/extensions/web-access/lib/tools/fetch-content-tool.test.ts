@@ -49,6 +49,40 @@ describe("registerFetchContentTool", () => {
     expect(fake.appendedEntries).toHaveLength(1);
   });
 
+  test("falls back to the single URL when urls is empty", async () => {
+    // Arrange
+    const fake = createFakePi();
+    const url = "https://www.youtube.com/watch?v=rb5SlUg0CWU";
+    const fakeRuntime = runtime([{ url, title: "Video", content: "Transcript", error: null, provider: "youtube" }]);
+    registerFetchContentTool(fake.pi, fakeRuntime);
+
+    // Act
+    const result = (await fake.runTool("fetch_content", { url, urls: [] })) as ToolResult;
+
+    // Assert
+    expect(fakeRuntime.fetchAllContent).toHaveBeenCalledWith([url], undefined, expect.any(Object));
+    expect(result.content.at(-1)?.text).toBe("Transcript");
+    expect(result.details).toMatchObject({ urls: [url], urlCount: 1, successful: 1 });
+  });
+
+  test("keeps a nonempty urls array authoritative when url is also provided", async () => {
+    // Arrange
+    const fake = createFakePi();
+    const url = "https://example.com/batch";
+    const fakeRuntime = runtime([{ url, title: "Example", content: "Body", error: null, provider: "http" }]);
+    registerFetchContentTool(fake.pi, fakeRuntime);
+
+    // Act
+    const result = (await fake.runTool("fetch_content", {
+      url: "https://example.com/ignored",
+      urls: [url],
+    })) as ToolResult;
+
+    // Assert
+    expect(fakeRuntime.fetchAllContent).toHaveBeenCalledWith([url], undefined, expect.any(Object));
+    expect(result.details).toMatchObject({ urls: [url], successful: 1 });
+  });
+
   test("points to the next stored chunk when inline content is truncated", async () => {
     // Arrange
     const fake = createFakePi();
@@ -111,14 +145,18 @@ describe("registerFetchContentTool", () => {
     expect(result.details.truncated).toBe(false);
   });
 
-  test("throws a structured validation error when no URL is provided", async () => {
+  test.each([
+    {},
+    { urls: [] },
+    { url: "", urls: [] },
+  ])("throws a structured validation error when no URL is provided: %j", async (params) => {
     // Arrange
     const fake = createFakePi();
     const fakeRuntime = runtime();
     registerFetchContentTool(fake.pi, fakeRuntime);
 
     // Act
-    const error = await fake.runTool("fetch_content", {}).catch((thrown) => thrown);
+    const error = await fake.runTool("fetch_content", params).catch((thrown) => thrown);
 
     // Assert
     expect(error).toBeInstanceOf(WebAccessToolError);

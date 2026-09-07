@@ -32,6 +32,18 @@ describe("planYouTubeFrameRequest", () => {
     });
   });
 
+  test.each(["1:00", "1:00-1:20"])("treats zero as an unspecified frame count with timestamp %s", (timestamp) => {
+    // Arrange
+    const expected = planYouTubeFrameRequest({ timestamp }, 100);
+
+    // Act
+    const result = planYouTubeFrameRequest({ timestamp, frames: 0 }, 100);
+
+    // Assert
+    expect(expected.ok).toBe(true);
+    expect(result).toEqual(expected);
+  });
+
   test("returns typed planning failures before frame extraction", () => {
     // Arrange / Act / Assert
     expect(planYouTubeFrameRequest({ frames: 3 }, null)).toEqual({

@@ -115,6 +115,20 @@ describe("registerWebAccessExtension", () => {
     expect(getSearchContentProperties.limit?.description).toContain("search or fetch chunks");
   });
 
+  test("exposes a neutral frame count for callers that populate every parameter", () => {
+    // Arrange
+    const fake = createFakePi();
+
+    // Act
+    registerWebAccessExtension(fake.pi);
+    const properties = parameterProperties(fake.tools.get("fetch_content"));
+
+    // Assert
+    expect(properties.frames).toMatchObject({ minimum: 0, maximum: 12 });
+    expect(properties.frames?.description).toContain("Use 0 or omit");
+    expect(properties.timestamp?.description).toContain("Use an empty string or omit");
+  });
+
   test("registers session lifecycle handlers", async () => {
     // Arrange
     const fake = createFakePi();

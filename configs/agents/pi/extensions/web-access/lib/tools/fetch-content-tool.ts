@@ -47,7 +47,7 @@ export function registerFetchContentTool(pi: ExtensionAPI, runtime: WebAccessRun
       "Use when the user provides URLs or asks to inspect a web page, repository, or YouTube video. For plain YouTube summary, description, or transcript requests, call fetch_content without prompt so default video extraction includes transcript with timestamps. Include the user's exact question in prompt only for narrow content-specific questions; if the user's task needs a transcript, explicitly ask for it.",
     parameters: FETCH_CONTENT_PARAMETERS,
     async execute(_toolCallId, params, signal, onUpdate) {
-      const urls = params.urls ?? (params.url ? [params.url] : []);
+      const urls = params.urls?.length ? params.urls : params.url ? [params.url] : [];
       if (urls.length === 0) failTool(noFetchUrlError({ hasUrl: Boolean(params.url), hasUrls: Boolean(params.urls) }));
       onUpdate?.({
         content: [{ type: "text", text: `Fetching ${urls.length} URL(s)...` }],
