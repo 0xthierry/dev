@@ -72,8 +72,8 @@ Example spawn override:
   "subagent_type": "scout",
   "prompt": "Review authentication boundaries and report exact evidence.",
   "execution": {
-    "provider": "cliproxyapi",
-    "model": "gpt-6-astra",
+    "provider": "xai",
+    "model": "grok-4.6",
     "effort": "high"
   }
 }
@@ -90,13 +90,16 @@ another machine. An omitted execution override still follows normal resolution.
 
 | Exact provider / model | Recommended work | Rationale and limitation |
 |---|---|---|
-| `cliproxyapi/gpt-6-astra` | Default for implementation, debugging, planning, and review | Low or medium for most implementation: low for well-scoped changes, medium for reasoning across components. High is usually unnecessary; reserve it for unusually difficult root-cause analysis, complex architecture, or high-risk security/concurrency review |
+| `cliproxyapi/gpt-6-astra` | Default for implementation, debugging, and planning; code review only when the user explicitly requests Astra | Low or medium for most implementation: low for well-scoped changes, medium for reasoning across components. High is usually unnecessary; reserve it for unusually difficult root-cause analysis or complex architecture |
 | `cliproxyapi/gpt-5.6-luna` or `xai/grok-4.5` | Defaults for read-only codebase reconnaissance | Medium for locating files/symbols, tracing call paths, mapping dependencies, finding patterns, and explaining components; require paths and evidence |
 | `cliproxyapi/gpt-5.6-sol` | Implementation fallback when Astra is unavailable or rate-limited and substitution is allowed; explicit user requests | Low for small patches, medium for bounded multi-file changes, high for complex implementation/debugging |
-| `xai/grok-4.6` | Preferred independent-provider reviewer; implementation/research when explicitly selected | Medium for bounded reviews; high for difficult debugging hypotheses or security/correctness review; provide an artifact and a specific question |
+| `xai/grok-4.6` | Default for code review; implementation/research when explicitly selected | Medium for bounded reviews; high for difficult debugging hypotheses or security/correctness review; provide an artifact and a specific question |
 
 Use `cliproxyapi/gpt-6-astra` instead of the reconnaissance profile when the task
-requires design decisions, difficult diagnosis, correctness judgments, or edits.
+requires design decisions, difficult diagnosis, or edits. For code review, including
+correctness and security review, use `xai/grok-4.6` unless the user explicitly
+requests another model. Use Astra for code review only when the user explicitly
+requests it.
 An Astra parent can delegate implementation to another Astra with non-overlapping
 ownership. Honor user choices and repository locks; set provider, model, and effort
 explicitly to select a profile and inspect the returned effective settings.

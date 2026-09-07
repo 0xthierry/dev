@@ -54,7 +54,13 @@ test("exposes stable model routing preferences without replacing execution polic
     "cliproxyapi/gpt-5.6-luna or xai/grok-4.5 are the defaults for read-only codebase reconnaissance",
   );
   expect(description).toContain("cliproxyapi/gpt-5.6-sol is an implementation fallback");
-  expect(description).toContain("xai/grok-4.6 is the preferred independent-provider reviewer");
+  expect(description).toContain("xai/grok-4.6 is the default for code review");
+  expect(description).toContain("Use Astra for code review only when the user explicitly requests it");
+  expect(description).toContain(
+    "For code review, including correctness and security review, use xai/grok-4.6 unless the user explicitly requests another model",
+  );
+  expect(description).not.toContain("implementation, debugging, planning, and review");
+  expect(description).not.toContain("judging correctness");
   expect(description).toContain("Repository locks still apply");
   expect(description).not.toMatch(/\b(?:xhigh|max|subscription|openai-codex)\b/);
   expect(first.tools.get("agent_followup")?.description).toContain("guidance in agent_spawn");
