@@ -68,7 +68,7 @@ The helper implements room guards, explicit roster setup, model/effort selection
 ### Preconditions and invariants
 
 - MAIN must actually be inside Herdr (`HERDR_ENV=1`). If not, stop; never control some other focused client.
-- This repo pins Herdr **0.8.2** and AMQ **0.77.1**. Verify installed versions with `herdr --version` and `amq --version`. Changing either pin requires a real sidecar launch/close smoke test, not just mocked tests.
+- This repo pins Herdr **0.9.0** and AMQ **0.77.1**. Verify installed versions with `herdr --version` and `amq --version`. Changing either pin requires a real sidecar launch/close smoke test, not just mocked tests.
 - Claude requires Code **2.1.255+**; confirm entitlement via `/model` before launching. The helper verifies exact Pi provider/model catalog availability before creating a pane. Catalog presence does not prove credits, entitlement, or provider capacity; a launch rejection still means unavailable.
 - `herdr --skill` and AMQ's pinned-tag skill are upgrade references only, not competing active skills. For syntax, use `herdr pane` plus nested `-h` and `amq <command> -h`. Never run bare `herdr`, which starts/attaches the TUI.
 - **If `AM_ROOT` is non-empty it is authoritative.** The helper preserves it and rejects a different `--root`. It preserves inherited `AM_ME`; otherwise the harness name is MAIN's handle. Do not override those environment variables to evade guards.

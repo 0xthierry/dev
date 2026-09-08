@@ -25,7 +25,7 @@ java = "temurin-17.0.19+10"
 dotnet = "8.0.420"
 zig = "latest"
 aws = "latest"
-"github:herdrdev/herdr" = "0.8.2"
+"github:herdrdev/herdr" = "0.9.0"
 
 [settings]
 experimental = false

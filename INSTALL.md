@@ -54,13 +54,14 @@ Use `--dry-run` first when changing the setup flow or validating a host:
 
 1. Shared CLI packages for the selected host
 2. Shared CLI tool config under `configs/cli/`
-3. Shared env, shell, git, SSH, `mise`, and AI CLI setup
+3. Shared env, shell, git, SSH, `mise`, and AI CLI setup, including the pinned `ai-memory` binary and user service
 4. Linux hosts also install and enable Docker
 5. Repo-owned config directories for the selected host
 6. Moshi host integration on hosts that include the `moshi` config target: installs the pinned `moshi-hook`, exposes Herdr at `~/.local/bin/herdr` for SSH probes, opens the Tailscale mosh UDP range with UFW, refreshes hooks for installed/configured agents, and starts the `moshi-hook` user service after pairing
 7. Herdr integrations for installed/configured agents, with the Pi integration loaded from the pinned repository-generated extension
 8. Agent hook dependencies from `configs/agents/hooks`
 9. Agent code review tools from `configs/agents/bin/install-cr-tools.sh`
+10. Claude Code / Codex ai-memory MCP and lifecycle hooks merged into the rendered agent configs. Pi uses the vendored `ai-memory-pi.ts` extension; do not run `ai-memory install-hooks --agent pi --apply`
 
 The setup is intended to be idempotent and non-destructive. Existing unrelated paths are warned about and left in place instead of being overwritten.
 
@@ -90,6 +91,24 @@ For the agent setup, verify:
 ls -la ~/.codex
 ls -la ~/.claude
 ls -la ~/.pi/agent/extensions
+```
+
+For ai-memory, verify:
+
+```bash
+ai-memory --version
+systemctl --user status ai-memory.service   # Linux
+# launchctl print gui/$(id -u)/dev.ai-memory  # macOS
+curl -sS http://127.0.0.1:49374/mcp | head
+ls -la ~/.pi/agent/extensions/ai-memory-pi.ts
+grep -n 'ai-memory' ~/.claude/settings.json ~/.codex/config.toml ~/.codex/hooks.json
+```
+
+Independent clones of one repo still get different project names unless that repo contains `.ai-memory.toml` with a fixed `project`. Example for four `background-coding-agent` checkouts:
+
+```toml
+workspace = "meistrari"
+project = "background-coding-agent"
 ```
 
 For Moshi + Herdr setup, verify:

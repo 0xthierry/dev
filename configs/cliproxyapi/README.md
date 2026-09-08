@@ -148,6 +148,7 @@ do not generate a management key unless the template requests one.
 bash tests/cliproxyapi.test.sh
 bash tests/cliproxy-helper.test.sh
 bash tests/agents-install.test.sh
+bash tests/ai-memory.test.sh
 systemctl --user status cliproxyapi.service  # Linux
 cliproxy check
 ```

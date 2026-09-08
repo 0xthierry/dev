@@ -19,6 +19,8 @@ source "$REPO_ROOT/install/tools.sh"
 source "$REPO_ROOT/install/moshi.sh"
 source "$REPO_ROOT/install/dependencies.sh"
 source "$REPO_ROOT/install/hooks.sh"
+# shellcheck source=install/ai-memory.sh
+source "$REPO_ROOT/install/ai-memory.sh"
 
 HOST_ENV_VARS=()
 # shellcheck disable=SC2034
@@ -152,6 +154,9 @@ run_post_setup_tasks() {
   install_hooks "$REPO_ROOT"
   install_agent_review_tools "$REPO_ROOT"
   install_ghidra_cli_tools
+  # After Claude/Codex/Pi configs and Herdr/Moshi hooks, so ai-memory merges
+  # into the rendered files instead of being overwritten.
+  configure_ai_memory_agents
 }
 
 setup_host_prereqs() { :; }

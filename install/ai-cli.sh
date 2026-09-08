@@ -347,6 +347,11 @@ install_ai_clis() {
   source "$(dirname "${BASH_SOURCE[0]}")/cliproxyapi.sh"
   install_cliproxyapi
 
+  # Shared project memory for Claude Code, Codex, and Pi.
+  # shellcheck source=install/ai-memory.sh
+  source "$(dirname "${BASH_SOURCE[0]}")/ai-memory.sh"
+  install_ai_memory
+
   # Gemini CLI (Google)
   install_npm_global_cli "Gemini CLI" "@google/gemini-cli" "0.56.0"
 
