@@ -2,7 +2,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { createBrowserUseApprovalHandler } from "./approval";
+import { createAutoAcceptBrowserUseApprovalHandler, createBrowserUseApprovalHandler } from "./approval";
+import { BROWSER_USE_COMMAND_COMPLETIONS, BROWSER_USE_COMMAND_USAGE, parseBrowserUseCommand } from "./command";
 import {
   BROWSER_USE_PARAMETERS,
   BROWSER_USE_PROMPT_GUIDELINES,
@@ -35,6 +36,7 @@ export function registerBrowserUseExtension(pi: ExtensionAPI, host: BrowserUseHo
   const paths = host.resolvePaths();
   let runtime: BrowserUseRuntime | undefined;
   let enabled = false;
+  let acceptPermissions = false;
 
   if (registeredApis.has(pi)) return;
   registeredApis.add(pi);
@@ -44,37 +46,46 @@ export function registerBrowserUseExtension(pi: ExtensionAPI, host: BrowserUseHo
     description: "Show Browser Use runtime file availability",
     handler: async (_args, ctx) => {
       if (!ctx.hasUI) return;
-      ctx.ui.notify(JSON.stringify({ enabled, ...paths }, null, 2), paths.available ? "info" : "warning");
+      ctx.ui.notify(JSON.stringify({ enabled, acceptPermissions, ...paths }, null, 2), paths.available ? "info" : "warning");
     },
   });
 
   pi.registerCommand("browser-use", {
     description: "Enable, disable, or check Browser Use for this session (default: off)",
     getArgumentCompletions: (prefix) =>
-      ["on", "off", "status"].filter((value) => value.startsWith(prefix)).map((value) => ({ value, label: value })),
+      BROWSER_USE_COMMAND_COMPLETIONS.filter((value) => value.startsWith(prefix)).map((value) => ({
+        value,
+        label: value,
+      })),
     handler: async (args, ctx) => {
-      const mode = args.trim() || "status";
-      if (!["on", "off", "status"].includes(mode)) {
-        if (ctx.hasUI) ctx.ui.notify("Usage: /browser-use on|off|status", "warning");
+      const command = parseBrowserUseCommand(args);
+      if (command.mode === "invalid") {
+        if (ctx.hasUI) ctx.ui.notify(BROWSER_USE_COMMAND_USAGE, "warning");
         return;
       }
-      if (mode === "on") {
+      if (command.mode === "on") {
         if (!paths.available) {
           if (ctx.hasUI) ctx.ui.notify(paths.reason, "warning");
           return;
         }
         enabled = true;
-      } else if (mode === "off") {
+        acceptPermissions = command.acceptPermissions;
+      } else if (command.mode === "off") {
         enabled = false;
+        acceptPermissions = false;
         const previous = runtime;
         runtime = undefined;
         await previous?.close();
       }
-      if (ctx.hasUI)
-        ctx.ui.notify(
-          `Browser Use is ${enabled ? "on" : "off"}.${mode === "off" ? " JavaScript bindings cleared; the tool remains available." : ""}`,
-          "info",
-        );
+      if (ctx.hasUI) {
+        const extra =
+          command.mode === "off"
+            ? " JavaScript bindings cleared; the tool remains available."
+            : command.mode === "on" && acceptPermissions
+              ? " All browser permission prompts are auto-accepted for this session."
+              : "";
+        ctx.ui.notify(`Browser Use is ${enabled ? "on" : "off"}.${extra}`, "info");
+      }
     },
   });
 
@@ -93,10 +104,12 @@ export function registerBrowserUseExtension(pi: ExtensionAPI, host: BrowserUseHo
       if (!enabled) throw new Error("Browser Use is disabled. Ask the user to enable it with /browser-use on.");
       runtime ??= host.createRuntime(paths);
       const active = runtime;
-      const approve = createBrowserUseApprovalHandler(async (message, approvalSignal) => {
-        if (!ctx.hasUI) return undefined;
-        return ctx.ui.confirm("Browser permission", message, { signal: approvalSignal });
-      });
+      const approve = acceptPermissions
+        ? createAutoAcceptBrowserUseApprovalHandler()
+        : createBrowserUseApprovalHandler(async (message, approvalSignal) => {
+            if (!ctx.hasUI) return undefined;
+            return ctx.ui.confirm("Browser permission", message, { signal: approvalSignal });
+          });
       const result = await active.execute(parseBrowserUseCode(params), signal, approve);
       return {
         content: formatBrowserUseContent(result.content),
@@ -130,6 +143,7 @@ export function registerBrowserUseExtension(pi: ExtensionAPI, host: BrowserUseHo
   pi.on("agent_settled", () => runtime?.endTurn());
   pi.on("session_shutdown", async () => {
     enabled = false;
+    acceptPermissions = false;
     const previous = runtime;
     runtime = undefined;
     await previous?.close();

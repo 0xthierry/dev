@@ -98,11 +98,40 @@ describe("registerBrowserUseExtension", () => {
     // Assert
     expect(completions).toEqual([
       { value: "on", label: "on" },
+      { value: "on --accept-permissions", label: "on --accept-permissions" },
       { value: "off", label: "off" },
     ]);
     expect(fakePi.uiNotifications[0]?.message).toContain("Usage:");
     expect(fakePi.uiNotifications[1]?.message).toContain("off");
     expect(host.createRuntime).not.toHaveBeenCalled();
+  });
+
+  test("on --accept-permissions auto-accepts empty origin elicitations", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const runtime = createRuntime();
+    const host = createHost(runtime);
+    registerBrowserUseExtension(fakePi.pi, host);
+    const request = {
+      message: "Allow Browser Use to access http://127.0.0.1:9?",
+      requestedSchema: { type: "object", properties: {}, additionalProperties: false },
+      _meta: { tool_name: "access_browser_origin", origin: "http://127.0.0.1:9" },
+    };
+
+    // Act
+    await fakePi.runCommand("browser-use", "on --accept-permissions", { hasUI: true });
+    await fakePi.runTool("browser_use", { code: "ok" });
+    const approve = (runtime.execute as ReturnType<typeof mock>).mock.calls[0]?.[2] as
+      | ((params: unknown, signal: AbortSignal) => Promise<{ action: string }>)
+      | undefined;
+
+    // Assert
+    expect(fakePi.uiNotifications[0]?.message).toContain("auto-accepted");
+    expect(approve).toBeTypeOf("function");
+    await expect(approve?.(request, new AbortController().signal)).resolves.toEqual({
+      action: "accept",
+      content: {},
+    });
   });
 
   test("reports missing kernel without exposing browser_use", async () => {

@@ -24,7 +24,13 @@ Use `await agent.documentation.get("<name>")` when one of these setup topics app
 - `chrome-troubleshooting`: read when Chromium browser extension setup, installation, or communication fails
 
 ## Session switch
-`browser_use` remains visible but is disabled by default. The user enables it with `/browser-use on` and disables it with `/browser-use off`; `/browser-use status` reports the state. Do not enable it without the user's instruction. A disabled-tool error does not mean the browser extension is missing: ask the user to enable Browser Use. Turning it off or reloading Pi clears bindings, and a reload starts disabled again. Enabling the tool does not approve website access or bypass browser safety checks.
+`browser_use` stays visible but starts **off**. The user turns it on with `/browser-use on` and off with `/browser-use off`. `/browser-use on --accept-permissions` (alias `--dangerously-accept-permissions`) auto-accepts every browser permission prompt for this session, including origin/CDP and extra form fields. `/browser-use status` reports the state. Do not run `/browser-use on` yourself.
+
+If `browser_use` returns that it is disabled: ask **once** for `/browser-use on`. Then continue the task. Do not ask again on later clicks, navigations, or screenshots in the same session. A disabled-tool error is not a missing extension.
+
+`/browser-use off`, `/reload`, or a crash turns it off again and clears bindings.
+
+`/browser-use on` is the session gate. It is not per-site permission. After it is on, the user's request to open, read, or use a page is consent for that work. Do not ask "may I use the browser?" or "allow this navigation?" for ordinary browsing. Still stop for money, deletion, a login on a different site than the user named, or OS/extension installs.
 
 ## Bootstrap
 These setup details are internal. User-facing progress updates should be less technical in nature. Never mention the kernel, JavaScript sessions, module exports, reading documentation, or loading instructions unless a user is asking for that exact information. If setup or recovery is needed, describe it naturally as connecting to the browser or retrying the browser connection.
@@ -131,7 +137,11 @@ At `turn_ended`, agent-created tabs are automatically closed unless marked as a 
 ## Screenshots and approvals
 Pi preserves returned text and image blocks, including images in error results. However, the upstream runtime discards buffered images when JavaScript throws. For screenshot evidence, use a separate successful screenshot call rather than combining it with later operations that can fail. Use only the screenshot APIs in the selected browser's documentation.
 
-Normal origin approvals use Pi's confirmation UI. Ask for approval through that flow; never bypass it or auto-approve. Strict automatic review is unsupported and fails closed. Report that limitation rather than replacing it with another approval mode or control surface.
+With `/browser-use on` (no extra flag), origin and other kernel permission asks use Pi's confirmation UI. Do not also ask the same question in chat. Do not auto-approve in JavaScript.
+
+With `/browser-use on --accept-permissions`, Pi auto-accepts every kernel elicitation for this session (origin, CDP, extra form fields). Do not wait for a permission dialog. Do not ask the user to click Allow. Do not treat a missing dialog as failure. Do not turn that flag on yourself.
+
+Chrome/Brave/Edge OS dialogs (camera, microphone, location) are still outside Pi. Strict automatic review metadata is not something you forge. Report a real failure instead of switching to agent-browser or Computer Use.
 
 ## Permission categories and available APIs
 These are first-party runtime permission categories, not Pi on/off options or a guarantee that every operation prompts. Existing grants, runtime policy, and the requested operation determine whether approval is needed. Discover capabilities and read their documentation before use; a permission category does not mean its API is exposed in every browser version.
@@ -149,23 +159,26 @@ These are first-party runtime permission categories, not Pi on/off options or a 
 For optional capabilities, first call `browser.capabilities.list()` or `tab.capabilities.list()`, then read the selected capability's `documentation()`. Browser-level viewport control is distinct from tab-level capabilities such as CDP and page assets.
 
 ### Three different kinds of confirmation
-1. **Runtime permission:** access to an origin or a capability from the table above. Pi forwards supported requests to its confirmation UI. The adapter does not add a confirmation before each ordinary read, click, scroll, or text entry.
-2. **Action confirmation:** a consequential operation such as sending a message, submitting a form on the user's behalf, purchasing, deleting data, changing access, or transmitting sensitive information. Follow the selected browser's confirmation policy even when origin access was granted. A click or text entry can perform such an operation.
-3. **Browser-native permission:** Chrome/Brave/Edge dialogs for camera, microphone, location, notifications, and similar features. These are separate from Pi and runtime permissions; follow the documented confirmation policy before accepting them.
+1. **Runtime permission:** access to an origin or a capability from the table above. With plain `/browser-use on`, Pi shows its confirmation UI. With `--accept-permissions`, Pi answers yes to those kernel asks automatically. The adapter does not add a chat confirmation before each ordinary read, click, scroll, or text entry.
+2. **Action confirmation:** a consequential operation such as sending a message, submitting a form on the user's behalf, purchasing, deleting data, changing access, or transmitting sensitive information. Follow the selected browser's confirmation policy even when origin access was granted. A click or text entry can perform such an operation. `--accept-permissions` does not mean the user asked you to send money or delete data without checking.
+3. **Browser-native permission:** Chrome/Brave/Edge dialogs for camera, microphone, location, notifications, and similar features. These are separate from Pi kernel elicitations. `--accept-permissions` does not click those OS/browser dialogs.
 
 ### Routine authorized work: no extra conversational prompts
 When the user has requested browser inspection, testing, or debugging, proceed with the ordinary steps needed for that task without adding a chat-level “May I?” before each step. This includes reading page/AX state, scrolling, ordinary navigation controls, entering generated non-sensitive test data, taking task-relevant screenshots, reading console errors, and read-only CDP debugging observations. Keep CDP and recording capabilities available; a request to reduce prompts is not a request to remove those features.
 
-Do not ask the same permission question in chat and then again through Pi's dialog for the same action and scope. When the runtime requests permission, let its supported Pi confirmation flow present that request. Do not restart the browser session unnecessarily; reuse valid bindings and grants according to runtime policy.
+Do not ask the same permission question in chat and then again through Pi's dialog for the same action and scope. When the runtime requests permission and `--accept-permissions` is off, let Pi's confirmation UI present that request. When it is on, continue; the kernel ask is already accepted.
 
-“Debugging” is not blanket authorization: CDP commands that change state, access sensitive data, transmit information, or perform consequential actions still follow the selected browser's policy. Do not suppress runtime CDP permission requests, auto-approve them based on a debugging label, or treat origin/CDP access as approval for a later consequential action. This guidance removes redundant conversational questions, not first-party permission checks.
+Do not restart the browser session unnecessarily; reuse valid bindings and grants according to runtime policy.
+
+“Debugging” is not blanket authorization for consequential actions in chat. Origin/CDP access is not approval to purchase, delete, or send sensitive data. `--accept-permissions` only auto-answers kernel elicitations; it does not change those chat-level checks.
 
 ### What the Pi adapter supports
-- Simple form-mode approval requests with no data-entry fields: an explicit user confirmation returns accept or decline. With no UI, an aborted request, or an unsupported request, the adapter cancels or fails closed.
-- The adapter does not collect permission-form fields, handle URL-mode elicitation, or perform mandatory automated safety reviews. Report those limits; never forge reviewer metadata or substitute a user confirmation for an automated review.
-- Enabling `/browser-use on` only enables tool execution. It does not grant website access or permission for consequential actions.
-- The adapter does not request persistent grants or expose a remembered-site-permission setting. Do not promise that a grant survives another turn, reload, or browser restart; its reuse is controlled by the first-party runtime and policy.
-- A denied request and an unavailable approval mechanism are different failures. Report which occurred, stop the affected action, and use documented troubleshooting rather than bypassing the check or switching control surfaces.
+- Plain `/browser-use on`: simple form-mode kernel asks go to Pi's confirmation UI (accept or decline). Abort or no UI cancels.
+- `/browser-use on --accept-permissions`: every kernel elicitation is accepted with empty form content for this session. Abort still cancels.
+- The adapter does not fill permission-form field values. Auto-accept sends `{ action: "accept", content: {} }`. It does not forge reviewer metadata.
+- Enabling `/browser-use on` only enables tool execution. `--accept-permissions` additionally auto-answers kernel permission asks. Neither is consent for consequential actions in chat (money, deletion, a different-site login).
+- The adapter does not request persistent grants. `/browser-use off`, `/reload`, or a crash turns auto-accept off.
+- A denied request and an unavailable approval mechanism are different failures. Report which occurred. Do not switch to agent-browser or Computer Use to work around a permission failure.
 
 Only the `browser_use` tool can be used to control this surface. Do not use agent-browser, Playwright MCP, or Computer Use for this surface. References to Playwright mean the documented `tab.playwright` API. The in-app browser is not supported by this integration.
 

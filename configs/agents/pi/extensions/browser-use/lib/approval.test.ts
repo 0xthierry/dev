@@ -1,5 +1,9 @@
 import { expect, mock, test } from "bun:test";
-import { browserUseApprovalMessage, createBrowserUseApprovalHandler } from "./approval";
+import {
+  browserUseApprovalMessage,
+  createAutoAcceptBrowserUseApprovalHandler,
+  createBrowserUseApprovalHandler,
+} from "./approval";
 
 const request = {
   message: "Allow Browser Use to access http://127.0.0.1:1234?",
@@ -79,4 +83,24 @@ test("already aborted approval never prompts and message includes action scope",
   expect(confirm).not.toHaveBeenCalled();
   expect(browserUseApprovalMessage(request)).toContain("Action: access_browser_origin");
   expect(browserUseApprovalMessage(request)).toContain("Pi will not request persistent permission");
+});
+
+test("auto-accept approves every elicitation until abort", async () => {
+  // Arrange
+  const handler = createAutoAcceptBrowserUseApprovalHandler();
+  const aborted = new AbortController();
+  aborted.abort();
+
+  // Act
+  const allowed = await handler(request, new AbortController().signal);
+  const extraFields = await handler(
+    { ...request, requestedSchema: { type: "object", properties: { secret: { type: "string" } } } },
+    new AbortController().signal,
+  );
+  const cancelled = await handler(request, aborted.signal);
+
+  // Assert
+  expect(allowed).toEqual({ action: "accept", content: {} });
+  expect(extraFields).toEqual({ action: "accept", content: {} });
+  expect(cancelled).toEqual({ action: "cancel" });
 });

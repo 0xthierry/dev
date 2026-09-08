@@ -17,6 +17,13 @@ export function createBrowserUseApprovalHandler(confirm: BrowserUseConfirmation)
   };
 }
 
+export function createAutoAcceptBrowserUseApprovalHandler(): BrowserUseApprovalHandler {
+  return async (_params, signal) => {
+    if (signal.aborted) return { action: "cancel" };
+    return { action: "accept", content: {} };
+  };
+}
+
 function record(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
