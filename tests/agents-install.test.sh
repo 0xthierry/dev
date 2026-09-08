@@ -136,6 +136,11 @@ EOF
     assert_file_contains "deploys writing-pr into $target" "$test_home/$target/skills/writing-pr/SKILL.md" 'name: writing-pr'
   done
 
+  [[ "$(readlink "$test_home/.pi/agent/skills/agent-browser")" == "$REPO_ROOT/configs/agents/skills/agent-browser" ]] || fail "missing original agent-browser skill in Pi"
+  cmp -s "$test_home/.pi/agent/skills/agent-browser/SKILL.md" "$REPO_ROOT/configs/agents/skills/agent-browser/SKILL.md" || fail "Pi rewrote agent-browser skill"
+  [[ "$(readlink "$test_home/.pi/agent/skills/control-browser")" == "$REPO_ROOT/configs/agents/pi/extensions/browser-use/skills/control-browser" ]] || fail "missing control-browser skill in Pi"
+  printf 'ok: Pi installs both browser skills without rewriting agent-browser\n'
+
   assert_json "preserves unrelated Pi provider" "$test_home/.pi/agent/models.json" '.providers["local-test"].baseUrl == "http://localhost:1234/v1"'
   assert_json "adds Pi Responses proxy provider" "$test_home/.pi/agent/models.json" '.providers.cliproxyapi.api == "openai-responses"'
   assert_json "maps the complete pinned Codex catalog without duplicates" "$test_home/.pi/agent/models.json" '

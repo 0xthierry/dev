@@ -408,6 +408,11 @@ force_link_pi_skill_entries() {
     force_link_path_replacing_symlink "$source_path" "$target_path" "pi skill $name"
   done < <(find "$SOURCE_SKILLS_DIR" -mindepth 1 -maxdepth 1 \( -type f -o -type d -o -type l \) ! -name '.*' -print0)
 
+  force_link_path_replacing_symlink \
+    "$SOURCE_PI_EXTENSIONS_DIR/browser-use/skills/control-browser" \
+    "$target_skills_dir/control-browser" \
+    "pi skill control-browser"
+
   prune_broken_skill_links "$target_skills_dir"
 }
 

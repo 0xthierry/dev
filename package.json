@@ -26,7 +26,11 @@
       "./configs/agents/pi/extensions/amq-notify",
       "./configs/agents/pi/extensions/herdr-agent-state.ts",
       "./configs/agents/pi/extensions/moshi-hooks.ts",
-      "./configs/agents/pi/extensions/ai-memory-pi.ts"
+      "./configs/agents/pi/extensions/ai-memory-pi.ts",
+      "./configs/agents/pi/extensions/browser-use/index.ts"
+    ],
+    "skills": [
+      "./configs/agents/pi/extensions/browser-use/skills"
     ],
     "prompts": [
       "./configs/agents/pi/prompts"

@@ -24,8 +24,10 @@
       "./amq-notify",
       "./herdr-agent-state.ts",
       "./moshi-hooks.ts",
-      "./ai-memory-pi.ts"
-    ]
+      "./ai-memory-pi.ts",
+      "./browser-use/index.ts"
+    ],
+    "skills": ["./browser-use/skills"]
   },
   "dependencies": {
     "@ff-labs/fff-node": "0.10.6",

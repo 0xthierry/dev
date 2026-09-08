@@ -27,6 +27,7 @@ type PendingEventWaiter = {
 
 export type PiRpcHarness = {
   request: (command: JsonObject, timeoutMs?: number) => Promise<JsonObject>;
+  send: (message: JsonObject) => void;
   waitForEvent: (predicate: (event: JsonObject) => boolean, timeoutMs?: number) => Promise<JsonObject>;
   stop: () => Promise<void>;
   events: JsonObject[];
@@ -91,6 +92,11 @@ function createHarness(child: ChildProcessWithoutNullStreams, startupTimeoutMs: 
     const harness: PiRpcHarness = {
       events,
       stderr: () => stderrChunks.join(""),
+
+      // UI replies are notifications: Pi does not send an RPC response for them.
+      send(message) {
+        child.stdin.write(`${JSON.stringify(message)}\n`);
+      },
 
       request(command, timeoutMs = 10_000) {
         const id = String(command.id ?? `req-${++requestCounter}`);
