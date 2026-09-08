@@ -55,7 +55,6 @@ pi install ./configs/agents/pi/extensions/nested-agents
 pi install ./configs/agents/pi/extensions/lsp
 pi install ./configs/agents/pi/extensions/fff
 pi install ./configs/agents/pi/extensions/amq-notify
-pi install ./configs/agents/pi/extensions/computer-use
 ```
 
 The GitHub/repository-root package installs all extensions declared in the root `package.json`. To install only one extension, clone the repo and use one of the local per-extension install commands above, or install the bundle and use `pi config` to disable resources you do not want.
@@ -84,7 +83,6 @@ For day-to-day use on Thierry's machines, `configs/agents/install.sh` symlinks t
 - [`herdr-agent-state.ts`](./herdr-agent-state.ts) — reports authoritative Pi lifecycle and resumable session identity to its Herdr pane.
 - [`moshi-hooks.ts`](./moshi-hooks.ts) — reports Pi lifecycle and approval state directly to the Moshi daemon socket.
 - [`ai-memory-pi.ts`](./ai-memory-pi.ts) — captures Pi lifecycle events and bridges the local ai-memory HTTP MCP tools into Pi.
-- [`computer-use`](./computer-use/README.md) — copies and organizes OpenAI's signed macOS Computer Use bridge for direct Pi desktop control.
 
 ## Dependencies
 

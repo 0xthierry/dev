@@ -26,8 +26,7 @@
       "./configs/agents/pi/extensions/amq-notify",
       "./configs/agents/pi/extensions/herdr-agent-state.ts",
       "./configs/agents/pi/extensions/moshi-hooks.ts",
-      "./configs/agents/pi/extensions/ai-memory-pi.ts",
-      "./configs/agents/pi/extensions/computer-use"
+      "./configs/agents/pi/extensions/ai-memory-pi.ts"
     ],
     "prompts": [
       "./configs/agents/pi/prompts"

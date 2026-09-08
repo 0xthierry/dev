@@ -24,8 +24,7 @@
       "./amq-notify",
       "./herdr-agent-state.ts",
       "./moshi-hooks.ts",
-      "./ai-memory-pi.ts",
-      "./computer-use"
+      "./ai-memory-pi.ts"
     ]
   },
   "dependencies": {
