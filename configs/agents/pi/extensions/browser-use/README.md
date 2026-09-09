@@ -17,6 +17,12 @@ Default runtime discovery:
 
 Set `PI_BROWSER_USE_RESOURCES_ROOT` to the desktop **Resources directory** for a nonstandard installation. An explicit override does not fall back to another installation. Linux live browser discovery is verified on the development host. macOS path discovery and paths containing spaces have tests, but live macOS operation still needs verification on a Mac. Windows has no default discovery.
 
+## Tool routing
+
+`agent-browser` is the default for browser automation, including CDP attachment to the user's existing browser and logins. Use `browser_use` only when the user explicitly requests `browser_use`, `control-browser`, or the ChatGPT browser extension for the task. Naming a browser, URL, or existing login does not select this extension. Tool availability or `/browser-use on` alone does not select it either.
+
+Preserve the selected browser and tool. Report failures rather than silently switching tools. A disabled extension is not a prohibition on CDP, but never switch tools to bypass an explicit permission denial. This policy changes routing instructions only, not either tool's capabilities or permission checks.
+
 ## Usage
 
 - **Disabled by default.** `browser_use` stays registered and visible while off, but rejects execution without starting a runtime.

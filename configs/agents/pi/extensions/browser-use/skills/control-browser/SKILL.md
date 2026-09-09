@@ -1,11 +1,15 @@
 ---
 name: control-browser
-description: "Control the user's Chromium browser for tasks that depend on existing browser state: tabs, logged-in sessions, or extensions. Prefer purpose-built connectors, APIs, or CLIs when available."
+description: "Use only when the user explicitly requests browser_use, control-browser, or the ChatGPT browser extension for the task. Otherwise use agent-browser for browser automation, including existing Chromium tabs and logins through CDP."
 ---
 
 # Browser
 ## Choose the workflow
-Pi also provides the unchanged `agent-browser` skill. Use it for managed automation sessions, QA/dogfooding, recording, audits, and other CLI workflows that do not require the user's existing browser. Use `control-browser` / `browser_use` for the user's connected Chromium browser, open tabs, and existing logins. These skills coexist; browser_use being available is not a blanket ban on managed agent-browser sessions. If the distinction matters and the user has not specified which browser to use, ask. Do not switch an existing-browser task to agent-browser to work around disabled-tool state, missing authentication, or a permission failure.
+Default to `agent-browser` for browser automation, including the user's existing browser, tabs, and logins through CDP. Use `browser_use` only when the user explicitly requests `browser_use`, `control-browser`, or the ChatGPT browser extension for the task. Naming Chrome, Brave, Edge, an existing login, or a URL does not select this tool.
+
+Tool availability or `/browser-use on` alone does not select `browser_use`. Do not ask to enable it during an `agent-browser` task. Preserve the user's chosen browser and tool; report failures instead of silently switching tools. A disabled extension is not a ban on independently requested CDP work. Never switch tools to bypass an explicit permission denial.
+
+The rest of this skill applies only after the user selects `browser_use`. It describes this extension's APIs, not exclusive ownership of the user's browser.
 
 ## Stop: choose the right surface before any browser action
 Explicit browser intent wins: if the user names Chrome, Brave, Edge, or their browser, or asks to open, show, or navigate to a page; inspect its visual or interactive state; or interact with its UI, continue with Browser and do not substitute a connector.
@@ -14,9 +18,7 @@ Otherwise, treat a URL or open browser tab as context, not browser intent. Earli
 
 Use this skill for those tasks in the user's connected browser: inspecting pages, navigating, testing local apps, clicking, typing, taking screenshots, and reading visible page state.
 
-If the `browser_use` tool is available in the session, treat this skill as mandatory reading before browser work. Open and follow this skill before saying that Browser is unavailable. Do not substitute agent-browser, Playwright MCP, or Computer Use for this surface.
-
-Do not skip this skill just because Computer Use or agent-browser tools are visible. Those are different surfaces.
+Read this skill before using the explicitly requested `browser_use` tool. Do not load it merely because a task needs an existing browser. `agent-browser` has its own skill and supports both managed browsers and CDP attachment; those tasks do not require this extension.
 
 ## Setup Documentation
 Use `await agent.documentation.get("<name>")` when one of these setup topics applies:
@@ -95,7 +97,7 @@ const browser = await agent.browsers.get("extension");
 nodeRepl.write(await browser.documentation());
 ```
 
-If no extension instance is available, tell the user the ChatGPT browser extension must be connected. Do not fall back to agent-browser.
+If no extension instance is available, report that the explicitly requested extension is unavailable. Do not silently switch to agent-browser; the user can explicitly choose that tool instead.
 
 ### The task requires browser interaction, the user does not specify a browser, and the task has a target URL
 When the user supplies a URL or the intended URL can be reasonably inferred, replace the example below with that URL. Continue only with a supported Chromium extension connection; an in-app selection is not supported:
@@ -180,6 +182,6 @@ Do not restart the browser session unnecessarily; reuse valid bindings and grant
 - The adapter does not request persistent grants. `/browser-use off`, `/reload`, or a crash turns auto-accept off.
 - A denied request and an unavailable approval mechanism are different failures. Report which occurred. Do not switch to agent-browser or Computer Use to work around a permission failure.
 
-Only the `browser_use` tool can be used to control this surface. Do not use agent-browser, Playwright MCP, or Computer Use for this surface. References to Playwright mean the documented `tab.playwright` API. The in-app browser is not supported by this integration.
+Only `browser_use` executes the extension APIs documented here. This does not prohibit independently requested `agent-browser` CDP attachment to the same browser. References to Playwright mean the documented `tab.playwright` API, not Playwright MCP. The in-app browser is not supported by this integration.
 
 <!-- BROWSER_SKILL_EOF: This is the complete Browser skill. Do not request additional lines. -->

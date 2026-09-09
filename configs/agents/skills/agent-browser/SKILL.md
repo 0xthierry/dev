@@ -55,11 +55,16 @@ The dashboard runs independently of browser sessions on port 4848 and can also b
 
 ## Local operational guardrails
 
+Default to `agent-browser` for browser automation, including the user's existing browser, tabs, and logins through CDP. Use `browser_use` / `control-browser` only when the user explicitly requests that tool or the ChatGPT browser extension for the task. Naming a browser or needing an existing login does not select the extension. Its availability or `/browser-use on` alone does not change this default; do not ask to enable it during an `agent-browser` task.
+
+Preserve the user's chosen browser and tool. A disabled extension does not prohibit CDP attachment, but never switch tools to bypass an explicit permission denial. Report connection or authentication failures instead of silently switching tools.
+
 For Slack tasks, load the dedicated `agent-slack` skill first and preserve its authorization and `_sent from pi_` footer rules even when using the browser as a fallback.
 
 These repository-specific guardrails supplement the version-matched instructions above. If command syntax differs, follow `agent-browser skills get core` for the installed version.
 
 - Use the current core skill's worktree-scoped named-session workflow: `export AGENT_BROWSER_SESSION="$(agent-browser session id --scope worktree --prefix task)"`. Do not use the shared default session or attach to a user-owned browser unless the task explicitly requires it.
+- A named session does not prove browser isolation: it can attach to a shared browser through CDP. Verify the connection mode before calling it a separate browser or closing it. Use the current core skill's CDP attachment and tab-pinning workflow when sharing a browser.
 - Before using an explicitly requested existing browser, inspect `agent-browser session list`, `agent-browser tab list`, and `agent-browser get url`. Switch tabs by stable ids such as `t10`, never positional integers.
 - Use absolute paths for screenshots, videos, downloads, HARs, and upload inputs. Create destination directories first and verify expected artifacts with `test -s <path>`.
 - An upload command succeeding only proves that the command ran. Verify the page received the file and, when relevant, that the application produced the expected hosted URL or request.

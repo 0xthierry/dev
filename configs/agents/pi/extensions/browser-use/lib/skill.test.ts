@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { BROWSER_USE_PROMPT_GUIDELINES } from "./definitions";
+import { BROWSER_USE_PROMPT_GUIDELINES, BROWSER_USE_PROMPT_SNIPPET } from "./definitions";
+import { browserUseToolDescription } from "./tool";
 
 const skill = readFileSync(new URL("../skills/control-browser/SKILL.md", import.meta.url), "utf8");
+const agentBrowserSkill = readFileSync(new URL("../../../../skills/agent-browser/SKILL.md", import.meta.url), "utf8");
 
 function section(heading: string): string {
   const start = skill.indexOf(heading);
@@ -12,19 +14,33 @@ function section(heading: string): string {
 }
 
 describe("control-browser skill contract", () => {
-  test("allows the original agent-browser skill for separate managed workflows", () => {
-    // Arrange
+  test.each([
+    ["injected guidelines", BROWSER_USE_PROMPT_GUIDELINES.join("\n")],
+    ["tool description", browserUseToolDescription("/test/browser-client.mjs")],
+    ["control-browser skill", skill],
+    ["agent-browser skill", agentBrowserSkill],
+  ])("%s preserves explicit extension opt-in and agent-browser CDP access", (_name, guidance) => {
+    expect(guidance).toContain("only when the user explicitly requests");
+    expect(guidance).toContain("agent-browser");
+    expect(guidance).toContain("CDP");
+    expect(guidance).toContain("/browser-use on");
+    expect(guidance).toContain("alone");
+    expect(guidance).toContain("explicit permission denial");
+    expect(guidance).not.toContain("For existing-browser tasks, do not substitute agent-browser");
+    expect(guidance).not.toContain("Do not use agent-browser, Playwright MCP, or Computer Use for this surface");
+    expect(guidance).not.toContain("mandatory reading before browser work");
+    expect(guidance).not.toContain("separate managed automation and QA sessions");
+  });
+
+  test("discovery and routing distinguish browser target from tool selection", () => {
     const guidance = section("## Choose the workflow");
-
-    // Act
-    const promptGuidance = BROWSER_USE_PROMPT_GUIDELINES.join("\n");
-
-    // Assert
-    expect(guidance).toContain("unchanged `agent-browser` skill");
-    expect(guidance).toContain("not a blanket ban");
-    expect(guidance).toContain("Do not switch an existing-browser task");
-    expect(promptGuidance).toContain("separate managed automation and QA sessions");
-    expect(promptGuidance).not.toContain("while browser_use is available");
+    expect(skill.split("---")[1]).toContain("Use only when the user explicitly requests");
+    expect(BROWSER_USE_PROMPT_SNIPPET).toContain("only when the user explicitly requests");
+    expect(BROWSER_USE_PROMPT_SNIPPET).toContain("otherwise use agent-browser");
+    expect(guidance).toContain("Naming Chrome, Brave, Edge, an existing login, or a URL does not select this tool");
+    expect(guidance).toContain("Do not ask to enable it during an `agent-browser` task");
+    expect(guidance).toContain("The rest of this skill applies only after the user selects `browser_use`");
+    expect(agentBrowserSkill).toContain("A named session does not prove browser isolation");
   });
 
   test("distinguishes user discovery, claiming, and playback evidence", () => {
