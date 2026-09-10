@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
+import { Agent } from "undici";
 import { loadConfig, normalizedString } from "../config";
 import { type CookieMap, getGoogleCookies } from "./chrome-cookies";
 
@@ -14,6 +15,9 @@ const USER_AGENT =
 const MODEL_HEADER_NAME = "x-goog-ext-525001261-jspb";
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 const EMPTY_TEXT = "";
+// Gemini can return headers larger than Node fetch's default 16 KiB limit.
+// Keep a bounded, provider-local limit; do not change the global dispatcher.
+const GEMINI_FETCH_OPTIONS = { dispatcher: new Agent({ maxHeaderSize: 128 * 1024 }) };
 const MODEL_HEADERS: Record<string, string> = {
   "gemini-3-pro": '[1,null,null,null,"9d8ca3786ebdfbea",null,null,0,[4]]',
   "gemini-2.5-pro": '[1,null,null,null,"4af6c7f5da75d65d",null,null,0,[4]]',
@@ -83,6 +87,7 @@ async function runGeminiWebOnce(
   params.set("f.req", buildFReqPayload(prompt, uploaded));
 
   const response = await fetch(GEMINI_STREAM_GENERATE_URL, {
+    ...GEMINI_FETCH_OPTIONS,
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded;charset=utf-8",
@@ -125,6 +130,7 @@ async function fetchWithCookieRedirects(
   let current = url;
   for (let i = 0; i <= maxRedirects; i++) {
     const response = await fetch(current, {
+      ...GEMINI_FETCH_OPTIONS,
       headers: { "user-agent": USER_AGENT, cookie: cookieHeader },
       redirect: "manual",
       signal,
@@ -150,6 +156,7 @@ async function uploadFile(
   const buffer = readFileSync(filePath);
   const name = basename(filePath);
   const response = await fetch(`${GEMINI_UPLOAD_URL}/${GEMINI_UPLOAD_PUSH_ID}?upload_protocol=raw`, {
+    ...GEMINI_FETCH_OPTIONS,
     method: "POST",
     headers: {
       "content-type": "application/octet-stream",

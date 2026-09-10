@@ -57,7 +57,7 @@ function appendFallbackFailure(result: ExtractedContent): ExtractedContent {
 export function createDefaultContentExtractors(): ContentExtractor[] {
   return [
     githubExtractor,
-    youtubeTranscriptExtractor,
+    createYouTubeTranscriptExtractor(),
     authenticatedHttpExtractor,
     exaContentsExtractor,
     tavilyExtractExtractor,
@@ -81,29 +81,62 @@ const githubExtractor: ContentExtractor = {
   },
 };
 
-const youtubeTranscriptExtractor: ContentExtractor = {
-  name: "youtube-transcript",
-  supports: (target) => target.requestKind === "content" && target.youtube.isYouTube && isYouTubeEnabled(),
-  async extract(target, signal) {
-    try {
-      const youtube = await extractYouTube(target.url, signal, target.options.prompt, target.options.model);
-      if (youtube) return { status: "success", result: youtube };
-    } catch (err) {
-      if (isAbortError(err)) return { status: "terminal", result: abortedResult(target.url) };
-    }
-    const message = "Could not extract YouTube video content. Sign into gemini.google.com in Brave or Chromium.";
-    return {
-      status: "terminal",
-      result: {
-        url: target.url,
-        title: "",
-        content: "",
-        error: message,
-        errorDetails: authRequiredError(target.url, message),
-      },
-    };
-  },
-};
+function safeYouTubeFailureMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "Unknown provider error";
+  const safeMessage =
+    message
+      .split(/[\r\n]/, 1)[0]
+      .replace(/https?:\/\/\S+/gi, "[URL redacted]")
+      .replace(
+        /\b(?:authorization|proxy-authorization|set-cookie|cookie|[\w-]*(?:token|secret|password|api[_-]?key)|__Secure-[\w-]+)\b\s*[:=].*/gi,
+        "[credentials redacted]",
+      )
+      .replace(/\b(?:Bearer|Basic)\s+\S+/gi, "[credentials redacted]")
+      .slice(0, 500)
+      .trim() || "Unknown provider error";
+  const cause = error instanceof Error ? error.cause : undefined;
+  const code = cause && typeof cause === "object" && "code" in cause ? cause.code : undefined;
+  return typeof code === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? `${safeMessage} (${code})` : safeMessage;
+}
+
+export function createYouTubeTranscriptExtractor(
+  extractTranscript: typeof extractYouTube = extractYouTube,
+): ContentExtractor {
+  return {
+    name: "youtube-transcript",
+    supports: (target) => target.requestKind === "content" && target.youtube.isYouTube && isYouTubeEnabled(),
+    async extract(target, signal) {
+      try {
+        const youtube = await extractTranscript(target.url, signal, target.options.prompt, target.options.model);
+        if (youtube) return { status: "success", result: youtube };
+      } catch (err) {
+        if (isAbortError(err)) return { status: "terminal", result: abortedResult(target.url) };
+        const message = `Could not extract YouTube video content: ${safeYouTubeFailureMessage(err)}`;
+        return {
+          status: "terminal",
+          result: {
+            url: target.url,
+            title: "",
+            content: "",
+            error: message,
+            errorDetails: { ...fetchFailedError(target.url, message), whatHappened: message },
+          },
+        };
+      }
+      const message = "Could not extract YouTube video content. Sign into gemini.google.com in Brave or Chromium.";
+      return {
+        status: "terminal",
+        result: {
+          url: target.url,
+          title: "",
+          content: "",
+          error: message,
+          errorDetails: authRequiredError(target.url, message),
+        },
+      };
+    },
+  };
+}
 
 const authenticatedHttpExtractor: ContentExtractor = {
   name: "authenticated-http",
