@@ -23,6 +23,7 @@ HOST_CONFIG_TARGETS=(
   ghostty
   herdr
   agents
+  moshi
   brave
   browser-diagnostics
 )

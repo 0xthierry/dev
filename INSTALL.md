@@ -46,7 +46,7 @@ Use `--dry-run` first when changing the setup flow or validating a host:
 - macOS setup
 - Installs the shared CLI layer through Homebrew
 - Uses OrbStack as the container engine and installs the `docker` CLI through Homebrew
-- Applies `nvim` and `agents`
+- Applies `nvim`, `agents`, and Moshi host integration
 
 ## What Setup Applies
 
@@ -57,7 +57,7 @@ Use `--dry-run` first when changing the setup flow or validating a host:
 3. Shared env, shell, git, SSH, `mise`, and AI CLI setup, including the pinned `ai-memory` binary and user service
 4. Linux hosts also install and enable Docker
 5. Repo-owned config directories for the selected host
-6. Moshi host integration on hosts that include the `moshi` config target: installs the pinned `moshi-hook`, exposes Herdr at `~/.local/bin/herdr` for SSH probes, opens the Tailscale mosh UDP range with UFW, refreshes hooks for installed/configured agents, and starts the `moshi-hook` user service after pairing
+6. Moshi host integration on hosts that include the `moshi` config target: installs the pinned `moshi-hook`, allows inbound Tailscale connections, exposes Herdr at `~/.local/bin/herdr` for SSH probes, opens the Tailscale mosh UDP range with UFW, refreshes hooks for installed/configured agents, and starts the `moshi-hook` user service after pairing
 7. Herdr integrations for installed/configured agents, with the Pi integration loaded from the pinned repository-generated extension
 8. Agent hook dependencies from `configs/agents/hooks`
 9. Agent code review tools from `configs/agents/bin/install-cr-tools.sh`
@@ -72,6 +72,7 @@ Run the Bash checks after changing the setup code:
 ```bash
 bash -n setup.sh install/*.sh install/hosts/*.sh
 shellcheck setup.sh install/*.sh install/hosts/*.sh
+bash tests/moshi.test.sh
 ./setup.sh dev --dry-run
 ./setup.sh omarchy --dry-run
 ./setup.sh macbook --dry-run
@@ -118,7 +119,9 @@ moshi-hook version
 amq --version
 herdr --version
 ls -la ~/.local/bin/herdr
-systemctl --user status moshi-hook
+systemctl --user status moshi-hook                        # Linux
+launchctl print gui/$(id -u)/app.getmoshi.moshi-hook     # macOS
+moshi-hook probe
 moshi-hook status
 herdr integration status
 herdr session list --json

@@ -9,6 +9,25 @@ trap 'rm -rf "$TEMP"' EXIT
 
 fail() { printf 'not ok: %s\n' "$1" >&2; exit 1; }
 
+# Arrange: exercise the checked-in package contract with the Bun runtime that
+# setup uses, without installing dependencies or changing the repository.
+REAL_BUN="$(command -v bun)" || fail "Bun is required to verify the frozen lockfile"
+LOCKFILE_FIXTURE="$TEMP/lockfile compatibility"
+mkdir -p "$LOCKFILE_FIXTURE"
+cp "$ROOT/configs/browser-diagnostics/package.json" "$ROOT/configs/browser-diagnostics/bun.lock" "$LOCKFILE_FIXTURE/"
+cp "$LOCKFILE_FIXTURE/bun.lock" "$TEMP/bun.lock.before"
+
+# Act
+(
+  cd "$LOCKFILE_FIXTURE"
+  "$REAL_BUN" install --lockfile-only --frozen-lockfile --ignore-scripts > "$TEMP/lockfile.log"
+) || fail "checked-in frozen lockfile is incompatible with the setup Bun runtime"
+
+# Assert
+cmp -s "$TEMP/bun.lock.before" "$LOCKFILE_FIXTURE/bun.lock" || fail "frozen install changed the checked-in package contract"
+[[ ! -e "$LOCKFILE_FIXTURE/node_modules" ]] || fail "lockfile verification installed dependencies"
+printf 'ok: checked-in frozen lockfile is accepted without dependency writes\n'
+
 # Arrange: a separate package and HOME exercise the installer without touching
 # real browser state or downloading dependencies. Spaces test command quoting.
 export REPO_ROOT="$TEMP/repo with spaces"

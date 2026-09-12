@@ -13,7 +13,7 @@ import { closeSync, openSync, readSync } from "node:fs"
 import { spawnSync } from "node:child_process"
 
 // Kept for debugging / manual replay through the CLI adapter above.
-const helperBinary = "/home/thierry/.local/bin/moshi-hook"
+const helperBinary = "/Users/thierry/.local/bin/moshi-hook"
 
 const agentSource = "pi"
 const agentDisplayName = "Pi"

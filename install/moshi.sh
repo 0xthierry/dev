@@ -150,6 +150,21 @@ expose_herdr_for_moshi_probe() {
   link_or_replace_path "$herdr_bin" "$HOME/.local/bin/herdr" "herdr Moshi probe binary"
 }
 
+configure_moshi_tailscale_incoming() {
+  if ! check_installed tailscale; then
+    log_item "Tailscale not available, skipping inbound connection setting"
+    return 0
+  fi
+
+  run_cmd tailscale set --shields-up=false
+  if (( ! ${DRY_RUN:-0} )) \
+    && ! tailscale debug prefs 2>/dev/null | jq -e '.ShieldsUp == false' >/dev/null; then
+    printf 'error: Tailscale still blocks incoming connections after disabling Shields Up\n' >&2
+    return 1
+  fi
+  log_item "Tailscale incoming connections: enabled"
+}
+
 configure_mosh_firewall() {
   if [[ "$(uname -s)" == "Darwin" ]]; then
     return 0
@@ -226,6 +241,113 @@ configure_moshi_agent_hooks() {
   done
 }
 
+configure_moshi_macos_service() {
+  local moshi_hook_bin="$1"
+  local domain=""
+  local service=""
+  domain="gui/$(id -u)"
+  service="$domain/app.getmoshi.moshi-hook"
+  local plist="$HOME/Library/LaunchAgents/app.getmoshi.moshi-hook.plist"
+
+  # Retain any legacy Homebrew package, but stop its service so only the
+  # repository-pinned ~/.local binary owns the daemon.
+  if check_installed brew \
+    && brew list --formula --versions moshi-hook >/dev/null 2>&1 \
+    && brew services list 2>/dev/null | awk '$1 == "moshi-hook" && $2 != "none" { found = 1 } END { exit !found }'; then
+    run_cmd brew services stop moshi-hook
+  fi
+
+  if (( ${DRY_RUN:-0} )); then
+    log_item "[dry-run] Install and start pinned Moshi macOS LaunchAgent: $plist"
+    return 0
+  fi
+
+  python3 - "$HOME" "$moshi_hook_bin" <<'PY'
+import os
+import pathlib
+import plistlib
+import sys
+import tempfile
+
+home = pathlib.Path(sys.argv[1]).absolute()
+binary = sys.argv[2]
+support = home / "Library/Application Support/Moshi"
+plist = home / "Library/LaunchAgents/app.getmoshi.moshi-hook.plist"
+support.mkdir(parents=True, exist_ok=True)
+plist.parent.mkdir(parents=True, exist_ok=True)
+
+service = {
+    "Label": "app.getmoshi.moshi-hook",
+    "ProgramArguments": [binary, "serve"],
+    "WorkingDirectory": str(support),
+    "EnvironmentVariables": {
+        "HOME": str(home),
+        "PATH": ":".join([
+            str(home / ".local/bin"),
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/usr/bin",
+            "/bin",
+            "/usr/sbin",
+            "/sbin",
+        ]),
+    },
+    "Disabled": False,
+    "RunAtLoad": True,
+    "KeepAlive": True,
+    "ThrottleInterval": 5,
+    "StandardOutPath": str(support / "launchd.log"),
+    "StandardErrorPath": str(support / "launchd.log"),
+}
+content = plistlib.dumps(service)
+if not plist.is_symlink() and plist.is_file() and plist.read_bytes() == content:
+    plist.chmod(0o600)
+else:
+    if plist.exists() and plist.is_dir() and not plist.is_symlink():
+        sys.exit("error: Moshi LaunchAgent destination is a directory: " + str(plist))
+    fd, temporary = tempfile.mkstemp(prefix=".moshi-hook-", dir=plist.parent)
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(content)
+            os.fchmod(stream.fileno(), 0o600)
+        os.replace(temporary, plist)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+PY
+
+  launchctl enable "$service"
+  if launchctl print "$service" >/dev/null 2>&1; then
+    launchctl kickstart -k "$service"
+    log_item "moshi-hook: macOS LaunchAgent restarted"
+  else
+    launchctl bootstrap "$domain" "$plist"
+    log_item "moshi-hook: macOS LaunchAgent installed and started"
+  fi
+}
+
+wait_for_moshi_hook_service() {
+  local moshi_hook_bin="$1"
+  local status_json=""
+  local attempt=0
+
+  if (( ${DRY_RUN:-0} )); then
+    return 0
+  fi
+
+  for (( attempt = 0; attempt < 20; attempt += 1 )); do
+    status_json="$("$moshi_hook_bin" probe --json 2>/dev/null || true)"
+    if jq -e '.running == true and .gateway == true' >/dev/null 2>&1 <<< "$status_json"; then
+      log_item "moshi-hook: daemon and gateway are ready"
+      return 0
+    fi
+    sleep 0.25
+  done
+
+  printf 'error: moshi-hook service did not become ready: %s\n' "${status_json:-no probe response}" >&2
+  return 1
+}
+
 configure_moshi_hook_service() {
   local moshi_hook_bin=""
 
@@ -235,12 +357,8 @@ configure_moshi_hook_service() {
   fi
 
   if [[ "$(uname -s)" == "Darwin" ]]; then
-    # Retain any legacy Homebrew package, but stop its service so only the
-    # pinned ~/.local binary owns the launchd daemon.
-    if check_installed brew && brew list --formula --versions moshi-hook >/dev/null 2>&1; then
-      run_cmd brew services stop moshi-hook
-    fi
-    run_cmd "$moshi_hook_bin" service install
+    configure_moshi_macos_service "$moshi_hook_bin"
+    wait_for_moshi_hook_service "$moshi_hook_bin"
     return 0
   fi
 
@@ -253,6 +371,7 @@ configure_moshi_hook_service() {
   if (( MOSHI_HOOK_CHANGED )); then
     run_cmd systemctl --user restart moshi-hook.service
   fi
+  wait_for_moshi_hook_service "$moshi_hook_bin"
 }
 
 apply_moshi() {
@@ -261,6 +380,7 @@ apply_moshi() {
   log_section "Moshi"
   install_moshi_hook_binary
   expose_herdr_for_moshi_probe
+  configure_moshi_tailscale_incoming
   configure_mosh_firewall
 
   if ! pairing_state="$(moshi_hook_pairing_state)"; then
