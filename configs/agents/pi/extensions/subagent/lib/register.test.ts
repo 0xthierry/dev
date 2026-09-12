@@ -1,6 +1,8 @@
 import { describe, expect, mock, test } from "bun:test";
 import { createFakePi } from "../../_shared/testing/fake-pi";
 import {
+  deliverRootAgentMessage,
+  formatRootAgentMessage,
   formatRootFinalAnswer,
   hasChildLaunchEnvironment,
   PARENT_ORCHESTRATION_GUIDANCE,
@@ -47,6 +49,37 @@ describe("registerSubagentExtension", () => {
     expect(message).not.toContain("/root");
     expect(message).toContain("[REDACTED]");
     expect(message).toContain(notification.artifactReference);
+  });
+
+  test("delivers an attributed subagent reply as a steering message that wakes an idle root", () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const redact = createEnvironmentRedactor({ API_KEY: "secret-value" });
+    const notification = {
+      senderPath: "/root/advisor-secret-value",
+      taskName: "advisor-secret-value",
+      message: "Question with secret-value",
+    };
+
+    // Act
+    deliverRootAgentMessage(fakePi.pi, notification, redact);
+
+    // Assert
+    expect(fakePi.sentMessages).toEqual([
+      {
+        message: {
+          customType: "subagent-message",
+          content: formatRootAgentMessage(notification, redact),
+          display: false,
+        },
+        options: { deliverAs: "steer", triggerTurn: true },
+      },
+    ]);
+    const delivered = fakePi.sentMessages[0]?.message as { content?: string } | undefined;
+    expect(delivered?.content).not.toContain("secret-value");
+    expect(delivered?.content).toContain("Message Type: SUBAGENT_MESSAGE");
+    expect(delivered?.content).toContain("Task name: advisor-[REDACTED]");
+    expect(delivered?.content).toContain("Sender: /root/advisor-[REDACTED]");
   });
 
   test("registers exactly seven stable tools and lifecycle handlers", () => {

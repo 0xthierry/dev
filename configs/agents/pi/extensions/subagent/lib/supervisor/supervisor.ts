@@ -33,6 +33,7 @@ import {
 } from "./limits";
 import {
   AgentMailbox,
+  DEFAULT_MAILBOX_LIMITS,
   FINAL_ANSWER_MESSAGE_TYPE,
   type FinalAnswerNotification,
   formatFinalAnswerMailMessage,
@@ -46,6 +47,7 @@ import {
   type AssignmentRecord,
   RegistryError,
 } from "./registry";
+import { type AgentReplyNotification, formatAgentReplyMessage } from "./reply";
 import {
   AgentScheduler,
   type ResidentEvictionOutcome,
@@ -122,6 +124,7 @@ export interface SupervisorRuntime {
   createProcess(request: CreateSupervisorProcessRequest): SupervisorAgentProcess;
   reportAgentActivity?(agentPath: string, activity: AgentActivity | undefined): void;
   deliverRootCompletion?(notification: FinalAnswerNotification): void | Promise<void>;
+  deliverRootMessage?(notification: AgentReplyNotification): void | Promise<void>;
   journal: SupervisorJournalPort;
   artifacts: SupervisorArtifactPort;
 }
@@ -156,6 +159,12 @@ export interface SendAgentRequest {
   signal?: AbortSignal;
 }
 
+export interface ReplyAgentRequest {
+  senderPath: string;
+  message: string;
+  signal?: AbortSignal;
+}
+
 export interface AgentOperationResult {
   agentPath: string;
   agentId: string;
@@ -169,6 +178,11 @@ export interface SendAgentResult {
   agentId: string;
   delivery: "steered" | "queued";
   mailId?: string;
+}
+
+export interface ReplyAgentResult {
+  parentPath: string;
+  delivery: "steered" | "queued";
 }
 
 export interface WaitAgentRequest {
@@ -262,6 +276,7 @@ export class SupervisorError extends Error {
 export interface AgentSupervisor {
   spawn(request: SpawnAgentRequest): Promise<AgentOperationResult>;
   send(request: SendAgentRequest): Promise<SendAgentResult>;
+  reply(request: ReplyAgentRequest): Promise<ReplyAgentResult>;
   followup(request: FollowupAgentRequest): Promise<AgentOperationResult>;
   wait(request: WaitAgentRequest): Promise<WaitAgentResult>;
   interrupt(target: string, signal?: AbortSignal): Promise<AgentListEntry>;
@@ -377,6 +392,49 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
       mailId: mail.id,
     });
     return { agentPath: record.agentPath, agentId: record.agentId, delivery: "queued", mailId: mail.id };
+  }
+
+  async reply(request: ReplyAgentRequest): Promise<ReplyAgentResult> {
+    this.requireOpen();
+    throwIfAborted(request.signal);
+    requireMessage(request.message, "reply message");
+    const sender = this.registry.resolve(request.senderPath);
+    this.requireNotClosing(sender);
+    const parentPath = sender.parentPath;
+    const messageLimit = this.options.mailboxLimits?.maxMessageBytes ?? DEFAULT_MAILBOX_LIMITS.maxMessageBytes;
+    if (Buffer.byteLength(request.message, "utf8") > messageLimit) {
+      throw new SupervisorError("invalid_message", `Reply message exceeds ${messageLimit} UTF-8 bytes`);
+    }
+    const notification = { senderPath: sender.agentPath, taskName: sender.taskName, message: request.message };
+
+    if (parentPath === "/root") {
+      const admission = this.mailbox.reserve(sender.agentPath, parentPath, request.message);
+      try {
+        if (!this.runtime.deliverRootMessage) {
+          throw new SupervisorError("process_unavailable", "Root message delivery is unavailable");
+        }
+        await this.runtime.deliverRootMessage({ ...notification, message: this.redact(notification.message) });
+        return { parentPath, delivery: "steered" };
+      } finally {
+        this.mailbox.release(admission);
+      }
+    }
+
+    const parentMessage = formatAgentReplyMessage(redactStringValues(notification, this.redact));
+    const parentMessageLimit = this.options.mailboxLimits?.maxMessageBytes ?? DEFAULT_MAILBOX_LIMITS.maxMessageBytes;
+    if (Buffer.byteLength(parentMessage, "utf8") > parentMessageLimit) {
+      throw new SupervisorError(
+        "invalid_message",
+        `Attributed reply exceeds the parent mailbox limit of ${parentMessageLimit} UTF-8 bytes`,
+      );
+    }
+    const delivered = await this.send({
+      senderPath: sender.agentPath,
+      target: parentPath,
+      message: parentMessage,
+      signal: request.signal,
+    });
+    return { parentPath, delivery: delivered.delivery };
   }
 
   async followup(request: FollowupAgentRequest): Promise<AgentOperationResult> {

@@ -27,6 +27,8 @@ const toolNames = [
   "agent_close",
 ] as const;
 
+const childToolNames = [...toolNames.slice(0, 2), "agent_reply", ...toolNames.slice(2)];
+
 type JsonObject = Record<string, unknown>;
 
 describe("persistent subagent Pi RPC E2E", () => {
@@ -154,6 +156,129 @@ describe("persistent subagent Pi RPC E2E", () => {
     );
     expect(harness.stderr()).toBe("");
   }, 130_000);
+
+  test("delivers a child's question to the active main and its answer back through followup", async () => {
+    // Arrange
+    const fixture = await createFixture();
+    const question = "REPLY-QUESTION-COMPATIBILITY-73D2";
+    const answer = "PRESERVE-COMPATIBILITY-ANSWER-92B1";
+    const harness = await startHarness(
+      fixture,
+      {
+        0: [
+          toolStep("agent_spawn", {
+            task_name: "consultant",
+            subagent_type: "worker",
+            prompt: "Ask your parent a compatibility question, then report that you need an answer.",
+            execution: { effort: "off" },
+          }),
+          toolStep("agent_wait", { targets: ["/root/consultant"], timeout_seconds: 30 }),
+          toolStep("agent_followup", { target: "/root/consultant", message: answer }),
+          toolStep("agent_wait", { targets: ["/root/consultant"], timeout_seconds: 30 }),
+          { contextEcho: { sentinel: question, prefix: "MAIN_RECEIVED_QUESTION" } },
+        ],
+      },
+      { 0: 0, 1: 0 },
+      true,
+      [],
+      {
+        "/root/consultant": [
+          toolStep("agent_reply", { message: question }),
+          { text: "Blocked on the parent's compatibility decision." },
+          { contextEcho: { sentinel: answer, prefix: "CHILD_RECEIVED_ANSWER" } },
+        ],
+      },
+    );
+
+    // Act
+    await harness.request({ type: "prompt", message: "Run the two-way consultation." });
+    const end = await harness.waitForEvent((event) => event.type === "agent_end", 60_000);
+    const sessionText = await readSessionText(fixture.piAgentDir);
+
+    // Assert
+    expect(eventText(end)).toContain(`MAIN_RECEIVED_QUESTION ${question}`);
+    const messages = harness.events.filter(
+      (event) => event.type === "message_end" && JSON.stringify(event).includes('"customType":"subagent-message"'),
+    );
+    expect(messages).toHaveLength(1);
+    expect(JSON.stringify(messages)).toContain("/root/consultant");
+    expect(JSON.stringify(messages)).toContain(question);
+    expect(JSON.stringify(messages)).not.toContain("Message Type: FINAL_ANSWER");
+    expect(sessionText).toContain('"toolName":"agent_reply"');
+    expect(sessionText).toContain(`CHILD_RECEIVED_ANSWER ${answer}`);
+    expect(sessionText).not.toMatch(/PI_SUBAGENT_IPC_TOKEN|control\.sock/);
+    expect(harness.stderr()).toBe("");
+  }, 70_000);
+
+  test("a reply wakes an idle main and receives its answer while the child is still running", async () => {
+    // Arrange
+    const fixture = await createFixture();
+    const question = "IDLE-MAIN-REPLY-SENTINEL-21D4";
+    const answer = "LIVE-PARENT-ANSWER-82C4";
+    const gatePath = join(fixture.projectRoot, "release-reply");
+    const completionGate = join(fixture.projectRoot, "release-completion");
+    const gateScript = (path: string) => `const fs = require('node:fs'); const path = ${JSON.stringify(path)};
+      const timer = setTimeout(() => process.exit(1), 60000);
+      const watcher = fs.watch(${JSON.stringify(fixture.projectRoot)}, () => {
+        if (fs.existsSync(path)) { clearTimeout(timer); watcher.close(); }
+      });
+      if (fs.existsSync(path)) { clearTimeout(timer); watcher.close(); }`;
+    const harness = await startHarness(
+      fixture,
+      {
+        0: [
+          toolStep("agent_spawn", {
+            task_name: "idle-replier",
+            subagent_type: "worker",
+            prompt: "Wait for the fixture gate, then message your parent.",
+            execution: { effort: "off" },
+          }),
+          { text: "MAIN_IS_IDLE_BEFORE_REPLY" },
+          toolStep("agent_send", { target: "/root/idle-replier", message: answer }),
+          toolStep("bash", { command: `touch ${shellQuote(completionGate)}` }),
+          toolStep("agent_wait", { targets: ["/root/idle-replier"], timeout_seconds: 30 }),
+          { contextEcho: { sentinel: question, prefix: "MAIN_WOKE_FOR_REPLY" } },
+        ],
+      },
+      { 0: 0, 1: 0 },
+      true,
+      [],
+      {
+        "/root/idle-replier": [
+          toolStep("bash", { command: `node -e ${shellQuote(gateScript(gatePath))}` }),
+          toolStep("agent_reply", { message: question }),
+          toolStep("bash", { command: `node -e ${shellQuote(gateScript(completionGate))}` }),
+          { contextEcho: { sentinel: answer, prefix: "LIVE_CHILD_RECEIVED_ANSWER" } },
+        ],
+      },
+    );
+
+    // Act
+    await harness.request({ type: "prompt", message: "Start the idle reply scenario." });
+    const firstEnd = await harness.waitForEvent((event) => event.type === "agent_end", 30_000);
+    await writeFile(gatePath, "reply now");
+    const replyEnd = await harness.waitForEvent(
+      (event) => event.type === "agent_end" && eventText(event).includes(`MAIN_WOKE_FOR_REPLY ${question}`),
+      40_000,
+    );
+
+    // Assert
+    expect(eventText(firstEnd)).toContain("MAIN_IS_IDLE_BEFORE_REPLY");
+    expect(eventText(replyEnd)).toContain(`MAIN_WOKE_FOR_REPLY ${question}`);
+    expect(harness.events.filter((event) => event.type === "agent_start")).toHaveLength(2);
+    const toolEnds = harness.events.filter((event) => event.type === "tool_execution_end");
+    expect(toolEvent(toolEnds, "agent_send")).toContain('"delivery":"steered"');
+    expect(toolEvent(toolEnds, "agent_wait")).toContain(`LIVE_CHILD_RECEIVED_ANSWER ${answer}`);
+    const sendIndex = harness.events.findIndex(
+      (event) => event.type === "tool_execution_end" && event.toolName === "agent_send",
+    );
+    const finalIndex = harness.events.findIndex(isFinalAnswerEvent);
+    expect(finalIndex).toBeGreaterThan(sendIndex);
+    const sessionText = await readSessionText(fixture.piAgentDir);
+    expect(sessionText).toContain('"toolName":"agent_reply"');
+    expect(sessionText).toContain(`LIVE_CHILD_RECEIVED_ANSWER ${answer}`);
+    expect(harness.stderr()).toBe("");
+  }, 80_000);
 
   test("retrieves the omitted head of a greater-than-12-KiB artifact through agent_wait pagination", async () => {
     // Arrange
@@ -363,7 +488,7 @@ describe("persistent subagent Pi RPC E2E", () => {
       ],
       "/root/coordinator/leaf": [
         { text: `Nested leaf completion reached its direct parent: ${leafPayloadSentinel}` },
-        { text: "Nested leaf mail received." },
+        { text: `Nested leaf mail received; completion: ${leafPayloadSentinel}` },
       ],
     };
     const harness = await startHarness(fixture, plans, { 0: 0, 1: 0 }, true, [], promptPlans);
@@ -392,6 +517,80 @@ describe("persistent subagent Pi RPC E2E", () => {
     expect(harness.stderr()).toBe("");
   }, 130_000);
 
+  test("routes a nested reply to its direct subagent parent without direct root message delivery", async () => {
+    // Arrange
+    const fixture = await createFixture();
+    await writeFile(
+      join(fixture.projectRoot, "pi-subagent.json"),
+      JSON.stringify({ runtime: { maxActiveAgents: 3, maxResidentAgents: 6, maxDepth: 2 } }),
+    );
+    const question = "NESTED-REPLY-QUESTION-61A2";
+    const harness = await startHarness(
+      fixture,
+      {
+        0: [
+          toolStep("agent_spawn", {
+            task_name: "reply-parent",
+            subagent_type: "worker",
+            prompt: "Delegate to a leaf and read its question.",
+            execution: { effort: "off" },
+          }),
+          toolStep("agent_wait", { targets: ["/root/reply-parent"], timeout_seconds: 30 }),
+          { text: "Nested reply routing complete." },
+        ],
+      },
+      { 0: 0, 1: 0, 2: 0 },
+      true,
+      [],
+      {
+        "/root/reply-parent": [
+          toolStep("agent_spawn", {
+            task_name: "leaf",
+            subagent_type: "worker",
+            prompt: "Send a question to your direct parent.",
+            execution: { effort: "off" },
+          }),
+          toolStep("agent_wait", { targets: ["/root/reply-parent/leaf"], timeout_seconds: 30 }),
+          { contextEcho: { sentinel: question, prefix: "DIRECT_PARENT_RECEIVED_REPLY" } },
+          // Reply and completion can arrive as separate one-at-a-time steering turns.
+          { contextEcho: { sentinel: question, prefix: "DIRECT_PARENT_RECEIVED_REPLY" } },
+        ],
+        "/root/reply-parent/leaf": [
+          toolStep("agent_reply", { message: question }),
+          { text: "Leaf sent its question." },
+        ],
+      },
+    );
+
+    // Act
+    await harness.request({ type: "prompt", message: "Exercise direct-parent reply routing." });
+    await harness.waitForEvent((event) => event.type === "agent_end", 60_000);
+
+    // Assert
+    const wait = toolEvent(
+      harness.events.filter((event) => event.type === "tool_execution_end"),
+      "agent_wait",
+    );
+    expect(wait).toContain(`DIRECT_PARENT_RECEIVED_REPLY ${question}`);
+    const receivedReplies = (await readSessionText(fixture.piAgentDir))
+      .split("\n")
+      .filter((line) => line.trim())
+      .map((line) => JSON.parse(line) as JsonObject)
+      .filter((entry) => {
+        const message = entry.message as JsonObject | undefined;
+        return message?.role === "user" && JSON.stringify(message.content).includes("Message Type: SUBAGENT_MESSAGE");
+      });
+    expect(receivedReplies).toHaveLength(1);
+    expect(JSON.stringify(receivedReplies)).toContain("Sender: /root/reply-parent/leaf");
+    expect(harness.events.filter((event) => event.type === "agent_start")).toHaveLength(1);
+    expect(
+      harness.events.filter(
+        (event) => event.type === "message_end" && JSON.stringify(event).includes('"customType":"subagent-message"'),
+      ),
+    ).toHaveLength(0);
+    expect(harness.stderr()).toBe("");
+  }, 70_000);
+
   test("suppresses the installed-style parent boundary when the explicit child runtime loads normally", async () => {
     // Arrange
     const fixture = await createFixture();
@@ -418,7 +617,7 @@ describe("persistent subagent Pi RPC E2E", () => {
       {
         "/root/collision-check": [
           toolStep("agent_list", {}),
-          { toolCatalogAudit: { expected: [...toolNames], forbidden: ["agent"] } },
+          { toolCatalogAudit: { expected: childToolNames, forbidden: ["agent"] } },
         ],
       },
       false,
@@ -435,7 +634,7 @@ describe("persistent subagent Pi RPC E2E", () => {
       harness.events.filter((event) => event.type === "tool_execution_end"),
       "agent_wait",
     );
-    expect(wait).toContain(`TOOL_CATALOG_AUDIT exact=true names=${toolNames.join(",")}`);
+    expect(wait).toContain(`TOOL_CATALOG_AUDIT exact=true names=${childToolNames.join(",")}`);
     expect(wait).not.toContain("TOOL_CATALOG_AUDIT exact=false");
     expect(harness.events.filter((event) => event.type === "extension_error")).toEqual([]);
     expect(harness.stderr()).toBe("");
@@ -490,6 +689,10 @@ describe("persistent subagent Pi RPC E2E", () => {
     return harness;
   }
 });
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
 
 function toolStep(name: string, arguments_: Record<string, unknown>) {
   return { toolCalls: [{ name, arguments: arguments_ }] };

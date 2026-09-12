@@ -5,7 +5,7 @@ import type { ArtifactPage, ReadArtifactPageOptions } from "../artifacts/artifac
 import type { ResolvedAgentExecution } from "../execution/profile";
 import { createEnvironmentRedactor, type RedactText, redactStringValues } from "../security/redaction";
 import { DEFAULT_WAIT_TIMEOUT_MS } from "../supervisor/limits";
-import { DEFAULT_MAILBOX_LIMITS } from "../supervisor/mailbox";
+import { DEFAULT_MAILBOX_LIMITS, MailboxError } from "../supervisor/mailbox";
 import { RegistryError } from "../supervisor/registry";
 import { type AgentSupervisor, SupervisorError } from "../supervisor/supervisor";
 import type { ExecutionInput } from "../tools/schemas";
@@ -307,6 +307,20 @@ export function createSupervisorIpcDispatcher(options: SupervisorIpcDispatcherOp
             signal,
           });
         }
+        case "agent_reply": {
+          const payload = request.payload as IpcOperationPayload["agent_reply"];
+          if (Buffer.byteLength(payload.message, "utf8") > DEFAULT_MAILBOX_LIMITS.maxMessageBytes) {
+            throw new SupervisorError(
+              "invalid_message",
+              `Reply message exceeds ${DEFAULT_MAILBOX_LIMITS.maxMessageBytes} UTF-8 bytes`,
+            );
+          }
+          return await supervisor.reply({
+            senderPath: request.caller.agentPath,
+            message: payload.message,
+            signal,
+          });
+        }
         case "agent_followup": {
           const payload = request.payload as IpcOperationPayload["agent_followup"];
           const target = await accessibleTarget(supervisor, request.caller, payload.target, signal);
@@ -469,7 +483,7 @@ async function requireForkSession(
 }
 
 function formatDispatchError(error: unknown, redact: RedactText): { kind: string; message: string } {
-  if (error instanceof SupervisorError || error instanceof RegistryError) {
+  if (error instanceof SupervisorError || error instanceof RegistryError || error instanceof MailboxError) {
     return { kind: error.kind, message: boundIpcErrorMessage(redact(error.message)) };
   }
   if (error instanceof DOMException && error.name === "AbortError") {

@@ -40,6 +40,7 @@ import { createRuntimeEntry, SUBAGENT_RUNTIME_ENTRY_TYPE } from "./sessions/entr
 import { getProjectSessionDirectory } from "./sessions/paths";
 import { recoverRuntimeMetadata } from "./sessions/recovery";
 import { type FinalAnswerNotification, formatFinalAnswerMailMessage } from "./supervisor/mailbox";
+import { type AgentReplyNotification, formatAgentReplyMessage } from "./supervisor/reply";
 import {
   type AgentActivity,
   type AgentSupervisor,
@@ -146,6 +147,7 @@ class PiSubagentBoundaryRuntime implements SubagentBoundaryRuntime {
         createProcess: (request) => processFactory.create(request),
         reportAgentActivity: (agentPath, activity) => this.reportAgentActivity(token, agentPath, activity),
         deliverRootCompletion: (notification) => this.deliverRootCompletion(token, notification),
+        deliverRootMessage: (notification) => this.deliverRootMessage(token, notification),
         journal: {
           append: (entry) => {
             const active = this.session;
@@ -297,6 +299,11 @@ class PiSubagentBoundaryRuntime implements SubagentBoundaryRuntime {
     );
   }
 
+  private deliverRootMessage(token: symbol, notification: AgentReplyNotification): void {
+    const active = this.requireSession(token);
+    deliverRootAgentMessage(active.pi, notification, active.redact);
+  }
+
   private createNestedExecutionResolver(
     token: symbol,
     sessionFiles: Map<string, string>,
@@ -381,6 +388,25 @@ class PiSubagentBoundaryRuntime implements SubagentBoundaryRuntime {
 
 export function formatRootFinalAnswer(notification: FinalAnswerNotification, redact: RedactText): string {
   return formatFinalAnswerMailMessage(redactStringValues(notification, redact));
+}
+
+export function deliverRootAgentMessage(
+  pi: Pick<ExtensionAPI, "sendMessage">,
+  notification: AgentReplyNotification,
+  redact: RedactText,
+): void {
+  pi.sendMessage(
+    {
+      customType: "subagent-message",
+      content: formatRootAgentMessage(notification, redact),
+      display: false,
+    },
+    { deliverAs: "steer", triggerTurn: true },
+  );
+}
+
+export function formatRootAgentMessage(notification: AgentReplyNotification, redact: RedactText): string {
+  return formatAgentReplyMessage(redactStringValues(notification, redact));
 }
 
 interface ActiveSession {
@@ -604,6 +630,7 @@ function delegatingSupervisor(current: () => AgentSupervisor): AgentSupervisor {
   return {
     spawn: (request) => current().spawn(request),
     send: (request) => current().send(request),
+    reply: (request) => current().reply(request),
     followup: (request) => current().followup(request),
     wait: (request) => current().wait(request),
     interrupt: (target, signal) => current().interrupt(target, signal),

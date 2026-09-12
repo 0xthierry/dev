@@ -57,6 +57,15 @@ export const SendParamsSchema = Type.Object({
     description: "Message of at most 16 KiB (UTF-8 bytes).",
   }),
 });
+export const ReplyParamsSchema = Type.Object(
+  {
+    message: Type.String({
+      minLength: 1,
+      description: "Message to your direct parent, at most 16 KiB (UTF-8 bytes).",
+    }),
+  },
+  { additionalProperties: false },
+);
 export const FollowupParamsSchema = Type.Object({
   target: Type.String({ description: "Exact agent ID or canonical agent path." }),
   message: Type.String({ description: "Self-contained next assignment." }),
@@ -120,6 +129,7 @@ export const ListParamsSchema = Type.Object({});
 export type ExecutionInput = Static<typeof ExecutionSchema>;
 export type SpawnParams = Static<typeof SpawnParamsSchema>;
 export type SendParams = Static<typeof SendParamsSchema>;
+export type ReplyParams = Static<typeof ReplyParamsSchema>;
 export type FollowupParams = Static<typeof FollowupParamsSchema>;
 export type WaitParams = Static<typeof WaitParamsSchema>;
 export type AgentWaitParams = Static<typeof AgentWaitParamsSchema>;

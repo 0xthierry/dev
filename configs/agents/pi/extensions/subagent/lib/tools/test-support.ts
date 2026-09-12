@@ -22,6 +22,7 @@ export function createFakeToolsRuntime(): AgentToolsRuntime {
       agentId: "agent-1",
       delivery: "steered" as const,
     })),
+    reply: mock(async () => ({ parentPath: "/root", delivery: "steered" as const })),
     followup: mock(async (request) => ({
       agentPath: request.target,
       agentId: "agent-1",

@@ -38,6 +38,23 @@ describe("IPC encoded envelopes", () => {
   });
 });
 
+describe("IPC reply payload", () => {
+  test("accepts only a non-empty message without caller-controlled routing fields", () => {
+    // Arrange
+    const inputs = [{ message: "Need clarification" }, { message: "" }, { message: "Question", target: "/root" }];
+
+    // Act
+    const accepted = parseOperationPayload("agent_reply", inputs[0] as { message: string });
+    const blank = () => parseOperationPayload("agent_reply", inputs[1] as { message: string });
+    const routed = () => parseOperationPayload("agent_reply", inputs[2] as { message: string; target: string });
+
+    // Assert
+    expect(accepted).toEqual({ message: "Need clarification" });
+    expect(blank).toThrow("non-empty string");
+    expect(routed).toThrow("unknown fields");
+  });
+});
+
 describe("IPC wait payload", () => {
   test("accepts only whole-second timeouts in the declared range", () => {
     // Arrange

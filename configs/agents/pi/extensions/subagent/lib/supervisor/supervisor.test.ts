@@ -9,6 +9,7 @@ import type {
 } from "../runner/process";
 import type { SubagentRuntimeEntry } from "../sessions/entries";
 import type { FinalAnswerNotification } from "./mailbox";
+import type { AgentReplyNotification } from "./reply";
 import {
   type AgentActivity,
   type CreateSupervisorProcessRequest,
@@ -109,6 +110,7 @@ function harness(options?: {
   resident?: number;
   redact?: (value: string) => string;
   mailboxMessages?: number;
+  deliverRootMessage?: (notification: AgentReplyNotification) => void | Promise<void>;
 }) {
   let agentId = 0;
   let mailId = 0;
@@ -117,6 +119,7 @@ function harness(options?: {
   const artifactContents = new Map<string, string>();
   const processes = new Map<string, FakeProcess>();
   const deliverRootCompletion = mock(async (_notification: FinalAnswerNotification) => {});
+  const deliverRootMessage = mock(options?.deliverRootMessage ?? (async (_notification: AgentReplyNotification) => {}));
   const reportAgentActivity = mock((_agentPath: string, _activity: AgentActivity | undefined) => {});
   const createProcess = mock((request: CreateSupervisorProcessRequest) => {
     const process = createFakeProcess(request.agentPath);
@@ -134,6 +137,7 @@ function harness(options?: {
     createProcess,
     reportAgentActivity,
     deliverRootCompletion,
+    deliverRootMessage,
     journal: {
       append: mock((entry: SubagentRuntimeEntry) => {
         entries.push(entry);
@@ -172,6 +176,7 @@ function harness(options?: {
     createProcess,
     reportAgentActivity,
     deliverRootCompletion,
+    deliverRootMessage,
     artifactContents,
     artifactWrite,
   };
@@ -447,6 +452,172 @@ describe("PersistentAgentSupervisor", () => {
     process?.assignments[1]?.resolve("second done");
     const secondWait = await fake.supervisor.wait({ targets: [spawned.agentPath], timeoutMs: 1_000 });
     expect(secondWait.completed[0]?.assignmentId).toBe("agent-1:2");
+  });
+
+  test("routes a reply to the authenticated sender's root parent with bounded admission", async () => {
+    // Arrange
+    const fake = harness({ redact: (value) => value.replaceAll("secret", "[REDACTED]") });
+    const advisor = await fake.supervisor.spawn({
+      taskName: "advisor",
+      agentType: "worker",
+      prompt: "Advise",
+      execution,
+    });
+
+    // Act
+    const result = await fake.supervisor.reply({ senderPath: advisor.agentPath, message: "secret question" });
+
+    // Assert
+    expect(result).toEqual({ parentPath: "/root", delivery: "steered" });
+    expect(fake.deliverRootMessage).toHaveBeenCalledWith({
+      senderPath: advisor.agentPath,
+      taskName: "advisor",
+      message: "[REDACTED] question",
+    });
+  });
+
+  test("routes a nested reply only to its derived direct parent", async () => {
+    // Arrange
+    const fake = harness();
+    const parent = await fake.supervisor.spawn({
+      taskName: "planner",
+      agentType: "worker",
+      prompt: "Plan",
+      execution,
+    });
+    const child = await fake.supervisor.spawn({
+      parentPath: parent.agentPath,
+      taskName: "advisor",
+      agentType: "worker",
+      prompt: "Advise",
+      execution,
+    });
+    const parentProcess = fake.processes.get(parent.agentPath);
+
+    // Act
+    const result = await fake.supervisor.reply({ senderPath: child.agentPath, message: "direct-parent question" });
+
+    // Assert
+    expect(result).toEqual({ parentPath: parent.agentPath, delivery: "steered" });
+    expect(parentProcess?.send).toHaveBeenCalledWith(
+      [
+        "Message Type: SUBAGENT_MESSAGE",
+        "Task name: advisor",
+        `Sender: ${child.agentPath}`,
+        "Payload:",
+        "direct-parent question",
+      ].join("\n"),
+      undefined,
+    );
+    expect(fake.deliverRootMessage).not.toHaveBeenCalled();
+  });
+
+  test("steers a running nested parent even while its mailbox has a pending reservation", async () => {
+    // Arrange
+    const fake = harness({ mailboxMessages: 1 });
+    const parent = await fake.supervisor.spawn({ taskName: "parent", agentType: "worker", prompt: "plan", execution });
+    const child = await fake.supervisor.spawn({
+      parentPath: parent.agentPath,
+      taskName: "child",
+      agentType: "worker",
+      prompt: "work",
+      execution,
+    });
+    const parentProcess = fake.processes.get(parent.agentPath);
+    parentProcess?.assignments[0]?.resolve("initial plan done");
+    await fake.supervisor.wait({ targets: [parent.agentPath], timeoutMs: 1_000 });
+    let releaseMail!: (value: { reference: string }) => void;
+    const pendingWrite = new Promise<{ reference: string }>((resolve) => {
+      releaseMail = resolve;
+    });
+    fake.artifactWrite.mockImplementationOnce(async () => await pendingWrite);
+    const pendingMail = fake.supervisor.send({ target: parent.agentPath, message: "queued while idle" });
+    await fake.supervisor.followup({ target: parent.agentPath, message: "resume planning" });
+
+    // Act
+    const reply = await fake.supervisor.reply({ senderPath: child.agentPath, message: "live question" });
+    releaseMail({ reference: "subagent-artifact:00000000000000000000000000000999" });
+    await pendingMail;
+
+    // Assert
+    expect(reply).toEqual({ parentPath: parent.agentPath, delivery: "steered" });
+    expect(parentProcess?.send).toHaveBeenCalledWith(expect.stringContaining("live question"), undefined);
+    expect(fake.deliverRootMessage).not.toHaveBeenCalled();
+  });
+
+  test("rejects a nested reply whose attributed envelope exceeds the mailbox limit without truncating it", async () => {
+    // Arrange
+    const fake = harness({ mailboxMessages: 2 });
+    const parent = await fake.supervisor.spawn({
+      taskName: "planner",
+      agentType: "worker",
+      prompt: "Plan",
+      execution,
+    });
+    const child = await fake.supervisor.spawn({
+      parentPath: parent.agentPath,
+      taskName: "advisor",
+      agentType: "worker",
+      prompt: "Advise",
+      execution,
+    });
+    const parentProcess = fake.processes.get(parent.agentPath);
+    const message = "x".repeat(200);
+
+    // Act
+    const reply = fake.supervisor.reply({ senderPath: child.agentPath, message });
+
+    // Assert
+    await expect(reply).rejects.toMatchObject({
+      kind: "invalid_message",
+      message: "Attributed reply exceeds the parent mailbox limit of 256 UTF-8 bytes",
+    });
+    expect(parentProcess?.send).not.toHaveBeenCalled();
+  });
+
+  test("holds configured mailbox admission while a root callback is in flight and releases it afterward", async () => {
+    // Arrange
+    let releaseFirst!: () => void;
+    const firstDelivery = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const fake = harness({
+      mailboxMessages: 1,
+      deliverRootMessage: async () => await firstDelivery,
+    });
+    const first = await fake.supervisor.spawn({ taskName: "first", agentType: "worker", prompt: "work", execution });
+    const second = await fake.supervisor.spawn({ taskName: "second", agentType: "worker", prompt: "work", execution });
+    const pending = fake.supervisor.reply({ senderPath: first.agentPath, message: "first reply" });
+
+    // Act
+    const blocked = fake.supervisor.reply({ senderPath: second.agentPath, message: "second reply" });
+
+    // Assert
+    await expect(blocked).rejects.toMatchObject({ kind: "mailbox_full" });
+    releaseFirst();
+    await expect(pending).resolves.toEqual({ parentPath: "/root", delivery: "steered" });
+    await expect(fake.supervisor.reply({ senderPath: second.agentPath, message: "retry" })).resolves.toEqual({
+      parentPath: "/root",
+      delivery: "steered",
+    });
+  });
+
+  test("rejects unavailable root delivery and releases its admission", async () => {
+    // Arrange
+    const fake = harness({ mailboxMessages: 1 });
+    const worker = await fake.supervisor.spawn({ taskName: "worker", agentType: "worker", prompt: "work", execution });
+    fake.runtime.deliverRootMessage = undefined;
+
+    // Act
+    const unavailable = fake.supervisor.reply({ senderPath: worker.agentPath, message: "question" });
+
+    // Assert
+    await expect(unavailable).rejects.toMatchObject({ kind: "process_unavailable" });
+    fake.runtime.deliverRootMessage = fake.deliverRootMessage;
+    await expect(fake.supervisor.reply({ senderPath: worker.agentPath, message: "retry" })).resolves.toEqual({
+      parentPath: "/root",
+      delivery: "steered",
+    });
   });
 
   test("keeps settled residents warm while the cache has capacity", async () => {

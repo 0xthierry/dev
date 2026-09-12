@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { ResolvedAgentExecution } from "../execution/profile";
+import { MailboxError } from "../supervisor/mailbox";
 import { type AgentSupervisor, SupervisorError } from "../supervisor/supervisor";
 import { createCapabilityAuthority } from "./authentication";
 import {
@@ -88,6 +89,32 @@ describe("IpcServer", () => {
       payload: { target: "/root/parent", message: "hi 🌍" },
     });
     expect(response(connection, 1)).toMatchObject({ id: "send-1", ok: true });
+  });
+
+  test("preserves typed mailbox admission failures for authenticated replies", async () => {
+    // Arrange
+    const authority = createCapabilityAuthority();
+    const capability = authority.issue(caller);
+    const dispatcher: AuthenticatedIpcDispatcher = {
+      dispatch: mock(async () => {
+        throw new MailboxError("mailbox_full", "Parent mailbox is full");
+      }),
+    };
+    const server = createIpcServer({ socketPath: "/private/control.sock", authority, dispatcher });
+    const connection = new FakeConnection();
+    server.accept(connection);
+    authenticate(connection, capability.token);
+
+    // Act
+    connection.emitData(encodeIpcFrame(requestFrame("reply", "agent_reply", { message: "question" })));
+    await flush();
+
+    // Assert
+    expect(response(connection, 1)).toMatchObject({
+      id: "reply",
+      ok: false,
+      error: { kind: "mailbox_full", message: "Parent mailbox is full" },
+    });
   });
 
   test("closes silently on authentication failure and caller spoof fields", async () => {
@@ -339,6 +366,10 @@ describe("createSupervisorIpcDispatcher", () => {
       signal,
     );
     await dispatcher.dispatch(
+      { caller, operation: "agent_reply", payload: { message: "question for parent" } },
+      signal,
+    );
+    await dispatcher.dispatch(
       {
         caller,
         operation: "agent_followup",
@@ -364,6 +395,11 @@ describe("createSupervisorIpcDispatcher", () => {
     expect(supervisor.send).toHaveBeenCalledWith(
       expect.objectContaining({ senderPath: caller.agentPath, target: "/root/parent/sibling" }),
     );
+    expect(supervisor.reply).toHaveBeenCalledWith({
+      senderPath: caller.agentPath,
+      message: "question for parent",
+      signal,
+    });
     expect(supervisor.followup).toHaveBeenCalledWith(
       expect.objectContaining({ target: "/root/parent/sibling", execution }),
     );
@@ -373,6 +409,37 @@ describe("createSupervisorIpcDispatcher", () => {
     expect(supervisor.interrupt).toHaveBeenCalledWith("/root/parent/sibling", signal);
     expect(supervisor.close).toHaveBeenCalledWith("/root/parent/sibling", signal);
     expect(visible).toEqual(entries.slice(0, 3));
+  });
+
+  test("rejects an oversized reply before supervisor dispatch", async () => {
+    // Arrange
+    const execution: ResolvedAgentExecution = {
+      profile: { provider: "test", model: "small", effort: "medium" },
+      source: { model: "parent", effort: "parent" },
+    };
+    const supervisor = fakeSupervisor([
+      {
+        agentPath: caller.agentPath,
+        agentId: caller.agentId,
+        agentType: "worker",
+        status: "running" as const,
+        execution,
+      },
+    ]);
+    const dispatcher = createSupervisorIpcDispatcher({
+      supervisor,
+      execution: { resolve: mock(async () => execution) },
+    });
+
+    // Act
+    const operation = dispatcher.dispatch(
+      { caller, operation: "agent_reply", payload: { message: "x".repeat(16 * 1024 + 1) } },
+      new AbortController().signal,
+    );
+
+    // Assert
+    await expect(operation).rejects.toMatchObject({ kind: "invalid_message" });
+    expect(supervisor.reply).not.toHaveBeenCalled();
   });
 
   test("passes only the authenticated caller to artifact authorization", async () => {
@@ -475,6 +542,7 @@ function fakeSupervisor(entries: Awaited<ReturnType<AgentSupervisor["list"]>>): 
       execution: request.execution,
     })),
     send: mock(async (request) => ({ agentPath: request.target, agentId: "target", delivery: "steered" as const })),
+    reply: mock(async () => ({ parentPath: "/root/parent", delivery: "steered" as const })),
     followup: mock(async (request) => ({
       agentPath: request.target,
       agentId: "target",

@@ -14,6 +14,7 @@ test("registers exactly the stable seven-tool catalog in order", () => {
   // Assert
   expect([...fakePi.tools.keys()]).toEqual([...AGENT_TOOL_NAMES]);
   expect(fakePi.tools.has("agent")).toBe(false);
+  expect(fakePi.tools.has("agent_reply")).toBe(false);
 });
 
 test("keeps every flattened guideline attributable and prompts stable", () => {
@@ -47,18 +48,18 @@ test("exposes stable model routing preferences without replacing execution polic
   // Assert
   expect(description).toBe(second.tools.get("agent_spawn")?.description ?? "");
   expect(description).toEndWith(SUBAGENT_MODEL_GUIDANCE);
-  expect(description).toContain("cliproxyapi/gpt-6-astra is the default for implementation");
-  expect(description).toContain("Use low or medium for most implementation tasks");
-  expect(description).toContain("High is usually unnecessary for implementation");
+  expect(description).toContain("cliproxyapi/gpt-5.6-sol is the default for implementation and debugging");
+  expect(description).toContain("cliproxyapi/gpt-6-astra is the default for planning");
+  expect(description).toContain("Use high effort for planning and design decisions");
+  expect(description).toContain("high for complex implementation or debugging");
   expect(description).toContain(
     "cliproxyapi/gpt-5.6-luna or xai/grok-4.5 are the defaults for read-only codebase reconnaissance",
   );
-  expect(description).toContain("cliproxyapi/gpt-5.6-sol is an implementation fallback");
+  expect(description).not.toContain("implementation fallback");
+  expect(description).not.toContain("gpt-6-astra is the default for implementation");
   expect(description).toContain("xai/grok-4.5 is the default for code review");
-  expect(description).not.toContain("xai/grok-4.6 is the default for code review");
-  expect(description).toContain("Reserve xai/grok-4.6 for critical work or explicit user requests");
-  expect(description).toContain("A review involving correctness or security is not automatically critical");
-  expect(description).toContain("State the concrete risk that justifies escalation");
+  expect(description).not.toContain("grok-4.6");
+  expect(description).toContain("should delegate implementation and debugging to cliproxyapi/gpt-5.6-sol");
   expect(description).toContain("Use Astra for code review only when the user explicitly requests it");
   expect(description).toContain(
     "For routine code review, including ordinary correctness and security checks, use xai/grok-4.5",

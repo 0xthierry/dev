@@ -5,6 +5,7 @@ import type {
   AgentWaitParams,
   FollowupParams,
   ListParams,
+  ReplyParams,
   SendParams,
   SpawnParams,
   TargetParams,
@@ -19,6 +20,7 @@ export const IPC_ERROR_MESSAGE_MAX_BYTES = 1024;
 export const IPC_OPERATIONS = [
   "agent_spawn",
   "agent_send",
+  "agent_reply",
   "agent_followup",
   "agent_wait",
   "agent_interrupt",
@@ -30,6 +32,7 @@ export type IpcOperation = (typeof IPC_OPERATIONS)[number];
 export type IpcOperationPayload = {
   agent_spawn: SpawnParams;
   agent_send: SendParams;
+  agent_reply: ReplyParams;
   agent_followup: FollowupParams;
   agent_wait: AgentWaitParams;
   agent_interrupt: TargetParams;
@@ -187,6 +190,8 @@ export function parseOperationPayload<Operation extends IpcOperation>(
       return parseSpawn(input) as IpcOperationPayload[Operation];
     case "agent_send":
       return parseSend(input) as IpcOperationPayload[Operation];
+    case "agent_reply":
+      return parseReply(input) as IpcOperationPayload[Operation];
     case "agent_followup":
       return parseFollowup(input) as IpcOperationPayload[Operation];
     case "agent_wait":
@@ -262,6 +267,11 @@ function parseSpawn(input: Readonly<Record<string, unknown>>): SpawnParams {
 function parseSend(input: Readonly<Record<string, unknown>>): SendParams {
   exactKeys(input, ["target", "message"]);
   return { target: requireString(input.target, "target"), message: requireString(input.message, "message") };
+}
+
+function parseReply(input: Readonly<Record<string, unknown>>): ReplyParams {
+  exactKeys(input, ["message"]);
+  return { message: requireString(input.message, "message") };
 }
 
 function parseFollowup(input: Readonly<Record<string, unknown>>): FollowupParams {

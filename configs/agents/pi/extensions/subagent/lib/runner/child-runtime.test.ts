@@ -24,7 +24,7 @@ function fakeRuntime(result: unknown = { accepted: true }) {
 }
 
 describe("registerChildRuntime", () => {
-  test("registers exactly the seven collaboration proxies in canonical order", () => {
+  test("registers the seven collaboration proxies and child-only reply in canonical order", () => {
     // Arrange
     const fakePi = createFakePi();
     const fake = fakeRuntime();
@@ -75,7 +75,7 @@ describe("registerChildRuntime", () => {
       fg: (_color: string, text: string) => text,
       bold: (text: string) => text,
     } as unknown as Theme;
-    const renderCall = (name: "agent_send" | "agent_followup") =>
+    const renderCall = (name: "agent_send" | "agent_followup" | "agent_reply") =>
       (
         fakePi.tools.get(name) as unknown as {
           renderCall(args: unknown, theme: Theme): { render(width: number): string[] };
@@ -92,7 +92,13 @@ describe("registerChildRuntime", () => {
       .map((line) => line.trimEnd())
       .join("\n");
 
+    const reply = renderCall("agent_reply")
+      .render(120)
+      .map((line) => line.trimEnd())
+      .join("\n");
+
     // Assert
+    expect(reply).toContain("agent_reply parent\n  Share status");
     expect(send).toContain("agent_send sibling\n  Share status");
     expect(followup).toContain("agent_followup sibling\n  Share status");
   });
@@ -105,6 +111,7 @@ describe("registerChildRuntime", () => {
     const calls: Array<[IpcOperation, unknown]> = [
       ["agent_spawn", { task_name: "nested", subagent_type: "worker", prompt: "work" }],
       ["agent_send", { target: "sibling", message: "status" }],
+      ["agent_reply", { message: "Need a compatibility decision." }],
       ["agent_followup", { target: "sibling", message: "continue" }],
       ["agent_wait", { targets: ["sibling"], condition: "all" }],
       ["agent_interrupt", { target: "sibling" }],
@@ -116,7 +123,7 @@ describe("registerChildRuntime", () => {
     for (const [operation, payload] of calls) await fakePi.runTool(operation, payload);
 
     // Assert
-    expect(fake.request).toHaveBeenCalledTimes(7);
+    expect(fake.request).toHaveBeenCalledTimes(8);
     calls.forEach(([operation, payload], index) => {
       expect(fake.request.mock.calls[index]?.slice(0, 2)).toEqual([operation, payload]);
       expect(fake.request.mock.calls[index]?.[1]).not.toHaveProperty("callerPath");

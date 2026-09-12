@@ -11,7 +11,7 @@ export const BUILTIN_AGENTS: readonly AgentDefinition[] = Object.freeze([
     ].join("\n"),
     sourcePath: "builtin://scout",
     source: "builtin",
-    execution: { effort: "low" as const },
+    execution: { effort: "high" as const },
   }),
   Object.freeze({
     name: "worker",

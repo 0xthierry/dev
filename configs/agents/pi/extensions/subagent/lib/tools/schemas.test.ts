@@ -1,7 +1,24 @@
 import { expect, test } from "bun:test";
 import { Value } from "typebox/value";
 import { REASONING_EFFORTS } from "../execution/profile";
-import { AgentWaitParamsSchema, ExecutionSchema, ListParamsSchema } from "./schemas";
+import { AgentWaitParamsSchema, ExecutionSchema, ListParamsSchema, ReplyParamsSchema } from "./schemas";
+
+test("reply accepts only message text, never routing or sender fields", () => {
+  // Arrange
+  const inputs = [
+    { message: "Need a decision." },
+    { message: "" },
+    { message: "hello", target: "/root/other" },
+    { message: "hello", senderPath: "/root/other" },
+    {},
+  ];
+
+  // Act
+  const accepted = inputs.map((input) => Value.Check(ReplyParamsSchema, input));
+
+  // Assert
+  expect(accepted).toEqual([true, false, false, false, false]);
+});
 
 test("accepts effort alone or an atomic provider-model pair", () => {
   // Arrange

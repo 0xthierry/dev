@@ -14,6 +14,8 @@ import {
   type FollowupParams,
   FollowupParamsSchema,
   ListParamsSchema,
+  type ReplyParams,
+  ReplyParamsSchema,
   type SendParams,
   SendParamsSchema,
   type SpawnParams,
@@ -25,6 +27,7 @@ import {
 export const CHILD_AGENT_TOOL_NAMES = [
   "agent_spawn",
   "agent_send",
+  "agent_reply",
   "agent_followup",
   "agent_wait",
   "agent_interrupt",
@@ -35,6 +38,7 @@ export const CHILD_AGENT_TOOL_NAMES = [
 export const CHILD_COLLABORATION_GUIDANCE = `You are a persistent child working for a direct parent orchestration session.
 The collaboration tools use the root session's shared scheduler and durable mailboxes; nested work shares the same filesystem and current working directory.
 Delegate only bounded, disjoint work. Communicate deliberately with exact agent IDs or canonical paths, and wait only when a result becomes a dependency.
+Use agent_reply for a question, blocker, or useful update to your direct parent; no target is needed. Delivery does not wait for an answer or complete your assignment. Continue independent work, or end your turn explaining the blocker if you cannot proceed. Do not poll or send repeated acknowledgments; your parent can answer through agent_send while you work or agent_followup after you finish.
 Your final answer is delivered to your direct parent. Do not expose credentials or control-channel metadata.
 
 ${ORCHESTRATION_GUIDANCE}`;
@@ -82,13 +86,31 @@ export function registerChildRuntime(pi: ExtensionAPI, runtime: ChildProxyRuntim
     description:
       "Send a message to a visible parent, child, or sibling. Steers running work or saves the message for a resumable agent; does not start a task.",
     promptSnippet: "Steer an agent or save a message without starting a task.",
-    promptGuidelines: ["agent_send: Use agent_followup for a new task or execution change."],
+    promptGuidelines: [
+      "agent_send: Use agent_reply to message your direct parent, including the main session. Use agent_followup for a new task or execution change.",
+    ],
     parameters: SendParamsSchema,
     execute: (_id, params, signal) => proxyTool(runtime, "agent_send", params, signal),
     renderCall: (args, theme) => {
       const params = args as SendParams | undefined;
       return renderAgentCall("agent_send", params?.target, theme, params?.message);
     },
+    renderResult: (result, options, theme) => renderAgentResult(result, options.expanded, theme),
+  });
+  pi.registerTool({
+    name: "agent_reply",
+    label: "reply to parent",
+    description:
+      "Send a question, blocker, or useful update to your direct parent. The authenticated runtime chooses the parent; no target is needed. Steers an active parent and wakes an idle main session; queues for an inactive subagent parent without starting a task. Returns after delivery or queueing, not after the parent's answer. Does not finish your assignment. Messages are limited to 16 KiB UTF-8.",
+    promptSnippet: "Send a message to your direct parent without waiting for an answer.",
+    promptGuidelines: [
+      "agent_reply: Send actionable questions or updates, not repeated acknowledgments or polling messages.",
+      "agent_reply: Continue independent work after sending. If blocked, end your turn explaining what answer you need; the parent can resume you with agent_followup.",
+    ],
+    parameters: ReplyParamsSchema,
+    execute: (_id, params, signal) => proxyTool(runtime, "agent_reply", params, signal),
+    renderCall: (args, theme) =>
+      renderAgentCall("agent_reply", "parent", theme, (args as ReplyParams | undefined)?.message),
     renderResult: (result, options, theme) => renderAgentResult(result, options.expanded, theme),
   });
   pi.registerTool({

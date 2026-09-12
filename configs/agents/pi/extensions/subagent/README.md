@@ -18,7 +18,7 @@ This runtime is not compatible with the retired foreground `agent` / `Agent` too
 6. `agent_list` — inspect bounded tree state and effective execution provenance.
 7. `agent_close` — permanently terminate a child and release resident capacity.
 
-All seven tools are registered once in that order. Children receive the same catalog through authenticated session-scoped IPC and share the root scheduler, filesystem, and working directory. The parent entrypoint suppresses itself in child launches so an explicit child runtime owns the proxy catalog.
+All seven main tools are registered once in that order. Children receive those tools plus `agent_reply`, registered after `agent_send`, through authenticated session-scoped IPC. They share the root scheduler, filesystem, and working directory. The parent entrypoint suppresses itself in child launches so an explicit child runtime owns the proxy catalog.
 
 ## Delegation workflow
 
@@ -35,6 +35,42 @@ The stable shared instructions live in `lib/agents/orchestration-guidance.ts`;
 model selection lives in `lib/tools/model-guidance.ts`. Parent and child runtimes
 consume these sources without per-turn model catalogs or volatile prompt content.
 
+## Two-way communication
+
+A child can send a question, blocker, or useful update to its direct parent:
+
+```json
+{ "message": "Does this change need to preserve compatibility?" }
+```
+
+Call `agent_reply` with that payload. It is available only to spawned agents.
+The runtime derives the sender and direct parent from the authenticated caller;
+there is no `target` parameter. Messages must be nonblank and at most 16 KiB
+of UTF-8 text. For a subagent parent, the attributed envelope must also fit its
+mailbox limit; an oversized envelope fails explicitly rather than truncating the
+message.
+
+- An active main receives a steering message at its next model-call boundary.
+- An idle main receives the message and starts a turn automatically. This can
+  consume model tokens without another user prompt.
+- An active subagent parent receives steering; an inactive subagent parent gets
+  durable queued mail, without starting another assignment.
+
+Replies are attributed `subagent-message` context, not user instructions or final
+answers. Delivery confirms acceptance or queueing, not that the parent has read
+or answered the message. It does not finish the child's assignment or wait for a
+response. If the parent is executing `agent_wait`, a reply does not interrupt
+that tool; it reaches the model after the tool returns.
+
+The parent answers with `agent_send` while the child is running, or
+`agent_followup` after it finishes. A child should continue independent work after
+sending. If it cannot proceed, it should end its turn with the blocker so its
+parent can respond and resume it. Avoid polling and repeated acknowledgments.
+Automatic final-answer delivery is unchanged and does not wake an idle main.
+The existing mailbox bounds queued messages for inactive subagent parents. Root
+replies enter Pi's steering queue; this extension does not impose a pending-root
+queue limit or a conversation-wide reply budget.
+
 ## Agents
 
 Built-in `scout` and `worker` definitions are always available. Global Markdown definitions are read from Pi's agent directory. A trusted project may add `.pi/agents/**/*.md`:
@@ -44,7 +80,7 @@ Built-in `scout` and `worker` definitions are always available. Global Markdown 
 name: worker
 description: Implements bounded production changes.
 provider: cliproxyapi
-model: gpt-6-astra
+model: gpt-5.6-sol
 effort: low
 ---
 
@@ -90,23 +126,19 @@ another machine. An omitted execution override still follows normal resolution.
 
 | Exact provider / model | Recommended work | Rationale and limitation |
 |---|---|---|
-| `cliproxyapi/gpt-6-astra` | Default for implementation, debugging, and planning; code review only when the user explicitly requests Astra | Low or medium for most implementation: low for well-scoped changes, medium for reasoning across components. High is usually unnecessary; reserve it for unusually difficult root-cause analysis or complex architecture |
+| `cliproxyapi/gpt-6-astra` | Default for planning and design decisions; code review only when the user explicitly requests Astra | High effort |
 | `cliproxyapi/gpt-5.6-luna` or `xai/grok-4.5` | Defaults for read-only codebase reconnaissance | Medium for locating files/symbols, tracing call paths, mapping dependencies, finding patterns, and explaining components; require paths and evidence |
-| `cliproxyapi/gpt-5.6-sol` | Implementation fallback when Astra is unavailable or rate-limited and substitution is allowed; explicit user requests | Low for small patches, medium for bounded multi-file changes, high for complex implementation/debugging |
+| `cliproxyapi/gpt-5.6-sol` | Default for implementation and debugging | Low for small patches, medium for bounded multi-file changes, high for complex implementation/debugging |
 | `xai/grok-4.5` | Default for routine code review, including ordinary correctness and security checks | Medium; provide an artifact and a specific question; require evidence |
-| `xai/grok-4.6` | Critical work or explicit user requests only | State the concrete risk that justifies escalation; medium for bounded critical reviews, high for complex critical investigations |
 
-Use `cliproxyapi/gpt-6-astra` instead of the reconnaissance profile when the task
-requires design decisions, difficult diagnosis, or edits. Use `xai/grok-4.5` for
-routine code review. Reserve `xai/grok-4.6` for critical work with substantial
-consequences if wrong, such as exploitable security boundaries, irreversible data
-loss, or production-critical concurrency failures, or explicit user requests.
-Correctness or security checks alone do not make a review critical: state the
-concrete risk before escalating. This is the user's routing preference, not a
-benchmark claim. Use Astra for code review only when the user explicitly requests it.
-An Astra parent can delegate implementation to another Astra with non-overlapping
-ownership. Honor user choices and repository locks; set provider, model, and effort
-explicitly to select a profile and inspect the returned effective settings.
+Use `cliproxyapi/gpt-5.6-sol` instead of the reconnaissance profile for debugging
+or edits. Use `cliproxyapi/gpt-6-astra` with high effort for planning and design
+decisions. Use `xai/grok-4.5` for routine code review, and Astra for code review
+only when the user explicitly requests it. These are the user's routing
+preferences, not benchmark claims.
+An Astra parent should delegate implementation and debugging to Sol with
+non-overlapping ownership. Honor user choices and repository locks; set provider,
+model, and effort explicitly and inspect the returned effective settings.
 
 **Effort is workflow policy, not a benchmark-proven optimum.** The recommendations
 use only low, medium, and high. They do not change runtime defaults or accepted
@@ -160,17 +192,11 @@ Both parent and nested tools receive the same model-selection guidance.
   the case for complex synthesis/planning, but these are not dedicated debugging
   or patch-review benchmarks. The index changes tasks, weighting, and grading;
   do not describe the earlier 61-point tie as the current index result.
-- **[Artificial Analysis: Grok 4.6, August 12](https://artificialanalysis.ai/articles/grok-4-6-benchmarks-and-analysis):**
-  Grok 4.6 scored **61**, five points above 4.5, on that dated Intelligence Index;
-  **88.4%** on Terminal-Bench **v2.1**; **1753 Elo** on GDPval-AA v2; and cost
-  **$0.84 per Intelligence Index task**. Its comparison used Sol's older $5/$30
-  pricing, not today's $4/$20. These dated results support Grok as a real agentic
-  alternative, not an exact current ranking against Astra in Pi.
 
 These are independently published evaluations that were read, **not benchmarks run
 locally**. Do not compare different index versions, Terminal-Bench versions, harnesses,
 reasoning levels, or historical prices as if they were one controlled experiment.
-No same-task, same-harness Pi comparison of all four was performed. We have no measured
+No same-task, same-harness Pi comparison of these models was performed. We have no measured
 subscription-allowance conversion or universal latency ordering. Track completed-task
 quality, wall time, retries, allowance consumption, and cache reuse before tightening
 these recommendations.
@@ -184,7 +210,6 @@ USD per million tokens, standard short-context requests, checked 2026-09-05:
 | [GPT-5.6 Sol](https://developers.openai.com/api/docs/models/gpt-5.6-sol.md) | $4 | $0.40 | $20 |
 | [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra.md) | $10 | $1 | $50 |
 | [Grok 4.5](https://docs.x.ai/developers/models/grok-4.5) | $2 | $0.30 | $6 |
-| [Grok 4.6](https://docs.x.ai/developers/models/grok-4.6) | $2 | $0.50 | $6 |
 
 OpenAI applies higher full-request rates above 272K input tokens; xAI documents a
 higher-context pricing tier above 200K. Cache writes, tools, fast/priority modes,
@@ -207,7 +232,7 @@ prices alone do not determine cost per successful task.
     "worker": {
       "execution": {
         "provider": "cliproxyapi",
-        "model": "gpt-6-astra",
+        "model": "gpt-5.6-sol",
         "effort": "low"
       },
       "allowInvocationOverride": {
