@@ -117,6 +117,8 @@ EOF
   assert_file_contains "dry-run preserves Codex instructions" "$test_home/.codex/AGENTS.md" 'Existing Codex instructions'
   [[ ! -e "$test_home/.pi/agent/AGENTS.md" ]] || fail "dry-run created global Pi instructions"
   [[ ! -e "$test_home/.pi/agent/skills/writing-pr" ]] || fail "dry-run installed writing-pr"
+  [[ ! -e "$test_home/.pi/agent/agents/advisor.md" ]] || fail "dry-run installed advisor"
+  [[ ! -e "$test_home/.pi/agent/skills/engineering-principles" ]] || fail "dry-run installed engineering-principles"
   assert_file_contains "dry-run includes global instructions" "$TEST_TMP_DIR/dry-run.log" 'pi AGENTS.md'
 
   # Act
@@ -134,6 +136,21 @@ EOF
   for target in .agents .codex .claude .pi/agent; do
     [[ "$(readlink "$test_home/$target/skills/writing-pr")" == "$REPO_ROOT/configs/agents/skills/writing-pr" ]] || fail "missing writing-pr skill link: $target"
     assert_file_contains "deploys writing-pr into $target" "$test_home/$target/skills/writing-pr/SKILL.md" 'name: writing-pr'
+  done
+
+  # Assert: file-backed profiles and progressively disclosed references survive installation unchanged.
+  local profile reference
+  for profile in advisor worker; do
+    cmp -s "$test_home/.pi/agent/agents/$profile.md" "$REPO_ROOT/configs/agents/agents/$profile.md" || fail "Pi did not preserve $profile profile"
+    printf 'ok: Pi deploys the unchanged %s profile\n' "$profile"
+  done
+  for target in .agents .codex .claude .pi/agent; do
+    [[ "$(readlink "$test_home/$target/skills/engineering-principles")" == "$REPO_ROOT/configs/agents/skills/engineering-principles" ]] || fail "missing engineering-principles skill link: $target"
+    for reference in "$REPO_ROOT/configs/agents/skills/engineering-principles/SKILL.md" "$REPO_ROOT/configs/agents/skills/engineering-principles/references/"*.md; do
+      local relative="${reference#"$REPO_ROOT/configs/agents/skills/engineering-principles/"}"
+      cmp -s "$test_home/$target/skills/engineering-principles/$relative" "$reference" || fail "installer did not preserve $target engineering-principles/$relative"
+    done
+    printf 'ok: %s deploys every engineering principle reference unchanged\n' "$target"
   done
 
   [[ "$(readlink "$test_home/.pi/agent/skills/agent-browser")" == "$REPO_ROOT/configs/agents/skills/agent-browser" ]] || fail "missing original agent-browser skill in Pi"
@@ -163,6 +180,8 @@ EOF
        else (.thinkingLevelMap | has("max") | not) end)
     )'
   assert_json "defaults Pi to proxy" "$test_home/.pi/agent/settings.json" '.defaultProvider == "cliproxyapi"'
+  assert_json "defaults Pi sessions to Sol" "$test_home/.pi/agent/settings.json" '.defaultModel == "gpt-5.6-sol"'
+  assert_json "defaults Pi sessions to high reasoning" "$test_home/.pi/agent/settings.json" '.defaultThinkingLevel == "high"'
   assert_file_contains "defaults Codex to proxy" "$test_home/.codex/config.toml" 'model_provider = "cliproxyapi"'
   assert_file_contains "Codex reads proxy key without environment export" "$test_home/.codex/config.toml" '[model_providers.cliproxyapi.auth]'
   assert_file_contains "adds Codex proxy provider" "$test_home/.codex/config.toml" '[model_providers.cliproxyapi]'

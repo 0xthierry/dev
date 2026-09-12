@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -12,6 +12,7 @@ import {
   FAUX_TOKENS_PER_SECOND_BY_DEPTH_ENV,
 } from "../_shared/testing/faux-provider-extension";
 import { type PiRpcHarness, startPiRpcHarness } from "../_shared/testing/pi-rpc-harness";
+import { parseAgentMarkdown } from "./lib/agents/frontmatter";
 import { writeArtifact } from "./lib/artifacts/artifacts";
 import { CHILD_EXTENSIONS_ENV, CHILD_NO_EXTENSIONS_ENV } from "./lib/runner/invocation";
 
@@ -41,6 +42,52 @@ describe("persistent subagent Pi RPC E2E", () => {
     if (tempDir) await rm(tempDir, { recursive: true, force: true });
     tempDir = undefined;
   });
+
+  test.each([
+    "advisor",
+    "worker",
+  ])("launches the shipped %s instructions through Pi with an explicit test-model override", async (role) => {
+    // Arrange
+    const fixture = await createFixture();
+    const sourcePath = resolve("configs/agents/agents", `${role}.md`);
+    const definition = parseAgentMarkdown(await readFile(sourcePath, "utf8"), `global://${role}.md`, "global");
+    await mkdir(join(fixture.piAgentDir, "agents"));
+    await copyFile(sourcePath, join(fixture.piAgentDir, "agents", `${role}.md`));
+    const harness = await startHarness(
+      fixture,
+      {
+        0: [
+          toolStep("agent_spawn", {
+            task_name: "shipped-profile",
+            subagent_type: role,
+            prompt: "Verify that the file-backed instructions reached the child model.",
+            execution: { provider: FAUX_PROVIDER_NAME, model: FAUX_MODEL_ID, effort: "off" },
+          }),
+          toolStep("agent_wait", { targets: ["/root/shipped-profile"], timeout_seconds: 30 }),
+          toolStep("agent_close", { target: "/root/shipped-profile" }),
+          { text: "Shipped profile lifecycle complete." },
+        ],
+        1: [{ text: "MISSING_FILE_BACKED_INSTRUCTIONS" }],
+      },
+      { 0: 0, 1: 0 },
+      true,
+      [],
+      { [definition.systemPrompt]: [{ text: "FILE_BACKED_INSTRUCTIONS_REACHED_MODEL" }] },
+    );
+
+    // Act
+    await harness.request({ type: "prompt", message: "Run the shipped profile propagation check." });
+    const end = await harness.waitForEvent((event) => event.type === "agent_end", 60_000);
+
+    // Assert
+    const toolEnds = harness.events.filter((event) => event.type === "tool_execution_end");
+    expect(eventText(end)).toContain("Shipped profile lifecycle complete.");
+    expect(toolEvent(toolEnds, "agent_spawn")).toContain('"status":"running"');
+    expect(toolEvent(toolEnds, "agent_wait")).toContain("FILE_BACKED_INSTRUCTIONS_REACHED_MODEL");
+    expect(toolEvent(toolEnds, "agent_wait")).not.toContain("MISSING_FILE_BACKED_INSTRUCTIONS");
+    expect(toolEvent(toolEnds, "agent_close")).toContain('"status":"closed"');
+    expect(harness.stderr()).toBe("");
+  }, 70_000);
 
   test("executes the stable lifecycle tools through Pi with persistent child sessions", async () => {
     // Arrange

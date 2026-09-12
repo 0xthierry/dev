@@ -2,9 +2,60 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { resolveAgentExecution } from "../execution/resolution";
 import { discoverAgents, readAgentDirectory } from "./discovery";
 
 describe("discoverAgents", () => {
+  test("loads shipped agent definitions and resolves advisor and worker file defaults", async () => {
+    // Arrange
+    const globalAgentsDir = join(import.meta.dir, "../../../../../agents");
+    const parent = { provider: "test", model: "parent", effort: "low" as const };
+
+    // Act
+    const result = await discoverAgents({ projectTrusted: false, globalAgentsDir });
+    const profiles = result.agents
+      .filter((agent) => agent.name === "advisor" || agent.name === "worker")
+      .map((agent) => ({
+        name: agent.name,
+        sourcePath: agent.sourcePath,
+        execution: resolveAgentExecution({ agent: agent.execution, parent }),
+      }));
+
+    // Assert
+    expect(result.agents.map((agent) => agent.name)).toEqual([
+      "advisor",
+      "codebase-analyzer",
+      "codebase-locator",
+      "codebase-pattern-finder",
+      "web-search-researcher",
+      "worker",
+    ]);
+    expect(profiles).toEqual([
+      {
+        name: "advisor",
+        sourcePath: "global://advisor.md",
+        execution: {
+          ok: true,
+          value: {
+            profile: { provider: "cliproxyapi", model: "gpt-6-astra", effort: "xhigh" },
+            source: { model: "agent", effort: "agent" },
+          },
+        },
+      },
+      {
+        name: "worker",
+        sourcePath: "global://worker.md",
+        execution: {
+          ok: true,
+          value: {
+            profile: { provider: "cliproxyapi", model: "gpt-5.6-sol", effort: "medium" },
+            source: { model: "agent", effort: "agent" },
+          },
+        },
+      },
+    ]);
+  });
+
   test("loads trusted project and global definitions in deterministic order with stable paths", async () => {
     // Arrange
     const root = await mkdtemp(join(tmpdir(), "subagent-discovery-"));
@@ -25,7 +76,7 @@ describe("discoverAgents", () => {
       const result = await discoverAgents({ projectRoot: repo, projectTrusted: true, globalAgentsDir: global });
 
       // Assert
-      expect(result.agents.map((agent) => agent.name)).toEqual(["alpha", "scout", "worker", "zeta"]);
+      expect(result.agents.map((agent) => agent.name)).toEqual(["alpha", "worker", "zeta"]);
       expect(result.agents.find((agent) => agent.name === "alpha")?.sourcePath).toBe(".pi/agents/alpha.md");
       expect(result.agents.find((agent) => agent.name === "zeta")?.sourcePath).toBe("global://zeta.md");
       expect(JSON.stringify(result)).not.toContain(root);
@@ -79,7 +130,7 @@ describe("discoverAgents", () => {
       const result = await discoverAgents({ projectRoot: root, projectTrusted: false });
 
       // Assert
-      expect(result.agents.map((agent) => agent.name)).toEqual(["scout", "worker"]);
+      expect(result.agents.map((agent) => agent.name)).toEqual(["worker"]);
       expect(result.repositoryConfig).toBeUndefined();
     } finally {
       await rm(root, { recursive: true, force: true });

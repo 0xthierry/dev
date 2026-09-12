@@ -1,16 +1,15 @@
 import { expect, test } from "bun:test";
-import { BUILTIN_AGENTS } from "./builtins";
+import { discoverAgents } from "./discovery";
 
-test("defaults both built-in agents to high effort without pinning a model", () => {
+test("discovers only the worker fallback when no file-backed agents are installed", async () => {
   // Arrange
-  const agents = BUILTIN_AGENTS;
+  const options = { projectTrusted: false };
 
   // Act
-  const defaults = agents.map(({ name, execution }) => ({ name, execution }));
+  const result = await discoverAgents(options);
 
   // Assert
-  expect(defaults).toEqual([
-    { name: "scout", execution: { effort: "high" } },
-    { name: "worker", execution: { effort: "high" } },
+  expect(result.agents.map(({ name, source, execution }) => ({ name, source, execution }))).toEqual([
+    { name: "worker", source: "builtin", execution: { effort: "high" } },
   ]);
 });

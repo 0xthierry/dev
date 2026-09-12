@@ -73,7 +73,16 @@ queue limit or a conversation-wide reply budget.
 
 ## Agents
 
-Built-in `scout` and `worker` definitions are always available. Global Markdown definitions are read from Pi's agent directory. A trusted project may add `.pi/agents/**/*.md`:
+A built-in `worker` fallback is always available. The repo-managed global `worker.md` overrides that fallback after installation, and other global Markdown definitions such as `advisor.md` are read from Pi's agent directory.
+
+| Repo-managed agent | File default | Responsibility |
+| --- | --- | --- |
+| [advisor](../../../agents/advisor.md) | `cliproxyapi/gpt-6-astra`, `xhigh` | Read-only decision advice through selected lenses |
+| [worker](../../../agents/worker.md) | `cliproxyapi/gpt-5.6-sol`, `medium` | Bounded implementation and verification |
+
+Both select and read definitions through the shared [engineering-principles skill](../../../skills/engineering-principles/SKILL.md). The skill includes progressive TypeScript and testing/Bun references. The built-in fallback remains minimal for standalone installations without these files.
+
+A trusted project may add `.pi/agents/**/*.md`:
 
 ```markdown
 ---
@@ -87,7 +96,7 @@ effort: low
 Project-specific worker instructions.
 ```
 
-`provider` and `model` are optional but atomic: specify both or neither. Project definitions and repository configuration are ignored when Pi does not trust the project. Discovery rejects duplicates within one source, applies deterministic project-over-global-over-built-in precedence across sources, and renders a name-sorted parent catalog without absolute paths or runtime state.
+`provider` and `model` are optional but atomic: specify both or neither. These frontmatter values are agent file defaults. When a named agent's defaults match the assignment, callers should omit `execution` instead of restating them as invocation overrides. Project definitions and repository configuration are ignored when Pi does not trust the project. Discovery rejects duplicates within one source, applies deterministic project-over-global-over-built-in precedence across sources, and renders a name-sorted parent catalog without absolute paths or runtime state.
 
 ## Execution resolution
 
@@ -98,14 +107,14 @@ Provider, model, and effort are assignment settings. Model and effort resolve in
 3. agent Markdown frontmatter;
 4. current parent execution.
 
-Provider and model must always be supplied together and the provider is never guessed from a model name. The selected Pi model must support the exact requested effort. Routing recommendations use `low`, `medium`, and `high`; the runtime retains Pi's broader effort support for explicit requests and existing configurations. Pi's model registry validates provider/model existence and authentication at the boundary, then credentials are immediately discarded. Children confirm their effective model and effort through RPC before accepting work. Follow-up execution changes perform model/thinking updates and state verification before prompting.
+Provider and model must always be supplied together and the provider is never guessed from a model name. The selected Pi model must support the exact requested effort. General task recommendations use `low`, `medium`, and `high`; they do not override named profiles such as the advisor's `xhigh` default. The runtime retains Pi's broader effort support for agent files, explicit requests, and repository settings. Pi's model registry validates provider/model existence and authentication at the boundary, then credentials are immediately discarded. Children confirm their effective model and effort through RPC before accepting work. Follow-up execution changes perform model/thinking updates and state verification before prompting.
 
 Example spawn override:
 
 ```json
 {
   "task_name": "routine-review",
-  "subagent_type": "scout",
+  "subagent_type": "advisor",
   "prompt": "Review this bounded patch for correctness and report exact evidence.",
   "execution": {
     "provider": "xai",
@@ -115,14 +124,23 @@ Example spawn override:
 }
 ```
 
+This routine-review example intentionally overrides the advisor's Astra `xhigh`
+file default with Grok at medium effort. For advisor decision work, omit
+`execution` so the file default applies.
+
 ## Model routing evidence
 
 The `agent_spawn` description contains a stable, advisory provider/model selection
-policy; `agent_followup` refers to the same policy. This does **not** change execution
-defaults, install providers, bypass repository locks, or promise authentication on
-another machine. An omitted execution override still follows normal resolution.
+policy; `agent_followup` refers to the same policy. It directs callers to choose a
+named agent whose file defaults fit the assignment and omit `execution` in that
+case. Callers should set `execution` only when the user or concrete assignment
+requests an override. This does **not** change execution defaults, install providers,
+bypass repository locks, or promise authentication on another machine. An omitted
+execution override still follows normal resolution.
 
 ### Recommended use
+
+Choose a fitting named agent first and omit `execution` unless an override is needed. The table below guides tasks without a fitting named profile and deliberate overrides. It does not replace the model or effort declared by a matching profile: advisor decision work keeps `xhigh`, not the generic planning recommendation of `high`.
 
 | Exact provider / model | Recommended work | Rationale and limitation |
 |---|---|---|
@@ -137,12 +155,15 @@ decisions. Use `xai/grok-4.5` for routine code review, and Astra for code review
 only when the user explicitly requests it. These are the user's routing
 preferences, not benchmark claims.
 An Astra parent should delegate implementation and debugging to Sol with
-non-overlapping ownership. Honor user choices and repository locks; set provider,
-model, and effort explicitly and inspect the returned effective settings.
+non-overlapping ownership. Honor user choices and repository locks. Prefer a named
+agent with matching file defaults and omit `execution`; when an override is needed,
+supply provider and model together while effort remains independently overridable.
+Inspect the returned effective settings.
 
-**Effort is workflow policy, not a benchmark-proven optimum.** The recommendations
-use only low, medium, and high. They do not change runtime defaults or accepted
-schema values. Existing agent defaults still apply when effort is omitted.
+**Effort is workflow policy, not a benchmark-proven optimum.** The general task
+recommendations use low, medium, and high. Named profiles can declare other supported
+levels. Neither the table nor its examples override matching agent defaults,
+repository precedence, or accepted schema values.
 
 The repo-managed `configs/agents/pi/cliproxyapi-models.json` maps the full pinned
 Pi Codex catalog, including the models recommended here. Deploy catalog changes
@@ -270,4 +291,4 @@ bun run test:pi-extensions:e2e subagent
 git diff --check
 ```
 
-The E2E suite loads the extension explicitly with the deterministic faux provider, including a normal isolated child-extension discovery scenario that checks parent-boundary suppression and catalog collisions. The directory also carries standalone `@0xthierry/pi-subagent` package metadata.
+The E2E suite loads the extension explicitly with the deterministic faux provider, including a normal isolated child-extension discovery scenario that checks parent-boundary suppression and catalog collisions. It also installs the shipped advisor and worker definitions into isolated Pi agent directories and verifies that their complete instructions reach the child model. Those propagation checks explicitly override execution to the no-cost test model; discovery tests separately verify the shipped model/effort defaults. The deterministic provider proves runtime wiring, not whether a live model follows the prose. The directory also carries standalone `@0xthierry/pi-subagent` package metadata.

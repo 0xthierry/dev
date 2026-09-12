@@ -66,8 +66,12 @@ test("exposes stable model routing preferences without replacing execution polic
   );
   expect(description).not.toContain("implementation, debugging, planning, and review");
   expect(description).not.toContain("judging correctness");
+  expect(description).toContain("omit execution so those defaults can apply");
+  expect(description).toContain("they do not replace matching named-agent defaults");
+  expect(description).toContain("Set execution only when the user or the concrete assignment requests an override");
   expect(description).toContain("Repository locks still apply");
-  expect(description).not.toMatch(/\b(?:xhigh|max|subscription|openai-codex)\b/);
+  expect(description).not.toContain("set effort explicitly");
+  expect(description).not.toMatch(/\b(?:subscription|openai-codex)\b/);
   expect(first.tools.get("agent_followup")?.description).toContain("guidance in agent_spawn");
 });
 
