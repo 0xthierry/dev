@@ -16,6 +16,7 @@ HOST_CONFIG_TARGETS=(
   moshi
   cameractrls
   brave
+  browser-diagnostics
   voxtype
 )
 

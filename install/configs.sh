@@ -5,6 +5,8 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # shellcheck source=install/herdr.sh
 source "$(dirname "${BASH_SOURCE[0]}")/herdr.sh"
+# shellcheck source=install/browser-diagnostics.sh
+source "$(dirname "${BASH_SOURCE[0]}")/browser-diagnostics.sh"
 
 apply_nvim() {
   ensure_dir "$HOME/.config"

@@ -24,6 +24,7 @@ HOST_CONFIG_TARGETS=(
   herdr
   agents
   brave
+  browser-diagnostics
 )
 
 # shellcheck disable=SC2034

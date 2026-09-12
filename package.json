@@ -42,7 +42,11 @@
     "test:pi-extensions": "bun scripts/pi-extension-tests.ts test",
     "test:pi-extensions:e2e": "bun scripts/pi-extension-tests.ts e2e",
     "lint:pi-extensions": "biome check",
-    "typecheck:pi-extensions": "tsc --noEmit -p tsconfig.pi-extensions.json"
+    "typecheck:pi-extensions": "tsc --noEmit -p tsconfig.pi-extensions.json",
+    "test:browser-diagnostics": "bun run --cwd configs/browser-diagnostics test",
+    "test:browser-diagnostics:e2e": "bun run --cwd configs/browser-diagnostics test:e2e",
+    "lint:browser-diagnostics": "bun run --cwd configs/browser-diagnostics lint",
+    "typecheck:browser-diagnostics": "bun run --cwd configs/browser-diagnostics typecheck"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.13",

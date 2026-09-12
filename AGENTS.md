@@ -29,6 +29,7 @@ The two layers don't validate each other. **Most recurring bug:** config deploye
 | `configs/hypr/` | `~/.config/hypr` | symlink (omarchy only) |
 | `configs/voxtype/` | `~/.config/voxtype/config.toml`, `~/.local/bin/voxtype-post-process` | symlink (omarchy only) |
 | `configs/herdr/config.toml` | `~/.config/herdr/config.toml` | symlink |
+| `configs/browser-diagnostics/` | `~/.local/bin/chrome-devtools-cli`, `~/.local/bin/browser-diagnostics` | `install/browser-diagnostics.sh`; frozen package-local Bun dependencies and launcher links (omarchy/macbook only) |
 | Moshi host integration | `~/.local/bin/herdr`, refreshed agent hooks, `moshi-hook` user service, mosh firewall rule | `install/moshi.sh` |
 | `configs/shell/` | sourced via `~/.zshrc` / `~/.zshenv` | written by `install/shell.sh` |
 | `configs/agents/` | `~/.agents/`, `~/.claude/`, `~/.codex/`, `~/.pi/agent/` | special installer |
@@ -54,6 +55,7 @@ Names differ between Homebrew and pacman (`tree-sitter-cli` vs `tree-sitter`, `m
 | Multi-account Codex proxy for Pi/Codex | `install/cliproxyapi.sh`, `configs/cliproxyapi/`, `scripts/cliproxy` (default Pi/Codex provider; OAuth state stays local) |
 | Shared Claude/Codex/Pi project memory | `install/ai-memory.sh`, vendored `configs/agents/pi/extensions/ai-memory-pi.ts` (pinned `ai-memory` release; do not run `install-hooks --agent pi --apply`) |
 | Add tool config | `configs/cli/` plus `install/tools.sh` if needed |
+| Brave diagnostics through skills, not native MCP tools | `configs/browser-diagnostics/`, `install/browser-diagnostics.sh`, shared `browser-diagnostics` / `web-performance-investigation` skills; attaches only to local CDP `127.0.0.1:9222` |
 | Add Herdr/Moshi integration | `install/herdr.sh`, `install/moshi.sh`, generated hooks under `configs/agents/{hooks,pi/extensions}/`, and the host's `HOST_CONFIG_TARGETS` |
 | Add Omarchy dictation (Voxtype + local LLM cleanup) | `configs/voxtype/`, `install/hosts/omarchy.sh` (`configure_voxtype`), Hyprland F9 / Super+Ctrl+X |
 | Add shell behavior | `configs/shell/` plus `install/shell.sh` |
@@ -77,6 +79,12 @@ Default to shared. Only touch `install/hosts/{host}.sh` when the user names a ho
 bash -n setup.sh install/*.sh install/hosts/*.sh
 shellcheck setup.sh install/*.sh install/hosts/*.sh
 bash tests/ai-memory.test.sh
+bash tests/browser-diagnostics.test.sh
+bun run test:browser-diagnostics
+bun run typecheck:browser-diagnostics
+bun run lint:browser-diagnostics
+# Uses an isolated browser fixture, not the user's Brave session:
+bun run test:browser-diagnostics:e2e
 ./setup.sh dev --dry-run
 ./setup.sh omarchy --dry-run
 ./setup.sh macbook --dry-run

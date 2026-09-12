@@ -137,6 +137,9 @@ apply_host_configs() {
       brave)
         apply_brave
         ;;
+      browser-diagnostics)
+        apply_browser_diagnostics
+        ;;
       *)
         log_item "Unknown config target: $target"
         ;;

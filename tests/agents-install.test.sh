@@ -153,6 +153,18 @@ EOF
     printf 'ok: %s deploys every engineering principle reference unchanged\n' "$target"
   done
 
+  local skill
+  for target in .agents .codex .claude .pi/agent; do
+    for skill in browser-diagnostics web-performance-investigation; do
+      [[ "$(readlink "$test_home/$target/skills/$skill")" == "$REPO_ROOT/configs/agents/skills/$skill" ]] || fail "missing $skill skill link: $target"
+      cmp -s "$test_home/$target/skills/$skill/SKILL.md" "$REPO_ROOT/configs/agents/skills/$skill/SKILL.md" || fail "installer rewrote $skill for $target"
+    done
+    cmp -s "$test_home/$target/skills/browser-diagnostics/references/mcp-tools.md" "$REPO_ROOT/configs/agents/skills/browser-diagnostics/references/mcp-tools.md" || fail "missing progressively disclosed MCP reference: $target"
+  done
+  assert_file_excludes "does not register Chrome DevTools MCP in Codex" "$test_home/.codex/config.toml" 'chrome-devtools'
+  assert_file_excludes "does not register diagnostics as a Pi extension" "$test_home/.pi/agent/settings.json" 'chrome-devtools'
+  printf 'ok: installs diagnostics as shared skills without native MCP registration\n'
+
   [[ "$(readlink "$test_home/.pi/agent/skills/agent-browser")" == "$REPO_ROOT/configs/agents/skills/agent-browser" ]] || fail "missing original agent-browser skill in Pi"
   cmp -s "$test_home/.pi/agent/skills/agent-browser/SKILL.md" "$REPO_ROOT/configs/agents/skills/agent-browser/SKILL.md" || fail "Pi rewrote agent-browser skill"
   [[ "$(readlink "$test_home/.pi/agent/skills/control-browser")" == "$REPO_ROOT/configs/agents/pi/extensions/browser-use/skills/control-browser" ]] || fail "missing control-browser skill in Pi"
