@@ -54,6 +54,11 @@ main() {
   export HOME PATH
   mkdir -p "$HOME/.local/bin" "$TEST_TMP_DIR/fake-bin"
 
+  mkdir -p "$HOME/.grok/downloads"
+  printf '#!/usr/bin/env bash\n' > "$HOME/.grok/downloads/grok-linux-x86_64"
+  chmod +x "$HOME/.grok/downloads/grok-linux-x86_64"
+  ln -s "$HOME/.grok/downloads/grok-linux-x86_64" "$HOME/.local/bin/grok"
+
   cat > "$HOME/.zshrc" <<'EOF'
 # keep before
 # >>> grok installer >>>
@@ -61,25 +66,58 @@ export PATH="$HOME/.grok/bin:$PATH"
 # <<< grok installer <<<
 # keep after
 EOF
-  DRY_RUN=0 remove_grok_shell_block "$HOME/.zshrc"
+
+  export PI_TEST_LOG="$TEST_TMP_DIR/pi-args.log"
+  cat > "$TEST_TMP_DIR/fake-bin/pi" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$PI_TEST_LOG"
+EOF
+  chmod +x "$TEST_TMP_DIR/fake-bin/pi"
+
+  DRY_RUN=1 install_grok_pi_launcher > "$TEST_TMP_DIR/grok-dry-run.log"
+  assert_file_contains "dry-run plans the Grok Pi launcher link" "$TEST_TMP_DIR/grok-dry-run.log" "ln -s $REPO_ROOT/scripts/grok $HOME/.local/bin/grok"
+  if [[ "$(readlink "$HOME/.local/bin/grok")" == "$HOME/.grok/downloads/grok-linux-x86_64" ]]; then
+    printf 'ok: Grok Pi launcher dry-run preserves the installed command\n'
+  else
+    printf 'not ok: Grok Pi launcher dry-run preserves the installed command\n' >&2
+    return 1
+  fi
+
+  DRY_RUN=0 install_grok_pi_launcher
   assert_file_contains "preserves shell content around the Grok block" "$HOME/.zshrc" "# keep after"
   assert_file_excludes "removes installer-managed Grok shell config" "$HOME/.zshrc" "grok installer"
 
-  DRY_RUN=1 install_grok_cli_binary "1.0.13" > "$TEST_TMP_DIR/grok-install.log"
-  assert_file_contains "uses the official Grok installer" "$TEST_TMP_DIR/grok-install.log" "https://x.ai/cli/install.sh"
-  assert_file_contains "pins the Grok CLI version" "$TEST_TMP_DIR/grok-install.log" "1.0.13"
-  assert_file_contains "installs Grok in the shared user bin directory" "$TEST_TMP_DIR/grok-install.log" "GROK_BIN_DIR=$HOME/.local/bin"
-  assert_file_contains "prevents the installer from editing shell files" "$TEST_TMP_DIR/grok-install.log" "PATH=$HOME/.local/bin:"
+  if [[ "$(readlink "$HOME/.local/bin/grok")" == "$REPO_ROOT/scripts/grok" ]]; then
+    printf 'ok: installs the repo-managed Grok Pi launcher\n'
+  else
+    printf 'not ok: installs the repo-managed Grok Pi launcher\n' >&2
+    return 1
+  fi
 
-  # shellcheck disable=SC1091
-  source "$REPO_ROOT/install/env.sh"
-  printf '%s\n' "${SHARED_ENV_VARS[@]}" > "$TEST_TMP_DIR/env.log"
-  assert_file_contains "disables Grok product telemetry" "$TEST_TMP_DIR/env.log" "GROK_TELEMETRY_ENABLED=false"
-  assert_file_contains "disables Grok trace uploads" "$TEST_TMP_DIR/env.log" "GROK_TELEMETRY_TRACE_UPLOAD=false"
-  assert_file_contains "disables Grok Mixpanel analytics" "$TEST_TMP_DIR/env.log" "GROK_TELEMETRY_MIXPANEL_ENABLED=false"
-  assert_file_contains "disables Grok external telemetry" "$TEST_TMP_DIR/env.log" "GROK_EXTERNAL_OTEL=0"
-  assert_file_contains "disables Grok feedback uploads" "$TEST_TMP_DIR/env.log" "GROK_FEEDBACK_ENABLED=false"
-  assert_file_contains "disables Grok session relay sync" "$TEST_TMP_DIR/env.log" "GROK_RELAY_SYNC_ENABLED=false"
+  if [[ -L "$HOME/.local/bin/grok.bak" ]] \
+    && [[ "$(readlink "$HOME/.local/bin/grok.bak")" == "$HOME/.grok/downloads/grok-linux-x86_64" ]]; then
+    printf 'ok: preserves the replaced standalone Grok command\n'
+  else
+    printf 'not ok: preserves the replaced standalone Grok command\n' >&2
+    return 1
+  fi
+
+  "$HOME/.local/bin/grok" "review this"
+  printf '%s\n' --model xai/grok-4.6 --thinking high "review this" > "$TEST_TMP_DIR/expected-pi-args.log"
+  if cmp -s "$PI_TEST_LOG" "$TEST_TMP_DIR/expected-pi-args.log"; then
+    printf 'ok: Grok command launches Pi with Grok 4.6 and high thinking\n'
+  else
+    printf 'not ok: Grok command launches Pi with Grok 4.6 and high thinking\n' >&2
+    return 1
+  fi
+
+  DRY_RUN=0 install_grok_pi_launcher >/dev/null
+  if [[ ! -e "$HOME/.local/bin/grok.bak.1" && ! -L "$HOME/.local/bin/grok.bak.1" ]]; then
+    printf 'ok: Grok Pi launcher installation is idempotent\n'
+  else
+    printf 'not ok: Grok Pi launcher installation is idempotent\n' >&2
+    return 1
+  fi
 
   export BREW_TEST_LOG="$TEST_TMP_DIR/brew.log"
   cat > "$TEST_TMP_DIR/fake-bin/uname" <<'EOF'

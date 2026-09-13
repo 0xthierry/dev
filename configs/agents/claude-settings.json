@@ -13,7 +13,7 @@
     "sessionUrl": false
   },
   "autoMemoryEnabled": false,
-  "effortLevel": "xhigh",
+  "effortLevel": "low",
   "tui": "fullscreen",
   "permissions": {
     "allow": [

@@ -4,6 +4,7 @@ set -euo pipefail
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+AI_CLI_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AMQ_SOURCE_URL="https://github.com/avivsinai/agent-message-queue.git"
 AMQ_VERSION="v0.77.1"
 AMQ_COMMIT="05678d46cb989b191657aaa29f4a5195f5de416c"
@@ -230,27 +231,27 @@ remove_grok_shell_block() {
   ' _ "$shell_file"
 }
 
-install_grok_cli_binary() {
-  local version="$1"
-  local install_dir="$HOME/.local/bin"
+install_grok_pi_launcher() {
+  local source_path="$AI_CLI_REPO_ROOT/scripts/grok"
+  local target_path="$HOME/.local/bin/grok"
   local shell_file=""
+  local backup_path=""
 
   for shell_file in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.config/fish/config.fish"; do
     remove_grok_shell_block "$shell_file"
   done
 
-  if installed_binary_is_pinned "grok" "$version"; then
-    log_item "Grok CLI: already at $version"
+  ensure_dir "$(dirname "$target_path")"
+  if [[ -L "$target_path" ]] \
+    && [[ "$(resolve_symlink_target "$target_path")" != "$(canonicalize_path "$source_path")" ]]; then
+    backup_path="$(next_backup_path "$target_path")"
+    run_cmd mv "$target_path" "$backup_path"
+    log_item "Grok command: backed up to $backup_path"
+    run_cmd ln -s "$source_path" "$target_path"
+    log_item "Grok Pi launcher: linked"
     return 0
   fi
-
-  ensure_dir "$install_dir"
-  log_item "Installing Grok CLI @ $version..."
-  # Install into the shared user bin directory and expose it to the installer so
-  # it does not modify shell startup files managed by this repository.
-  # shellcheck disable=SC2016 # $0 is intentionally expanded by the inner bash.
-  run_cmd env "GROK_BIN_DIR=$install_dir" "PATH=$install_dir:$PATH" \
-    bash -c 'curl -fsSL https://x.ai/cli/install.sh | bash -s -- "$0"' "$version"
+  safe_link_path "$source_path" "$target_path" "Grok Pi launcher"
 }
 
 install_agent_browser_binary() {
@@ -379,9 +380,8 @@ install_ai_clis() {
   # Factory CLI — `droid` binary
   install_factory_cli_binary
 
-  # Grok CLI (xAI) — install first because its installer also creates a generic
-  # `agent` alias; Cursor is installed afterwards and owns that alias.
-  install_grok_cli_binary "1.0.13"
+  # `grok` launches Pi with direct xAI Grok 4.6 and high thinking.
+  install_grok_pi_launcher
 
   # Cursor Agent CLI — `cursor-agent` binary
   install_cursor_agent_cli_binary
