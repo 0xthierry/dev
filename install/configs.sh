@@ -71,15 +71,29 @@ apply_agents() {
 
 apply_brave_linux() {
   local wrapper_src="$REPO_ROOT/configs/brave/brave-wrapper"
-  local wrapper_dst="$HOME/.local/bin/brave-wrapper"
   local desktop_src="$REPO_ROOT/configs/brave/brave-browser.desktop"
   local desktop_dst="$HOME/.local/share/applications/brave-browser.desktop"
+  local command_name=""
+  local command_dst=""
 
   ensure_dir "$HOME/.local/bin"
-  safe_link_path "$wrapper_src" "$wrapper_dst" "brave wrapper"
+  for command_name in brave-wrapper brave brave-browser brave-browser-stable; do
+    command_dst="$HOME/.local/bin/$command_name"
+    safe_link_path "$wrapper_src" "$command_dst" "Brave command $command_name"
+    if (( ! ${DRY_RUN:-0} )) \
+      && [[ "$(resolve_symlink_target "$command_dst")" != "$(canonicalize_path "$wrapper_src")" ]]; then
+      printf 'error: Brave command did not converge to the managed wrapper: %s\n' "$command_dst" >&2
+      return 1
+    fi
+  done
 
   ensure_dir "$HOME/.local/share/applications"
-  safe_link_path "$desktop_src" "$desktop_dst" "brave desktop entry"
+  safe_link_path "$desktop_src" "$desktop_dst" "Brave desktop entry"
+  if (( ! ${DRY_RUN:-0} )) \
+    && [[ "$(resolve_symlink_target "$desktop_dst")" != "$(canonicalize_path "$desktop_src")" ]]; then
+    printf 'error: Brave desktop entry did not converge to the managed source: %s\n' "$desktop_dst" >&2
+    return 1
+  fi
 
   if check_installed update-desktop-database; then
     run_cmd update-desktop-database "$HOME/.local/share/applications"

@@ -480,10 +480,18 @@ configure_omarchy_luks_performance() {
 }
 
 set_default_browser_brave() {
+  local current_default=""
+
   log_section "Default Browser"
 
   if ! check_installed xdg-settings; then
     log_item "xdg-settings not available, skipping"
+    return 0
+  fi
+
+  current_default="$(xdg-settings get default-web-browser 2>/dev/null || true)"
+  if [[ "$current_default" == "brave-browser.desktop" ]]; then
+    log_item "Default browser: already Brave"
     return 0
   fi
 
