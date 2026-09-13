@@ -6,7 +6,6 @@ description: >-
   which concrete choices they changed or why a relevant principle was not used.
   Includes TypeScript and testing guidance with on-demand Bun API references.
   Do not load every definition by default.
-disable-model-invocation: true
 ---
 
 # Select and apply engineering principles
