@@ -1,6 +1,7 @@
 ---
 name: web-performance-investigation
 description: Use to investigate browser performance or memory regressions with repeatable scenarios, matched source/build evidence, controlled measurements, and privacy-safe reports on local Omarchy or macOS desktops.
+disable-model-invocation: true
 ---
 
 # Web performance investigation

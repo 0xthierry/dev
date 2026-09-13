@@ -1,6 +1,7 @@
 ---
 name: browser-diagnostics
 description: Use to collect bounded CPU, network, JavaScript coverage, heap, or performance evidence from the existing local Brave browser on Omarchy or macOS while the selected browser controller owns interaction. Attach through the existing loopback CDP endpoint; do not launch another browser.
+disable-model-invocation: true
 ---
 
 # Browser diagnostics

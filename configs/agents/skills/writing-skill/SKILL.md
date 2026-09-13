@@ -5,6 +5,7 @@ description: >-
   or its linked reference documents. Covers instructional voice, skill structure,
   scope, examples, output contracts, and progressive disclosure. Not for executing
   the workflow a skill describes or editing unrelated prose.
+disable-model-invocation: true
 ---
 
 # Write a skill
