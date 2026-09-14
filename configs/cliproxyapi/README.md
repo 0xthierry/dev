@@ -1,9 +1,10 @@
-# Multi-account Codex for Pi and Codex
+# Multi-account Codex pool for Pi
 
 [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) runs locally and translates
 OpenAI Responses requests into Codex subscription requests. Each account completes
 its own OAuth login; the proxy stores and refreshes those tokens separately. Pi
-and Codex receive only a local proxy key, not the upstream OAuth credentials.
+receives only a local proxy key, not the upstream OAuth credentials. Codex CLI stays
+on its direct built-in OpenAI provider.
 This is third-party software, not an OpenAI-supported account-pooling feature;
 use only accounts you are authorized to use and comply with provider terms.
 
@@ -17,8 +18,9 @@ bash configs/agents/install.sh --yes
 ```
 
 The second command syncs all repository-managed agent configuration, not just the
-proxy. It preserves unrelated Pi providers and Codex MCP entries. Both clients
-now default to the proxy; enroll accounts and start the service before using them.
+proxy. It preserves unrelated Pi providers and Codex MCP entries. Pi defaults to the
+proxy, while Codex remains direct; enroll accounts and start the service before using
+Pi through the pool.
 
 Log in once per **distinct account**, choosing the appropriate account in your browser:
 
@@ -30,7 +32,7 @@ cliproxy login
 The helper uses device OAuth (enable device-code authorization in your ChatGPT
 security settings if required). It works on SSH hosts without forwarding a callback
 port. Repeating login with the same account refreshes that account, not pool size.
-No credentials are imported from Pi/Codex or synchronized across machines.
+No credentials are imported from Pi or Codex CLI, or synchronized across machines.
 
 On macOS, setup automatically enables and starts the LaunchAgent, including startup
 at future logins. Stop any manually running `cliproxy serve` before running setup so
@@ -60,33 +62,30 @@ cliproxy check                  # API authentication + model availability, no in
 cliproxy models                 # discover models exposed by logged-in accounts
 pi                             # GPT-6 Astra via pool
 pi --model gpt-5.6-sol
-codex                          # GPT-6 Astra via pool
-codex -m gpt-5.6-sol
+codex                          # Direct built-in OpenAI provider
 ```
 
 In an existing Pi session, use `/model` and select provider `cliproxyapi`. Its entries
 are merged into `~/.pi/agent/models.json`; the built-in model catalog remains intact.
-Both clients read the key from its private file using command-backed authentication;
-no environment export or wrapper is required. `cliproxy pi` / `cliproxy codex` still
-work as explicit proxy selectors.
+Pi reads the key from its private file using command-backed authentication; no
+environment export or wrapper is required. `cliproxy pi` remains an explicit proxy
+selector. The helper intentionally has no Codex client command.
 
-To bypass the proxy for a new session:
+To bypass the proxy for a new Pi session:
 
 ```bash
 pi --provider openai-codex --model gpt-6-astra
-codex -c 'model_provider="openai"'
-# For noninteractive Codex, put the override after the subcommand:
-codex exec -c 'model_provider="openai"' 'your prompt'
 ```
 
-Existing sessions, project-level Pi settings, and agents
+Codex is repository-configured with `model_provider = "openai"` and uses its normal
+direct authentication. Existing Pi sessions, project-level Pi settings, and agents
 with explicitly pinned `openai-codex` providers do **not** automatically move to the
-pool. Select `cliproxyapi` explicitly for those agents when desired.
+pool. Select `cliproxyapi` explicitly for those Pi agents when desired.
 
 Pi uses standard `openai-responses` with full conversation history, rather than its
 special ChatGPT transport. Consequently the repo's Codex-native compaction and
 fast-mode extensions do not apply to this provider; normal Pi compaction remains
-available. Codex uses SSE rather than WebSockets to avoid connection-bound response
+available. Pi uses SSE rather than WebSockets to avoid connection-bound response
 chaining across accounts. Model access still depends on account entitlements.
 The repo-managed Pi catalog maps all eight `openai-codex` models in Pi 0.85.1:
 
@@ -154,12 +153,12 @@ cliproxy check
 ```
 
 `check` does not prove inference or failover works. After adding two accounts, test a
-short conversation plus a tool call in **both clients**. Controlled account failover
+short conversation plus a tool call in Pi. Controlled account failover
 and reasoning/tool-history replay need live verification; don't deliberately exhaust
 accounts to test it. An empty model list means no usable account/model is loaded.
 A missing key/service is fixed by the targeted installer/start commands above.
 
-To stop pooling, select direct providers as shown above (or change the repo defaults)
+To stop pooling, select Pi's direct provider as shown above (or change the repo default)
 and stop the service:
 `systemctl --user disable --now cliproxyapi.service` on Linux, or
 `launchctl bootout "gui/$(id -u)/dev.cliproxyapi"` followed by

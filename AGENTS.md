@@ -53,7 +53,7 @@ Names differ between Homebrew and pacman (`tree-sitter-cli` vs `tree-sitter`, `m
 | Task | Location |
 |---|---|
 | Add shared CLI tool | `install/packages/common.sh` |
-| Multi-account Codex proxy for Pi/Codex | `install/cliproxyapi.sh`, `configs/cliproxyapi/`, `scripts/cliproxy` (default Pi/Codex provider; OAuth state stays local) |
+| Multi-account Codex proxy for Pi | `install/cliproxyapi.sh`, `configs/cliproxyapi/`, `scripts/cliproxy` (default Pi provider; Codex CLI stays direct; OAuth state stays local) |
 | Shared Claude/Codex/Pi project memory | `install/ai-memory.sh`, vendored `configs/agents/pi/extensions/ai-memory-pi.ts` (pinned `ai-memory` release; do not run `install-hooks --agent pi --apply`) |
 | Add tool config | `configs/cli/` plus `install/tools.sh` if needed |
 | Brave diagnostics through skills, not native MCP tools | `configs/browser-diagnostics/`, `install/browser-diagnostics.sh`, shared `browser-diagnostics` / `web-performance-investigation` skills; attaches only to local CDP `127.0.0.1:9222` |

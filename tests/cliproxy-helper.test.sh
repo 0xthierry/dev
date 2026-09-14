@@ -14,7 +14,6 @@ printf '%s' "${CLIPROXY_API_KEY:-}" > "$CAPTURE_ENV"
 EOF
 chmod +x "$tmp/bin/mock"
 ln -s "$tmp/bin/mock" "$tmp/bin/pi"
-ln -s "$tmp/bin/mock" "$tmp/bin/codex"
 ln -s "$tmp/bin/mock" "$HOME/.local/bin/cli-proxy-api"
 export PATH="$tmp/bin:$PATH"
 "$ROOT/scripts/cliproxy" login
@@ -22,19 +21,18 @@ export PATH="$tmp/bin:$PATH"
 "$ROOT/scripts/cliproxy" pi --model gpt-5.6-sol
  grep -qx -- 'cliproxyapi' "$CAPTURE"
  grep -qx -- 'gpt-5.6-sol' "$CAPTURE"
-"$ROOT/scripts/cliproxy" codex exec 'hello world'
- grep -qx -- 'model_provider="cliproxyapi"' "$CAPTURE"
- grep -qx -- 'hello world' "$CAPTURE"
-[[ "$(head -1 "$CAPTURE")" == exec ]]
-[[ "$(tail -1 "$CAPTURE")" == 'model_provider="cliproxyapi"' ]]
+if "$ROOT/scripts/cliproxy" codex 2>/dev/null; then
+  echo 'not ok: helper still accepts Codex as a proxy client' >&2
+  exit 1
+fi
 [[ ! -s "$CAPTURE_ENV" ]]
 if grep -Fq "$(< "$HOME/.config/cliproxyapi/api-key")" "$CAPTURE"; then
   echo 'not ok: proxy key exposed in arguments' >&2
   exit 1
 fi
 printf 'bad-key\n' > "$HOME/.config/cliproxyapi/api-key"
-if "$ROOT/scripts/cliproxy" codex 2>/dev/null; then
+if "$ROOT/scripts/cliproxy" pi 2>/dev/null; then
   echo 'not ok: accepted invalid proxy key' >&2
   exit 1
 fi
-printf 'ok: helper device login, provider selection, argument forwarding, secret handling\n'
+printf 'ok: helper device login, Pi-only provider selection, argument forwarding, secret handling\n'

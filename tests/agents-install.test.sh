@@ -194,9 +194,8 @@ EOF
   assert_json "defaults Pi to proxy" "$test_home/.pi/agent/settings.json" '.defaultProvider == "cliproxyapi"'
   assert_json "defaults Pi sessions to Sol" "$test_home/.pi/agent/settings.json" '.defaultModel == "gpt-5.6-sol"'
   assert_json "defaults Pi sessions to high reasoning" "$test_home/.pi/agent/settings.json" '.defaultThinkingLevel == "high"'
-  assert_file_contains "defaults Codex to proxy" "$test_home/.codex/config.toml" 'model_provider = "cliproxyapi"'
-  assert_file_contains "Codex reads proxy key without environment export" "$test_home/.codex/config.toml" '[model_providers.cliproxyapi.auth]'
-  assert_file_contains "adds Codex proxy provider" "$test_home/.codex/config.toml" '[model_providers.cliproxyapi]'
+  assert_file_contains "keeps Codex on the direct OpenAI provider" "$test_home/.codex/config.toml" 'model_provider = "openai"'
+  assert_file_excludes "does not add the proxy provider to Codex" "$test_home/.codex/config.toml" 'cliproxyapi'
   cp "$test_home/.pi/agent/models.json" "$TEST_TMP_DIR/first-pi-models.json"
 
   assert_file_contains "preserves Codex Figma MCP server" "$test_home/.codex/config.toml" '[mcp_servers.figma]'
