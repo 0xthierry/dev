@@ -1,0 +1,274 @@
+#!/usr/bin/env bash
+# Perform an allowlisted Hyprland window-management fallback after Cua refuses.
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+Usage:
+  cua-omarchy-window windows
+  cua-omarchy-window correlate
+  cua-omarchy-window move-to-output ADDRESS OUTPUT
+  cua-omarchy-window focus ADDRESS --authorize-foreground
+  cua-omarchy-window close ADDRESS --authorize-close
+EOF
+}
+
+fail() {
+  printf 'error: %s\n' "$1" >&2
+  exit 1
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"
+}
+
+require_runtime() {
+  require_command hyprctl
+  require_command jq
+}
+
+validate_address() {
+  [[ "$1" =~ ^0x[0-9A-Fa-f]+$ ]] || fail "invalid Hyprland window address: $1"
+}
+
+read_clients() {
+  local clients_json=""
+  clients_json="$(hyprctl clients -j)" || fail "unable to enumerate Hyprland windows"
+  jq -e 'type == "array"' >/dev/null <<< "$clients_json" \
+    || fail "Hyprland returned invalid window data"
+  printf '%s\n' "$clients_json"
+}
+
+correlate_windows() {
+  local clients_json=""
+  local cua_json=""
+  local result=""
+
+  require_command cua-driver
+  clients_json="$(read_clients)"
+  cua_json="$(cua-driver list_windows '{"on_screen_only":true}')" \
+    || fail "unable to enumerate Cua windows"
+
+  result="$(jq -n --argjson hypr "$clients_json" --argjson cua "$cua_json" '
+    def cua_windows:
+      if ($cua | type) == "array" then $cua
+      elif ($cua | type) == "object" and ($cua.windows | type) == "array" then $cua.windows
+      else error("Cua Driver returned invalid window data")
+      end;
+    def valid_cua_window:
+      (.pid | type) == "number"
+      and (.window_id | type) == "number"
+      and (.bounds | type) == "object"
+      and ([.bounds.x, .bounds.y, .bounds.width, .bounds.height] | all(type == "number"));
+    def matches($window):
+      [$hypr[]
+       | select(
+           (.pid | type) == "number"
+           and (.at | type) == "array" and (.at | length) >= 2
+           and (.size | type) == "array" and (.size | length) >= 2
+           and .pid == $window.pid
+           and .at[0] == $window.bounds.x
+           and .at[1] == $window.bounds.y
+           and .size[0] == $window.bounds.width
+           and .size[1] == $window.bounds.height
+         )];
+    [cua_windows[]
+     | if valid_cua_window then . else error("Cua Driver returned an invalid window record") end
+     | . as $window
+     | matches($window) as $matches
+     | {
+         pid: $window.pid,
+         window_id: $window.window_id,
+         title: ($window.title // null),
+         bounds: $window.bounds,
+         match_status: (
+           if ($matches | length) == 1 then "exact"
+           elif ($matches | length) == 0 then "unmatched"
+           else "ambiguous"
+           end
+         )
+       }
+       + if ($matches | length) == 1 then {hypr_address: $matches[0].address} else {} end
+    ]
+  ' 2>&1)" || fail "$result"
+
+  printf '%s\n' "$result"
+  if jq -e 'any(.[]; .match_status == "ambiguous")' >/dev/null <<< "$result"; then
+    return 1
+  fi
+}
+
+resolve_client_address() {
+  local requested="$1"
+  local clients_json=""
+  local matches=""
+  local count=""
+
+  validate_address "$requested"
+  clients_json="$(read_clients)"
+  matches="$(jq -c --arg address "$requested" \
+    '[.[] | select((.address | ascii_downcase) == ($address | ascii_downcase))]' \
+    <<< "$clients_json")" || fail "unable to inspect Hyprland window data"
+  count="$(jq -r 'length' <<< "$matches")"
+
+  case "$count" in
+    0) fail "unknown Hyprland window address: $requested" ;;
+    1) jq -r '.[0].address' <<< "$matches" ;;
+    *) fail "ambiguous Hyprland window address: $requested" ;;
+  esac
+}
+
+resolve_output() {
+  local requested="$1"
+  local monitors_json=""
+  local matches=""
+  local count=""
+
+  monitors_json="$(hyprctl monitors -j)" || fail "unable to enumerate Hyprland outputs"
+  jq -e 'type == "array"' >/dev/null <<< "$monitors_json" \
+    || fail "Hyprland returned invalid output data"
+  matches="$(jq -c --arg output "$requested" '[.[] | select(.name == $output)]' \
+    <<< "$monitors_json")" || fail "unable to inspect Hyprland output data"
+  count="$(jq -r 'length' <<< "$matches")"
+
+  case "$count" in
+    0) fail "unknown Hyprland output: $requested" ;;
+    1)
+      jq -er '
+        .[0]
+        | select((.activeWorkspace.name // "") != "")
+        | [.id, .activeWorkspace.name]
+        | @tsv
+      ' <<< "$matches" || fail "Hyprland output has no active workspace: $requested"
+      ;;
+    *) fail "ambiguous Hyprland output: $requested" ;;
+  esac
+}
+
+verify_move() {
+  local address="$1"
+  local monitor_id="$2"
+  local workspace="$3"
+  local clients_json=""
+  local attempt=0
+
+  for (( attempt = 0; attempt < 20; attempt += 1 )); do
+    clients_json="$(read_clients)"
+    if jq -e --arg address "$address" --arg workspace "$workspace" --argjson monitor "$monitor_id" '
+      any(.[];
+        ((.address | ascii_downcase) == ($address | ascii_downcase))
+        and .monitor == $monitor
+        and .workspace.name == $workspace)
+    ' >/dev/null <<< "$clients_json"; then
+      return 0
+    fi
+    sleep 0.05
+  done
+
+  fail "unable to verify window $address on workspace $workspace of monitor $monitor_id"
+}
+
+verify_focus() {
+  local address="$1"
+  local active_json=""
+  local attempt=0
+
+  for (( attempt = 0; attempt < 20; attempt += 1 )); do
+    active_json="$(hyprctl activewindow -j)" || fail "unable to inspect the active Hyprland window"
+    if jq -e --arg address "$address" \
+      '((.address // "") | ascii_downcase) == ($address | ascii_downcase)' \
+      >/dev/null <<< "$active_json"; then
+      return 0
+    fi
+    sleep 0.05
+  done
+
+  fail "unable to verify focus on window $address"
+}
+
+verify_closed() {
+  local address="$1"
+  local clients_json=""
+  local attempt=0
+
+  for (( attempt = 0; attempt < 20; attempt += 1 )); do
+    clients_json="$(read_clients)"
+    if jq -e --arg address "$address" \
+      'all(.[]; (.address | ascii_downcase) != ($address | ascii_downcase))' \
+      >/dev/null <<< "$clients_json"; then
+      return 0
+    fi
+    sleep 0.05
+  done
+
+  fail "unable to verify that window $address closed"
+}
+
+main() {
+  local command="${1:-}"
+  local requested_address=""
+  local address=""
+  local output=""
+  local output_state=""
+  local monitor_id=""
+  local workspace=""
+
+  case "$command" in
+    windows)
+      [[ $# -eq 1 ]] || { usage; exit 2; }
+      require_runtime
+      read_clients
+      ;;
+    correlate)
+      [[ $# -eq 1 ]] || { usage; exit 2; }
+      require_runtime
+      correlate_windows
+      ;;
+    move-to-output)
+      [[ $# -eq 3 ]] || { usage; exit 2; }
+      require_runtime
+      requested_address="$2"
+      output="$3"
+      address="$(resolve_client_address "$requested_address")"
+      output_state="$(resolve_output "$output")"
+      IFS=$'\t' read -r monitor_id workspace <<< "$output_state"
+      hyprctl dispatch movetoworkspacesilent "$workspace,address:$address" >/dev/null \
+        || fail "Hyprland refused to move window $address"
+      verify_move "$address" "$monitor_id" "$workspace"
+      printf 'moved window %s to output %s workspace %s\n' "$address" "$output" "$workspace"
+      ;;
+    focus)
+      [[ $# -eq 3 && "$3" == "--authorize-foreground" ]] \
+        || fail "focus requires ADDRESS --authorize-foreground"
+      require_runtime
+      address="$(resolve_client_address "$2")"
+      hyprctl dispatch focuswindow "address:$address" >/dev/null \
+        || fail "Hyprland refused to focus window $address"
+      verify_focus "$address"
+      printf 'focused window %s\n' "$address"
+      ;;
+    close)
+      [[ $# -eq 3 && "$3" == "--authorize-close" ]] \
+        || fail "close requires ADDRESS --authorize-close"
+      require_runtime
+      address="$(resolve_client_address "$2")"
+      hyprctl dispatch closewindow "address:$address" >/dev/null \
+        || fail "Hyprland refused to close window $address"
+      verify_closed "$address"
+      printf 'closed window %s\n' "$address"
+      ;;
+    -h|--help)
+      usage
+      ;;
+    '')
+      usage
+      exit 2
+      ;;
+    *)
+      usage
+      fail "unknown command: $command"
+      ;;
+  esac
+}
+
+main "$@"

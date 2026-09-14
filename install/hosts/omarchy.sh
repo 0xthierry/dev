@@ -34,6 +34,7 @@ HOST_PACMAN_PACKAGES=(
   fuse2
   ghostty
   gnome-keyring
+  grim
   hicolor-icon-theme
   libnotify
   libsecret

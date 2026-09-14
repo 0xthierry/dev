@@ -5,6 +5,8 @@ set -euo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)}"
+
 CUA_DRIVER_VERSION="0.28.1"
 CUA_DRIVER_RELEASE_TAG="cua-driver-rs-v${CUA_DRIVER_VERSION}"
 CUA_DRIVER_RELEASE_BASE_URL="${CUA_DRIVER_RELEASE_BASE_URL:-https://github.com/trycua/cua/releases/download/${CUA_DRIVER_RELEASE_TAG}}"
@@ -36,10 +38,6 @@ cua_driver_binary_checksum() {
   esac
 }
 
-cua_driver_skills_checksum() {
-  printf '%s\n' '3fbd1e7540e9084e294d03f92a0e933427fa60cbbba6e94844e5d55af679d17f'
-}
-
 cua_driver_verify_checksum() {
   local archive="$1"
   local expected="$2"
@@ -64,13 +62,12 @@ PY
   fi
 }
 
-# Validate every member before extracting a deliberately small, platform-specific subset.
-cua_driver_extract_archive() {
+# Validate every member before extracting the deliberately small Linux runtime subset.
+cua_driver_extract_runtime_archive() {
   local archive="$1"
   local destination="$2"
-  local kind="$3"
 
-  python3 - "$archive" "$destination" "$kind" "$CUA_DRIVER_RELEASE_TAG" <<'PY'
+  python3 - "$archive" "$destination" <<'PY'
 import pathlib
 import shutil
 import sys
@@ -78,8 +75,6 @@ import tarfile
 
 archive_path = pathlib.Path(sys.argv[1])
 destination = pathlib.Path(sys.argv[2])
-kind = sys.argv[3]
-skill_root = sys.argv[4] + "-skills"
 
 with tarfile.open(archive_path, "r:gz") as archive:
     members = archive.getmembers()
@@ -99,35 +94,18 @@ with tarfile.open(archive_path, "r:gz") as archive:
         seen.add(name)
         normalized.append((member, name))
 
-    selected = []
-    if kind == "runtime":
-        required = {"cua-driver", "cua-cursor-theme"}
-        regular = {name for member, name in normalized if member.isfile()}
-        if not required.issubset(regular):
-            raise SystemExit("error: Cua Driver runtime archive is missing required executables")
-        if not any(name == "wayland-helper" or name.startswith("wayland-helper/") for _, name in normalized):
-            raise SystemExit("error: Cua Driver runtime archive is missing wayland-helper")
-        for member, name in normalized:
-            if name in required or name == "wayland-helper" or name.startswith("wayland-helper/"):
-                selected.append((member, name))
-    elif kind == "skill":
-        prefix = skill_root + "/"
-        required = {prefix + "SKILL.md", prefix + "LINUX.md"}
-        regular = {name for member, name in normalized if member.isfile()}
-        if not required.issubset(regular):
-            raise SystemExit("error: Cua Driver skills archive is missing Linux skill files")
-        for member, name in normalized:
-            if name == skill_root:
-                continue
-            if not name.startswith(prefix):
-                raise SystemExit("error: Cua Driver skills archive has an unexpected root: " + name)
-            relative = name[len(prefix):]
-            if relative in {"MACOS.md", "WINDOWS.md"}:
-                continue
-            selected.append((member, relative))
-    else:
-        raise SystemExit("error: unknown Cua Driver archive kind")
+    required = {"cua-driver", "cua-cursor-theme"}
+    regular = {name for member, name in normalized if member.isfile()}
+    if not required.issubset(regular):
+        raise SystemExit("error: Cua Driver runtime archive is missing required executables")
+    if not any(name == "wayland-helper" or name.startswith("wayland-helper/") for _, name in normalized):
+        raise SystemExit("error: Cua Driver runtime archive is missing wayland-helper")
 
+    selected = [
+        (member, name)
+        for member, name in normalized
+        if name in required or name == "wayland-helper" or name.startswith("wayland-helper/")
+    ]
     destination.mkdir(parents=True, exist_ok=True)
     for member, relative in selected:
         target = destination / relative
@@ -232,26 +210,42 @@ cua_driver_runtime_ready() {
     && [[ -f "$release_dir/wayland-helper/winrects@cua/extension.js" ]]
 }
 
+cua_driver_local_skill_ready() {
+  local skill_dir="$1"
+  local config_dir=""
+  config_dir="$(dirname "$skill_dir")"
+  [[ "$(cua_driver_skill_version "$skill_dir/SKILL.md" 2>/dev/null || true)" == "$CUA_DRIVER_VERSION" ]] \
+    && [[ -f "$skill_dir/BROWSER.md" ]] \
+    && [[ -f "$skill_dir/OMARCHY.md" ]] \
+    && [[ -x "$config_dir/cua-omarchy-display" ]] \
+    && [[ -x "$config_dir/cua-omarchy-window" ]]
+}
+
 cua_driver_skill_ready() {
   local skill_dir="$1"
+  local local_skill_dir="$2"
   [[ "$(cua_driver_skill_version "$skill_dir/SKILL.md" 2>/dev/null || true)" == "$CUA_DRIVER_VERSION" ]] \
-    && [[ -f "$skill_dir/README.md" ]] \
-    && [[ -f "$skill_dir/LINUX.md" ]] \
-    && [[ -f "$skill_dir/BROWSER.md" ]] \
-    && [[ -f "$skill_dir/RECORDING.md" ]] \
-    && [[ -f "$skill_dir/EMBEDDING.md" ]] \
+    && cmp -s "$skill_dir/SKILL.md" "$local_skill_dir/SKILL.md" \
+    && cmp -s "$skill_dir/BROWSER.md" "$local_skill_dir/BROWSER.md" \
+    && cmp -s "$skill_dir/OMARCHY.md" "$local_skill_dir/OMARCHY.md" \
+    && [[ ! -e "$skill_dir/upstream" ]] \
     && [[ ! -e "$skill_dir/MACOS.md" ]] \
     && [[ ! -e "$skill_dir/WINDOWS.md" ]]
 }
 
 apply_cua_driver() (
-  local platform_info="" asset_platform="" rust_target="" binary_checksum="" skills_checksum=""
-  local binary_archive_name="" skills_archive_name="" binary_url="" skills_url=""
+  local platform_info="" asset_platform="" rust_target="" binary_checksum=""
+  local binary_archive_name="" binary_url=""
   local packages_dir="$HOME/.cua-driver/packages"
   local releases_dir="$packages_dir/releases"
   local release_dir=""
+  local local_skill_dir="$REPO_ROOT/configs/cua-driver/skill"
+  local omarchy_display_helper_source="$REPO_ROOT/configs/cua-driver/cua-omarchy-display"
+  local omarchy_window_helper_source="$REPO_ROOT/configs/cua-driver/cua-omarchy-window"
   local current_link="$packages_dir/current"
   local bin_link="$HOME/.local/bin/cua-driver"
+  local omarchy_display_helper_link="$HOME/.local/bin/cua-omarchy-display"
+  local omarchy_window_helper_link="$HOME/.local/bin/cua-omarchy-window"
   local skill_dir="$HOME/.cua-driver/skills/cua-driver"
   local tmp="" staged_runtime="" staged_skill="" backup_path=""
   local runtime_ready=0 skill_ready=0
@@ -260,17 +254,20 @@ apply_cua_driver() (
   platform_info="$(cua_driver_platform)" || return
   read -r asset_platform rust_target <<< "$platform_info"
   binary_checksum="$(cua_driver_binary_checksum "$asset_platform")" || return
-  skills_checksum="$(cua_driver_skills_checksum)" || return
   binary_archive_name="cua-driver-rs-${CUA_DRIVER_VERSION}-${asset_platform}-binary.tar.gz"
-  skills_archive_name="${CUA_DRIVER_RELEASE_TAG}-skills.tar.gz"
   binary_url="${CUA_DRIVER_RELEASE_BASE_URL}/${binary_archive_name}"
-  skills_url="${CUA_DRIVER_RELEASE_BASE_URL}/${skills_archive_name}"
   release_dir="$releases_dir/${CUA_DRIVER_VERSION}-${rust_target}"
 
   log_section "Cua Driver (pinned v${CUA_DRIVER_VERSION}, Linux only)"
 
+  if ! cua_driver_local_skill_ready "$local_skill_dir"; then
+    printf 'error: repository Cua Driver skill is missing or does not match runtime version %s: %s\n' \
+      "$CUA_DRIVER_VERSION" "$local_skill_dir" >&2
+    return 1
+  fi
+
   cua_driver_runtime_ready "$release_dir" && runtime_ready=1
-  cua_driver_skill_ready "$skill_dir" && skill_ready=1
+  cua_driver_skill_ready "$skill_dir" "$local_skill_dir" && skill_ready=1
 
   if (( ${DRY_RUN:-0} )); then
     if (( ! runtime_ready )); then
@@ -281,9 +278,7 @@ apply_cua_driver() (
       log_item "Cua Driver runtime $CUA_DRIVER_VERSION: already installed"
     fi
     if (( ! skill_ready )); then
-      dry_run_cmd curl --fail --silent --show-error --location --retry 3 --output "$skills_archive_name" "$skills_url"
-      log_item "Would SHA256-verify $skills_archive_name: $skills_checksum"
-      log_item "Would install Linux-only skill to $skill_dir"
+      log_item "Would install the repository-owned Linux skill from $local_skill_dir to $skill_dir"
     else
       log_item "Cua Driver skill $CUA_DRIVER_VERSION: already installed"
     fi
@@ -298,7 +293,7 @@ apply_cua_driver() (
       curl --fail --silent --show-error --location --retry 3 --output "$tmp/$binary_archive_name" "$binary_url" || return
       cua_driver_verify_checksum "$tmp/$binary_archive_name" "$binary_checksum" || return
       staged_runtime="$tmp/runtime"
-      cua_driver_extract_archive "$tmp/$binary_archive_name" "$staged_runtime" runtime || return
+      cua_driver_extract_runtime_archive "$tmp/$binary_archive_name" "$staged_runtime" || return
       chmod 0755 "$staged_runtime/cua-driver" "$staged_runtime/cua-cursor-theme" || return
       if [[ -L "$release_dir" ]]; then
         printf 'error: refusing to replace an unrelated Cua Driver release symlink: %s\n' "$release_dir" >&2
@@ -316,11 +311,10 @@ apply_cua_driver() (
     fi
 
     if (( ! skill_ready )); then
-      log_item "Downloading $skills_url"
-      curl --fail --silent --show-error --location --retry 3 --output "$tmp/$skills_archive_name" "$skills_url" || return
-      cua_driver_verify_checksum "$tmp/$skills_archive_name" "$skills_checksum" || return
       staged_skill="$tmp/skill"
-      cua_driver_extract_archive "$tmp/$skills_archive_name" "$staged_skill" skill || return
+      ensure_dir "$staged_skill" || return
+      cp "$local_skill_dir/SKILL.md" "$local_skill_dir/BROWSER.md" \
+        "$local_skill_dir/OMARCHY.md" "$staged_skill/" || return
       if [[ -e "$skill_dir" || -L "$skill_dir" ]]; then
         if [[ -L "$skill_dir" ]]; then
           printf 'error: refusing to replace an unrelated Cua Driver skill symlink: %s\n' "$skill_dir" >&2
@@ -331,7 +325,7 @@ apply_cua_driver() (
         log_item "Cua Driver skill: backed up to $backup_path"
       fi
       mv "$staged_skill" "$skill_dir" || return
-      log_item "Cua Driver Linux skill $CUA_DRIVER_VERSION: installed"
+      log_item "Repository-owned Cua Driver Linux skill $CUA_DRIVER_VERSION: installed"
     else
       log_item "Cua Driver skill $CUA_DRIVER_VERSION: already installed"
     fi
@@ -343,6 +337,16 @@ apply_cua_driver() (
   ensure_dir "$HOME/.local/bin" || return
   cua_driver_safe_link "$release_dir" "$current_link" "Cua Driver current release" "$releases_dir" || return
   cua_driver_safe_link "$current_link/cua-driver" "$bin_link" "cua-driver command" || return
+  if [[ "${SETUP_HOST:-}" == "omarchy" ]]; then
+    cua_driver_safe_link \
+      "$omarchy_display_helper_source" "$omarchy_display_helper_link" \
+      "cua-omarchy-display command" || return
+    cua_driver_safe_link \
+      "$omarchy_window_helper_source" "$omarchy_window_helper_link" \
+      "cua-omarchy-window command" || return
+  else
+    log_item "Cua Driver Omarchy helper commands: skipped outside the Omarchy host"
+  fi
 
   for skill_surface in \
     "$HOME/.agents/skills/cua-driver" \

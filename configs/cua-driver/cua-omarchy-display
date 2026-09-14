@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# Observe Hyprland outputs without changing focus, pointer state, or application state.
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+Usage:
+  cua-omarchy-display monitors
+  cua-omarchy-display capture-output OUTPUT PATH
+  cua-omarchy-display capture-layout PATH
+EOF
+}
+
+fail() {
+  printf 'error: %s\n' "$1" >&2
+  exit 1
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"
+}
+
+capture_png() {
+  local destination="$1"
+  shift
+  local parent=""
+  local temporary=""
+
+  [[ ! -d "$destination" ]] || fail "capture destination is a directory: $destination"
+  parent="$(dirname -- "$destination")"
+  [[ -d "$parent" ]] || fail "capture destination directory does not exist: $parent"
+
+  umask 077
+  temporary="$(mktemp "$parent/.cua-omarchy-display.XXXXXXXX")" || fail "unable to create temporary capture in: $parent"
+  trap 'rm -f -- "$temporary"' EXIT
+
+  if ! grim "$@" -t png "$temporary"; then
+    fail "display capture failed"
+  fi
+  chmod 0600 "$temporary"
+  mv -f -- "$temporary" "$destination"
+  temporary=""
+  trap - EXIT
+}
+
+main() {
+  local command="${1:-}"
+  local output=""
+  local destination=""
+  local monitors_json=""
+
+  case "$command" in
+    monitors)
+      [[ $# -eq 1 ]] || { usage; exit 2; }
+      require_command hyprctl
+      hyprctl monitors -j
+      ;;
+    capture-output)
+      [[ $# -eq 3 ]] || { usage; exit 2; }
+      output="$2"
+      destination="$3"
+      require_command hyprctl
+      require_command jq
+      require_command grim
+      monitors_json="$(hyprctl monitors -j)" || fail "unable to enumerate Hyprland outputs"
+      if ! jq -e --arg output "$output" 'any(.[]; .name == $output)' >/dev/null <<< "$monitors_json"; then
+        fail "unknown Hyprland output: $output"
+      fi
+      capture_png "$destination" -o "$output"
+      printf 'captured output %s to %s\n' "$output" "$destination"
+      ;;
+    capture-layout)
+      [[ $# -eq 2 ]] || { usage; exit 2; }
+      destination="$2"
+      require_command hyprctl
+      require_command grim
+      hyprctl monitors -j >/dev/null || fail "unable to enumerate Hyprland outputs"
+      capture_png "$destination"
+      printf 'captured Hyprland layout to %s\n' "$destination"
+      ;;
+    -h|--help)
+      usage
+      ;;
+    '')
+      usage
+      exit 2
+      ;;
+    *)
+      usage
+      fail "unknown command: $command"
+      ;;
+  esac
+}
+
+main "$@"

@@ -30,7 +30,7 @@ The two layers don't validate each other. **Most recurring bug:** config deploye
 | `configs/voxtype/` | `~/.config/voxtype/config.toml`, `~/.local/bin/voxtype-post-process` | symlink (omarchy only) |
 | `configs/herdr/config.toml` | `~/.config/herdr/config.toml` | symlink |
 | `configs/browser-diagnostics/` | `~/.local/bin/chrome-devtools-cli`, `~/.local/bin/browser-diagnostics` | `install/browser-diagnostics.sh`; frozen package-local Bun dependencies and launcher links (omarchy/macbook only) |
-| Cua Driver | `~/.local/bin/cua-driver`, `~/.cua-driver/`, agent skill links; `~/.config/systemd/user/cua-driver.service` on Omarchy | `install/cua-driver.sh`; pinned Linux release and Linux-only skill pack on `dev`/`omarchy`, never macOS; Omarchy enables native Wayland but does not install the experimental Hyprland plugin |
+| Cua Driver | `~/.local/bin/cua-driver`, `~/.cua-driver/`, repo-owned Linux skill links; `~/.local/bin/cua-omarchy-{display,window}` and `~/.config/systemd/user/cua-driver.service` on Omarchy | `install/cua-driver.sh`; pinned Linux runtime and concise repo-owned `configs/cua-driver/skill/` on `dev`/`omarchy`, never macOS; Omarchy adds `grim`, allowlisted display/window helpers, and native Wayland without the experimental Hyprland plugin |
 | Moshi host integration | `~/.local/bin/herdr`, refreshed agent hooks, `moshi-hook` user service, mosh firewall rule | `install/moshi.sh` |
 | `configs/shell/` | sourced via `~/.zshrc` / `~/.zshenv` | written by `install/shell.sh` |
 | `configs/agents/` | `~/.agents/`, `~/.claude/`, `~/.codex/`, `~/.pi/agent/` | special installer |
@@ -57,7 +57,7 @@ Names differ between Homebrew and pacman (`tree-sitter-cli` vs `tree-sitter`, `m
 | Shared Claude/Codex/Pi project memory | `install/ai-memory.sh`, vendored `configs/agents/pi/extensions/ai-memory-pi.ts` (pinned `ai-memory` release; do not run `install-hooks --agent pi --apply`) |
 | Add tool config | `configs/cli/` plus `install/tools.sh` if needed |
 | Brave diagnostics through skills, not native MCP tools | `configs/browser-diagnostics/`, `install/browser-diagnostics.sh`, shared `browser-diagnostics` / `web-performance-investigation` skills; attaches only to local CDP `127.0.0.1:9222` |
-| Add/update Cua Driver | `install/cua-driver.sh`, `configs/cua-driver/`, Linux package dependencies, and `cua-driver` in the `dev`/`omarchy` config targets; keep macOS excluded and do not enable the experimental Hyprland plugin without an explicit request |
+| Add/update Cua Driver | `install/cua-driver.sh`, `configs/cua-driver/` (repo-owned Linux skill and Omarchy display/window helpers), Linux package dependencies, and `cua-driver` in the `dev`/`omarchy` config targets; keep the skill version aligned with the pinned runtime, keep macOS excluded, and do not enable the experimental Hyprland plugin without an explicit request |
 | Add Herdr/Moshi integration | `install/herdr.sh`, `install/moshi.sh`, generated hooks under `configs/agents/{hooks,pi/extensions}/`, and the host's `HOST_CONFIG_TARGETS` |
 | Add Omarchy dictation (Voxtype + local LLM cleanup) | `configs/voxtype/`, `install/hosts/omarchy.sh` (`configure_voxtype`), Hyprland F9 / Super+Ctrl+X |
 | Add shell behavior | `configs/shell/` plus `install/shell.sh` |
@@ -83,6 +83,8 @@ shellcheck setup.sh install/*.sh install/hosts/*.sh
 bash tests/ai-memory.test.sh
 bash tests/browser-diagnostics.test.sh
 bash tests/cua-driver.test.sh
+bash tests/cua-omarchy-display.test.sh
+bash tests/cua-omarchy-window.test.sh
 bun run test:browser-diagnostics
 bun run typecheck:browser-diagnostics
 bun run lint:browser-diagnostics

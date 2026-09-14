@@ -34,7 +34,7 @@ assert_link_target() {
 
 make_fixtures() {
   local fixture_dir="$1"
-  mkdir -p "$fixture_dir/runtime/wayland-helper/winrects@cua" "$fixture_dir/skills/cua-driver-rs-v0.28.1-skills"
+  mkdir -p "$fixture_dir/runtime/wayland-helper/winrects@cua"
   cat > "$fixture_dir/runtime/cua-driver" <<'SCRIPT'
 #!/usr/bin/env bash
 if [[ "${1:-}" == "--version" ]]; then
@@ -52,25 +52,8 @@ SCRIPT
   printf '# Wayland helper\n' > "$fixture_dir/runtime/wayland-helper/README.md"
   printf 'ignored SDK payload\n' > "$fixture_dir/runtime/libcua_driver_sdk.so"
 
-  cat > "$fixture_dir/skills/cua-driver-rs-v0.28.1-skills/SKILL.md" <<'SKILL'
----
-name: cua-driver
-version: 0.28.1 # x-release-please-version
----
-# Cua Driver
-SKILL
-  printf '# README\n' > "$fixture_dir/skills/cua-driver-rs-v0.28.1-skills/README.md"
-  printf '# Linux\n' > "$fixture_dir/skills/cua-driver-rs-v0.28.1-skills/LINUX.md"
-  printf '# Browser\n' > "$fixture_dir/skills/cua-driver-rs-v0.28.1-skills/BROWSER.md"
-  printf '# Recording\n' > "$fixture_dir/skills/cua-driver-rs-v0.28.1-skills/RECORDING.md"
-  printf '# Embedding\n' > "$fixture_dir/skills/cua-driver-rs-v0.28.1-skills/EMBEDDING.md"
-  printf '# macOS\n' > "$fixture_dir/skills/cua-driver-rs-v0.28.1-skills/MACOS.md"
-  printf '# Windows\n' > "$fixture_dir/skills/cua-driver-rs-v0.28.1-skills/WINDOWS.md"
-
   tar -czf "$fixture_dir/runtime.tar.gz" -C "$fixture_dir/runtime" .
-  tar -czf "$fixture_dir/skills.tar.gz" -C "$fixture_dir/skills" cua-driver-rs-v0.28.1-skills
   sha256sum "$fixture_dir/runtime.tar.gz" | awk '{print $1}' > "$fixture_dir/runtime.sha256"
-  sha256sum "$fixture_dir/skills.tar.gz" | awk '{print $1}' > "$fixture_dir/skills.sha256"
 }
 
 make_fake_curl() {
@@ -91,7 +74,6 @@ done
 printf '%s\n' "$url" >> "$CUA_TEST_CURL_LOG"
 case "$url" in
   *-binary.tar.gz) cp "$CUA_TEST_RUNTIME_ARCHIVE" "$output" ;;
-  *-skills.tar.gz) cp "$CUA_TEST_SKILLS_ARCHIVE" "$output" ;;
   *) printf 'unexpected URL: %s\n' "$url" >&2; exit 1 ;;
 esac
 CURL
@@ -130,12 +112,11 @@ ln -s \
   export PATH="$case_root/bin:$PATH"
   export CUA_TEST_CURL_LOG="$case_root/curl.log"
   export CUA_TEST_RUNTIME_ARCHIVE="$fixture_dir/runtime.tar.gz"
-  export CUA_TEST_SKILLS_ARCHIVE="$fixture_dir/skills.tar.gz"
+  export SETUP_HOST=omarchy
   # shellcheck source=install/cua-driver.sh
   source "$INSTALLER"
   cua_driver_platform() { printf '%s\n' 'linux-x86_64 x86_64-unknown-linux-gnu'; }
   cua_driver_binary_checksum() { cat "$fixture_dir/runtime.sha256"; }
-  cua_driver_skills_checksum() { cat "$fixture_dir/skills.sha256"; }
 
   apply_cua_driver >/dev/null
   release="$HOME/.cua-driver/packages/releases/0.28.1-x86_64-unknown-linux-gnu"
@@ -145,11 +126,13 @@ ln -s \
   assert_file "$release/wayland-helper/install.sh"
   assert_not_exists "$release/libcua_driver_sdk.so"
   assert_file "$skill/SKILL.md"
-  assert_file "$skill/README.md"
-  assert_file "$skill/LINUX.md"
   assert_file "$skill/BROWSER.md"
-  assert_file "$skill/RECORDING.md"
-  assert_file "$skill/EMBEDDING.md"
+  assert_file "$skill/OMARCHY.md"
+  for skill_file in SKILL.md BROWSER.md OMARCHY.md; do
+    cmp -s "$skill/$skill_file" "$REPO_ROOT/configs/cua-driver/skill/$skill_file" \
+      || fail "installed Cua Driver $skill_file differs from repository source"
+  done
+  assert_not_exists "$skill/upstream"
   assert_not_exists "$skill/MACOS.md"
   assert_not_exists "$skill/WINDOWS.md"
   assert_file "$HOME/.local/bin/cua-driver.bak"
@@ -157,15 +140,29 @@ ln -s \
   assert_link_target "$HOME/.cua-driver/packages/current" "$release"
   assert_not_exists "$HOME/.cua-driver/packages/current.bak"
   assert_link_target "$HOME/.local/bin/cua-driver" "$HOME/.cua-driver/packages/current/cua-driver"
+  assert_link_target "$HOME/.local/bin/cua-omarchy-display" "$REPO_ROOT/configs/cua-driver/cua-omarchy-display"
+  assert_link_target "$HOME/.local/bin/cua-omarchy-window" "$REPO_ROOT/configs/cua-driver/cua-omarchy-window"
   for surface in .agents .claude .codex .pi/agent; do
     assert_link_target "$HOME/$surface/skills/cua-driver" "$skill"
   done
-  assert_eq '2' "$(wc -l < "$case_root/curl.log" | tr -d ' ')" 'initial download count'
+  assert_eq '1' "$(wc -l < "$case_root/curl.log" | tr -d ' ')" 'initial download count'
 
   apply_cua_driver >/dev/null
-  assert_eq '2' "$(wc -l < "$case_root/curl.log" | tr -d ' ')" 'idempotent download count'
+  assert_eq '1' "$(wc -l < "$case_root/curl.log" | tr -d ' ')" 'idempotent download count'
   assert_eq '1' "$(find "$HOME/.local/bin" -maxdepth 1 -name 'cua-driver.bak*' | wc -l | tr -d ' ')" 'binary backup count after rerun'
   assert_eq '1' "$(find "$HOME/.agents/skills" -maxdepth 1 -name 'cua-driver.bak*' | wc -l | tr -d ' ')" 'skill backup count after rerun'
+
+  mkdir -p "$skill/upstream"
+  printf '# stale cross-platform content\n' > "$skill/upstream/MACOS.md"
+  apply_cua_driver >/dev/null
+  assert_not_exists "$skill/upstream"
+  assert_eq '1' "$(wc -l < "$case_root/curl.log" | tr -d ' ')" 'download count after cross-platform skill cleanup'
+
+  printf '\nlocal drift\n' >> "$skill/OMARCHY.md"
+  apply_cua_driver >/dev/null
+  assert_eq '1' "$(wc -l < "$case_root/curl.log" | tr -d ' ')" 'download count after local skill drift'
+  cmp -s "$skill/OMARCHY.md" "$REPO_ROOT/configs/cua-driver/skill/OMARCHY.md" \
+    || fail 'local skill drift was not repaired from repository source'
 
   rm "$HOME/.agents/skills/cua-driver"
   ln -s "$HOME/unrelated-skill" "$HOME/.agents/skills/cua-driver"
@@ -174,7 +171,7 @@ ln -s \
   fi
   assert_link_target "$HOME/.agents/skills/cua-driver" "$HOME/unrelated-skill"
   grep -q 'refusing to replace an unrelated' "$case_root/unrelated-link-output" || fail 'unrelated symlink refusal was not reported'
-  assert_eq '2' "$(wc -l < "$case_root/curl.log" | tr -d ' ')" 'download count after unrelated link refusal'
+  assert_eq '1' "$(wc -l < "$case_root/curl.log" | tr -d ' ')" 'download count after unrelated link refusal'
 )
 
 printf 'test: dry-run performs no writes or network\n'
@@ -195,10 +192,27 @@ chmod +x "$case_root/bin/curl"
   cua_driver_platform() { printf '%s\n' 'linux-x86_64 x86_64-unknown-linux-gnu'; }
   DRY_RUN=1 apply_cua_driver > "$case_root/output"
   grep -q 'cua-driver-rs-0.28.1-linux-x86_64-binary.tar.gz' "$case_root/output" || fail 'dry-run omitted binary download'
-  grep -q 'cua-driver-rs-v0.28.1-skills.tar.gz' "$case_root/output" || fail 'dry-run omitted skill download'
+  grep -Fq "Would install the repository-owned Linux skill from $REPO_ROOT/configs/cua-driver/skill" \
+    "$case_root/output" || fail 'dry-run omitted repository-owned skill install'
+  if grep -q -- '-skills.tar.gz' "$case_root/output"; then
+    fail 'dry-run still referenced the upstream skill archive'
+  fi
+  grep -q 'Cua Driver Omarchy helper commands: skipped outside the Omarchy host' "$case_root/output" \
+    || fail 'non-Omarchy dry-run did not skip the Omarchy helpers'
   assert_not_exists "$case_root/curl.log"
   assert_eq '' "$(find "$HOME" -mindepth 1 -print -quit)" 'dry-run HOME contents'
 )
+
+printf 'test: standalone dry-run resolves the repository root\n'
+case_root="$TEST_ROOT/standalone"
+mkdir -p "$case_root/home"
+env -u REPO_ROOT HOME="$case_root/home" SETUP_HOST=omarchy \
+  bash "$INSTALLER" --dry-run > "$case_root/output"
+grep -Fq "Would install the repository-owned Linux skill from $REPO_ROOT/configs/cua-driver/skill" \
+  "$case_root/output" || fail 'standalone installer did not resolve the repository skill path'
+grep -Fq "$REPO_ROOT/configs/cua-driver/cua-omarchy-window" "$case_root/output" \
+  || fail 'standalone installer omitted the Omarchy window helper'
+assert_eq '' "$(find "$case_root/home" -mindepth 1 -print -quit)" 'standalone dry-run HOME contents'
 
 printf 'test: wrong checksum fails closed\n'
 case_root="$TEST_ROOT/checksum"
@@ -211,18 +225,41 @@ mkdir -p "$case_root/home"
   export PATH="$case_root/bin:$PATH"
   export CUA_TEST_CURL_LOG="$case_root/curl.log"
   export CUA_TEST_RUNTIME_ARCHIVE="$fixture_dir/runtime.tar.gz"
-  export CUA_TEST_SKILLS_ARCHIVE="$fixture_dir/skills.tar.gz"
   # shellcheck source=install/cua-driver.sh
   source "$INSTALLER"
   cua_driver_platform() { printf '%s\n' 'linux-x86_64 x86_64-unknown-linux-gnu'; }
   cua_driver_binary_checksum() { printf '%064d\n' 0; }
-  cua_driver_skills_checksum() { cat "$fixture_dir/skills.sha256"; }
   if apply_cua_driver > "$case_root/output" 2>&1; then
     fail 'wrong checksum was accepted'
   fi
   grep -q 'SHA256 mismatch' "$case_root/output" || fail 'wrong checksum error was not reported'
   assert_not_exists "$HOME/.cua-driver/packages/releases/0.28.1-x86_64-unknown-linux-gnu"
   assert_eq '1' "$(wc -l < "$case_root/curl.log" | tr -d ' ')" 'downloads before checksum failure'
+)
+
+printf 'test: repository skill version mismatch fails before writes or network\n'
+case_root="$TEST_ROOT/local-skill-version"
+mkdir -p "$case_root/home" "$case_root/bin"
+cat > "$case_root/bin/curl" <<'CURL'
+#!/usr/bin/env bash
+printf 'called\n' >> "$CUA_TEST_CURL_LOG"
+exit 99
+CURL
+chmod +x "$case_root/bin/curl"
+(
+  export HOME="$case_root/home"
+  export PATH="$case_root/bin:$PATH"
+  export CUA_TEST_CURL_LOG="$case_root/curl.log"
+  # shellcheck source=install/cua-driver.sh
+  source "$INSTALLER"
+  CUA_DRIVER_VERSION=9.9.9
+  if apply_cua_driver > "$case_root/output" 2>&1; then
+    fail 'mismatched repository skill version was accepted'
+  fi
+  grep -q 'repository Cua Driver skill is missing or does not match runtime version 9.9.9' "$case_root/output" \
+    || fail 'repository skill version mismatch was not reported'
+  assert_not_exists "$case_root/curl.log"
+  assert_eq '' "$(find "$HOME" -mindepth 1 -print -quit)" 'repository skill mismatch HOME contents'
 )
 
 printf 'test: safe extraction rejects traversal and symlink members\n'
@@ -250,10 +287,10 @@ PY
 (
   # shellcheck source=install/cua-driver.sh
   source "$INSTALLER"
-  if cua_driver_extract_archive "$case_root/traversal.tar.gz" "$case_root/traversal-out" runtime >/dev/null 2>&1; then
+  if cua_driver_extract_runtime_archive "$case_root/traversal.tar.gz" "$case_root/traversal-out" >/dev/null 2>&1; then
     fail 'path traversal archive was accepted'
   fi
-  if cua_driver_extract_archive "$case_root/symlink.tar.gz" "$case_root/symlink-out" runtime >/dev/null 2>&1; then
+  if cua_driver_extract_runtime_archive "$case_root/symlink.tar.gz" "$case_root/symlink-out" >/dev/null 2>&1; then
     fail 'symlink archive was accepted'
   fi
   assert_not_exists "$case_root/escape"
@@ -302,8 +339,9 @@ done
 (
   # shellcheck source=install/hosts/omarchy.sh
   source "$REPO_ROOT/install/hosts/omarchy.sh"
-  [[ " ${HOST_ENV_VARS[*]} " == *" CUA_DRIVER_RS_ENABLE_WAYLAND=1 "* ]]
-) || fail 'Omarchy does not enable the Cua Driver native Wayland backend'
+  [[ " ${HOST_ENV_VARS[*]} " == *" CUA_DRIVER_RS_ENABLE_WAYLAND=1 "* ]] \
+    && [[ " ${HOST_PACMAN_PACKAGES[*]} " == *" grim "* ]]
+) || fail 'Omarchy does not enable native Wayland capture with the required grim package'
 service="$REPO_ROOT/configs/cua-driver/cua-driver.service"
 assert_file "$service"
 grep -Fxq 'Environment=CUA_DRIVER_RS_ENABLE_WAYLAND=1' "$service" || fail 'service does not enable native Wayland'
