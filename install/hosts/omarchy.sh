@@ -3,6 +3,7 @@
 # shellcheck disable=SC2034
 HOST_ENV_VARS=(
   "OLLAMA_HOST=0.0.0.0:11434"
+  "CUA_DRIVER_RS_ENABLE_WAYLAND=1"
 )
 
 # shellcheck disable=SC2034
@@ -13,6 +14,7 @@ HOST_CONFIG_TARGETS=(
   ghostty
   herdr
   agents
+  cua-driver
   moshi
   cameractrls
   brave
@@ -47,6 +49,7 @@ HOST_PACMAN_PACKAGES=(
   telegram-desktop
   virtiofsd
   wtype
+  xdg-desktop-portal-hyprland
   xdg-utils
   xorg-setxkbmap
   zram-generator
@@ -737,6 +740,73 @@ configure_voxtype() {
   run_cmd systemctl --user enable --now voxtype.service
 }
 
+cua_driver_service_needs_restart() {
+  local main_pid=""
+  local running_executable=""
+  local desired_executable=""
+  local proc_root="${CUA_DRIVER_PROC_ROOT:-/proc}"
+
+  main_pid="$(systemctl --user show cua-driver.service --property MainPID --value 2>/dev/null || true)"
+  [[ "$main_pid" =~ ^[1-9][0-9]*$ ]] || return 0
+  desired_executable="$(readlink -f "$HOME/.local/bin/cua-driver" 2>/dev/null || true)"
+  running_executable="$(readlink -f "$proc_root/$main_pid/exe" 2>/dev/null || true)"
+  [[ -n "$desired_executable" && "$running_executable" == "$desired_executable" ]] || return 0
+  tr '\0' '\n' < "$proc_root/$main_pid/environ" 2>/dev/null \
+    | grep -Fxq 'CUA_DRIVER_RS_ENABLE_WAYLAND=1' || return 0
+  return 1
+}
+
+configure_cua_driver_service() {
+  local source_path="$REPO_ROOT/configs/cua-driver/cua-driver.service"
+  local target_path="$HOME/.config/systemd/user/cua-driver.service"
+
+  log_section "Cua Driver"
+
+  if [[ ! -f "$source_path" ]]; then
+    printf 'error: Cua Driver service definition is missing: %s\n' "$source_path" >&2
+    return 1
+  fi
+
+  ensure_dir "$(dirname "$target_path")"
+  safe_link_path "$source_path" "$target_path" "Cua Driver user service"
+
+  if (( ! ${DRY_RUN:-0} )); then
+    if [[ ! -x "$HOME/.local/bin/cua-driver" ]]; then
+      printf 'error: Cua Driver binary is unavailable after installation\n' >&2
+      return 1
+    fi
+    if [[ ! -L "$target_path" ]] \
+      || [[ "$(resolve_symlink_target "$target_path")" != "$(canonicalize_path "$source_path")" ]]; then
+      printf 'error: refusing to enable an unmanaged Cua Driver service: %s\n' "$target_path" >&2
+      return 1
+    fi
+    if ! check_installed systemctl; then
+      printf 'error: systemctl is required to enable the Cua Driver user service\n' >&2
+      return 1
+    fi
+  fi
+
+  run_cmd systemctl --user daemon-reload
+  if (( ${DRY_RUN:-0} )); then
+    run_cmd systemctl --user enable cua-driver.service
+    run_cmd systemctl --user start cua-driver.service
+  else
+    if ! systemctl --user is-enabled --quiet cua-driver.service 2>/dev/null; then
+      run_cmd systemctl --user enable cua-driver.service
+    fi
+    if ! systemctl --user is-active --quiet cua-driver.service 2>/dev/null; then
+      run_cmd systemctl --user start cua-driver.service
+      log_item "Cua Driver service: started"
+    elif cua_driver_service_needs_restart; then
+      run_cmd systemctl --user restart cua-driver.service
+      log_item "Cua Driver service: restarted to load the current runtime and Wayland settings"
+    else
+      log_item "Cua Driver service: already running the current runtime"
+    fi
+  fi
+  log_item "Cua Driver: native Wayland backend enabled; Hyprland plugin remains uninstalled"
+}
+
 setup_host_machine_state() {
   log_section "Host Machine State"
   configure_keyboard
@@ -747,6 +817,7 @@ setup_host_machine_state() {
   set_default_browser_brave
   configure_secret_service
   apply_host_configs
+  configure_cua_driver_service
   cleanup_ai_launcher_duplicates
   configure_voxtype
   reload_hyprland_if_running

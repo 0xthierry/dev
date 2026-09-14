@@ -133,6 +133,9 @@ apply_host_configs() {
       agents)
         apply_agents
         ;;
+      cua-driver)
+        apply_cua_driver
+        ;;
       cameractrls)
         apply_cameractrls
         ;;

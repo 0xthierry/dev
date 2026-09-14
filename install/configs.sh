@@ -7,6 +7,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/herdr.sh"
 # shellcheck source=install/browser-diagnostics.sh
 source "$(dirname "${BASH_SOURCE[0]}")/browser-diagnostics.sh"
+# shellcheck source=install/cua-driver.sh
+source "$(dirname "${BASH_SOURCE[0]}")/cua-driver.sh"
 
 apply_nvim() {
   ensure_dir "$HOME/.config"

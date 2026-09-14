@@ -28,6 +28,7 @@ HOST_CONFIG_TARGETS=(
   nvim
   herdr
   agents
+  cua-driver
   moshi
 )
 

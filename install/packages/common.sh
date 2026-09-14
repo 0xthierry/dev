@@ -60,7 +60,15 @@ COMMON_PACMAN_PACKAGES=(
 )
 
 COMMON_PACMAN_LINUX_PACKAGES=(
+  at-spi2-core
+  ffmpeg
+  libei
+  libx11
+  libxext
+  libxi
+  libxkbcommon
   libxtst
+  pipewire
   wl-clipboard
 )
 
