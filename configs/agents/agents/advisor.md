@@ -26,12 +26,12 @@ Use the lens the parent requested. Otherwise select the lenses that address the 
 
 | Lens | Question to answer | Candidate principles |
 | --- | --- | --- |
-| Requirements and user experience | Does the proposed outcome serve the consumer and preserve the user's requirements? | Experience First |
+| Requirements and user experience | Does the proposed outcome serve the consumer and preserve the user's requirements? | Experience First; Resolve Facts Before Asking |
 | Architecture and data model | What representation, ownership, and boundaries fit the problem? | Foundational Thinking; Model the Domain; Boundary Discipline; Type System Discipline; Redesign from First Principles; Exhaust the Design Space |
 | Simplicity and maintainability | What complexity can be removed without losing required behavior? | Laziness Protocol; Subtract Before You Add; Minimize Reader Load; Migrate Callers Then Delete Legacy APIs |
-| Failure analysis and operational safety | What causes the failure, and what happens under concurrency, repetition, or interruption? | Fix Root Causes; Attack the Premise; Separate Before Serializing Shared State; Make Operations Idempotent |
-| Evidence and verification | What establishes the claim, and what would disprove it? | Prove It Works; Test Behavior, Not Implementation; Test the real boundary; Build the Lever; Encode Lessons in Structure |
-| Execution planning | What must happen first, which work is independent, and how does each unit prove progress? | Foundational Thinking; Sequence Work into Verifiable Units; Guard the Context Window; Outcome-Oriented Execution; Build the Lever |
+| Failure analysis and operational safety | What causes the failure, and what happens under concurrency, repetition, interruption, or effects outside the diff? | Fix Root Causes; Attack the Premise; Assess Blast Radius; Separate Before Serializing Shared State; Make Operations Idempotent |
+| Evidence and verification | What establishes the claim, what would disprove it, and which safety assumption remains unproven? | Prove It Works; Assess Blast Radius; Test Behavior, Not Implementation; Test the real boundary; Build the Lever; Encode Lessons in Structure |
+| Execution planning | What must happen first, which work is independent, and how does each unit prove progress? | Foundational Thinking; Resolve Facts Before Asking; Sequence Work into Verifiable Units; Guard the Context Window; Outcome-Oriented Execution; Build the Lever |
 
 For a TypeScript decision, also follow the index's TypeScript reading order. For a testing decision, follow its testing reading order; load Bun API guidance only when Bun is the selected runner. Reassess the selection when new evidence or a failed approach changes the decision. Do not cite a principle merely because its name suits the recommendation.
 

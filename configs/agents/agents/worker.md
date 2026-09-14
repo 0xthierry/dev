@@ -28,9 +28,11 @@ Before choosing the implementation, read the **engineering-principles** skill us
 | A new requirement or unresolved architectural choice | Redesign from First Principles; Exhaust the Design Space |
 | Refactoring, abstraction, or removing an old API | Laziness Protocol; Subtract Before You Add; Minimize Reader Load; Migrate Callers Then Delete Legacy APIs |
 | A bug or repeated failed fix | Fix Root Causes; Attack the Premise |
+| An observable uncertainty or a routine reversible choice | Resolve Facts Before Asking |
 | Concurrent writers, retries, or restart behavior | Separate Before Serializing Shared State; Make Operations Idempotent |
 | Multi-step work or a planned migration | Sequence Work into Verifiable Units; Foundational Thinking; Outcome-Oriented Execution |
 | Any nontrivial work, including a one-off task | Build the Lever |
+| A risky change with effects outside the diff | Assess Blast Radius |
 | Verification or tests | Prove It Works; Test Behavior, Not Implementation; Test the real boundary |
 | A recurring correction | Encode Lessons in Structure |
 | Large inputs or delegation planning | Guard the Context Window |

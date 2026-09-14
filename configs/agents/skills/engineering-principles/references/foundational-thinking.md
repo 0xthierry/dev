@@ -4,7 +4,11 @@
 
 **Data structures first.** Get the data shape right before writing logic. Define core types early, trace every access pattern, and choose structures that match the dominant paths.
 
+**Caller usage first.** Write the intended call or interaction before settling the interface. Derive types, signatures, and module boundaries from what the caller must accomplish. Keep coordination and representation choices behind the boundary instead of making every caller reconstruct them.
+
 At code level, DRY the structure, not every line. Types and data models should converge. Three similar statements still beat a premature abstraction. Prefer explicit over clever. Test behavior and edge cases, not line counts.
+
+**Architecture friction is evidence.** Repeated deviations of the same shape mean the foundation may be wrong: casts that bypass the model, optional fields that are always required in practice, callers coordinating internal stages, or unrelated cases needing the same workaround. One exception is not a pattern. When the pattern appears, revisit the caller usage and data shape instead of adding another escape hatch.
 
 **Concurrency corollary.** Before sharing state between actors, ask "what happens if another actor modifies this concurrently?" If not "nothing", isolate.
 

@@ -28,9 +28,10 @@ Return concise decision rationales, not a transcript of internal deliberation. A
 ## Core
 
 - **[Laziness Protocol](references/laziness-protocol.md).** Refactoring, sizing a diff, or tempted to add abstractions, layers, or signal threading.
-- **[Foundational Thinking](references/foundational-thinking.md).** Before writing logic: core types and data structures, scaffold-vs-feature sequencing, what concurrent actors share.
+- **[Foundational Thinking](references/foundational-thinking.md).** Before writing logic: caller usage, core types and data structures, scaffold-vs-feature sequencing, what concurrent actors share, or repeated friction suggests the foundation is wrong.
 - **[Redesign from First Principles](references/redesign-from-first-principles.md).** Integrating a new requirement into an existing design.
 - **[Attack the Premise](references/attack-the-premise.md).** Two or more fixes that share one premise have failed the same gate.
+- **[Resolve Facts Before Asking](references/resolve-facts-before-asking.md).** About to ask the human a question that inspection, execution, measurement, or a prototype could answer.
 - **[Subtract Before You Add](references/subtract-before-you-add.md).** Sequencing an addition, refactor, or rewrite.
 - **[Minimize Reader Load](references/minimize-reader-load.md).** Reviewing or shaping code that is hard to trace.
 - **[Outcome-Oriented Execution](references/outcome-oriented-execution.md).** Planned rewrites and migrations with explicit phase boundaries.
@@ -50,6 +51,7 @@ Return concise decision rationales, not a transcript of internal deliberation. A
 ## Verification
 
 - **[Prove It Works](references/prove-it-works.md).** After a task, before declaring done.
+- **[Assess Blast Radius](references/assess-blast-radius.md).** A change may affect shared APIs, persisted or wire formats, dependency behavior, lifecycle timing, concurrency, migrations, or downstream consumers outside the diff.
 - **[Fix Root Causes](references/fix-root-causes.md).** Debugging a reported failure.
 - **[Sequence Work into Verifiable Units](references/sequence-verifiable-units.md).** Multi-step work, sweeps, migrations, or delivery through ordered commits.
 - **[Test Behavior, Not Implementation](references/test-behavior-not-implementation.md).** Writing, changing, or keeping a test.
