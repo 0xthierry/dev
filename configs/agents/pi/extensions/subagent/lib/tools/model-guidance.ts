@@ -1,4 +1,4 @@
-// Stable advisory instructions; execution resolution and model capabilities remain unchanged.
+// Stable routing instructions; Luna effort is enforced by the execution runtime.
 // Evidence and routing details: ../../README.md#model-routing-evidence.
 export const SUBAGENT_MODEL_GUIDANCE = `Model selection:
 
@@ -8,10 +8,14 @@ Choose a named agent that fits the task first. Unless the user or assignment nee
 
 - cliproxyapi/gpt-6-astra is the default for planning. Use high effort for planning and design decisions. Use Astra for code review only when the user explicitly requests it.
 
-- cliproxyapi/gpt-5.6-luna or xai/grok-4.5 are the defaults for read-only codebase reconnaissance. Use medium to locate relevant files and symbols, trace call paths, map dependencies, find existing implementation patterns, and summarize how a component works. Give it a specific question and require file paths and supporting evidence. Use cliproxyapi/gpt-5.6-sol when the task requires diagnosing a bug or making changes; use cliproxyapi/gpt-6-astra with high effort for planning and design decisions. For routine code review, including ordinary correctness and security checks, use xai/grok-4.5.
+- cliproxyapi/gpt-5.6-luna is a default for read-only codebase reconnaissance and always runs at xhigh effort. Use it to locate relevant files and symbols, trace call paths, map dependencies, find existing implementation patterns, and summarize how a component works. The subagent runtime enforces xhigh whenever this exact provider/model is selected, regardless of a lower or higher requested effort.
+
+- xai/grok-4.5 is also a default for read-only codebase reconnaissance. Use medium effort and require file paths and supporting evidence.
+
+Use cliproxyapi/gpt-5.6-sol when the task requires diagnosing a bug or making changes; use cliproxyapi/gpt-6-astra with high effort for planning and design decisions. For routine code review, including ordinary correctness and security checks, use xai/grok-4.5.
 
 - xai/grok-4.5 is the default for code review. Use medium for routine reviews. Give it the artifact and a specific review question; require evidence.
 
 Honor explicit user choices and repository settings. Choose by the delegated task, not by the parent's model. A parent using cliproxyapi/gpt-6-astra should delegate implementation and debugging to cliproxyapi/gpt-5.6-sol with non-overlapping ownership.
 
-Prefer a named agent whose file defaults match the assignment, and omit execution so those defaults can apply. Set execution only when the user or the concrete assignment requests an override. For a model override, supply provider and model together; effort may be overridden independently. Omitted settings follow repository configuration, agent defaults, then the parent. Repository locks still apply. Check the effective settings returned by the tool.`;
+Prefer a named agent whose file defaults match the assignment, and omit execution so those defaults can apply. Set execution only when the user or the concrete assignment requests an override. For a model override, supply provider and model together; effort normally resolves independently unless a runtime model policy fixes the effective level. Omitted settings follow repository configuration, agent defaults, then the parent. Repository model locks and non-policy effort locks still apply. Check the effective settings returned by the tool.`;

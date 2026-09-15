@@ -44,6 +44,56 @@ describe("runtime journal entries", () => {
     });
   });
 
+  test("normalizes older Luna execution while reading runtime recovery state", () => {
+    // Arrange
+    const entry = {
+      version: 2 as const,
+      event: "execution_changed" as const,
+      agentPath: "/root/review",
+      agentId: "agent-1",
+      execution: {
+        profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "low" as const },
+        source: { model: "invocation" as const, effort: "invocation" as const },
+      },
+    };
+
+    // Act
+    const parsed = createRuntimeEntry(entry);
+
+    // Assert
+    expect(parsed).toEqual({
+      ...entry,
+      execution: {
+        profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "xhigh" },
+        source: { model: "invocation", effort: "policy" },
+      },
+    });
+  });
+
+  test("rejects policy provenance on the model source", () => {
+    // Arrange
+    const sessionEntry = {
+      type: "custom",
+      customType: SUBAGENT_RUNTIME_ENTRY_TYPE,
+      data: {
+        version: 2,
+        event: "execution_changed",
+        agentPath: "/root/review",
+        agentId: "agent-1",
+        execution: {
+          profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "xhigh" },
+          source: { model: "policy", effort: "policy" },
+        },
+      },
+    };
+
+    // Act
+    const parsed = runtimeEntryFromSessionEntry(sessionEntry);
+
+    // Assert
+    expect(parsed).toBeUndefined();
+  });
+
   test("does not migrate legacy tool results or other journal versions", () => {
     // Arrange
     const entries = [

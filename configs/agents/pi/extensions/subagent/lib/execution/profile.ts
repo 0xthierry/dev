@@ -19,13 +19,28 @@ export interface PartialAgentExecution {
 }
 
 export type ExecutionSource = "invocation" | "repository" | "agent" | "parent";
+export type EffortExecutionSource = ExecutionSource | "policy";
 
 export interface ResolvedAgentExecution {
   profile: AgentExecutionProfile;
-  source: { model: ExecutionSource; effort: ExecutionSource };
+  source: { model: ExecutionSource; effort: EffortExecutionSource };
 }
 
 const EFFORT_SET = new Set<string>(REASONING_EFFORTS);
+
+export function modelPolicyEffort(model: AgentModelReference): ReasoningEffort | undefined {
+  return model.provider === "cliproxyapi" && model.model === "gpt-5.6-luna" ? "xhigh" : undefined;
+}
+
+export function enforceModelEffortPolicy(execution: ResolvedAgentExecution): ResolvedAgentExecution {
+  const effort = modelPolicyEffort(execution.profile);
+  return effort
+    ? {
+        profile: { ...execution.profile, effort },
+        source: { ...execution.source, effort: "policy" },
+      }
+    : execution;
+}
 
 export function parseReasoningEffort(value: unknown): ReasoningEffort | undefined {
   return typeof value === "string" && EFFORT_SET.has(value) ? (value as ReasoningEffort) : undefined;

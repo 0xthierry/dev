@@ -995,6 +995,56 @@ describe("PersistentAgentSupervisor", () => {
     expect(fake.entries.at(-1)?.event).toBe("closed");
   });
 
+  test("normalizes recovered Luna execution before a bare follow-up", async () => {
+    // Arrange
+    const fake = harness();
+    await fake.supervisor.restore([
+      {
+        agentPath: "/root/luna-recovered",
+        agentId: "luna-agent",
+        agentType: "worker",
+        sessionFile: "/sessions/luna.jsonl",
+        execution: {
+          profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "low" },
+          source: { model: "invocation", effort: "invocation" },
+        },
+        assignmentGeneration: 1,
+        queuedMailIds: [],
+      },
+    ]);
+
+    // Act
+    const restored = await fake.supervisor.list();
+    const followup = await fake.supervisor.followup({ target: "luna-agent", message: "resume" });
+    await flush();
+    const process = fake.processes.get("/root/luna-recovered");
+
+    // Assert
+    expect(restored[0]?.execution).toEqual({
+      profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "xhigh" },
+      source: { model: "invocation", effort: "policy" },
+    });
+    expect(followup.execution).toEqual(restored[0]?.execution);
+    expect(fake.createProcess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        execution: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "xhigh" },
+      }),
+    );
+    expect(process?.followup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        execution: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "xhigh" },
+      }),
+    );
+
+    // Act
+    process?.assignments[0]?.resolve("recovered Luna complete");
+    await fake.supervisor.wait({ targets: ["luna-agent"], timeoutMs: 1_000 });
+    const settled = await fake.supervisor.list();
+
+    // Assert
+    expect(settled[0]?.execution).toEqual(restored[0]?.execution);
+  });
+
   test("waits for any or all exact assignment snapshots and aborts only the wait", async () => {
     // Arrange
     const fake = harness();

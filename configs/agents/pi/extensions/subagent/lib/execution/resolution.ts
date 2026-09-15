@@ -7,7 +7,7 @@ import type {
   ReasoningEffort,
   ResolvedAgentExecution,
 } from "./profile";
-import { readModelReference } from "./profile";
+import { modelPolicyEffort, readModelReference } from "./profile";
 
 export interface InvocationOverride extends PartialAgentExecution {}
 
@@ -42,8 +42,8 @@ export function resolveAgentExecution(input: ExecutionResolutionInput): Executio
   const agentModel = readModelReference(input.agent ?? {});
   if (!agentModel.ok) return agentModel;
 
-  const lockError = lockedOverrideError(input, invocationModel.value, repositoryModel.value);
-  if (lockError) return { ok: false, error: lockError };
+  const modelLockError = lockedModelOverrideError(input, invocationModel.value, repositoryModel.value);
+  if (modelLockError) return { ok: false, error: modelLockError };
 
   const invocationModelSelection =
     invocationModel.value &&
@@ -52,6 +52,19 @@ export function resolveAgentExecution(input: ExecutionResolutionInput): Executio
     sameModel(invocationModel.value, repositoryModel.value)
       ? undefined
       : invocationModel.value;
+  const selectedModel = firstModel([
+    [invocationModelSelection, "invocation"],
+    [repositoryModel.value, "repository"],
+    [agentModel.value, "agent"],
+    [input.parent, "parent"],
+  ]);
+  const policyEffort = modelPolicyEffort(selectedModel.value);
+
+  if (!policyEffort) {
+    const effortLockError = lockedEffortOverrideError(input);
+    if (effortLockError) return { ok: false, error: effortLockError };
+  }
+
   const invocationEffortSelection =
     input.invocation?.effort !== undefined &&
     input.repository?.effort !== undefined &&
@@ -59,19 +72,14 @@ export function resolveAgentExecution(input: ExecutionResolutionInput): Executio
     input.invocation.effort === input.repository.effort
       ? undefined
       : input.invocation?.effort;
-
-  const selectedModel = firstModel([
-    [invocationModelSelection, "invocation"],
-    [repositoryModel.value, "repository"],
-    [agentModel.value, "agent"],
-    [input.parent, "parent"],
-  ]);
-  const selectedEffort = firstEffort([
-    [invocationEffortSelection, "invocation"],
-    [input.repository?.effort, "repository"],
-    [input.agent?.effort, "agent"],
-    [input.parent.effort, "parent"],
-  ]);
+  const selectedEffort = policyEffort
+    ? { value: policyEffort, source: "policy" as const }
+    : firstEffort([
+        [invocationEffortSelection, "invocation"],
+        [input.repository?.effort, "repository"],
+        [input.agent?.effort, "agent"],
+        [input.parent.effort, "parent"],
+      ]);
 
   return {
     ok: true,
@@ -116,7 +124,7 @@ export function resolveAndValidateAgentExecution(
   return resolved.ok ? validateAgentExecution(resolved.value, catalog) : resolved;
 }
 
-function lockedOverrideError(
+function lockedModelOverrideError(
   input: ExecutionResolutionInput,
   invocationModel: AgentModelReference | undefined,
   repositoryModel: AgentModelReference | undefined,
@@ -130,9 +138,18 @@ function lockedOverrideError(
       configured: `${repositoryModel.provider}/${repositoryModel.model}`,
     };
   }
+  return undefined;
+}
+
+function lockedEffortOverrideError(input: ExecutionResolutionInput): ExecutionResolutionError | undefined {
   const invocationEffort = input.invocation?.effort;
   const repositoryEffort = input.repository?.effort;
-  if (invocationEffort && repositoryEffort && policy?.effort === false && invocationEffort !== repositoryEffort) {
+  if (
+    invocationEffort &&
+    repositoryEffort &&
+    input.repository?.allowInvocationOverride?.effort === false &&
+    invocationEffort !== repositoryEffort
+  ) {
     return {
       kind: "override_locked",
       field: "effort",

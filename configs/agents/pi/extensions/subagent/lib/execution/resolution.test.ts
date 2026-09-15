@@ -41,6 +41,111 @@ describe("resolveAgentExecution", () => {
     });
   });
 
+  test("forces xhigh when an invocation selects cliproxyapi Luna", () => {
+    // Arrange
+    const input = {
+      parent,
+      invocation: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "low" as const },
+    };
+
+    // Act
+    const result = resolveAgentExecution(input);
+
+    // Assert
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "xhigh" },
+        source: { model: "invocation", effort: "policy" },
+      },
+    });
+  });
+
+  test("forces xhigh when repository configuration selects cliproxyapi Luna", () => {
+    // Arrange
+    const input = {
+      parent,
+      repository: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "max" as const },
+    };
+
+    // Act
+    const result = resolveAgentExecution(input);
+
+    // Assert
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "xhigh" },
+        source: { model: "repository", effort: "policy" },
+      },
+    });
+  });
+
+  test("forces xhigh when an agent profile selects cliproxyapi Luna", () => {
+    // Arrange
+    const input = {
+      parent,
+      agent: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "off" as const },
+    };
+
+    // Act
+    const result = resolveAgentExecution(input);
+
+    // Assert
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "xhigh" },
+        source: { model: "agent", effort: "policy" },
+      },
+    });
+  });
+
+  test("forces xhigh when cliproxyapi Luna is inherited from the parent", () => {
+    // Arrange
+    const input = {
+      parent: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "medium" as const },
+    };
+
+    // Act
+    const result = resolveAgentExecution(input);
+
+    // Assert
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "xhigh" },
+        source: { model: "parent", effort: "policy" },
+      },
+    });
+  });
+
+  test("lets the Luna policy supersede a conflicting repository effort lock", () => {
+    // Arrange
+    const input = {
+      parent,
+      repository: {
+        provider: "cliproxyapi",
+        model: "gpt-5.6-luna",
+        effort: "medium" as const,
+        allowInvocationOverride: { model: false, effort: false },
+      },
+      invocation: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "max" as const },
+    };
+
+    // Act
+    const result = resolveAgentExecution(input);
+
+    // Assert
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "xhigh" },
+        source: { model: "repository", effort: "policy" },
+      },
+    });
+  });
+
   test("returns a typed error for a differing locked override", () => {
     // Arrange
     const input = {

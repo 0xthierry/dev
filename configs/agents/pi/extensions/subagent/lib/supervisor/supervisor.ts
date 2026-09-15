@@ -1,6 +1,6 @@
 import { type ArtifactKind, ArtifactTooLargeError } from "../artifacts/artifacts";
 import { prepareCompletionPreview } from "../artifacts/output";
-import type { ResolvedAgentExecution } from "../execution/profile";
+import { enforceModelEffortPolicy, type ResolvedAgentExecution } from "../execution/profile";
 import {
   RpcClientClosedError,
   RpcProtocolViolationError,
@@ -332,6 +332,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
       throw new SupervisorError("depth_exceeded", `Agent depth ${depth} exceeds limit ${this.options.limits.maxDepth}`);
     }
     const agentId = exactId(this.runtime.createAgentId(), "agent");
+    const execution = enforceModelEffortPolicy(request.execution);
     const record = this.registry.register({
       agentPath: path,
       agentId,
@@ -339,21 +340,14 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
       taskName: request.taskName,
       agentType: request.agentType,
       depth,
-      execution: request.execution,
+      execution,
     });
     const assignment = this.registry.queueAssignment(path, "spawn");
     const session: SupervisorProcessSession =
       request.context?.kind === "fork"
         ? { kind: "fork", parentSessionFile: request.context.parentSessionFile }
         : { kind: "fresh" };
-    const ticket = this.scheduleAssignment(
-      record,
-      assignment,
-      request.prompt,
-      request.execution,
-      session,
-      request.signal,
-    );
+    const ticket = this.scheduleAssignment(record, assignment, request.prompt, execution, session, request.signal);
     return await this.operationResult(path, assignment.id, ticket);
   }
 
@@ -451,7 +445,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
       record = this.registry.resolve(record.agentPath);
       this.requireNotClosing(record);
     }
-    const execution = request.execution ?? record.execution;
+    const execution = enforceModelEffortPolicy(request.execution ?? record.execution);
     const assignment = this.registry.queueAssignment(record.agentPath, "followup");
     try {
       await this.persist({
@@ -647,7 +641,7 @@ export class PersistentAgentSupervisor implements AgentSupervisor {
         agentType: request.agentType,
         depth,
         status: request.status ?? "unloaded",
-        execution: request.execution,
+        execution: enforceModelEffortPolicy(request.execution),
         sessionFile: request.sessionFile,
         assignmentGeneration: request.assignmentGeneration,
         assignments: recoveredAssignments.map((assignment) => ({

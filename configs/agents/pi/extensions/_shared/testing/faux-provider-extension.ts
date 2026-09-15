@@ -5,6 +5,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 export const FAUX_PROVIDER_NAME = "pi-extension-e2e-faux";
 export const FAUX_MODEL_ID = "pi-extension-e2e-faux-model";
 export const FAUX_ALT_MODEL_ID = "pi-extension-e2e-faux-model-alt";
+export const FAUX_LUNA_PROVIDER_NAME = "cliproxyapi";
+export const FAUX_LUNA_MODEL_ID = "gpt-5.6-luna";
 export const FAUX_API_KEY_ENV = "PI_EXTENSION_E2E_FAUX_API_KEY";
 export const FAUX_RESPONSE_TEXT_ENV = "PI_EXTENSION_E2E_FAUX_RESPONSE_TEXT";
 export const FAUX_TOOL_CALLS_ENV = "PI_EXTENSION_E2E_FAUX_TOOL_CALLS";
@@ -25,6 +27,13 @@ const model = {
   maxTokens: 1_024,
 };
 const alternateModel = { ...model, id: FAUX_ALT_MODEL_ID, name: "Pi Extension E2E Faux Alternate Model" };
+const lunaModel = {
+  ...model,
+  id: FAUX_LUNA_MODEL_ID,
+  name: "Pi Extension E2E Faux Luna Model",
+  reasoning: true,
+  thinkingLevelMap: { off: null, minimal: null, xhigh: "xhigh", max: "max" },
+};
 
 export default function (pi: ExtensionAPI) {
   const faux = registerFauxProvider({
@@ -41,6 +50,13 @@ export default function (pi: ExtensionAPI) {
     apiKey: `$${FAUX_API_KEY_ENV}`,
     api: faux.api,
     models: [model, alternateModel],
+  });
+  pi.registerProvider(FAUX_LUNA_PROVIDER_NAME, {
+    name: "Pi Extension E2E Faux Luna Provider",
+    baseUrl: "http://localhost:0",
+    apiKey: `$${FAUX_API_KEY_ENV}`,
+    api: faux.api,
+    models: [lunaModel],
   });
 }
 

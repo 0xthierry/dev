@@ -35,7 +35,7 @@ test("keeps every flattened guideline attributable and prompts stable", () => {
   }
 });
 
-test("exposes stable model routing preferences without replacing execution policy", () => {
+test("exposes stable model routing preferences and enforced Luna effort policy", () => {
   // Arrange
   const first = createFakePi();
   const second = createFakePi();
@@ -53,8 +53,10 @@ test("exposes stable model routing preferences without replacing execution polic
   expect(description).toContain("Use high effort for planning and design decisions");
   expect(description).toContain("high for complex implementation or debugging");
   expect(description).toContain(
-    "cliproxyapi/gpt-5.6-luna or xai/grok-4.5 are the defaults for read-only codebase reconnaissance",
+    "cliproxyapi/gpt-5.6-luna is a default for read-only codebase reconnaissance and always runs at xhigh effort",
   );
+  expect(description).toContain("runtime enforces xhigh whenever this exact provider/model is selected");
+  expect(description).toContain("xai/grok-4.5 is also a default for read-only codebase reconnaissance");
   expect(description).not.toContain("implementation fallback");
   expect(description).not.toContain("gpt-6-astra is the default for implementation");
   expect(description).toContain("xai/grok-4.5 is the default for code review");
@@ -69,7 +71,7 @@ test("exposes stable model routing preferences without replacing execution polic
   expect(description).toContain("omit execution so those defaults can apply");
   expect(description).toContain("they do not replace matching named-agent defaults");
   expect(description).toContain("Set execution only when the user or the concrete assignment requests an override");
-  expect(description).toContain("Repository locks still apply");
+  expect(description).toContain("Repository model locks and non-policy effort locks still apply");
   expect(description).not.toContain("set effort explicitly");
   expect(description).not.toMatch(/\b(?:subscription|openai-codex)\b/);
   expect(first.tools.get("agent_followup")?.description).toContain("guidance in agent_spawn");

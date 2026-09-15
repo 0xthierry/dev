@@ -10,7 +10,7 @@ import { REASONING_EFFORTS } from "../execution/profile";
 import { DEFAULT_WAIT_TIMEOUT_MS, MAX_WAIT_TIMEOUT_MS } from "../supervisor/limits";
 
 const EffortSchema = StringEnum(REASONING_EFFORTS, {
-  description: "Reasoning effort override, independent of provider/model. See agent_spawn for selection guidance.",
+  description: "Reasoning effort override. Runtime model policies may replace it; see agent_spawn guidance.",
 });
 export const ExecutionSchema = Type.Union(
   [
@@ -26,7 +26,7 @@ export const ExecutionSchema = Type.Union(
   ],
   {
     description:
-      "Optional settings: supply provider/model together; effort is independent. Precedence: invocation > trusted repository > agent > parent. Conflicting repository locks fail.",
+      "Optional settings: supply provider/model together. Model and effort normally resolve independently by invocation > trusted repository > agent > parent; runtime model policies may fix the effective effort. Conflicting locks fail unless superseded by such a policy.",
   },
 );
 export const ForkTurnsSchema = StringEnum(["none", "all"] as const, {

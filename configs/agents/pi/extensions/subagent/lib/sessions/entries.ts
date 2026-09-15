@@ -1,4 +1,10 @@
-import { type ExecutionSource, parseReasoningEffort, type ResolvedAgentExecution } from "../execution/profile";
+import {
+  type EffortExecutionSource,
+  type ExecutionSource,
+  enforceModelEffortPolicy,
+  parseReasoningEffort,
+  type ResolvedAgentExecution,
+} from "../execution/profile";
 
 export const SUBAGENT_RUNTIME_ENTRY_TYPE = "subagent-runtime";
 export const SUBAGENT_RUNTIME_ENTRY_VERSION = 2 as const;
@@ -205,20 +211,24 @@ function executionFrom(value: unknown): RuntimeExecutionProfile | undefined {
   const provider = exactNonemptyString(profile.provider);
   const model = exactNonemptyString(profile.model);
   const effort = parseReasoningEffort(profile.effort);
-  const modelSource = executionSource(source.model);
-  const effortSource = executionSource(source.effort);
+  const modelSource = modelExecutionSource(source.model);
+  const effortSource = effortExecutionSource(source.effort);
   return provider && model && effort && modelSource && effortSource
-    ? {
+    ? enforceModelEffortPolicy({
         profile: { provider, model, effort },
         source: { model: modelSource, effort: effortSource },
-      }
+      })
     : undefined;
 }
 
-function executionSource(value: unknown): ExecutionSource | undefined {
+function modelExecutionSource(value: unknown): ExecutionSource | undefined {
   return value === "invocation" || value === "repository" || value === "agent" || value === "parent"
     ? value
     : undefined;
+}
+
+function effortExecutionSource(value: unknown): EffortExecutionSource | undefined {
+  return value === "policy" ? value : modelExecutionSource(value);
 }
 
 function assignmentKindFrom(value: unknown): RuntimeAssignmentKind | undefined {
