@@ -5,8 +5,8 @@ import { join, resolve } from "node:path";
 import {
   FAUX_ALT_MODEL_ID,
   FAUX_API_KEY_ENV,
-  FAUX_LUNA_MODEL_ID,
-  FAUX_LUNA_PROVIDER_NAME,
+  FAUX_GROK_MODEL_ID,
+  FAUX_GROK_PROVIDER_NAME,
   FAUX_MODEL_ID,
   FAUX_PROVIDER_NAME,
   FAUX_RESPONSE_PLANS_BY_DEPTH_ENV,
@@ -91,7 +91,7 @@ describe("persistent subagent Pi RPC E2E", () => {
     expect(harness.stderr()).toBe("");
   }, 70_000);
 
-  test("launches cliproxyapi Luna at xhigh even when the caller requests another effort", async () => {
+  test("launches xAI Grok 4.5 at high even when the caller requests another effort", async () => {
     // Arrange
     const fixture = await createFixture();
     const harness = await startHarness(
@@ -99,42 +99,42 @@ describe("persistent subagent Pi RPC E2E", () => {
       {
         0: [
           toolStep("agent_spawn", {
-            task_name: "luna-policy",
+            task_name: "grok-policy",
             subagent_type: "worker",
-            prompt: "Confirm the enforced Luna execution settings.",
-            execution: { provider: FAUX_LUNA_PROVIDER_NAME, model: FAUX_LUNA_MODEL_ID, effort: "low" },
+            prompt: "Confirm the enforced Grok 4.5 execution settings.",
+            execution: { provider: FAUX_GROK_PROVIDER_NAME, model: FAUX_GROK_MODEL_ID, effort: "low" },
           }),
-          toolStep("agent_wait", { targets: ["/root/luna-policy"], timeout_seconds: 30 }),
+          toolStep("agent_wait", { targets: ["/root/grok-policy"], timeout_seconds: 30 }),
           toolStep("agent_followup", {
-            target: "/root/luna-policy",
-            message: "Retain the enforced Luna settings without another execution override.",
+            target: "/root/grok-policy",
+            message: "Retain the enforced Grok 4.5 settings without another execution override.",
           }),
-          toolStep("agent_wait", { targets: ["/root/luna-policy"], timeout_seconds: 30 }),
-          toolStep("agent_close", { target: "/root/luna-policy" }),
-          { text: "Luna policy lifecycle complete." },
+          toolStep("agent_wait", { targets: ["/root/grok-policy"], timeout_seconds: 30 }),
+          toolStep("agent_close", { target: "/root/grok-policy" }),
+          { text: "Grok 4.5 policy lifecycle complete." },
         ],
-        1: [{ text: "LUNA_CHILD_RAN_AT_ENFORCED_EFFORT" }, { text: "LUNA_CHILD_RETAINED_ENFORCED_EFFORT" }],
+        1: [{ text: "GROK_CHILD_RAN_AT_ENFORCED_EFFORT" }, { text: "GROK_CHILD_RETAINED_ENFORCED_EFFORT" }],
       },
       { 0: 0, 1: 0 },
     );
 
     // Act
-    await harness.request({ type: "prompt", message: "Run the Luna effort policy check." });
+    await harness.request({ type: "prompt", message: "Run the Grok 4.5 effort policy check." });
     const end = await harness.waitForEvent((event) => event.type === "agent_end", 60_000);
 
     // Assert
     const toolEnds = harness.events.filter((event) => event.type === "tool_execution_end");
     const spawn = toolEvent(toolEnds, "agent_spawn");
-    expect(eventText(end)).toContain("Luna policy lifecycle complete.");
-    expect(spawn).toContain(`"provider":"${FAUX_LUNA_PROVIDER_NAME}"`);
-    expect(spawn).toContain(`"model":"${FAUX_LUNA_MODEL_ID}"`);
-    expect(spawn).toContain('"effort":"xhigh"');
+    expect(eventText(end)).toContain("Grok 4.5 policy lifecycle complete.");
+    expect(spawn).toContain(`"provider":"${FAUX_GROK_PROVIDER_NAME}"`);
+    expect(spawn).toContain(`"model":"${FAUX_GROK_MODEL_ID}"`);
+    expect(spawn).toContain('"effort":"high"');
     expect(spawn).toContain('"source":{"model":"invocation","effort":"policy"}');
-    expect(toolEvent(toolEnds, "agent_wait", 0)).toContain("LUNA_CHILD_RAN_AT_ENFORCED_EFFORT");
+    expect(toolEvent(toolEnds, "agent_wait", 0)).toContain("GROK_CHILD_RAN_AT_ENFORCED_EFFORT");
     const followup = toolEvent(toolEnds, "agent_followup");
-    expect(followup).toContain('"effort":"xhigh"');
+    expect(followup).toContain('"effort":"high"');
     expect(followup).toContain('"source":{"model":"invocation","effort":"policy"}');
-    expect(toolEvent(toolEnds, "agent_wait", 1)).toContain("LUNA_CHILD_RETAINED_ENFORCED_EFFORT");
+    expect(toolEvent(toolEnds, "agent_wait", 1)).toContain("GROK_CHILD_RETAINED_ENFORCED_EFFORT");
     expect(toolEvent(toolEnds, "agent_close")).toContain('"status":"closed"');
     expect(harness.stderr()).toBe("");
   }, 70_000);

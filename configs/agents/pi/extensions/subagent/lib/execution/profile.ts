@@ -29,7 +29,7 @@ export interface ResolvedAgentExecution {
 const EFFORT_SET = new Set<string>(REASONING_EFFORTS);
 
 export function modelPolicyEffort(model: AgentModelReference): ReasoningEffort | undefined {
-  return model.provider === "cliproxyapi" && model.model === "gpt-5.6-luna" ? "xhigh" : undefined;
+  return model.provider === "xai" && model.model === "grok-4.5" ? "high" : undefined;
 }
 
 export function enforceModelEffortPolicy(execution: ResolvedAgentExecution): ResolvedAgentExecution {

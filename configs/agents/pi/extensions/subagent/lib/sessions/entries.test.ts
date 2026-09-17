@@ -44,7 +44,7 @@ describe("runtime journal entries", () => {
     });
   });
 
-  test("normalizes older Luna execution while reading runtime recovery state", () => {
+  test("normalizes older Grok 4.5 execution while reading runtime recovery state", () => {
     // Arrange
     const entry = {
       version: 2 as const,
@@ -52,7 +52,7 @@ describe("runtime journal entries", () => {
       agentPath: "/root/review",
       agentId: "agent-1",
       execution: {
-        profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "low" as const },
+        profile: { provider: "xai", model: "grok-4.5", effort: "low" as const },
         source: { model: "invocation" as const, effort: "invocation" as const },
       },
     };
@@ -64,7 +64,7 @@ describe("runtime journal entries", () => {
     expect(parsed).toEqual({
       ...entry,
       execution: {
-        profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "xhigh" },
+        profile: { provider: "xai", model: "grok-4.5", effort: "high" },
         source: { model: "invocation", effort: "policy" },
       },
     });
@@ -81,7 +81,7 @@ describe("runtime journal entries", () => {
         agentPath: "/root/review",
         agentId: "agent-1",
         execution: {
-          profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "xhigh" },
+          profile: { provider: "xai", model: "grok-4.5", effort: "high" },
           source: { model: "policy", effort: "policy" },
         },
       },

@@ -35,7 +35,7 @@ test("keeps every flattened guideline attributable and prompts stable", () => {
   }
 });
 
-test("exposes stable model routing preferences and enforced Luna effort policy", () => {
+test("exposes stable model routing preferences and enforced Grok 4.5 effort policy", () => {
   // Arrange
   const first = createFakePi();
   const second = createFakePi();
@@ -53,10 +53,9 @@ test("exposes stable model routing preferences and enforced Luna effort policy",
   expect(description).toContain("Use high effort for planning and design decisions");
   expect(description).toContain("high for complex implementation or debugging");
   expect(description).toContain(
-    "cliproxyapi/gpt-5.6-luna is a default for read-only codebase reconnaissance and always runs at xhigh effort",
+    "xai/grok-4.5 is the default for read-only codebase reconnaissance and always runs at high effort",
   );
-  expect(description).toContain("runtime enforces xhigh whenever this exact provider/model is selected");
-  expect(description).toContain("xai/grok-4.5 is also a default for read-only codebase reconnaissance");
+  expect(description).toContain("runtime enforces high whenever this exact provider/model is selected");
   expect(description).not.toContain("implementation fallback");
   expect(description).not.toContain("gpt-6-astra is the default for implementation");
   expect(description).toContain("xai/grok-4.5 is the default for code review");

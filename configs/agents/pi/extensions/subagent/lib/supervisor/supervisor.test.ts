@@ -995,17 +995,17 @@ describe("PersistentAgentSupervisor", () => {
     expect(fake.entries.at(-1)?.event).toBe("closed");
   });
 
-  test("normalizes recovered Luna execution before a bare follow-up", async () => {
+  test("normalizes recovered Grok 4.5 execution before a bare follow-up", async () => {
     // Arrange
     const fake = harness();
     await fake.supervisor.restore([
       {
-        agentPath: "/root/luna-recovered",
-        agentId: "luna-agent",
+        agentPath: "/root/grok-recovered",
+        agentId: "grok-agent",
         agentType: "worker",
-        sessionFile: "/sessions/luna.jsonl",
+        sessionFile: "/sessions/grok.jsonl",
         execution: {
-          profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "low" },
+          profile: { provider: "xai", model: "grok-4.5", effort: "low" },
           source: { model: "invocation", effort: "invocation" },
         },
         assignmentGeneration: 1,
@@ -1015,30 +1015,30 @@ describe("PersistentAgentSupervisor", () => {
 
     // Act
     const restored = await fake.supervisor.list();
-    const followup = await fake.supervisor.followup({ target: "luna-agent", message: "resume" });
+    const followup = await fake.supervisor.followup({ target: "grok-agent", message: "resume" });
     await flush();
-    const process = fake.processes.get("/root/luna-recovered");
+    const process = fake.processes.get("/root/grok-recovered");
 
     // Assert
     expect(restored[0]?.execution).toEqual({
-      profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "xhigh" },
+      profile: { provider: "xai", model: "grok-4.5", effort: "high" },
       source: { model: "invocation", effort: "policy" },
     });
     expect(followup.execution).toEqual(restored[0]?.execution);
     expect(fake.createProcess).toHaveBeenCalledWith(
       expect.objectContaining({
-        execution: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "xhigh" },
+        execution: { provider: "xai", model: "grok-4.5", effort: "high" },
       }),
     );
     expect(process?.followup).toHaveBeenCalledWith(
       expect.objectContaining({
-        execution: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "xhigh" },
+        execution: { provider: "xai", model: "grok-4.5", effort: "high" },
       }),
     );
 
     // Act
-    process?.assignments[0]?.resolve("recovered Luna complete");
-    await fake.supervisor.wait({ targets: ["luna-agent"], timeoutMs: 1_000 });
+    process?.assignments[0]?.resolve("recovered Grok 4.5 complete");
+    await fake.supervisor.wait({ targets: ["grok-agent"], timeoutMs: 1_000 });
     const settled = await fake.supervisor.list();
 
     // Assert

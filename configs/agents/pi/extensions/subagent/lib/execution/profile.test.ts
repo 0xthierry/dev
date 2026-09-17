@@ -14,10 +14,10 @@ describe("execution profile", () => {
     expect(parseReasoningEffort("HIGH")).toBeUndefined();
   });
 
-  test("enforces xhigh with policy provenance for cliproxyapi Luna", () => {
+  test("enforces high with policy provenance for xAI Grok 4.5", () => {
     // Arrange
     const execution = {
-      profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "low" as const },
+      profile: { provider: "xai", model: "grok-4.5", effort: "low" as const },
       source: { model: "parent" as const, effort: "parent" as const },
     };
 
@@ -26,7 +26,7 @@ describe("execution profile", () => {
 
     // Assert
     expect(normalized).toEqual({
-      profile: { provider: "cliproxyapi", model: "gpt-5.6-luna", effort: "xhigh" },
+      profile: { provider: "xai", model: "grok-4.5", effort: "high" },
       source: { model: "parent", effort: "policy" },
     });
   });
