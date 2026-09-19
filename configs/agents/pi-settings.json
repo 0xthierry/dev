@@ -25,7 +25,8 @@
   "extensions": [
     "!../../.agents/**",
     "!../../.claude/**",
-    "!../../.codex/**"
+    "!../../.codex/**",
+    "-extensions/xai-grok-fast-mode"
   ],
   "skills": [
     "!../../.agents/**",
