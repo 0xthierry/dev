@@ -6,7 +6,7 @@ import { resolveAgentExecution } from "../execution/resolution";
 import { discoverAgents, readAgentDirectory } from "./discovery";
 
 describe("discoverAgents", () => {
-  test("loads shipped agent definitions and resolves advisor and worker file defaults", async () => {
+  test("loads shipped agent definitions and resolves their routed file defaults", async () => {
     // Arrange
     const globalAgentsDir = join(import.meta.dir, "../../../../../agents");
     const parent = { provider: "test", model: "parent", effort: "low" as const };
@@ -14,7 +14,7 @@ describe("discoverAgents", () => {
     // Act
     const result = await discoverAgents({ projectTrusted: false, globalAgentsDir });
     const profiles = result.agents
-      .filter((agent) => agent.name === "advisor" || agent.name === "worker")
+      .filter((agent) => agent.name === "advisor" || agent.name === "codebase-locator" || agent.name === "worker")
       .map((agent) => ({
         name: agent.name,
         sourcePath: agent.sourcePath,
@@ -39,6 +39,17 @@ describe("discoverAgents", () => {
           value: {
             profile: { provider: "cliproxyapi", model: "gpt-6-astra", effort: "xhigh" },
             source: { model: "agent", effort: "agent" },
+          },
+        },
+      },
+      {
+        name: "codebase-locator",
+        sourcePath: "global://rpi/codebase-locator.md",
+        execution: {
+          ok: true,
+          value: {
+            profile: { provider: "cliproxyapi", model: "gpt-5.6-terra", effort: "medium" },
+            source: { model: "agent", effort: "policy" },
           },
         },
       },

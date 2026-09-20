@@ -41,11 +41,11 @@ describe("resolveAgentExecution", () => {
     });
   });
 
-  test("forces high when an invocation selects xAI Grok 4.5", () => {
+  test("forces medium when an invocation selects GPT-5.6 Terra", () => {
     // Arrange
     const input = {
       parent,
-      invocation: { provider: "xai", model: "grok-4.5", effort: "low" as const },
+      invocation: { provider: "cliproxyapi", model: "gpt-5.6-terra", effort: "low" as const },
     };
 
     // Act
@@ -55,17 +55,17 @@ describe("resolveAgentExecution", () => {
     expect(result).toEqual({
       ok: true,
       value: {
-        profile: { provider: "xai", model: "grok-4.5", effort: "high" },
+        profile: { provider: "cliproxyapi", model: "gpt-5.6-terra", effort: "medium" },
         source: { model: "invocation", effort: "policy" },
       },
     });
   });
 
-  test("forces high when repository configuration selects xAI Grok 4.5", () => {
+  test("forces medium when repository configuration selects GPT-5.6 Terra", () => {
     // Arrange
     const input = {
       parent,
-      repository: { provider: "xai", model: "grok-4.5", effort: "max" as const },
+      repository: { provider: "cliproxyapi", model: "gpt-5.6-terra", effort: "max" as const },
     };
 
     // Act
@@ -75,17 +75,17 @@ describe("resolveAgentExecution", () => {
     expect(result).toEqual({
       ok: true,
       value: {
-        profile: { provider: "xai", model: "grok-4.5", effort: "high" },
+        profile: { provider: "cliproxyapi", model: "gpt-5.6-terra", effort: "medium" },
         source: { model: "repository", effort: "policy" },
       },
     });
   });
 
-  test("forces high when an agent profile selects xAI Grok 4.5", () => {
+  test("forces medium when an agent profile selects GPT-5.6 Terra", () => {
     // Arrange
     const input = {
       parent,
-      agent: { provider: "xai", model: "grok-4.5", effort: "off" as const },
+      agent: { provider: "cliproxyapi", model: "gpt-5.6-terra", effort: "off" as const },
     };
 
     // Act
@@ -95,16 +95,16 @@ describe("resolveAgentExecution", () => {
     expect(result).toEqual({
       ok: true,
       value: {
-        profile: { provider: "xai", model: "grok-4.5", effort: "high" },
+        profile: { provider: "cliproxyapi", model: "gpt-5.6-terra", effort: "medium" },
         source: { model: "agent", effort: "policy" },
       },
     });
   });
 
-  test("forces high when xAI Grok 4.5 is inherited from the parent", () => {
+  test("forces medium when GPT-5.6 Terra is inherited from the parent", () => {
     // Arrange
     const input = {
-      parent: { provider: "xai", model: "grok-4.5", effort: "medium" as const },
+      parent: { provider: "cliproxyapi", model: "gpt-5.6-terra", effort: "high" as const },
     };
 
     // Act
@@ -114,23 +114,23 @@ describe("resolveAgentExecution", () => {
     expect(result).toEqual({
       ok: true,
       value: {
-        profile: { provider: "xai", model: "grok-4.5", effort: "high" },
+        profile: { provider: "cliproxyapi", model: "gpt-5.6-terra", effort: "medium" },
         source: { model: "parent", effort: "policy" },
       },
     });
   });
 
-  test("lets the Grok 4.5 policy supersede a conflicting repository effort lock", () => {
+  test("lets the GPT-5.6 Terra policy supersede a conflicting repository effort lock", () => {
     // Arrange
     const input = {
       parent,
       repository: {
-        provider: "xai",
-        model: "grok-4.5",
-        effort: "medium" as const,
+        provider: "cliproxyapi",
+        model: "gpt-5.6-terra",
+        effort: "low" as const,
         allowInvocationOverride: { model: false, effort: false },
       },
-      invocation: { provider: "xai", model: "grok-4.5", effort: "max" as const },
+      invocation: { provider: "cliproxyapi", model: "gpt-5.6-terra", effort: "max" as const },
     };
 
     // Act
@@ -140,7 +140,7 @@ describe("resolveAgentExecution", () => {
     expect(result).toEqual({
       ok: true,
       value: {
-        profile: { provider: "xai", model: "grok-4.5", effort: "high" },
+        profile: { provider: "cliproxyapi", model: "gpt-5.6-terra", effort: "medium" },
         source: { model: "repository", effort: "policy" },
       },
     });

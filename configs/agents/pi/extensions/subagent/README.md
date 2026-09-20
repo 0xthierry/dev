@@ -107,7 +107,7 @@ Provider, model, and effort are assignment settings. Model and effort resolve in
 3. agent Markdown frontmatter;
 4. current parent execution.
 
-Provider and model must always be supplied together and the provider is never guessed from a model name. After model precedence resolves, the runtime applies model-specific effort policy: `xai/grok-4.5` always resolves to `high`, regardless of invocation, repository, agent, or inherited parent effort. This invariant supersedes repository effort locks for Grok 4.5 while model locks continue to apply, and returned execution provenance reports the effort source as `policy`. Every other selected Pi model must support the exact normally resolved effort. General task recommendations use `low`, `medium`, and `high`; they do not override named profiles such as the advisor's `xhigh` default. The runtime retains Pi's broader effort support for other agent files, explicit requests, and repository settings. Pi's model registry validates provider/model existence and authentication at the boundary, then credentials are immediately discarded. Children confirm their effective model and effort through RPC before accepting work. Follow-up execution changes perform model/thinking updates and state verification before prompting.
+Provider and model must always be supplied together and the provider is never guessed from a model name. After model precedence resolves, the runtime applies model-specific effort policy: `cliproxyapi/gpt-5.6-terra` always resolves to `medium`, regardless of invocation, repository, agent, or inherited parent effort. This invariant supersedes repository effort locks for Terra while model locks continue to apply, and returned execution provenance reports the effort source as `policy`. Every other selected Pi model must support the exact normally resolved effort. General task recommendations use `low`, `medium`, and `high`; they do not override named profiles such as the advisor's `xhigh` default. The runtime retains Pi's broader effort support for other agent files, explicit requests, and repository settings. Pi's model registry validates provider/model existence and authentication at the boundary, then credentials are immediately discarded. Children confirm their effective model and effort through RPC before accepting work. Follow-up execution changes perform model/thinking updates and state verification before prompting.
 
 Example spawn override:
 
@@ -117,15 +117,15 @@ Example spawn override:
   "subagent_type": "advisor",
   "prompt": "Review this bounded patch for correctness and report exact evidence.",
   "execution": {
-    "provider": "xai",
-    "model": "grok-4.5",
-    "effort": "high"
+    "provider": "cliproxyapi",
+    "model": "gpt-5.6-terra",
+    "effort": "medium"
   }
 }
 ```
 
 This routine-review example intentionally overrides the advisor's Astra `xhigh`
-file default with Grok at its enforced `high` effort. For advisor decision work,
+file default with Terra at its enforced `medium` effort. For advisor decision work,
 omit `execution` so the file default applies.
 
 ## Model routing evidence
@@ -134,8 +134,8 @@ The `agent_spawn` description contains a stable, advisory provider/model selecti
 policy; `agent_followup` refers to the same policy. It directs callers to choose a
 named agent whose file defaults fit the assignment and omit `execution` in that
 case. Callers should set `execution` only when the user or concrete assignment
-requests an override. The prose is advisory; the separately documented Grok 4.5
-`high` runtime policy is enforced during execution resolution. This guidance does
+requests an override. The prose is advisory; the separately documented Terra
+`medium` runtime policy is enforced during execution resolution. This guidance does
 not install providers, bypass model locks, or promise authentication on another
 machine. An omitted execution override still follows normal resolution and any
 applicable model effort policy.
@@ -148,16 +148,16 @@ Choose a fitting named agent first and omit `execution` unless an override is ne
 |---|---|---|
 | `cliproxyapi/gpt-6-astra` | Default for planning and design decisions; code review only when the user explicitly requests Astra | High effort |
 | `cliproxyapi/gpt-5.6-sol` | Default for implementation and debugging | Low for small patches, medium for bounded multi-file changes, high for complex implementation/debugging |
-| `xai/grok-4.5` | Default for read-only reconnaissance and routine code review, including ordinary correctness and security checks | Always `high`; runtime-enforced for every selection source; require paths/evidence for reconnaissance and provide an artifact plus a specific question for review |
+| `cliproxyapi/gpt-5.6-terra` | Default for read-only reconnaissance and routine code review, including ordinary correctness and security checks | Always `medium`; runtime-enforced for every selection source; require paths/evidence for reconnaissance and provide an artifact plus a specific question for review |
 
 Use `cliproxyapi/gpt-5.6-sol` instead of the reconnaissance profile for debugging
 or edits. Use `cliproxyapi/gpt-6-astra` with high effort for planning and design
-decisions. Use `xai/grok-4.5` for routine code review, and Astra for code review
-only when the user explicitly requests it. These are the user's routing
-preferences, not benchmark claims.
+decisions. Use `cliproxyapi/gpt-5.6-terra` at medium effort for routine code review,
+and Astra for code review only when the user explicitly requests it. These are the
+user's routing preferences, not benchmark claims.
 An Astra parent should delegate implementation and debugging to Sol with
 non-overlapping ownership. Honor user choices and repository locks, except that the
-Grok 4.5 `high` invariant always supersedes effort inputs and effort locks. Prefer a
+Terra `medium` invariant always supersedes effort inputs and effort locks. Prefer a
 named agent with matching file defaults and omit `execution`; when an override is
 needed, supply provider and model together while effort remains independently
 overridable for models without a runtime effort policy. Inspect the returned
@@ -165,9 +165,9 @@ effective settings.
 
 **Effort is workflow policy, not a benchmark-proven optimum.** The general task
 recommendations use low, medium, and high. Named profiles can declare other supported
-levels. The Grok 4.5 `high` rule is an enforced model policy; the remaining table entries
-are advisory and do not override matching agent defaults, repository precedence, or
-accepted schema values.
+levels. The Terra `medium` rule is an enforced model policy; the remaining table
+entries are advisory and do not override matching agent defaults, repository
+precedence, or accepted schema values.
 
 The repo-managed `configs/agents/pi/cliproxyapi-models.json` maps the full pinned
 Pi Codex catalog, including the models recommended here. Deploy catalog changes
@@ -187,10 +187,10 @@ availability. See `configs/cliproxyapi/README.md` for the complete mapping.
   and proportionate verification. It does not prescribe a universal low-effort
   migration: it advises preserving effective effort except when moving from its
   non-reasoning/lightest settings.
-- [xAI's Grok 4.5 documentation](https://docs.x.ai/developers/models/grok-4.5)
-  documents the model API, context, and pricing. It does not prescribe a subagent
-  role or reasoning level; assigning Grok 4.5 to read-only reconnaissance at enforced
-  high effort is this repository's workflow policy.
+- The repo-managed `cliproxyapi` catalog maps `gpt-5.6-terra` to the local Codex
+  account pool. It does not prescribe a subagent role or reasoning level; assigning
+  Terra to read-only reconnaissance and routine review at enforced medium effort is
+  the user's workflow policy.
 - The user-provided Terminal-Bench 4.0 chart shows the lowest-cost Astra point at
   approximately 50% accuracy and $5, above Sol's best plotted point at approximately
   38% and $8. Individual effort labels, error bars, and cost aggregation are absent
@@ -234,10 +234,9 @@ USD per million tokens, standard short-context requests, checked 2026-09-05:
 |---|---:|---:|---:|
 | [GPT-5.6 Sol](https://developers.openai.com/api/docs/models/gpt-5.6-sol.md) | $4 | $0.40 | $20 |
 | [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra.md) | $10 | $1 | $50 |
-| [Grok 4.5](https://docs.x.ai/developers/models/grok-4.5) | $2 | $0.30 | $6 |
 
-OpenAI applies higher full-request rates above 272K input tokens; xAI documents a
-higher-context pricing tier above 200K. Cache writes, tools, fast/priority modes,
+OpenAI applies higher full-request rates above 272K input tokens. Cache writes,
+tools, fast/priority modes,
 and other service tiers may have additional/different prices. Sol's quoted rates
 are promotional, documented through at least November 21, 2026. Headline token
 prices alone do not determine cost per successful task.

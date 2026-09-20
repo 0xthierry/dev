@@ -995,17 +995,17 @@ describe("PersistentAgentSupervisor", () => {
     expect(fake.entries.at(-1)?.event).toBe("closed");
   });
 
-  test("normalizes recovered Grok 4.5 execution before a bare follow-up", async () => {
+  test("normalizes recovered GPT-5.6 Terra execution before a bare follow-up", async () => {
     // Arrange
     const fake = harness();
     await fake.supervisor.restore([
       {
-        agentPath: "/root/grok-recovered",
-        agentId: "grok-agent",
+        agentPath: "/root/terra-recovered",
+        agentId: "terra-agent",
         agentType: "worker",
-        sessionFile: "/sessions/grok.jsonl",
+        sessionFile: "/sessions/terra.jsonl",
         execution: {
-          profile: { provider: "xai", model: "grok-4.5", effort: "low" },
+          profile: { provider: "cliproxyapi", model: "gpt-5.6-terra", effort: "low" },
           source: { model: "invocation", effort: "invocation" },
         },
         assignmentGeneration: 1,
@@ -1015,30 +1015,30 @@ describe("PersistentAgentSupervisor", () => {
 
     // Act
     const restored = await fake.supervisor.list();
-    const followup = await fake.supervisor.followup({ target: "grok-agent", message: "resume" });
+    const followup = await fake.supervisor.followup({ target: "terra-agent", message: "resume" });
     await flush();
-    const process = fake.processes.get("/root/grok-recovered");
+    const process = fake.processes.get("/root/terra-recovered");
 
     // Assert
     expect(restored[0]?.execution).toEqual({
-      profile: { provider: "xai", model: "grok-4.5", effort: "high" },
+      profile: { provider: "cliproxyapi", model: "gpt-5.6-terra", effort: "medium" },
       source: { model: "invocation", effort: "policy" },
     });
     expect(followup.execution).toEqual(restored[0]?.execution);
     expect(fake.createProcess).toHaveBeenCalledWith(
       expect.objectContaining({
-        execution: { provider: "xai", model: "grok-4.5", effort: "high" },
+        execution: { provider: "cliproxyapi", model: "gpt-5.6-terra", effort: "medium" },
       }),
     );
     expect(process?.followup).toHaveBeenCalledWith(
       expect.objectContaining({
-        execution: { provider: "xai", model: "grok-4.5", effort: "high" },
+        execution: { provider: "cliproxyapi", model: "gpt-5.6-terra", effort: "medium" },
       }),
     );
 
     // Act
-    process?.assignments[0]?.resolve("recovered Grok 4.5 complete");
-    await fake.supervisor.wait({ targets: ["grok-agent"], timeoutMs: 1_000 });
+    process?.assignments[0]?.resolve("recovered GPT-5.6 Terra complete");
+    await fake.supervisor.wait({ targets: ["terra-agent"], timeoutMs: 1_000 });
     const settled = await fake.supervisor.list();
 
     // Assert

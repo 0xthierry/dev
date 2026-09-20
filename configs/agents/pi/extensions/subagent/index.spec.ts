@@ -5,12 +5,12 @@ import { join, resolve } from "node:path";
 import {
   FAUX_ALT_MODEL_ID,
   FAUX_API_KEY_ENV,
-  FAUX_GROK_MODEL_ID,
-  FAUX_GROK_PROVIDER_NAME,
   FAUX_MODEL_ID,
   FAUX_PROVIDER_NAME,
   FAUX_RESPONSE_PLANS_BY_DEPTH_ENV,
   FAUX_RESPONSE_PLANS_BY_PROMPT_ENV,
+  FAUX_TERRA_MODEL_ID,
+  FAUX_TERRA_PROVIDER_NAME,
   FAUX_TOKENS_PER_SECOND_BY_DEPTH_ENV,
 } from "../_shared/testing/faux-provider-extension";
 import { type PiRpcHarness, startPiRpcHarness } from "../_shared/testing/pi-rpc-harness";
@@ -91,7 +91,7 @@ describe("persistent subagent Pi RPC E2E", () => {
     expect(harness.stderr()).toBe("");
   }, 70_000);
 
-  test("launches xAI Grok 4.5 at high even when the caller requests another effort", async () => {
+  test("launches GPT-5.6 Terra at medium even when the caller requests another effort", async () => {
     // Arrange
     const fixture = await createFixture();
     const harness = await startHarness(
@@ -99,42 +99,42 @@ describe("persistent subagent Pi RPC E2E", () => {
       {
         0: [
           toolStep("agent_spawn", {
-            task_name: "grok-policy",
+            task_name: "terra-medium",
             subagent_type: "worker",
-            prompt: "Confirm the enforced Grok 4.5 execution settings.",
-            execution: { provider: FAUX_GROK_PROVIDER_NAME, model: FAUX_GROK_MODEL_ID, effort: "low" },
+            prompt: "Confirm the GPT-5.6 Terra execution settings.",
+            execution: { provider: FAUX_TERRA_PROVIDER_NAME, model: FAUX_TERRA_MODEL_ID, effort: "low" },
           }),
-          toolStep("agent_wait", { targets: ["/root/grok-policy"], timeout_seconds: 30 }),
+          toolStep("agent_wait", { targets: ["/root/terra-medium"], timeout_seconds: 30 }),
           toolStep("agent_followup", {
-            target: "/root/grok-policy",
-            message: "Retain the enforced Grok 4.5 settings without another execution override.",
+            target: "/root/terra-medium",
+            message: "Retain the GPT-5.6 Terra settings without another execution override.",
           }),
-          toolStep("agent_wait", { targets: ["/root/grok-policy"], timeout_seconds: 30 }),
-          toolStep("agent_close", { target: "/root/grok-policy" }),
-          { text: "Grok 4.5 policy lifecycle complete." },
+          toolStep("agent_wait", { targets: ["/root/terra-medium"], timeout_seconds: 30 }),
+          toolStep("agent_close", { target: "/root/terra-medium" }),
+          { text: "GPT-5.6 Terra lifecycle complete." },
         ],
-        1: [{ text: "GROK_CHILD_RAN_AT_ENFORCED_EFFORT" }, { text: "GROK_CHILD_RETAINED_ENFORCED_EFFORT" }],
+        1: [{ text: "TERRA_CHILD_RAN_AT_MEDIUM" }, { text: "TERRA_CHILD_RETAINED_MEDIUM" }],
       },
       { 0: 0, 1: 0 },
     );
 
     // Act
-    await harness.request({ type: "prompt", message: "Run the Grok 4.5 effort policy check." });
+    await harness.request({ type: "prompt", message: "Run the GPT-5.6 Terra medium-effort check." });
     const end = await harness.waitForEvent((event) => event.type === "agent_end", 60_000);
 
     // Assert
     const toolEnds = harness.events.filter((event) => event.type === "tool_execution_end");
     const spawn = toolEvent(toolEnds, "agent_spawn");
-    expect(eventText(end)).toContain("Grok 4.5 policy lifecycle complete.");
-    expect(spawn).toContain(`"provider":"${FAUX_GROK_PROVIDER_NAME}"`);
-    expect(spawn).toContain(`"model":"${FAUX_GROK_MODEL_ID}"`);
-    expect(spawn).toContain('"effort":"high"');
+    expect(eventText(end)).toContain("GPT-5.6 Terra lifecycle complete.");
+    expect(spawn).toContain(`"provider":"${FAUX_TERRA_PROVIDER_NAME}"`);
+    expect(spawn).toContain(`"model":"${FAUX_TERRA_MODEL_ID}"`);
+    expect(spawn).toContain('"effort":"medium"');
     expect(spawn).toContain('"source":{"model":"invocation","effort":"policy"}');
-    expect(toolEvent(toolEnds, "agent_wait", 0)).toContain("GROK_CHILD_RAN_AT_ENFORCED_EFFORT");
+    expect(toolEvent(toolEnds, "agent_wait", 0)).toContain("TERRA_CHILD_RAN_AT_MEDIUM");
     const followup = toolEvent(toolEnds, "agent_followup");
-    expect(followup).toContain('"effort":"high"');
+    expect(followup).toContain('"effort":"medium"');
     expect(followup).toContain('"source":{"model":"invocation","effort":"policy"}');
-    expect(toolEvent(toolEnds, "agent_wait", 1)).toContain("GROK_CHILD_RETAINED_ENFORCED_EFFORT");
+    expect(toolEvent(toolEnds, "agent_wait", 1)).toContain("TERRA_CHILD_RETAINED_MEDIUM");
     expect(toolEvent(toolEnds, "agent_close")).toContain('"status":"closed"');
     expect(harness.stderr()).toBe("");
   }, 70_000);

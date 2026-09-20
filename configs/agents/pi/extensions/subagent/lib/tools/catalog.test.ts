@@ -35,7 +35,7 @@ test("keeps every flattened guideline attributable and prompts stable", () => {
   }
 });
 
-test("exposes stable model routing preferences and enforced Grok 4.5 effort policy", () => {
+test("exposes stable model routing preferences and enforced GPT-5.6 Terra effort policy", () => {
   // Arrange
   const first = createFakePi();
   const second = createFakePi();
@@ -53,17 +53,17 @@ test("exposes stable model routing preferences and enforced Grok 4.5 effort poli
   expect(description).toContain("Use high effort for planning and design decisions");
   expect(description).toContain("high for complex implementation or debugging");
   expect(description).toContain(
-    "xai/grok-4.5 is the default for read-only codebase reconnaissance and always runs at high effort",
+    "cliproxyapi/gpt-5.6-terra is the default for read-only codebase reconnaissance and always runs at medium effort",
   );
-  expect(description).toContain("runtime enforces high whenever this exact provider/model is selected");
+  expect(description).toContain("runtime enforces medium whenever this exact provider/model is selected");
   expect(description).not.toContain("implementation fallback");
   expect(description).not.toContain("gpt-6-astra is the default for implementation");
-  expect(description).toContain("xai/grok-4.5 is the default for code review");
-  expect(description).not.toContain("grok-4.6");
+  expect(description).toContain("cliproxyapi/gpt-5.6-terra is the default for code review at medium effort");
+  expect(description).not.toContain("grok-");
   expect(description).toContain("should delegate implementation and debugging to cliproxyapi/gpt-5.6-sol");
   expect(description).toContain("Use Astra for code review only when the user explicitly requests it");
   expect(description).toContain(
-    "For routine code review, including ordinary correctness and security checks, use xai/grok-4.5",
+    "For routine code review, including ordinary correctness and security checks, use cliproxyapi/gpt-5.6-terra at medium effort",
   );
   expect(description).not.toContain("implementation, debugging, planning, and review");
   expect(description).not.toContain("judging correctness");

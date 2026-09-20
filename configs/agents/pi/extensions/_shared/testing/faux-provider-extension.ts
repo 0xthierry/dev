@@ -5,8 +5,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 export const FAUX_PROVIDER_NAME = "pi-extension-e2e-faux";
 export const FAUX_MODEL_ID = "pi-extension-e2e-faux-model";
 export const FAUX_ALT_MODEL_ID = "pi-extension-e2e-faux-model-alt";
-export const FAUX_GROK_PROVIDER_NAME = "xai";
-export const FAUX_GROK_MODEL_ID = "grok-4.5";
+export const FAUX_TERRA_PROVIDER_NAME = "cliproxyapi";
+export const FAUX_TERRA_MODEL_ID = "gpt-5.6-terra";
 export const FAUX_API_KEY_ENV = "PI_EXTENSION_E2E_FAUX_API_KEY";
 export const FAUX_RESPONSE_TEXT_ENV = "PI_EXTENSION_E2E_FAUX_RESPONSE_TEXT";
 export const FAUX_TOOL_CALLS_ENV = "PI_EXTENSION_E2E_FAUX_TOOL_CALLS";
@@ -27,12 +27,12 @@ const model = {
   maxTokens: 1_024,
 };
 const alternateModel = { ...model, id: FAUX_ALT_MODEL_ID, name: "Pi Extension E2E Faux Alternate Model" };
-const grokModel = {
+const terraModel = {
   ...model,
-  id: FAUX_GROK_MODEL_ID,
-  name: "Pi Extension E2E Faux Grok 4.5 Model",
+  id: FAUX_TERRA_MODEL_ID,
+  name: "Pi Extension E2E Faux GPT-5.6 Terra Model",
   reasoning: true,
-  thinkingLevelMap: { off: null, minimal: null, high: "high", xhigh: "xhigh", max: "max" },
+  thinkingLevelMap: { off: null, minimal: null, medium: "medium", high: "high", xhigh: "xhigh", max: "max" },
 };
 
 export default function (pi: ExtensionAPI) {
@@ -51,12 +51,12 @@ export default function (pi: ExtensionAPI) {
     api: faux.api,
     models: [model, alternateModel],
   });
-  pi.registerProvider(FAUX_GROK_PROVIDER_NAME, {
-    name: "Pi Extension E2E Faux Grok Provider",
+  pi.registerProvider(FAUX_TERRA_PROVIDER_NAME, {
+    name: "Pi Extension E2E Faux GPT-5.6 Terra Provider",
     baseUrl: "http://localhost:0",
     apiKey: `$${FAUX_API_KEY_ENV}`,
     api: faux.api,
-    models: [grokModel],
+    models: [terraModel],
   });
 }
 
