@@ -125,7 +125,7 @@ glm() (
   export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
   export API_TIMEOUT_MS="3000000"
 
-  claude --effort max "$@"
+  claude --effort high "$@"
 )
 
 alias dstop='docker ps -q | xargs -r docker stop'
