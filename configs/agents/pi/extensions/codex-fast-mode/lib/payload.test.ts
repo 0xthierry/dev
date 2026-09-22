@@ -2,13 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { applyCodexFastMode } from "./payload";
 
 describe("applyCodexFastMode", () => {
-  for (const model of ["gpt-5.4", "gpt-5.5", "gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna"] as const) {
+  for (const model of ["gpt-5.4", "gpt-5.5", "gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-luna"] as const) {
     test(`sets priority service tier on eligible ${model} Codex payloads`, () => {
       // Arrange
       const payload = codexPayload({ model });
 
       // Act
-      const result = applyCodexFastMode(payload);
+      const result = applyCodexFastMode(payload, { provider: "cliproxyapi", id: model });
 
       // Assert
       expect(result).toEqual({ ...payload, service_tier: "priority" });
@@ -21,24 +21,35 @@ describe("applyCodexFastMode", () => {
     const payload = codexPayload({ service_tier: "priority" });
 
     // Act
-    const result = applyCodexFastMode(payload);
+    const result = applyCodexFastMode(payload, { provider: "openai-codex", id: "gpt-5.6" });
 
     // Assert
     expect(result).toBeUndefined();
   });
 
-  for (const model of ["gpt-5.4-mini", "gpt-5.6-sol", "gpt-6-astra"] as const) {
+  for (const model of ["gpt-5.4-mini", "gpt-5.6-sol", "gpt-6-astra", "gpt-6-sol"] as const) {
     test(`does not opt excluded ${model} Codex payloads into fast mode`, () => {
       // Arrange
       const payload = codexPayload({ model });
 
       // Act
-      const result = applyCodexFastMode(payload);
+      const result = applyCodexFastMode(payload, { provider: "cliproxyapi", id: model });
 
       // Assert
       expect(result).toBeUndefined();
     });
   }
+
+  test("does not change eligible payloads from unrelated providers", () => {
+    // Arrange
+    const payload = codexPayload({ model: "gpt-6-luna" });
+
+    // Act
+    const result = applyCodexFastMode(payload, { provider: "openai", id: "gpt-6-luna" });
+
+    // Assert
+    expect(result).toBeUndefined();
+  });
 
   test("does not change non-Codex OpenAI responses payloads", () => {
     // Arrange
@@ -50,7 +61,7 @@ describe("applyCodexFastMode", () => {
     };
 
     // Act
-    const result = applyCodexFastMode(payload);
+    const result = applyCodexFastMode(payload, { provider: "cliproxyapi", id: "gpt-5.6-sol" });
 
     // Assert
     expect(result).toBeUndefined();
@@ -61,7 +72,7 @@ describe("applyCodexFastMode", () => {
     const payload = "not json";
 
     // Act
-    const result = applyCodexFastMode(payload);
+    const result = applyCodexFastMode(payload, undefined);
 
     // Assert
     expect(result).toBeUndefined();

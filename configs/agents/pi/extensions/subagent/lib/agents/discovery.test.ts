@@ -13,23 +13,13 @@ describe("discoverAgents", () => {
 
     // Act
     const result = await discoverAgents({ projectTrusted: false, globalAgentsDir });
-    const profiles = result.agents
-      .filter((agent) => agent.name === "advisor" || agent.name === "codebase-locator" || agent.name === "worker")
-      .map((agent) => ({
-        name: agent.name,
-        sourcePath: agent.sourcePath,
-        execution: resolveAgentExecution({ agent: agent.execution, parent }),
-      }));
+    const profiles = result.agents.map((agent) => ({
+      name: agent.name,
+      sourcePath: agent.sourcePath,
+      execution: resolveAgentExecution({ agent: agent.execution, parent }),
+    }));
 
     // Assert
-    expect(result.agents.map((agent) => agent.name)).toEqual([
-      "advisor",
-      "codebase-analyzer",
-      "codebase-locator",
-      "codebase-pattern-finder",
-      "web-search-researcher",
-      "worker",
-    ]);
     expect(profiles).toEqual([
       {
         name: "advisor",
@@ -38,6 +28,17 @@ describe("discoverAgents", () => {
           ok: true,
           value: {
             profile: { provider: "cliproxyapi", model: "gpt-6-astra", effort: "xhigh" },
+            source: { model: "agent", effort: "agent" },
+          },
+        },
+      },
+      {
+        name: "codebase-analyzer",
+        sourcePath: "global://rpi/codebase-analyzer.md",
+        execution: {
+          ok: true,
+          value: {
+            profile: { provider: "cliproxyapi", model: "gpt-6-luna", effort: "high" },
             source: { model: "agent", effort: "agent" },
           },
         },
@@ -54,12 +55,34 @@ describe("discoverAgents", () => {
         },
       },
       {
+        name: "codebase-pattern-finder",
+        sourcePath: "global://rpi/codebase-pattern-finder.md",
+        execution: {
+          ok: true,
+          value: {
+            profile: { provider: "cliproxyapi", model: "gpt-6-luna", effort: "high" },
+            source: { model: "agent", effort: "agent" },
+          },
+        },
+      },
+      {
+        name: "web-search-researcher",
+        sourcePath: "global://rpi/web-search-researcher.md",
+        execution: {
+          ok: true,
+          value: {
+            profile: { provider: "cliproxyapi", model: "gpt-6-luna", effort: "high" },
+            source: { model: "agent", effort: "agent" },
+          },
+        },
+      },
+      {
         name: "worker",
         sourcePath: "global://worker.md",
         execution: {
           ok: true,
           value: {
-            profile: { provider: "cliproxyapi", model: "gpt-5.6-sol", effort: "medium" },
+            profile: { provider: "cliproxyapi", model: "gpt-6-sol", effort: "high" },
             source: { model: "agent", effort: "agent" },
           },
         },

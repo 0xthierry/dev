@@ -78,7 +78,7 @@ A built-in `worker` fallback is always available. The repo-managed global `worke
 | Repo-managed agent | File default | Responsibility |
 | --- | --- | --- |
 | [advisor](../../../agents/advisor.md) | `cliproxyapi/gpt-6-astra`, `xhigh` | Read-only decision advice through selected lenses |
-| [worker](../../../agents/worker.md) | `cliproxyapi/gpt-5.6-sol`, `medium` | Bounded implementation and verification |
+| [worker](../../../agents/worker.md) | `cliproxyapi/gpt-6-sol`, `high` | Bounded implementation and verification |
 
 Both select and read definitions through the shared [engineering-principles skill](../../../skills/engineering-principles/SKILL.md). The skill includes progressive TypeScript and testing/Bun references. The built-in fallback remains minimal for standalone installations without these files.
 
@@ -89,8 +89,8 @@ A trusted project may add `.pi/agents/**/*.md`:
 name: worker
 description: Implements bounded production changes.
 provider: cliproxyapi
-model: gpt-5.6-sol
-effort: low
+model: gpt-6-sol
+effort: high
 ---
 
 Project-specific worker instructions.
@@ -147,10 +147,10 @@ Choose a fitting named agent first and omit `execution` unless an override is ne
 | Exact provider / model | Recommended work | Rationale and limitation |
 |---|---|---|
 | `cliproxyapi/gpt-6-astra` | Default for planning and design decisions; code review only when the user explicitly requests Astra | High effort |
-| `cliproxyapi/gpt-5.6-sol` | Default for implementation and debugging | Low for small patches, medium for bounded multi-file changes, high for complex implementation/debugging |
+| `cliproxyapi/gpt-6-sol` | Default for implementation and debugging | High effort |
 | `cliproxyapi/gpt-5.6-terra` | Default for read-only reconnaissance and routine code review, including ordinary correctness and security checks | Always `medium`; runtime-enforced for every selection source; require paths/evidence for reconnaissance and provide an artifact plus a specific question for review |
 
-Use `cliproxyapi/gpt-5.6-sol` instead of the reconnaissance profile for debugging
+Use `cliproxyapi/gpt-6-sol` at high effort instead of the reconnaissance profile for debugging
 or edits. Use `cliproxyapi/gpt-6-astra` with high effort for planning and design
 decisions. Use `cliproxyapi/gpt-5.6-terra` at medium effort for routine code review,
 and Astra for code review only when the user explicitly requests it. These are the
@@ -181,65 +181,20 @@ availability. See `configs/cliproxyapi/README.md` for the complete mapping.
   continue useful local work, and explain each tool's practical behavior.
   Pi's own lifecycle semantics remain authoritative; Codex's defaults and tool
   behavior are not copied blindly.
-- [OpenAI's latest-model guide](https://developers.openai.com/api/docs/guides/latest-model)
-  describes stronger software-engineering results and fewer output tokens for
-  Astra in several evaluations. Its prompting advice supports explicit delegation
-  and proportionate verification. It does not prescribe a universal low-effort
-  migration: it advises preserving effective effort except when moving from its
-  non-reasoning/lightest settings.
-- The repo-managed `cliproxyapi` catalog maps `gpt-5.6-terra` to the local Codex
-  account pool. It does not prescribe a subagent role or reasoning level; assigning
-  Terra to read-only reconnaissance and routine review at enforced medium effort is
-  the user's workflow policy.
-- The user-provided Terminal-Bench 4.0 chart shows the lowest-cost Astra point at
-  approximately 50% accuracy and $5, above Sol's best plotted point at approximately
-  38% and $8. Individual effort labels, error bars, and cost aggregation are absent
-  from the screenshot. This supports revisiting the execution default, but is not
-  a locally reproduced Pi benchmark or proof of subscription savings.
+- The repo-managed `cliproxyapi` catalog maps GPT-6 Luna, GPT-6 Sol, GPT-6 Astra,
+  and GPT-5.6 Terra to the local Codex account pool. Catalog presence proves
+  configuration, not live entitlement, quota, or comparative quality.
+- Assigning GPT-6 Sol at high effort to implementation, Astra to planning, and
+  Terra to read-only reconnaissance and routine review is the user's workflow
+  policy. Named research agents may instead pin GPT-6 Luna at high effort; the
+  repo-managed Fast Mode extension adds priority processing to those proxy-backed
+  Luna payloads. These are not benchmark claims, and no same-task, same-harness Pi
+  comparison of these exact routes has been run locally.
 
-Benchmark details and pricing belong here, not in the model-facing tool prompt.
-Both parent and nested tools receive the same model-selection guidance.
-
-### Directly checked public evidence (2026-09-05)
-
-- **[Artificial Analysis: Astra, September 3](https://artificialanalysis.ai/articles/benchmarking-gpt-6-astra):**
-  Astra in Codex scored **67** on the Coding Agent Index. In the reported
-  highest-effort comparison it scored **2 points above Sol at approximately the
-  same API task cost**, using roughly
-  **one-third as many tokens**. This supports using Astra for difficult implementation,
-  not treating it as an expensive review-only model. On the separate Intelligence
-  Index **v4.1.1**, both scored 61 and Astra cost **75% more per task**; cost advantage
-  depended on the workload. AA-Omniscience hallucination rates fell from 92% to 51%
-  on that particular evaluation, not a general code-verification accuracy measure.
-- **[Artificial Analysis: Index v4.2, September 4](https://artificialanalysis.ai/articles/artificial-analysis-intelligence-index-v4-2):**
-  The updated index puts Astra **4 points above Sol**; GDP.pdf all-pass rates are
-  **33.2% versus 28.2%**, and AA-Briefcase improves roughly **85 Elo**. This strengthens
-  the case for complex synthesis/planning, but these are not dedicated debugging
-  or patch-review benchmarks. The index changes tasks, weighting, and grading;
-  do not describe the earlier 61-point tie as the current index result.
-
-These are independently published evaluations that were read, **not benchmarks run
-locally**. Do not compare different index versions, Terminal-Bench versions, harnesses,
-reasoning levels, or historical prices as if they were one controlled experiment.
-No same-task, same-harness Pi comparison of these models was performed. We have no measured
-subscription-allowance conversion or universal latency ordering. Track completed-task
-quality, wall time, retries, allowance consumption, and cache reuse before tightening
-these recommendations.
-
-### Official specifications and API price references
-
-USD per million tokens, standard short-context requests, checked 2026-09-05:
-
-| Official model documentation | Input | Cached input | Output |
-|---|---:|---:|---:|
-| [GPT-5.6 Sol](https://developers.openai.com/api/docs/models/gpt-5.6-sol.md) | $4 | $0.40 | $20 |
-| [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra.md) | $10 | $1 | $50 |
-
-OpenAI applies higher full-request rates above 272K input tokens. Cache writes,
-tools, fast/priority modes,
-and other service tiers may have additional/different prices. Sol's quoted rates
-are promotional, documented through at least November 21, 2026. Headline token
-prices alone do not determine cost per successful task.
+Keep volatile benchmark and price claims out of the model-facing tool prompt. Track
+completed-task quality, wall time, retries, allowance consumption, and cache reuse
+before tightening these recommendations. Both parent and nested tools receive the
+same stable model-selection guidance.
 
 ## Trusted repository configuration
 
@@ -256,8 +211,8 @@ prices alone do not determine cost per successful task.
     "worker": {
       "execution": {
         "provider": "cliproxyapi",
-        "model": "gpt-5.6-sol",
-        "effort": "low"
+        "model": "gpt-6-sol",
+        "effort": "high"
       },
       "allowInvocationOverride": {
         "model": true,

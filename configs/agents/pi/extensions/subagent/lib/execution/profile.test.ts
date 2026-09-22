@@ -34,7 +34,7 @@ describe("execution profile", () => {
   test("leaves other model executions unchanged", () => {
     // Arrange
     const execution = {
-      profile: { provider: "cliproxyapi", model: "gpt-5.6-sol", effort: "low" as const },
+      profile: { provider: "cliproxyapi", model: "gpt-6-sol", effort: "high" as const },
       source: { model: "agent" as const, effort: "agent" as const },
     };
 

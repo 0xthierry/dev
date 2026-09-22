@@ -21,7 +21,11 @@ describe("registerCodexFastModeExtension", () => {
 
     // Act
     registerCodexFastModeExtension(fakePi.pi);
-    const results = await fakePi.emit("before_provider_request", { payload });
+    const results = await fakePi.emit(
+      "before_provider_request",
+      { payload },
+      { model: { provider: "cliproxyapi", id: "gpt-5.6" } },
+    );
 
     // Assert
     expect(fakePi.handlers.get("before_provider_request")?.length).toBe(1);

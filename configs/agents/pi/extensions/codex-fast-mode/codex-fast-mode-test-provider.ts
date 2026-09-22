@@ -8,9 +8,15 @@ import {
 } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-export const CODEX_FAST_MODE_TEST_PROVIDER = "codex-fast-mode-e2e";
-export const CODEX_FAST_MODE_TEST_MODEL = "codex-fast-mode-e2e-model";
+export const CODEX_FAST_MODE_TEST_PROVIDER = "cliproxyapi";
 export const CODEX_FAST_MODE_TEST_API_KEY_ENV = "CODEX_FAST_MODE_E2E_API_KEY";
+export const CODEX_FAST_MODE_TEST_MODELS = [
+  "gpt-5.6",
+  "gpt-6-luna",
+  "gpt-5.6-sol",
+  "gpt-6-astra",
+  "gpt-6-sol",
+] as const;
 
 const api = "codex-fast-mode-e2e-api";
 const usage = {
@@ -29,17 +35,15 @@ export default function (pi: ExtensionAPI) {
     apiKey: CODEX_FAST_MODE_TEST_API_KEY_ENV,
     api,
     streamSimple,
-    models: [
-      {
-        id: CODEX_FAST_MODE_TEST_MODEL,
-        name: "Codex Fast Mode E2E Model",
-        reasoning: false,
-        input: ["text"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 128_000,
-        maxTokens: 1_024,
-      },
-    ],
+    models: CODEX_FAST_MODE_TEST_MODELS.map((id) => ({
+      id,
+      name: `Codex Fast Mode E2E ${id}`,
+      reasoning: false,
+      input: ["text"] as const,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 128_000,
+      maxTokens: 1_024,
+    })),
   });
 }
 
@@ -47,7 +51,7 @@ function streamSimple(model: Model<Api>, _context: Context, options?: SimpleStre
   const stream = createAssistantMessageEventStream();
 
   queueMicrotask(async () => {
-    const originalPayload = buildCodexPayload(options?.sessionId);
+    const originalPayload = buildCodexPayload(model.id, options?.sessionId);
     const payload = (await options?.onPayload?.(originalPayload, model)) ?? originalPayload;
     const text = `service_tier=${readServiceTier(payload)}`;
     const message = buildAssistantMessage(model, text);
@@ -72,9 +76,9 @@ function streamSimple(model: Model<Api>, _context: Context, options?: SimpleStre
   return stream;
 }
 
-function buildCodexPayload(sessionId: string | undefined): Record<string, unknown> {
+function buildCodexPayload(model: string, sessionId: string | undefined): Record<string, unknown> {
   return {
-    model: process.env.CODEX_FAST_MODE_E2E_PAYLOAD_MODEL ?? "gpt-5.6",
+    model,
     store: false,
     stream: true,
     instructions: "You are a helpful assistant.",

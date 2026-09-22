@@ -1,6 +1,6 @@
 ---
 name: use-agent
-description: Use only when the user explicitly asks or allows the current Claude or Pi main to orchestrate other agent harnesses over Herdr and AMQ. Routes GPT-6 Astra at high as the most powerful planner, hard-task debugger, and orchestration profile; GPT-5.6-sol executes, while Fable 5.1 and Grok provide independent review and reconnaissance. Otherwise, never invoke it.
+description: Use only when the user explicitly asks or allows the current Claude or Pi main to orchestrate other agent harnesses over Herdr and AMQ. Routes GPT-6 Astra at high as the most powerful planner, hard-task debugger, and orchestration profile; GPT-6 Sol executes, while Claude Opus 5.5 provides independent review. Otherwise, never invoke it.
 ---
 
 # Use Agent
@@ -14,19 +14,17 @@ Use only this curated mapping. Roles and capability priority are workflow policy
 | Profile | Harness / pinned model | Effort | Role and ownership |
 | --- | --- | --- | --- |
 | **GPT-6 Astra orchestrator** | Pi / `cliproxyapi/gpt-6-astra` | `high` | **Most powerful profile.** Leads demanding planning, architecture, hard tasks, deep debugging, decomposition, synthesis, and adjudication. Prefer orchestration over execution. Read-only as a sidecar. |
-| **Fable 5.1 second opinion** | Claude / `claude-fable-5-1` | `xhigh` | Read-only second-opinion partner to Astra. Supplies independent evidence, counterarguments, and alternatives. **Not an oracle or final adjudicator**, and never an escalation above Astra. |
-| **Fable 5.1 adversary** | Claude / `claude-fable-5-1` | `high` | Read-only demanding plan, implementation, debugging-hypothesis, security, and correctness review; one explicit lens per task. |
-| **GPT-5.6-sol implementer** | Pi / `cliproxyapi/gpt-5.6-sol` | `high` | Writing workhorse for demanding multi-file features, refactors, reproductions, fix application, integration, and test/fix loops. Exact file ownership required. |
-| **Grok 4.5 scout** | Pi / `xai/grok-4.5` | `high` | Fast, always read-only reconnaissance: locate files/symbols, trace call paths, inventory dependencies/config, find patterns, and perform bounded verification. |
-| **Grok 4.6 adversary** | Pi / `xai/grok-4.6` | `high` | Fast read-only adversarial reviewer and independent debugger. Pair with Fable `high` when provider-diverse artifact review is useful. |
+| **Claude Opus 5.5 second opinion** | Claude / `claude-opus-5-5` | `xhigh` | Read-only second-opinion partner to Astra. Supplies independent evidence, counterarguments, and alternatives. **Not an oracle or final adjudicator**, and never an escalation above Astra. |
+| **Claude Opus 5.5 adversary** | Claude / `claude-opus-5-5` | `high` | Read-only demanding plan, implementation, debugging-hypothesis, security, and correctness review; one explicit lens per task. |
+| **GPT-6 Sol implementer** | Pi / `cliproxyapi/gpt-6-sol` | `high` | Writing workhorse for demanding multi-file features, refactors, reproductions, fix application, integration, and test/fix loops. Exact file ownership required. |
 
-When Astra is MAIN, keep demanding planning and synthesis local and delegate bounded execution to GPT-5.6-sol. Do not launch a duplicate Astra by default. With another model as MAIN, Astra returns actionable plans, debugging hypotheses, discriminating checks, decisions, or worker contracts; it does not launch its own fleet or take over MAIN's user relationship.
+When Astra is MAIN, keep demanding planning and synthesis local and delegate bounded execution to GPT-6 Sol. Do not launch a duplicate Astra by default. With another model as MAIN, Astra returns actionable plans, debugging hypotheses, discriminating checks, decisions, or worker contracts; it does not launch its own fleet or take over MAIN's user relationship.
 
-Astra leads demanding reasoning; Fable is its independent second-opinion partner when another perspective adds value. Fable `high` plus Grok 4.6 `high` remain the default **artifact-review** adversarial pair. Ask independent reviewers before showing either the other's conclusions. Grok 4.5 and 4.6 add within-family diversity, not provider diversity.
+Astra leads demanding reasoning; Opus is its independent second-opinion partner when another perspective adds value. Use Opus `high` for read-only adversarial artifact review; ask independent reviewers before showing either the other's conclusions.
 
-Honor explicit user model/effort requests. The helper pins the profiles above and does not accept arbitrary model/effort overrides. If the user requests something outside the roster, explain that limitation rather than silently changing the request. If a model is unavailable, report the category without credentials and ask before substituting. Higher effort does not make Fable the lead or an oracle.
+Honor explicit user model/effort requests. The helper pins the profiles above and does not accept arbitrary model/effort overrides. If the user requests something outside the roster, explain that limitation rather than silently changing the request. If a model is unavailable, report the category without credentials and ask before substituting. Higher effort does not make Opus the lead or an oracle.
 
-Effort controls are provider-specific, not comparable token budgets. Astra's curated setting is `high`; verify other levels before requesting them. Fable supports `low`, `medium`, `high`, `xhigh`, `max`; this skill uses `high`/`xhigh`. GPT-5.6-sol through Pi supports `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, but the writing profile pins `high`. Grok 4.5 supports `low`/`medium`/`high`, never `xhigh`; Grok 4.6 also supports `xhigh`, but the review profile pins `high`. Do not silently promote effort or rely on defaults.
+Effort controls are provider-specific, not comparable token budgets. Astra's curated setting is `high`; verify other levels before requesting them. Opus 5.5 supports `low`, `medium`, `high`, `xhigh`, `max`; this skill uses `high`/`xhigh`. GPT-6 Sol through Pi supports `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, but the writing profile pins `high`. Do not silently promote effort or rely on defaults.
 
 ## Plan before launching
 
@@ -42,12 +40,11 @@ For each lane, record:
 
 Typical fleets (never launch one of every model by habit):
 
-- **Codebase question:** one Grok 4.5 scout, or N scouts with distinct questions.
-- **Demanding plan/architecture:** Astra `high` defines dependencies, ownership, risks, and validation gates; Fable `xhigh` supplies an independent second opinion when useful. Astra synthesizes against evidence; MAIN accepts and dispatches.
-- **Medium/complex implementation:** N GPT-5.6-sol workers on disjoint modules.
-- **Wide feature:** Grok scouts map the codebase, Astra plans, GPT-5.6-sol implements, then Fable `high`/Grok 4.6 `high` review settled artifacts.
-- **Difficult bug:** Astra leads root-cause reasoning and discriminating checks; scouts or GPT-5.6-sol gather evidence/reproductions, then GPT-5.6-sol applies and tests the accepted fix. Add independent Fable/Grok hypotheses when useful.
-- **High-risk design/disagreement:** Astra leads adjudication against evidence, paired with Fable `xhigh` for a second opinion when warranted—not a Fable oracle.
+- **Demanding plan/architecture:** Astra `high` defines dependencies, ownership, risks, and validation gates; Opus `xhigh` supplies an independent second opinion when useful. Astra synthesizes against evidence; MAIN accepts and dispatches.
+- **Medium/complex implementation:** N GPT-6 Sol workers on disjoint modules.
+- **Wide feature:** Astra plans, GPT-6 Sol implements, then Opus `high` reviews settled artifacts.
+- **Difficult bug:** Astra leads root-cause reasoning and discriminating checks; GPT-6 Sol gathers evidence/reproductions, applies the accepted fix, and runs tests. Add an independent Opus hypothesis when useful.
+- **High-risk design/disagreement:** Astra leads adjudication against evidence, paired with Opus `xhigh` for a second opinion when warranted—not an Opus oracle.
 
 Scale any selected profile from one to N only as justified by the runnable frontier, resources, and provider capacity. Never launch reviewers before their artifact exists or allow concurrent writers to own the same files. Designate one integration owner for shared interfaces.
 
@@ -79,7 +76,7 @@ The helper implements room guards, explicit roster setup, model/effort selection
 
 ```bash
 bash "$HELPER" init --topic auth-fix --harness pi \
-  --workers pi-gpt6-astra-1,claude-fable51-xhigh-1,pi-gpt56-1
+  --workers pi-gpt6-astra-1,claude-opus55-xhigh-1,pi-gpt6sol-1
 ```
 
 This provisions mailboxes only, not processes. It uses `amq init --force` for the exact room, resolves session identity through `amq route explain`, and, for a named session, adds the planned handles to its **base configuration authority**, preserving existing base registrations. It then provisions the authoritative mailboxes with `amq doctor --fix-mailboxes` and runs bound diagnostics. Neither MAIN's room nor the notifier is retargeted. If updating an existing room, include all still-needed worker handles; do not drop live workers from the roster. One coordinator owns roster updates: do not run concurrent init/config writers.
@@ -89,11 +86,9 @@ This provisions mailboxes only, not processes. It uses `amq init --force` for th
 | Handle pattern (N is a positive integer) | Profile |
 | --- | --- |
 | `pi-gpt6-astra-N` | Astra `high`, read-only planner/orchestration advisor |
-| `claude-fable51-xhigh-N` | Fable `xhigh`, read-only second opinion |
-| `claude-fable51-high-N` | Fable `high`, read-only adversary |
-| `pi-gpt56-N` | GPT-5.6-sol `high`, writer |
-| `pi-grok45-N` | Grok 4.5 `high`, read-only scout |
-| `pi-grok46-N` | Grok 4.6 `high`, read-only adversary |
+| `claude-opus55-xhigh-N` | Opus 5.5 `xhigh`, read-only second opinion |
+| `claude-opus55-high-N` | Opus 5.5 `high`, read-only adversary |
+| `pi-gpt6sol-N` | GPT-6 Sol `high`, writer |
 
 Handles are reservations, not capacity. Keep one live process per handle. MAIN is provisioned alongside workers and cannot collide with a worker handle. The helper does not maintain a durable handle/pane ledger: MAIN must verify a handle is configured and unused before launching, and must not concurrently launch the same handle.
 
@@ -108,7 +103,7 @@ Default split is right of MAIN's pane, resolved with `herdr pane current --curre
 
 ```bash
 bash "$HELPER" launch --topic auth-fix --harness pi \
-  --handle claude-fable51-xhigh-1 --target "<known-pane-id>" --direction down
+  --handle claude-opus55-xhigh-1 --target "<known-pane-id>" --direction down
 ```
 
 Capture the returned room, main handle, worker handle, and pane ID. Immediately record the append-only tuple **(handle, pane_id, task_id, task_message_id, result_message_id, lifecycle state)**. A successful launch is not readiness or completion; wait for the separate AMQ `ready` message before dispatch.
@@ -121,7 +116,7 @@ Read-only profiles remove edit/write from the core tool allowlist and receive a 
 
 ## Dispatch and communicate
 
-The helper supplies the standard readiness/reply/retirement prompt, including read-only and Astra/Fable role constraints. MAIN must still send a self-contained task after `ready`. On any transport command failure, workers stop and report the exact error in their terminal response; they must not bypass strict validation, inspect mailbox files, change bindings, or invent repairs. MAIN diagnoses transport. A readiness notice known to have used a non-strict workaround is not a clean launch smoke; pause dispatch and repair first.
+The helper supplies the standard readiness/reply/retirement prompt, including read-only and Astra/Opus role constraints. MAIN must still send a self-contained task after `ready`. On any transport command failure, workers stop and report the exact error in their terminal response; they must not bypass strict validation, inspect mailbox files, change bindings, or invent repairs. MAIN diagnoses transport. A readiness notice known to have used a non-strict workaround is not a clean launch smoke; pause dispatch and repair first.
 
 For main-side AMQ calls, re-derive the binding on every tool call:
 

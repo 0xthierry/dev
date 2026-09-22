@@ -144,6 +144,14 @@ EOF
     cmp -s "$test_home/.pi/agent/agents/$profile.md" "$REPO_ROOT/configs/agents/agents/$profile.md" || fail "Pi did not preserve $profile profile"
     printf 'ok: Pi deploys the unchanged %s profile\n' "$profile"
   done
+  assert_file_contains "routes the Pi worker through GPT-6 Sol" "$test_home/.pi/agent/agents/worker.md" 'model: gpt-6-sol'
+  assert_file_contains "uses high effort for the Pi worker" "$test_home/.pi/agent/agents/worker.md" 'effort: high'
+  for profile in codebase-analyzer codebase-pattern-finder web-search-researcher; do
+    assert_file_contains "routes $profile through GPT-6 Luna" "$test_home/.pi/agent/agents/rpi/$profile.md" 'model: gpt-6-luna'
+    assert_file_contains "uses high effort for $profile" "$test_home/.pi/agent/agents/rpi/$profile.md" 'effort: high'
+  done
+  assert_file_contains "routes generated Codex agents through GPT-6 Sol" "$test_home/.codex/agents/worker.toml" 'model = "gpt-6-sol"'
+  assert_file_contains "uses high effort for generated Codex agents" "$test_home/.codex/agents/worker.toml" 'model_reasoning_effort = "high"'
   for target in .agents .codex .claude .pi/agent; do
     [[ "$(readlink "$test_home/$target/skills/engineering-principles")" == "$REPO_ROOT/configs/agents/skills/engineering-principles" ]] || fail "missing engineering-principles skill link: $target"
     for reference in "$REPO_ROOT/configs/agents/skills/engineering-principles/SKILL.md" "$REPO_ROOT/configs/agents/skills/engineering-principles/references/"*.md; do
@@ -193,7 +201,7 @@ EOF
        else (.thinkingLevelMap | has("max") | not) end)
     )'
   assert_json "defaults Pi to proxy" "$test_home/.pi/agent/settings.json" '.defaultProvider == "cliproxyapi"'
-  assert_json "defaults Pi sessions to Sol" "$test_home/.pi/agent/settings.json" '.defaultModel == "gpt-5.6-sol"'
+  assert_json "defaults Pi sessions to GPT-6 Sol" "$test_home/.pi/agent/settings.json" '.defaultModel == "gpt-6-sol"'
   assert_json "defaults Pi sessions to high reasoning" "$test_home/.pi/agent/settings.json" '.defaultThinkingLevel == "high"'
   assert_file_contains "keeps Codex on the direct OpenAI provider" "$test_home/.codex/config.toml" 'model_provider = "openai"'
   assert_file_excludes "does not add the proxy provider to Codex" "$test_home/.codex/config.toml" 'cliproxyapi'

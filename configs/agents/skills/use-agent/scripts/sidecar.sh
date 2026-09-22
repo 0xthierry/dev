@@ -9,8 +9,8 @@ usage() {
     '       bash sidecar.sh retire --topic TOPIC --harness pi|claude --handle HANDLE --pane PANE [--root ROOT]' \
     '' \
     "--harness is MAIN's harness, not the worker's. Worker profiles are inferred from handles:" \
-    '  pi-gpt6-astra-N, claude-fable51-xhigh-N, claude-fable51-high-N,' \
-    '  pi-gpt56-N, pi-grok45-N, pi-grok46-N (N is a canonical positive integer).' \
+    '  pi-gpt6-astra-N, claude-opus55-xhigh-N, claude-opus55-high-N,' \
+    '  pi-gpt6sol-N (N is a canonical positive integer).' \
     'TOPIC is lowercase kebab-case. Default split: current main pane, right.' \
     'Nonempty inherited AM_ROOT and AM_ME are preserved exactly. --root cannot override AM_ROOT.' \
     "Otherwise room defaults to \$PWD/.agent-mail/use-agent-TOPIC and main handle to --harness." \
@@ -42,7 +42,7 @@ valid_identifier() {
 
 select_profile() {
   local handle="$1" prefix
-  [[ "$handle" =~ ^(pi-gpt6-astra|claude-fable51-xhigh|claude-fable51-high|pi-gpt56|pi-grok45|pi-grok46)-[1-9][0-9]*$ ]] \
+  [[ "$handle" =~ ^(pi-gpt6-astra|claude-opus55-xhigh|claude-opus55-high|pi-gpt6sol)-[1-9][0-9]*$ ]] \
     || bad_args "unknown worker profile or invalid replica: $handle"
   prefix="${handle%-*}"
   WORKER_HARNESS=pi
@@ -50,13 +50,11 @@ select_profile() {
   WORKER_READONLY=1
   case "$prefix" in
     pi-gpt6-astra) WORKER_MODEL=cliproxyapi/gpt-6-astra ;;
-    pi-gpt56) WORKER_MODEL=cliproxyapi/gpt-5.6-sol; WORKER_READONLY=0 ;;
-    pi-grok45) WORKER_MODEL=xai/grok-4.5 ;;
-    pi-grok46) WORKER_MODEL=xai/grok-4.6 ;;
-    claude-fable51-xhigh)
-      WORKER_HARNESS=claude; WORKER_MODEL=claude-fable-5-1; WORKER_EFFORT=xhigh ;;
-    claude-fable51-high)
-      WORKER_HARNESS=claude; WORKER_MODEL=claude-fable-5-1 ;;
+    pi-gpt6sol) WORKER_MODEL=cliproxyapi/gpt-6-sol; WORKER_READONLY=0 ;;
+    claude-opus55-xhigh)
+      WORKER_HARNESS=claude; WORKER_MODEL=claude-opus-5-5; WORKER_EFFORT=xhigh ;;
+    claude-opus55-high)
+      WORKER_HARNESS=claude; WORKER_MODEL=claude-opus-5-5 ;;
   esac
 }
 
@@ -68,7 +66,7 @@ build_worker_prompt() {
   case "$WORKER_HANDLE" in
     pi-gpt6-astra-*)
       printf '%s' ' You are the planning and orchestration advisor, not an executor. Return actionable plans, task dependencies, exact proposed ownership, debugging hypotheses and discriminating checks, risks, and validation gates as relevant to your bounded task. Do not launch or control other workers; MAIN dispatches and integrates.' ;;
-    claude-fable51-xhigh-*)
+    claude-opus55-xhigh-*)
       printf '%s' " You are Astra's independent second-opinion partner, not an oracle or final adjudicator. Challenge assumptions and return evidence, counterarguments, and alternatives. Astra is the most powerful reasoning lead; MAIN retains final acceptance." ;;
   esac
 }
@@ -154,7 +152,7 @@ verify_worker_cli() {
     patch=$((10#${BASH_REMATCH[3]}))
     ((major > 2 || (major == 2 && minor > 1) || (major == 2 && minor == 1 && patch >= 255))) \
       || fail 'Claude Code >=2.1.255 is required; no fallback'
-    printf 'Manual prerequisite: confirm /model entitlement to claude-fable-5-1; CLI version is not entitlement.\n' >&2
+    printf 'Manual prerequisite: confirm /model entitlement to claude-opus-5-5; CLI version is not entitlement.\n' >&2
   fi
 }
 

@@ -3,11 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { type PiRpcHarness, startPiRpcHarness } from "../_shared/testing/pi-rpc-harness";
-import {
-  CODEX_FAST_MODE_TEST_API_KEY_ENV,
-  CODEX_FAST_MODE_TEST_MODEL,
-  CODEX_FAST_MODE_TEST_PROVIDER,
-} from "./codex-fast-mode-test-provider";
+import { CODEX_FAST_MODE_TEST_API_KEY_ENV, CODEX_FAST_MODE_TEST_PROVIDER } from "./codex-fast-mode-test-provider";
 
 const extensionPath = import.meta.dir;
 const testProviderPath = resolve(import.meta.dir, "codex-fast-mode-test-provider.ts");
@@ -31,10 +27,12 @@ describe("codex-fast-mode extension E2E", () => {
 
   for (const [model, expectedTier] of [
     ["gpt-5.6", "priority"],
+    ["gpt-6-luna", "priority"],
     ["gpt-5.6-sol", "missing"],
     ["gpt-6-astra", "missing"],
+    ["gpt-6-sol", "missing"],
   ] as const) {
-    test(`uses service_tier=${expectedTier} for ${model} Codex-shaped payloads`, async () => {
+    test(`uses service_tier=${expectedTier} for ${CODEX_FAST_MODE_TEST_PROVIDER}/${model}`, async () => {
       // Arrange
       tempProject = await mkdtemp(join(tmpdir(), "pi-codex-fast-mode-e2e-"));
       harness = await startPiRpcHarness({
@@ -50,11 +48,10 @@ describe("codex-fast-mode extension E2E", () => {
           "--provider",
           CODEX_FAST_MODE_TEST_PROVIDER,
           "--model",
-          CODEX_FAST_MODE_TEST_MODEL,
+          model,
         ],
         env: {
           [CODEX_FAST_MODE_TEST_API_KEY_ENV]: "test-key",
-          CODEX_FAST_MODE_E2E_PAYLOAD_MODEL: model,
         },
       });
 

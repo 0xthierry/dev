@@ -48,10 +48,12 @@ test("exposes stable model routing preferences and enforced GPT-5.6 Terra effort
   // Assert
   expect(description).toBe(second.tools.get("agent_spawn")?.description ?? "");
   expect(description).toEndWith(SUBAGENT_MODEL_GUIDANCE);
-  expect(description).toContain("cliproxyapi/gpt-5.6-sol is the default for implementation and debugging");
+  expect(description).toContain("cliproxyapi/gpt-6-sol is the default for implementation and debugging at high effort");
   expect(description).toContain("cliproxyapi/gpt-6-astra is the default for planning");
   expect(description).toContain("Use high effort for planning and design decisions");
-  expect(description).toContain("high for complex implementation or debugging");
+  expect(description).toContain(
+    "Use cliproxyapi/gpt-6-sol at high effort when the task requires diagnosing a bug or making changes",
+  );
   expect(description).toContain(
     "cliproxyapi/gpt-5.6-terra is the default for read-only codebase reconnaissance and always runs at medium effort",
   );
@@ -60,7 +62,7 @@ test("exposes stable model routing preferences and enforced GPT-5.6 Terra effort
   expect(description).not.toContain("gpt-6-astra is the default for implementation");
   expect(description).toContain("cliproxyapi/gpt-5.6-terra is the default for code review at medium effort");
   expect(description).not.toContain("grok-");
-  expect(description).toContain("should delegate implementation and debugging to cliproxyapi/gpt-5.6-sol");
+  expect(description).toContain("should delegate implementation and debugging to cliproxyapi/gpt-6-sol at high effort");
   expect(description).toContain("Use Astra for code review only when the user explicitly requests it");
   expect(description).toContain(
     "For routine code review, including ordinary correctness and security checks, use cliproxyapi/gpt-5.6-terra at medium effort",
@@ -72,7 +74,7 @@ test("exposes stable model routing preferences and enforced GPT-5.6 Terra effort
   expect(description).toContain("Set execution only when the user or the concrete assignment requests an override");
   expect(description).toContain("Repository model locks and non-policy effort locks still apply");
   expect(description).not.toContain("set effort explicitly");
-  expect(description).not.toMatch(/\b(?:subscription|openai-codex)\b/);
+  expect(description).not.toMatch(/\bsubscription\b/);
   expect(first.tools.get("agent_followup")?.description).toContain("guidance in agent_spawn");
 });
 

@@ -22,8 +22,9 @@ if os.environ.get('FAIL_COMMAND') == name + ' ' + ' '.join(args[:2]):
 if name == 'pi':
     print('provider model context max-out thinking images')
     if not os.environ.get('MISSING_MODEL'):
-        for provider, model in [('cliproxyapi','gpt-6-astra'), ('cliproxyapi','gpt-5.6-sol'), ('xai','grok-4.5'), ('xai','grok-4.6')]:
-            print(provider, model, '272K 128K yes yes')
+        for provider, model in [('cliproxyapi','gpt-6-astra'), ('cliproxyapi','gpt-6-sol')]:
+            if model != 'gpt-6-sol' or not os.environ.get('MISSING_SOL'):
+                print(provider, model, '272K 128K yes yes')
 elif name == 'claude':
     print(os.environ.get('CLAUDE_VERSION', '2.1.255 (Claude Code)'))
 elif name == 'herdr':
@@ -43,7 +44,7 @@ elif name == 'amq':
         print(json.dumps({'source_root': root, 'source_session': os.environ.get('CONFIG_SESSION', '')}))
     elif 'doctor' in args:
         locks = [{'agent': 'pi-gpt6-astra-1'}] if os.environ.get('WAKE_LOCK') else []
-        agents = os.environ.get('CONFIG_AGENTS', 'pi,actual-main,pi-gpt6-astra-1,pi-gpt56-1,pi-grok45-1,pi-grok46-1,claude-fable51-high-1,claude-fable51-xhigh-1').split(',')
+        agents = os.environ.get('CONFIG_AGENTS', 'pi,actual-main,pi-gpt6-astra-1,pi-gpt6sol-1,claude-opus55-high-1,claude-opus55-xhigh-1').split(',')
         print('{}' if os.environ.get('BAD_DOCTOR') else json.dumps({
             'ops': {'wake_locks': locks},
             'checks': [{'name': 'Config', 'status': 'error' if os.environ.get('BAD_CONFIG') else 'ok'}],
@@ -88,22 +89,22 @@ class SidecarTests(unittest.TestCase):
                 self.assertEqual(self.calls(), [])
 
     def test_init_explicit_roster_and_binding(self):
-        result = self.run_helper('init', '--workers', 'pi-gpt6-astra-1,claude-fable51-xhigh-1', AM_ROOT='/bound', AM_ME='actual-main')
+        result = self.run_helper('init', '--workers', 'pi-gpt6-astra-1,claude-opus55-xhigh-1', AM_ROOT='/bound', AM_ME='actual-main')
         self.assertEqual(result.returncode, 0, result.stderr)
         call = next(c for c in self.calls() if c[:2] == ['amq', 'init'])
         self.assertEqual(call[call.index('--root') + 1], '/bound')
-        self.assertEqual(call[call.index('--agents') + 1], 'actual-main,pi-gpt6-astra-1,claude-fable51-xhigh-1')
+        self.assertEqual(call[call.index('--agents') + 1], 'actual-main,pi-gpt6-astra-1,claude-opus55-xhigh-1')
         self.assertFalse(any(c[0] == 'herdr' for c in self.calls()))
 
     def test_session_init_preserves_base_roster_without_rebinding(self):
-        r = self.run_helper('init', '--workers', 'pi-grok45-1', AM_ROOT='/base/session',
+        r = self.run_helper('init', '--workers', 'pi-gpt6sol-1', AM_ROOT='/base/session',
                             CONFIG_SESSION='session', CONFIG_AGENTS='claude,pi,user,other-worker')
         self.assertEqual(r.returncode, 0, r.stderr)
         inits = [c for c in self.calls() if c[:2] == ['amq', 'init']]
         self.assertEqual(len(inits), 2)
         self.assertEqual(inits[0][inits[0].index('--root') + 1], '/base/session')
         self.assertEqual(inits[1][inits[1].index('--root') + 1], '/base')
-        self.assertEqual(inits[1][inits[1].index('--agents') + 1], 'claude,pi,user,other-worker,pi,pi-grok45-1')
+        self.assertEqual(inits[1][inits[1].index('--agents') + 1], 'claude,pi,user,other-worker,pi,pi-gpt6sol-1')
         self.assertIn('ROOM_ROOT=/base/session', r.stdout)
         self.assertNotIn('unregistered-stranger', inits[1][-2])
         doctor = [c for c in self.calls() if c[:2] == ['amq', 'doctor']][-1]
@@ -111,7 +112,7 @@ class SidecarTests(unittest.TestCase):
         self.assertEqual(doctor[doctor.index('--base-root') + 1], '/base')
 
     def test_missing_authoritative_handle_blocks_before_model_or_pane(self):
-        r = self.run_helper('launch', '--handle', 'pi-grok45-1', AM_ROOT='/base/session',
+        r = self.run_helper('launch', '--handle', 'pi-gpt6sol-1', AM_ROOT='/base/session',
                             CONFIG_SESSION='session', CONFIG_AGENTS='claude,pi,user')
         self.assertNotEqual(r.returncode, 0)
         self.assertIn('never bypass strict', r.stderr)
@@ -121,7 +122,7 @@ class SidecarTests(unittest.TestCase):
         for bad in ({'BAD_CONFIG': '1'}, {'BAD_DOCTOR': '1'}, {'CONFIG_SESSION': 'wrong'}):
             with self.subTest(bad=bad):
                 self.log.unlink(missing_ok=True)
-                r = self.run_helper('init', '--workers', 'pi-grok45-1', AM_ROOT='/base/session',
+                r = self.run_helper('init', '--workers', 'pi-gpt6sol-1', AM_ROOT='/base/session',
                                     **{'CONFIG_SESSION': 'session', **bad})
                 self.assertNotEqual(r.returncode, 0)
                 self.assertEqual(len([c for c in self.calls() if c[:2] == ['amq', 'init']]), 1)
@@ -146,16 +147,16 @@ class SidecarTests(unittest.TestCase):
         r = amq('session', 'create', 'smoke', '--root', str(base), '--me', 'pi', '--json')
         self.assertEqual(r.returncode, 0, r.stderr)
         # Reproduce the regression: session-only roster cannot authorize strict sends.
-        r = amq('init', '--root', str(session), '--agents', 'pi,pi-grok45-1', '--force')
+        r = amq('init', '--root', str(session), '--agents', 'pi,pi-gpt6sol-1', '--force')
         self.assertEqual(r.returncode, 0, r.stderr)
-        r = amq('send', '--root', str(session), '--me', 'pi-grok45-1', '--to', 'pi',
+        r = amq('send', '--root', str(session), '--me', 'pi-gpt6sol-1', '--to', 'pi',
                 '--strict', '--body', 'must fail before repair', '--json')
         self.assertNotEqual(r.returncode, 0)
         self.assertIn('not in config.json agents', r.stderr)
-        r = self.run_helper('init', '--workers', 'pi-grok45-1', AM_ROOT=str(session),
+        r = self.run_helper('init', '--workers', 'pi-gpt6sol-1', AM_ROOT=str(session),
                             AM_ME='pi', AMQ_NO_UPDATE_CHECK='1')
         self.assertEqual(r.returncode, 0, r.stderr)
-        r = amq('send', '--root', str(session), '--me', 'pi-grok45-1', '--to', 'pi',
+        r = amq('send', '--root', str(session), '--me', 'pi-gpt6sol-1', '--to', 'pi',
                 '--strict', '--body', 'strict readiness smoke', '--json')
         self.assertEqual(r.returncode, 0, r.stderr)
         message_id = json.loads(r.stdout)['id']
@@ -170,20 +171,28 @@ class SidecarTests(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
 
     def test_bad_roster(self):
-        for roster in ('pi-gpt6-astra-0', 'unknown-1', 'pi-gpt56-1,pi-gpt56-1', 'pi-gpt56-1,'):
+        for roster in ('pi-gpt6-astra-0', 'unknown-1', 'pi-gpt6sol-1,pi-gpt6sol-1',
+                       'pi-gpt6sol-1,', 'pi-gpt56-1', 'pi-gpt6luna-1', 'pi-grok45-1',
+                       'pi-grok46-1', 'claude-fable51-high-1',
+                       'claude-fable51-xhigh-1'):
             with self.subTest(roster=roster):
                 r = self.run_helper('init', '--workers', roster)
+                self.assertNotEqual(r.returncode, 0)
+                self.assertEqual(self.calls(), [])
+
+    def test_removed_grok_profiles_rejected_before_external_calls(self):
+        for handle in ('pi-grok45-1', 'pi-grok46-1'):
+            with self.subTest(handle=handle):
+                r = self.run_helper('launch', '--handle', handle)
                 self.assertNotEqual(r.returncode, 0)
                 self.assertEqual(self.calls(), [])
 
     def test_profiles_and_prompt_quoting(self):
         profiles = [
             ('pi-gpt6-astra-1', 'cliproxyapi/gpt-6-astra', 'high', True),
-            ('pi-gpt56-1', 'cliproxyapi/gpt-5.6-sol', 'high', False),
-            ('pi-grok45-1', 'xai/grok-4.5', 'high', True),
-            ('pi-grok46-1', 'xai/grok-4.6', 'high', True),
-            ('claude-fable51-xhigh-1', 'claude-fable-5-1', 'xhigh', True),
-            ('claude-fable51-high-1', 'claude-fable-5-1', 'high', True),
+            ('pi-gpt6sol-1', 'cliproxyapi/gpt-6-sol', 'high', False),
+            ('claude-opus55-xhigh-1', 'claude-opus-5-5', 'xhigh', True),
+            ('claude-opus55-high-1', 'claude-opus-5-5', 'high', True),
         ]
         for handle, model, effort, readonly in profiles:
             with self.subTest(handle=handle):
@@ -213,10 +222,17 @@ class SidecarTests(unittest.TestCase):
                     self.assertEqual(argv[argv.index('--wake-inject-mode') + 1], 'none')
                 else:
                     self.assertNotIn('--wake-inject-mode', argv)
+                    self.assertIn('confirm /model entitlement to claude-opus-5-5', r.stderr)
 
     def test_missing_model_does_not_split(self):
         r = self.run_helper('launch', '--handle', 'pi-gpt6-astra-1', MISSING_MODEL='1')
         self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(any(c[:3] == ['herdr', 'pane', 'split'] for c in self.calls()))
+
+    def test_missing_proxy_sol_model_does_not_split(self):
+        r = self.run_helper('launch', '--handle', 'pi-gpt6sol-1', MISSING_SOL='1')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('cliproxyapi/gpt-6-sol', r.stderr)
         self.assertFalse(any(c[:3] == ['herdr', 'pane', 'split'] for c in self.calls()))
 
     def test_launch_failure_cleans_only_created_pane(self):
@@ -246,12 +262,12 @@ class SidecarTests(unittest.TestCase):
         self.assertFalse(any(c[:3] == ['herdr', 'pane', 'run'] for c in self.calls()))
 
     def test_old_claude_rejected_before_split(self):
-        r = self.run_helper('launch', '--handle', 'claude-fable51-high-1', CLAUDE_VERSION='2.1.254 (Claude Code)')
+        r = self.run_helper('launch', '--handle', 'claude-opus55-high-1', CLAUDE_VERSION='2.1.254 (Claude Code)')
         self.assertNotEqual(r.returncode, 0)
         self.assertFalse(any(c[:3] == ['herdr', 'pane', 'split'] for c in self.calls()))
 
     def test_explicit_target_and_direction(self):
-        r = self.run_helper('launch', '--handle', 'pi-gpt56-1', '--target', 'other-pane', '--direction', 'down')
+        r = self.run_helper('launch', '--handle', 'pi-gpt6sol-1', '--target', 'other-pane', '--direction', 'down')
         self.assertEqual(r.returncode, 0, r.stderr)
         split = next(c for c in self.calls() if c[:3] == ['herdr', 'pane', 'split'])
         self.assertEqual(split[split.index('--pane') + 1], 'other-pane')

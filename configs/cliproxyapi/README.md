@@ -63,7 +63,7 @@ After upgrading/reconfiguring an already running service, restart it explicitly.
 ```bash
 cliproxy check                  # API authentication + model availability, no inference
 cliproxy models                 # discover models exposed by logged-in accounts
-pi                             # GPT-6 Astra via pool
+pi                             # GPT-6 Sol high via pool
 pi --provider cliproxyapi --model gpt-6-sol
 codex                          # Direct built-in OpenAI provider
 ```
@@ -86,10 +86,12 @@ with explicitly pinned `openai-codex` providers do **not** automatically move to
 pool. Select `cliproxyapi` explicitly for those Pi agents when desired.
 
 Pi uses standard `openai-responses` with full conversation history, rather than its
-special ChatGPT transport. Consequently the repo's Codex-native compaction and
-fast-mode extensions do not apply to this provider; normal Pi compaction remains
-available. Pi uses SSE rather than WebSockets to avoid connection-bound response
-chaining across accounts. Model access still depends on account entitlements.
+special ChatGPT transport. Consequently the repo's Codex-native compaction extension
+does not apply to this provider; normal Pi compaction remains available. The
+repo-managed Fast Mode extension explicitly opts eligible proxy-backed Luna payloads
+into `service_tier: "priority"`. Pi uses SSE rather than WebSockets to avoid
+connection-bound response chaining across accounts. Model access still depends on
+account entitlements.
 The repo-managed Pi catalog maps these nine Codex chat models:
 
 - `cliproxyapi/gpt-5.3-codex-spark`

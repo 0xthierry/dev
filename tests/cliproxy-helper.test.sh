@@ -30,9 +30,12 @@ export PATH="$tmp/bin:$PATH"
 "$ROOT/scripts/cliproxy" login
  grep -qx -- '--codex-device-login' "$CAPTURE"
  grep -qx -- '--user restart cliproxyapi.service' "$SERVICE_CAPTURE"
-"$ROOT/scripts/cliproxy" pi --model gpt-5.6-sol
+"$ROOT/scripts/cliproxy" pi
  grep -qx -- 'cliproxyapi' "$CAPTURE"
- grep -qx -- 'gpt-5.6-sol' "$CAPTURE"
+ grep -qx -- 'gpt-6-sol' "$CAPTURE"
+ grep -qx -- 'high' "$CAPTURE"
+"$ROOT/scripts/cliproxy" pi --model gpt-6-luna
+ grep -qx -- 'gpt-6-luna' "$CAPTURE"
 if "$ROOT/scripts/cliproxy" codex 2>/dev/null; then
   echo 'not ok: helper still accepts Codex as a proxy client' >&2
   exit 1
