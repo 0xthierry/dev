@@ -175,7 +175,8 @@ EOF
   assert_json "maps the complete pinned Codex catalog without duplicates" "$test_home/.pi/agent/models.json" '
     [.providers.cliproxyapi.models[].id] | sort == [
       "gpt-5.3-codex-spark", "gpt-5.5", "gpt-5.6-luna",
-      "gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-astra"
+      "gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-astra", "gpt-6-luna",
+      "gpt-6-sol", "gpt-daybreak-blue-latest"
     ]'
   assert_json "preserves Spark text-only input and smaller context" "$test_home/.pi/agent/models.json" '
     .providers.cliproxyapi.models[] | select(.id == "gpt-5.3-codex-spark") |
@@ -188,7 +189,7 @@ EOF
       .maxTokens == 32768 and .reasoning == true and
       .thinkingLevelMap.off == null and .thinkingLevelMap.minimal == null and
       .thinkingLevelMap.xhigh == "xhigh" and
-      (if (.id | test("^gpt-(5[.]6-|6-)")) then .thinkingLevelMap.max == "max"
+      (if (.id | test("^gpt-(5[.]6-|6-)|^gpt-daybreak")) then .thinkingLevelMap.max == "max"
        else (.thinkingLevelMap | has("max") | not) end)
     )'
   assert_json "defaults Pi to proxy" "$test_home/.pi/agent/settings.json" '.defaultProvider == "cliproxyapi"'

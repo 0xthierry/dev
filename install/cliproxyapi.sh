@@ -4,17 +4,18 @@ set -euo pipefail
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-CLIPROXYAPI_VERSION="7.2.151"
+CLIPROXYAPI_VERSION="7.3.12"
+CLIPROXYAPI_PLUGIN_BUILD_VERSION="1"
 CLIPROXYAPI_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# From the official v7.2.151 release's checksums.txt. Keep these in the repo,
+# From the official v7.3.12 release's checksums.txt. Keep these in the repo,
 # rather than trusting a checksum downloaded alongside the archive at install.
 cliproxyapi_checksum() {
   case "$1" in
-    darwin_aarch64) echo 9115b9691ceff071735ec1365c2885dca5d4084105de09877f5afdb675f1f815 ;;
-    darwin_amd64) echo 05d9344b0a39b81ef1d4217b1136964dadfba4a485d18a70564562fef4f6bf98 ;;
-    linux_aarch64) echo 14c03fcc69923c012bd0dace189790cf1ad1586f17bb64d8c09784a0a23ad587 ;;
-    linux_amd64) echo 194f38ad40bba5cb07cdc1521b0853be0f9868c53ade40c677f32b21005c33f9 ;;
+    darwin_aarch64) echo c20618ed6e4c76e6a73ed7dafa0d5f9569f0b6c20213fd450b3569bffde20114 ;;
+    darwin_amd64) echo 72c3403ad94d708c4aec48be2f34bdef2c230824440111f156076efd75b1f550 ;;
+    linux_aarch64) echo c3c2b2398222fcaa1f20e2bb09ef8c17bab708cef3a0d948e477e153517eee7a ;;
+    linux_amd64) echo eb73eb43ef82dea0ffc7b433fc3b6f994cd0b3f35d3b59ee85870827e2fc3cec ;;
     *) return 1 ;;
   esac
 }
@@ -79,6 +80,84 @@ PY
   log_item "CLIProxyAPI: installed $CLIPROXYAPI_VERSION ($platform)"
 )
 
+install_cliproxyapi_plugin() (
+  set -euo pipefail
+  local os="$1" arch="$2" plugin_arch="$2" platform="" extension="" source_dir=""
+  local plugin_dir="" destination="" marker="" source_digest="" expected=""
+  local tmp="" backup=""
+
+  if [[ "$plugin_arch" == aarch64 ]]; then
+    plugin_arch=arm64
+  fi
+  platform="${os}_${plugin_arch}"
+  source_dir="$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi/plugins/codex-current-models"
+  plugin_dir="$HOME/.local/share/cliproxyapi/plugins/$os/$plugin_arch"
+  marker="$HOME/.local/share/cliproxyapi/plugin-codex-current-models.version"
+  case "$os" in
+    linux) extension=so ;;
+    darwin) extension=dylib ;;
+    *) printf 'error: unsupported CLIProxyAPI plugin OS\n' >&2; return 1 ;;
+  esac
+  destination="$plugin_dir/codex-current-models.$extension"
+  source_digest="$(python3 - "$source_dir" <<'PY'
+import hashlib
+import pathlib
+import sys
+
+source_dir = pathlib.Path(sys.argv[1])
+digest = hashlib.sha256()
+for name in ("go.mod", "main.go"):
+    path = source_dir / name
+    digest.update(name.encode())
+    digest.update(b"\0")
+    digest.update(path.read_bytes())
+    digest.update(b"\0")
+print(digest.hexdigest())
+PY
+)" || return
+  expected="$source_digest $platform build-$CLIPROXYAPI_PLUGIN_BUILD_VERSION"
+
+  if [[ -f "$destination" && ! -L "$destination" && -f "$marker" ]] && [[ "$(< "$marker")" == "$expected" ]]; then
+    log_item "CLIProxyAPI model plugin: already current ($platform)"
+    return 0
+  fi
+  if (( ${DRY_RUN:-0} )); then
+    log_item "[dry-run] Build and install CLIProxyAPI Codex model plugin for $platform"
+    return 0
+  fi
+  if ! command -v go >/dev/null 2>&1; then
+    printf 'error: Go is required to build the CLIProxyAPI model plugin\n' >&2
+    return 1
+  fi
+  if ! command -v cc >/dev/null 2>&1; then
+    printf 'error: a C compiler (cc) is required to build the CLIProxyAPI model plugin\n' >&2
+    return 1
+  fi
+
+  ensure_dir "$plugin_dir" || return
+  tmp="$(mktemp -d "$plugin_dir/.codex-current-models.XXXXXXXX")" || return
+  trap 'rm -rf "$tmp"' EXIT
+  (
+    cd "$source_dir" || exit
+    CGO_ENABLED=1 go build -buildvcs=false -trimpath -buildmode=c-shared \
+      -o "$tmp/codex-current-models.$extension" .
+  ) || return
+  rm -f "$tmp/codex-current-models.h" || return
+  chmod 0700 "$tmp/codex-current-models.$extension" || return
+  if [[ -e "$destination" || -L "$destination" ]]; then
+    backup="$(next_backup_path "$destination")"
+    mv "$destination" "$backup" || return
+    log_item "CLIProxyAPI model plugin: previous file backed up to $backup"
+  fi
+  mv "$tmp/codex-current-models.$extension" "$destination" || return
+  printf '%s\n' "$expected" > "$tmp/version" || return
+  if [[ -e "$marker" || -L "$marker" ]]; then
+    rm -f "$marker" || return
+  fi
+  mv "$tmp/version" "$marker" || return
+  log_item "CLIProxyAPI model plugin: installed ($platform)"
+)
+
 configure_cliproxyapi() {
   local os="$1"
   if (( ${DRY_RUN:-0} )); then
@@ -89,7 +168,7 @@ configure_cliproxyapi() {
 
   # All secret handling stays inside Python: no shell variables, command-line
   # arguments, environment values, or log output ever contain either key.
-  python3 - "$HOME" "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi/config.yaml" "$os" <<'PY'
+  python3 - "$HOME" "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi/config.yaml" "$os" "$HOME/.local/share/cliproxyapi/plugins" <<'PY'
 import os
 import pathlib
 import plistlib
@@ -102,6 +181,8 @@ home = pathlib.Path(sys.argv[1]).absolute()
 template = pathlib.Path(sys.argv[2]).read_text()
 if "{{API_KEY}}" not in template:
     sys.exit("error: CLIProxyAPI config template has no API key placeholder")
+if "{{PLUGIN_DIR}}" not in template:
+    sys.exit("error: CLIProxyAPI config template has no plugin directory placeholder")
 config_dir = home / ".config/cliproxyapi"
 state_dir = home / ".local/share/cliproxyapi"
 auth_dir = state_dir / "auth"
@@ -159,6 +240,7 @@ def private_key(name):
 
 key = private_key("api-key")
 rendered = template.replace("{{API_KEY}}", key)
+rendered = rendered.replace("{{PLUGIN_DIR}}", sys.argv[4])
 if "{{MANAGEMENT_KEY}}" in rendered:
     rendered = rendered.replace("{{MANAGEMENT_KEY}}", private_key("management-key"))
 write_private(config_dir / "config.yaml", rendered.encode())
@@ -234,6 +316,7 @@ install_cliproxyapi() {
   platform="${os}_${arch}"
   checksum="$(cliproxyapi_checksum "$platform")" || return
   install_cliproxyapi_binary "$platform" "$checksum" || return
+  install_cliproxyapi_plugin "$os" "$arch" || return
   configure_cliproxyapi "$os" || return
   ensure_dir "$HOME/.local/bin" || return
   safe_link_path "$CLIPROXYAPI_REPO_ROOT/scripts/cliproxy" "$HOME/.local/bin/cliproxy" "CLIProxyAPI helper" || return

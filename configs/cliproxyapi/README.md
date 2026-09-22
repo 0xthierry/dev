@@ -17,10 +17,11 @@ bash install/cliproxyapi.sh
 bash configs/agents/install.sh --yes
 ```
 
-The second command syncs all repository-managed agent configuration, not just the
-proxy. It preserves unrelated Pi providers and Codex MCP entries. Pi defaults to the
-proxy, while Codex remains direct; enroll accounts and start the service before using
-Pi through the pool.
+The proxy installer requires Go and the platform C compiler (`cc`) to build the small
+repo-owned model registrar and scheduler plugin. The second command syncs all
+repository-managed agent configuration, not just the proxy. It preserves unrelated Pi providers and
+Codex MCP entries. Pi defaults to the proxy, while Codex remains direct; enroll
+accounts and start the service before using Pi through the pool.
 
 Log in once per **distinct account**, choosing the appropriate account in your browser:
 
@@ -32,7 +33,9 @@ cliproxy login
 The helper uses device OAuth (enable device-code authorization in your ChatGPT
 security settings if required). It works on SSH hosts without forwarding a callback
 port. Repeating login with the same account refreshes that account, not pool size.
-No credentials are imported from Pi or Codex CLI, or synchronized across machines.
+After a successful login, the helper restarts an active repository-managed service so
+the plugin refreshes per-account model availability. No credentials are imported from
+Pi or Codex CLI, or synchronized across machines.
 
 On macOS, setup automatically enables and starts the LaunchAgent, including startup
 at future logins. Stop any manually running `cliproxy serve` before running setup so
@@ -61,7 +64,7 @@ After upgrading/reconfiguring an already running service, restart it explicitly.
 cliproxy check                  # API authentication + model availability, no inference
 cliproxy models                 # discover models exposed by logged-in accounts
 pi                             # GPT-6 Astra via pool
-pi --model gpt-5.6-sol
+pi --provider cliproxyapi --model gpt-6-sol
 codex                          # Direct built-in OpenAI provider
 ```
 
@@ -87,7 +90,7 @@ special ChatGPT transport. Consequently the repo's Codex-native compaction and
 fast-mode extensions do not apply to this provider; normal Pi compaction remains
 available. Pi uses SSE rather than WebSockets to avoid connection-bound response
 chaining across accounts. Model access still depends on account entitlements.
-The repo-managed Pi catalog maps the six `openai-codex` models in Pi 0.87.0:
+The repo-managed Pi catalog maps these nine Codex chat models:
 
 - `cliproxyapi/gpt-5.3-codex-spark`
 - `cliproxyapi/gpt-5.5`
@@ -95,19 +98,26 @@ The repo-managed Pi catalog maps the six `openai-codex` models in Pi 0.87.0:
 - `cliproxyapi/gpt-5.6-sol`
 - `cliproxyapi/gpt-5.6-terra`
 - `cliproxyapi/gpt-6-astra`
+- `cliproxyapi/gpt-6-luna`
+- `cliproxyapi/gpt-6-sol`
+- `cliproxyapi/gpt-daybreak-blue-latest`
 
 This is a pinned mapping in `configs/agents/pi/cliproxyapi-models.json`, not automatic
 model discovery. Recheck the full Codex catalog when updating Pi. Spark is text-only
 with 128K context; the others accept images and use 272K context. All retain the
 proxy's conservative 32K output cap. Proxy limits and actual model limits may differ.
-Reasoning mappings retain the proxy's disabled off/minimal settings and expose only
-the extended levels declared for each model in Pi's Codex catalog. Subscription
-usage has no per-token cost estimate in these custom entries.
+Reasoning mappings retain the proxy's disabled off/minimal settings and expose the
+extended levels Pi supports. Subscription usage has no per-token cost estimate in
+these custom entries.
 
-A Pi mapping does not grant upstream access. At verification, `cliproxy models`
-advertised all six mapped models. Image-generation and internal review IDs
-advertised by the proxy are not general Codex chat models
-and are not included.
+A Pi mapping does not grant upstream access. CLIProxyAPI's upstream static catalogs
+currently omit the three newest IDs. The repo-owned `codex-current-models` plugin
+checks each account's live Codex model catalog, registers the union of supported IDs,
+and keeps partially rolled-out models on eligible accounts. It uses the real model
+IDs without aliases or substitution. Live verification returned successful responses
+from all three models; repeated Daybreak requests stayed on the one account that
+currently advertises it. Image-generation and internal review IDs advertised by the
+proxy are not general Codex chat models and are not included.
 
 ## Routing and security
 
@@ -118,15 +128,18 @@ and are not included.
 - Bootstrap buffering allows some failures inside HTTP 200 streams to fail over before
   output begins. Mid-stream failures and account-bound reasoning history are not
   guaranteed to recover transparently. This is not unlimited quota.
-- Listener: `127.0.0.1:8317`; authenticated API and WebSockets; management UI/API,
-  plugins and profiling disabled. Never expose the listener publicly.
+- Listener: `127.0.0.1:8317`; authenticated API and WebSockets; management UI/API
+  and profiling disabled. The only enabled plugin is the repo-owned model registrar
+  and scheduler. It reads existing Codex auth through CLIProxyAPI's host API, checks
+  model availability against the Codex endpoint, and has no executor or authentication
+  capability. Never expose the listener publicly.
 - Private config/key: `~/.config/cliproxyapi/{config.yaml,api-key}` (0600).
 - OAuth state: `~/.local/share/cliproxyapi/auth/` (directory 0700, service/helper umask 077).
   Never commit, paste, or share these files. Local processes running as your user can
   access them, just as they can access your direct CLI credentials.
 - Request-body logging, including error-only request capture, is disabled via
   `commercial-mode`. Application diagnostics still exist; treat logs as private.
-- Official v7.2.151 binaries are pinned with platform SHA256 hashes in
+- Official v7.3.12 binaries are pinned with platform SHA256 hashes in
   `install/cliproxyapi.sh`. Review upstream changes before updating the pin.
 
 ## Usage statistics and management
@@ -161,7 +174,7 @@ and stop the service:
 `launchctl bootout "gui/$(id -u)/dev.cliproxyapi"` followed by
 `launchctl disable "gui/$(id -u)/dev.cliproxyapi"` on macOS. Credentials are retained.
 
-Upstream evidence (v7.2.151): `config.example.yaml`, `cmd/server/main.go`,
+Upstream evidence (v7.3.12): `config.example.yaml`, `cmd/server/main.go`,
 `sdk/cliproxy/auth/selector.go`, `internal/api/server_routes.go`,
 `internal/runtime/executor/codex_executor_stream.go`, and
 `internal/api/middleware/request_logging.go`. Client references:

@@ -10,7 +10,12 @@ remote-management:
   disable-control-panel: true
   disable-auto-update-panel: true
 plugins:
-  enabled: false
+  enabled: true
+  dir: "{{PLUGIN_DIR}}"
+  configs:
+    codex-current-models:
+      enabled: true
+      priority: 1
 pprof:
   enable: false
 debug: false

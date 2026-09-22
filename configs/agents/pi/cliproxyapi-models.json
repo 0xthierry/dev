@@ -59,6 +59,33 @@
           "input": ["text", "image"],
           "contextWindow": 272000,
           "maxTokens": 32768
+        },
+        {
+          "id": "gpt-6-sol",
+          "name": "GPT-6 Sol (local Codex account pool)",
+          "reasoning": true,
+          "thinkingLevelMap": { "off": null, "minimal": null, "xhigh": "xhigh", "max": "max" },
+          "input": ["text", "image"],
+          "contextWindow": 272000,
+          "maxTokens": 32768
+        },
+        {
+          "id": "gpt-6-luna",
+          "name": "GPT-6 Luna (local Codex account pool)",
+          "reasoning": true,
+          "thinkingLevelMap": { "off": null, "minimal": null, "xhigh": "xhigh", "max": "max" },
+          "input": ["text", "image"],
+          "contextWindow": 272000,
+          "maxTokens": 32768
+        },
+        {
+          "id": "gpt-daybreak-blue-latest",
+          "name": "Daybreak Blue (local Codex account pool)",
+          "reasoning": true,
+          "thinkingLevelMap": { "off": null, "minimal": null, "xhigh": "xhigh", "max": "max" },
+          "input": ["text", "image"],
+          "contextWindow": 272000,
+          "maxTokens": 32768
         }
       ]
     }

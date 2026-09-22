@@ -25,6 +25,8 @@ COMMON_PACMAN_PACKAGES=(
   fastfetch
   inxi
   github-cli
+  go
+  gcc
   make
   cmake
   pkgconf
@@ -103,6 +105,7 @@ COMMON_BREW_FORMULAE=(
   gh
   googleworkspace-cli
   infisical/get-cli/infisical
+  go
   make
   cmake
   pkgconf

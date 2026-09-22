@@ -7,9 +7,23 @@ TEST_TMP="$(mktemp -d)"
 trap 'rm -rf "$TEST_TMP"' EXIT
 export HOME="$TEST_TMP/home with spaces"
 CLIPROXYAPI_REPO_ROOT="$TEST_TMP/repo"
-mkdir -p "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi" "$CLIPROXYAPI_REPO_ROOT/scripts"
+mkdir -p "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi/plugins" "$CLIPROXYAPI_REPO_ROOT/scripts"
 cp "$REPO_ROOT/configs/cliproxyapi/config.yaml" "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi/config.yaml"
+cp -R "$REPO_ROOT/configs/cliproxyapi/plugins/codex-current-models" "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi/plugins/codex-current-models"
 printf '#!/bin/sh\n' > "$CLIPROXYAPI_REPO_ROOT/scripts/cliproxy"
+python3 - "$REPO_ROOT" <<'PY'
+import pathlib
+import re
+import sys
+
+root = pathlib.Path(sys.argv[1])
+plugin = (root / "configs/cliproxyapi/plugins/codex-current-models/main.go").read_text()
+installer = (root / "install/ai-cli.sh").read_text()
+plugin_version = re.search(r'clientVersion\s+=\s+"([^"]+)"', plugin)
+codex_version = re.search(r'@openai/codex"\s+"([^"]+)"', installer)
+assert plugin_version and codex_version
+assert plugin_version.group(1) == codex_version.group(1)
+PY
 
 # No real network, binary execution, or service actions are permitted.
 curl() {
@@ -20,6 +34,18 @@ curl() {
     shift
   done
   cp "$TEST_TMP/release.tar.gz" "$output"
+}
+cc() { :; }
+go() {
+  printf 'compile\n' >> "$TEST_TMP/compiles"
+  local output=""
+  while (( $# )); do
+    if [[ "$1" == -o ]]; then output="$2"; shift; fi
+    shift
+  done
+  [[ -n "$output" ]]
+  printf 'fixture plugin\n' > "$output"
+  printf 'fixture header\n' > "${output%.*}.h"
 }
 systemctl() { echo 'unexpected systemctl' >&2; return 99; }
 launchctl() { echo 'unexpected launchctl' >&2; return 99; }
@@ -73,13 +99,22 @@ assert "allow-remote: false" in config
 assert "disable-control-panel: true" in config
 assert "disable-auto-update-panel: true" in config
 assert "usage-statistics-enabled: true" in config
+assert "plugins:\n  enabled: true" in config
+assert f'dir: "{home}/.local/share/cliproxyapi/plugins"' in config
+assert "codex-current-models:" in config
 for path in (config_dir / "api-key", config_dir / "config.yaml"):
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 assert stat.S_IMODE((home / ".local/share/cliproxyapi/auth").stat().st_mode) == 0o700
+plugin = home / ".local/share/cliproxyapi/plugins/linux/amd64/codex-current-models.so"
+assert plugin.read_text() == "fixture plugin\n"
+assert stat.S_IMODE(plugin.stat().st_mode) == 0o700
+marker = (home / ".local/share/cliproxyapi/plugin-codex-current-models.version").read_text().strip()
+assert re.fullmatch(r"[0-9a-f]{64} linux_amd64 build-1", marker)
 assert (config_dir / "api-key").read_bytes() == (tmp / "original-key").read_bytes()
 assert key in (config_dir / "config.yaml").read_text()
 assert "~/.local/share/cliproxyapi/auth" in (config_dir / "config.yaml").read_text()
 assert not list(home.rglob("*.bak*"))
+assert (tmp / "compiles").read_text().splitlines() == ["compile"]
 unit = (home / ".config/systemd/user/cliproxyapi.service").read_text()
 assert f'"{home}/.local/bin/cli-proxy-api" -config "{config_dir}/config.yaml"' in unit
 assert [line for line in unit.splitlines() if line.startswith("WorkingDirectory=")] == ["WorkingDirectory=%h/.local/share/cliproxyapi"]
@@ -120,7 +155,7 @@ if install_cliproxyapi_binary linux_aarch64 invalid > "$TEST_TMP/mismatch.log" 2
 fi
 cmp "$TEST_TMP/original-binary" "$HOME/.local/bin/cli-proxy-api"
 grep -q 'SHA256 mismatch' "$TEST_TMP/mismatch.log"
-[[ "$(< "$HOME/.local/share/cliproxyapi/version")" == '7.2.151 linux_amd64' ]]
+[[ "$(< "$HOME/.local/share/cliproxyapi/version")" == '7.3.12 linux_amd64' ]]
 echo 'ok: checksum rejection preserves existing binary and marker'
 
 # macOS activation is automatic, idempotent, and propagates launchctl failures.
@@ -143,6 +178,8 @@ TEST_OS=Darwin TEST_ARCH=aarch64 DRY_RUN=0 install_cliproxyapi >> "$TEST_TMP/ins
 [[ "$(grep -c '^enable ' "$TEST_TMP/launchctl.log")" -eq 2 ]]
 [[ "$(grep -c '^bootstrap ' "$TEST_TMP/launchctl.log")" -eq 1 ]]
 [[ "$(grep -c '^print ' "$TEST_TMP/launchctl.log")" -eq 2 ]]
+[[ "$(wc -l < "$TEST_TMP/compiles")" -eq 2 ]]
+[[ -f "$HOME/.local/share/cliproxyapi/plugins/darwin/arm64/codex-current-models.dylib" ]]
 if ENABLE_RESULT=1 enable_cliproxyapi_macos >> "$TEST_TMP/install.log" 2>&1; then
   echo 'not ok: enable failure ignored' >&2; exit 1
 fi

@@ -27,8 +27,31 @@ if [[ ! -f "$config" || ! -f "$key_file" || ! -x "$binary" ]]; then
   printf 'CLIProxyAPI is not installed. Run bash install/cliproxyapi.sh from the setup repo.\n' >&2
   exit 1
 fi
+restart_managed_service_after_login() {
+  case "$(uname -s)" in
+    Linux)
+      if command -v systemctl >/dev/null 2>&1 && systemctl --user is-active --quiet cliproxyapi.service; then
+        systemctl --user restart cliproxyapi.service
+        printf 'Restarted the CLIProxyAPI user service to refresh per-account model availability.\n'
+      fi
+      ;;
+    Darwin)
+      local service=""
+      service="gui/$(id -u)/dev.cliproxyapi"
+      if command -v launchctl >/dev/null 2>&1 && launchctl print "$service" >/dev/null 2>&1; then
+        launchctl kickstart -k "$service"
+        printf 'Restarted the CLIProxyAPI LaunchAgent to refresh per-account model availability.\n'
+      fi
+      ;;
+  esac
+}
+
 case "$command_name" in
-  login) exec "$binary" --config "$config" --codex-device-login "$@" ;;
+  login)
+    "$binary" --config "$config" --codex-device-login "$@"
+    restart_managed_service_after_login
+    exit 0
+    ;;
   serve) exec "$binary" --config "$config" "$@" ;;
 esac
 CLIPROXY_API_KEY="$(< "$key_file")"
