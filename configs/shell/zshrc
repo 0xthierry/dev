@@ -108,6 +108,26 @@ claude() {
   command claude --append-system-prompt-file ~/.agents/developer-instructions.txt "$@"
 }
 
+glm() (
+  if [[ -z "${ZAI_API_KEY:-}" ]]; then
+    print -u2 "glm: ZAI_API_KEY is not set; add it to ~/.secrets"
+    return 1
+  fi
+
+  unset ANTHROPIC_API_KEY
+  export ANTHROPIC_AUTH_TOKEN="$ZAI_API_KEY"
+  export ANTHROPIC_BASE_URL="https://api.z.ai/api/anthropic"
+  export ANTHROPIC_MODEL="glm-5.3[1m]"
+  export ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-5.3-flash[1m]"
+  export ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5.3[1m]"
+  export ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.3[1m]"
+  export CLAUDE_CODE_AUTO_COMPACT_WINDOW="1000000"
+  export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
+  export API_TIMEOUT_MS="3000000"
+
+  claude --effort max "$@"
+)
+
 alias dstop='docker ps -q | xargs -r docker stop'
 
 mkcd() {
