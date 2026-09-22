@@ -209,8 +209,8 @@ EOF
   assert_json "canonical Claude plugin value wins" "$test_home/.claude/settings.json" '.enabledPlugins["typescript-lsp@claude-plugins-official"] == true'
   assert_json "drops runtime-injected Claude env" "$test_home/.claude/settings.json" '.env.PATH == null'
   assert_json "drops other local-only Claude settings" "$test_home/.claude/settings.json" '.agentPushNotifEnabled == null'
-  assert_json "defaults Claude sessions to Fable 5.1" "$test_home/.claude/settings.json" '.model == "claude-fable-5-1"'
-  assert_json "defaults Claude sessions to low reasoning" "$test_home/.claude/settings.json" '.effortLevel == "low"'
+  assert_json "defaults Claude sessions to Opus 5.5" "$test_home/.claude/settings.json" '.model == "claude-opus-5-5"'
+  assert_json "defaults Claude sessions to medium reasoning" "$test_home/.claude/settings.json" '.effortLevel == "medium"'
 
   if cmp -s "$claude_state_before" "$test_home/.claude.json"; then
     printf 'ok: preserves Claude user-scoped MCP state\n'

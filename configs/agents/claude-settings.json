@@ -11,7 +11,7 @@
     "sessionUrl": false
   },
   "autoMemoryEnabled": false,
-  "effortLevel": "low",
+  "effortLevel": "medium",
   "tui": "fullscreen",
   "permissions": {
     "allow": [
@@ -76,7 +76,7 @@
     ],
     "defaultMode": "default"
   },
-  "model": "claude-fable-5-1",
+  "model": "claude-opus-5-5",
   "enableAllProjectMcpServers": false,
   "statusLine": {
     "type": "command",
