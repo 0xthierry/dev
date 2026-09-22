@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { createFakePi } from "../../_shared/testing/fake-pi";
+import type { BrowserUseApprovalHandler } from "./approval";
 import type { BrowserUsePaths } from "./paths";
 import type { BrowserUseHost } from "./register";
 import { registerBrowserUseExtension } from "./register";
@@ -122,7 +123,7 @@ describe("registerBrowserUseExtension", () => {
     await fakePi.runCommand("browser-use", "on --accept-permissions", { hasUI: true });
     await fakePi.runTool("browser_use", { code: "ok" });
     const approve = (runtime.execute as ReturnType<typeof mock>).mock.calls[0]?.[2] as
-      | ((params: unknown, signal: AbortSignal) => Promise<{ action: string }>)
+      | BrowserUseApprovalHandler
       | undefined;
 
     // Assert

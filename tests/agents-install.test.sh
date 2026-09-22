@@ -174,8 +174,8 @@ EOF
   assert_json "adds Pi Responses proxy provider" "$test_home/.pi/agent/models.json" '.providers.cliproxyapi.api == "openai-responses"'
   assert_json "maps the complete pinned Codex catalog without duplicates" "$test_home/.pi/agent/models.json" '
     [.providers.cliproxyapi.models[].id] | sort == [
-      "gpt-5.3-codex-spark", "gpt-5.4", "gpt-5.4-mini", "gpt-5.5",
-      "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-astra"
+      "gpt-5.3-codex-spark", "gpt-5.5", "gpt-5.6-luna",
+      "gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-astra"
     ]'
   assert_json "preserves Spark text-only input and smaller context" "$test_home/.pi/agent/models.json" '
     .providers.cliproxyapi.models[] | select(.id == "gpt-5.3-codex-spark") |

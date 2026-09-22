@@ -87,11 +87,9 @@ special ChatGPT transport. Consequently the repo's Codex-native compaction and
 fast-mode extensions do not apply to this provider; normal Pi compaction remains
 available. Pi uses SSE rather than WebSockets to avoid connection-bound response
 chaining across accounts. Model access still depends on account entitlements.
-The repo-managed Pi catalog maps all eight `openai-codex` models in Pi 0.85.1:
+The repo-managed Pi catalog maps the six `openai-codex` models in Pi 0.87.0:
 
 - `cliproxyapi/gpt-5.3-codex-spark`
-- `cliproxyapi/gpt-5.4`
-- `cliproxyapi/gpt-5.4-mini`
 - `cliproxyapi/gpt-5.5`
 - `cliproxyapi/gpt-5.6-luna`
 - `cliproxyapi/gpt-5.6-sol`
@@ -107,9 +105,8 @@ the extended levels declared for each model in Pi's Codex catalog. Subscription
 usage has no per-token cost estimate in these custom entries.
 
 A Pi mapping does not grant upstream access. At verification, `cliproxy models`
-advertised six of these models but not `gpt-5.4` or `gpt-5.4-mini`; those two mappings
-remain selectable for accounts/proxy versions that expose them. Image-generation
-and internal review IDs advertised by the proxy are not general Codex chat models
+advertised all six mapped models. Image-generation and internal review IDs
+advertised by the proxy are not general Codex chat models
 and are not included.
 
 ## Routing and security
