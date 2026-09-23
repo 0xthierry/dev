@@ -24,6 +24,7 @@ HOST_CONFIG_TARGETS=(
 
 # shellcheck disable=SC2034
 HOST_PACMAN_PACKAGES=(
+  amdsmi
   bitwarden
   cameractrls
   ccache
