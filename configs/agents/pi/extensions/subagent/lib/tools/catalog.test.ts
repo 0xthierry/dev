@@ -35,7 +35,7 @@ test("keeps every flattened guideline attributable and prompts stable", () => {
   }
 });
 
-test("exposes stable model routing preferences and enforced GPT-5.6 Terra effort policy", () => {
+test("exposes Luna routing preferences without recommending Terra", () => {
   // Arrange
   const first = createFakePi();
   const second = createFakePi();
@@ -55,17 +55,17 @@ test("exposes stable model routing preferences and enforced GPT-5.6 Terra effort
     "Use cliproxyapi/gpt-6-sol at high effort when the task requires diagnosing a bug or making changes",
   );
   expect(description).toContain(
-    "cliproxyapi/gpt-5.6-terra is the default for read-only codebase reconnaissance and always runs at medium effort",
+    "cliproxyapi/gpt-6-luna is the default for read-only codebase reconnaissance at xhigh effort",
   );
-  expect(description).toContain("runtime enforces medium whenever this exact provider/model is selected");
+  expect(description).not.toContain("gpt-5.6-terra");
   expect(description).not.toContain("implementation fallback");
   expect(description).not.toContain("gpt-6-astra is the default for implementation");
-  expect(description).toContain("cliproxyapi/gpt-5.6-terra is the default for code review at medium effort");
+  expect(description).toContain("cliproxyapi/gpt-6-luna is the default for code review at xhigh effort");
   expect(description).not.toContain("grok-");
   expect(description).toContain("should delegate implementation and debugging to cliproxyapi/gpt-6-sol at high effort");
   expect(description).toContain("Use Astra for code review only when the user explicitly requests it");
   expect(description).toContain(
-    "For routine code review, including ordinary correctness and security checks, use cliproxyapi/gpt-5.6-terra at medium effort",
+    "For routine code review, including ordinary correctness and security checks, use cliproxyapi/gpt-6-luna at xhigh effort",
   );
   expect(description).not.toContain("implementation, debugging, planning, and review");
   expect(description).not.toContain("judging correctness");

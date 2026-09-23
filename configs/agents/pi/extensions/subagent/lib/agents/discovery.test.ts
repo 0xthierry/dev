@@ -49,8 +49,8 @@ describe("discoverAgents", () => {
         execution: {
           ok: true,
           value: {
-            profile: { provider: "cliproxyapi", model: "gpt-5.6-terra", effort: "medium" },
-            source: { model: "agent", effort: "policy" },
+            profile: { provider: "cliproxyapi", model: "gpt-6-luna", effort: "xhigh" },
+            source: { model: "agent", effort: "agent" },
           },
         },
       },

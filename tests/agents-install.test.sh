@@ -146,6 +146,8 @@ EOF
   done
   assert_file_contains "routes the Pi worker through GPT-6 Sol" "$test_home/.pi/agent/agents/worker.md" 'model: gpt-6-sol'
   assert_file_contains "uses high effort for the Pi worker" "$test_home/.pi/agent/agents/worker.md" 'effort: high'
+  assert_file_contains "routes codebase-locator through GPT-6 Luna" "$test_home/.pi/agent/agents/rpi/codebase-locator.md" 'model: gpt-6-luna'
+  assert_file_contains "uses xhigh effort for codebase-locator" "$test_home/.pi/agent/agents/rpi/codebase-locator.md" 'effort: xhigh'
   for profile in codebase-analyzer codebase-pattern-finder web-search-researcher; do
     assert_file_contains "routes $profile through GPT-6 Luna" "$test_home/.pi/agent/agents/rpi/$profile.md" 'model: gpt-6-luna'
     assert_file_contains "uses high effort for $profile" "$test_home/.pi/agent/agents/rpi/$profile.md" 'effort: high'

@@ -107,7 +107,7 @@ Provider, model, and effort are assignment settings. Model and effort resolve in
 3. agent Markdown frontmatter;
 4. current parent execution.
 
-Provider and model must always be supplied together and the provider is never guessed from a model name. After model precedence resolves, the runtime applies model-specific effort policy: `cliproxyapi/gpt-5.6-terra` always resolves to `medium`, regardless of invocation, repository, agent, or inherited parent effort. This invariant supersedes repository effort locks for Terra while model locks continue to apply, and returned execution provenance reports the effort source as `policy`. Every other selected Pi model must support the exact normally resolved effort. General task recommendations use `low`, `medium`, and `high`; they do not override named profiles such as the advisor's `xhigh` default. The runtime retains Pi's broader effort support for other agent files, explicit requests, and repository settings. Pi's model registry validates provider/model existence and authentication at the boundary, then credentials are immediately discarded. Children confirm their effective model and effort through RPC before accepting work. Follow-up execution changes perform model/thinking updates and state verification before prompting.
+Provider and model must always be supplied together and the provider is never guessed from a model name. After model precedence resolves, the runtime applies model-specific effort policy: `cliproxyapi/gpt-5.6-terra` always resolves to `medium`, regardless of invocation, repository, agent, or inherited parent effort. This invariant supersedes repository effort locks for Terra while model locks continue to apply, and returned execution provenance reports the effort source as `policy`. Every other selected Pi model must support the exact normally resolved effort. General task recommendations include `high` and `xhigh`; they do not override named profiles such as the advisor's `xhigh` default. The runtime retains Pi's broader effort support for other agent files, explicit requests, and repository settings. Pi's model registry validates provider/model existence and authentication at the boundary, then credentials are immediately discarded. Children confirm their effective model and effort through RPC before accepting work. Follow-up execution changes perform model/thinking updates and state verification before prompting.
 
 Example spawn override:
 
@@ -118,15 +118,15 @@ Example spawn override:
   "prompt": "Review this bounded patch for correctness and report exact evidence.",
   "execution": {
     "provider": "cliproxyapi",
-    "model": "gpt-5.6-terra",
-    "effort": "medium"
+    "model": "gpt-6-luna",
+    "effort": "xhigh"
   }
 }
 ```
 
 This routine-review example intentionally overrides the advisor's Astra `xhigh`
-file default with Terra at its enforced `medium` effort. For advisor decision work,
-omit `execution` so the file default applies.
+file default with Luna at `xhigh` effort. For advisor decision work, omit
+`execution` so the file default applies.
 
 ## Model routing evidence
 
@@ -148,11 +148,11 @@ Choose a fitting named agent first and omit `execution` unless an override is ne
 |---|---|---|
 | `cliproxyapi/gpt-6-astra` | Default for planning and design decisions; code review only when the user explicitly requests Astra | High effort |
 | `cliproxyapi/gpt-6-sol` | Default for implementation and debugging | High effort |
-| `cliproxyapi/gpt-5.6-terra` | Default for read-only reconnaissance and routine code review, including ordinary correctness and security checks | Always `medium`; runtime-enforced for every selection source; require paths/evidence for reconnaissance and provide an artifact plus a specific question for review |
+| `cliproxyapi/gpt-6-luna` | Default for read-only reconnaissance and routine code review, including ordinary correctness and security checks | `xhigh` recommended; require paths/evidence for reconnaissance and provide an artifact plus a specific question for review |
 
 Use `cliproxyapi/gpt-6-sol` at high effort instead of the reconnaissance profile for debugging
 or edits. Use `cliproxyapi/gpt-6-astra` with high effort for planning and design
-decisions. Use `cliproxyapi/gpt-5.6-terra` at medium effort for routine code review,
+decisions. Use `cliproxyapi/gpt-6-luna` at xhigh effort for routine code review,
 and Astra for code review only when the user explicitly requests it. These are the
 user's routing preferences, not benchmark claims.
 An Astra parent should delegate implementation and debugging to Sol with
@@ -164,10 +164,10 @@ overridable for models without a runtime effort policy. Inspect the returned
 effective settings.
 
 **Effort is workflow policy, not a benchmark-proven optimum.** The general task
-recommendations use low, medium, and high. Named profiles can declare other supported
-levels. The Terra `medium` rule is an enforced model policy; the remaining table
-entries are advisory and do not override matching agent defaults, repository
-precedence, or accepted schema values.
+recommendations include high and xhigh. Named profiles can declare other supported
+levels. The Terra `medium` rule still applies when Terra is explicitly selected. Luna's
+`xhigh` recommendation is advisory and does not override matching agent defaults,
+repository precedence, or accepted schema values.
 
 The repo-managed `configs/agents/pi/cliproxyapi-models.json` maps the full pinned
 Pi Codex catalog, including the models recommended here. Deploy catalog changes
@@ -185,8 +185,8 @@ availability. See `configs/cliproxyapi/README.md` for the complete mapping.
   and GPT-5.6 Terra to the local Codex account pool. Catalog presence proves
   configuration, not live entitlement, quota, or comparative quality.
 - Assigning GPT-6 Sol at high effort to implementation, Astra to planning, and
-  Terra to read-only reconnaissance and routine review is the user's workflow
-  policy. Named research agents may instead pin GPT-6 Luna at high effort; the
+  GPT-6 Luna at xhigh to read-only reconnaissance and routine review is the user's
+  workflow policy. Named research agents may instead pin GPT-6 Luna at high effort; the
   repo-managed Fast Mode extension adds priority processing to those proxy-backed
   Luna payloads. These are not benchmark claims, and no same-task, same-harness Pi
   comparison of these exact routes has been run locally.
