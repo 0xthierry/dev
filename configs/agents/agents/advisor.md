@@ -5,8 +5,6 @@ description: >-
   simplicity, failure risks, verification, or execution planning. Inspects evidence,
   challenges assumptions, and recommends a next action. Does not implement changes.
   Use for judgment, not routine file lookup or code walkthroughs.
-provider: cliproxyapi
-model: gpt-6-astra
 effort: xhigh
 ---
 

@@ -4,8 +4,6 @@ description: >-
   Implements bounded production changes, bug fixes, and refactors within assigned
   ownership. Reads the existing code, preserves the requested behavior, runs focused
   verification, and returns changed paths, evidence, and unresolved risks.
-provider: cliproxyapi
-model: gpt-6-sol
 effort: high
 ---
 

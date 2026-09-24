@@ -77,8 +77,8 @@ A built-in `worker` fallback is always available. The repo-managed global `worke
 
 | Repo-managed agent | File default | Responsibility |
 | --- | --- | --- |
-| [advisor](../../../agents/advisor.md) | `cliproxyapi/gpt-6-astra`, `xhigh` | Read-only decision advice through selected lenses |
-| [worker](../../../agents/worker.md) | `cliproxyapi/gpt-6-sol`, `high` | Bounded implementation and verification |
+| [advisor](../../../agents/advisor.md) | `xhigh` effort; inherits the parent model | Read-only decision advice through selected lenses |
+| [worker](../../../agents/worker.md) | `high` effort; inherits the parent model | Bounded implementation and verification |
 
 Both select and read definitions through the shared [engineering-principles skill](../../../skills/engineering-principles/SKILL.md). The skill includes progressive TypeScript and testing/Bun references. The built-in fallback remains minimal for standalone installations without these files.
 
