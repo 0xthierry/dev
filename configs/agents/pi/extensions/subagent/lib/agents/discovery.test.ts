@@ -38,8 +38,8 @@ describe("discoverAgents", () => {
         execution: {
           ok: true,
           value: {
-            profile: { provider: "cliproxyapi", model: "gpt-6-luna", effort: "high" },
-            source: { model: "agent", effort: "agent" },
+            profile: { provider: "test", model: "parent", effort: "high" },
+            source: { model: "parent", effort: "agent" },
           },
         },
       },
@@ -49,8 +49,8 @@ describe("discoverAgents", () => {
         execution: {
           ok: true,
           value: {
-            profile: { provider: "cliproxyapi", model: "gpt-6-luna", effort: "xhigh" },
-            source: { model: "agent", effort: "agent" },
+            profile: { provider: "test", model: "parent", effort: "xhigh" },
+            source: { model: "parent", effort: "agent" },
           },
         },
       },
@@ -60,8 +60,8 @@ describe("discoverAgents", () => {
         execution: {
           ok: true,
           value: {
-            profile: { provider: "cliproxyapi", model: "gpt-6-luna", effort: "high" },
-            source: { model: "agent", effort: "agent" },
+            profile: { provider: "test", model: "parent", effort: "high" },
+            source: { model: "parent", effort: "agent" },
           },
         },
       },
@@ -71,8 +71,8 @@ describe("discoverAgents", () => {
         execution: {
           ok: true,
           value: {
-            profile: { provider: "cliproxyapi", model: "gpt-6-luna", effort: "high" },
-            source: { model: "agent", effort: "agent" },
+            profile: { provider: "test", model: "parent", effort: "high" },
+            source: { model: "parent", effort: "agent" },
           },
         },
       },
