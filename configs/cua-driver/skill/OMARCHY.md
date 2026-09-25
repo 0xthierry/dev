@@ -1,12 +1,12 @@
 # Cua Driver on Thierry's Omarchy desktop
 
-Apply this profile only when the current graphical session is Hyprland/Omarchy. On the managed Omarchy host, the repository configures a user service with `CUA_DRIVER_RS_ENABLE_WAYLAND=1`. Check that service first and reuse it when active instead of starting a second daemon.
+Apply this profile only when the current graphical session is Hyprland/Omarchy. The repository manages two separate user services: `cua-driver.service` uses native Wayland (`CUA_DRIVER_RS_ENABLE_WAYLAND=1`), while `cua-driver-x11.service` uses X11 (`CUA_DRIVER_RS_ENABLE_WAYLAND=0`) on a private endpoint. Reuse these services; do not start ad hoc daemons or change the default service's backend to work around an input failure.
 
 ## Establish the live display layout
 
 Run `cua-omarchy-display monitors` before any task whose result depends on a monitor or desktop coordinate. Treat the returned `hyprctl monitors -j` data as current state. Discover output names and geometry at runtime; names such as `DP-1` and `HDMI-A-2` are examples, not durable identities.
 
-With the repository's pinned Cua Driver 0.28.1:
+With the repository's pinned Cua Driver 0.28.3:
 
 - `get_desktop_state` has no selected-output parameter.
 - Its `"display":"primary"` label does not prove that Hyprland considers the captured output primary or focused. The native Wayland backend currently binds the first advertised `wl_output`.
@@ -39,6 +39,23 @@ Use this route when the desired application window is on a secondary output:
 5. Verify each action with `verify_state` or a fresh `get_window_state`, as required by the upstream loop.
 
 Do not derive a Cua window click by subtracting monitor origins from a `grim` screenshot. Mixed scaling, window decorations, and compositor transforms make that translation unproven. Re-ground on the exact Cua window snapshot instead.
+
+## Use the isolated X11 endpoint for terminal input
+
+Native Wayland capture does not imply native keyboard injection is available. On this host, Cua 0.28.3 refuses native foreground keyboard input without the Hyprland input plugin. For an explicitly authorized terminal-verification workflow, launch a separate **Alacritty X11** window through Cua; leave the user's existing terminals, global environment, and keyboard layout unchanged:
+
+```bash
+cua-driver launch_app '{"name":"/usr/bin/env","additional_arguments":["-u","WAYLAND_DISPLAY","/usr/bin/alacritty","--title","Cua terminal verification","-e","bash","--noprofile","--norc"]}'
+systemctl --user is-active cua-driver-x11.service
+socket="$XDG_RUNTIME_DIR/cua-driver-x11/driver.sock"
+CUA_DRIVER_RS_ENABLE_WAYLAND=0 cua-driver --socket "$socket" list_windows '{}'
+```
+
+Use this socket for **every** subsequent observation and action on that window. X11 `window_id` values are XIDs and differ from the native Wayland endpoint's IDs for the same application; never mix them. Obtain the exact PID/XID from this endpoint, then take `get_window_state` before input. The endpoint sees X11/XWayland windows, not native Wayland applications. Do not use the native `cua-omarchy-window correlate` output as an X11 target.
+
+Keep the normal background-first input ladder. The tested XWayland background route timed out while waiting for its virtual input device; after this backend failure and with foreground authorization, retry only the refused action with `delivery_mode:"foreground"`. Do not reinterpret a permission denial as a backend failure. Verify text and keys from fresh screenshots, not the tool's delivery summary. If the result remains unverifiable, stop rather than assuming that a command ran.
+
+Host verification with Cua 0.28.3 demonstrated foreground typing and Enter execution in Alacritty, with `CUA_INPUT_OK` visible afterward. Ghostty X11 received text but the tested Return/Enter actions did not execute the command. Quoted text also failed to reproduce exactly with the host's US International dead-key layout; inspect the complete text before submitting it and never execute a mismatched command. This is bounded host evidence, not a claim that arbitrary text, all XWayland applications, or all key combinations work. Prefer Alacritty for this verification route; broader CLI navigation still needs its own evidence.
 
 ## Restrict desktop-level actions
 
@@ -88,6 +105,8 @@ Do not use `hyprctl dispatch` directly. Add any future compositor operation to t
 
 ## Diagnose before improvising
 
-Run `cua-driver doctor` when the service, Wayland backend, accessibility bus, or capture route is unclear. Check `systemctl --user status cua-driver.service` when the managed service is unavailable. Do not install or enable the experimental Hyprland plugin; this repository intentionally uses the released native Wayland backend without that plugin.
+Run `cua-driver doctor` when the default service, Wayland backend, accessibility bus, or capture route is unclear. Check `systemctl --user status cua-driver.service cua-driver-x11.service` for the managed endpoints. Native Wayland capture remains plugin-free; X11 terminal input uses the separate endpoint described above.
+
+Do not install or enable a Hyprland plugin as an incidental fix. The 0.28.3 release-asset build kit enables production input but still declares `native_certified:false`; its package instructions, manifest, and PKGBUILD supersede the tag's stale source README for package procedures. The kit requires the matching compositor/compiler/runtime, installation outside Hyprland, and a fresh graphical session. On the inspected host, the compositor was built with GCC 16.1.1 while the installed compiler was 16.2.1. Do not bypass verification, replace shared runtime libraries, downgrade the system compiler, or hot-load/unload an incompatible module. A future native-plugin setup needs a separate compatibility review and explicit approval for disruptive steps.
 
 A degraded accessibility tree does not justify ungrounded coordinates. Use the exact window screenshot, the typed browser route, or a fresh supported observation. Preserve the upstream rule that foreground delivery requires prior authorization or a new user approval.

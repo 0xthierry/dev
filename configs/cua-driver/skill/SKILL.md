@@ -1,7 +1,7 @@
 ---
 name: cua-driver
 description: Drive or inspect native GUI applications with Cua Driver on repository-managed Linux hosts, especially Thierry's Hyprland/Omarchy desktop. Use for Linux computer-use workflows, native windows, desktop screenshots, browser windows, GUI interaction, or continuation of earlier Cua activity.
-version: 0.28.1
+version: 0.28.3
 ---
 
 # Cua Driver on Linux
@@ -12,7 +12,7 @@ This repository supports Cua on Linux only. Do not load or apply macOS or Window
 
 ## Load only the applicable reference
 
-- On Hyprland/Omarchy, read `OMARCHY.md` before any monitor, workspace, compositor, or multi-window operation.
+- On Hyprland/Omarchy, read `OMARCHY.md` before selecting an input backend or performing any monitor, workspace, compositor, or multi-window operation.
 - For Chromium or Electron page content, read `BROWSER.md` before binding or mutating a page.
 - For an unfamiliar tool or parameter, run `cua-driver describe TOOL`. Treat the installed schema as authoritative for the pinned runtime.
 
@@ -39,7 +39,7 @@ Use the managed daemon when it is running:
 cua-driver status
 ```
 
-Run `cua-driver doctor` when the display backend, AT-SPI bus, service, or capture route is unclear. On the managed Omarchy host, the user service enables the native Wayland backend.
+Run `cua-driver doctor` when the display backend, AT-SPI bus, service, or capture route is unclear. On the managed Omarchy host, the default service enables native Wayland capture. `OMARCHY.md` describes the separate managed X11 endpoint for Alacritty input; its window IDs must never be mixed with native Wayland IDs.
 
 For an existing application:
 
@@ -106,7 +106,7 @@ A public `session` label is lifecycle metadata, not authority. When using one, r
 
 Do not close a window with unsaved state, delete data, send a message, submit a form, approve a transaction, or change persistent settings without explicit user intent for that outcome. A cleanup action still needs authorization when it can discard state.
 
-Do not enable the experimental Hyprland input plugin, change Cua permission mode, attach to a personal browser profile, start recording, or modify managed service configuration unless the user explicitly requests that change.
+Do not enable a Hyprland input plugin, change Cua permission mode, attach to a personal browser profile, start recording, or modify managed service configuration unless the user explicitly requests that change.
 
 ## Finish with evidence
 

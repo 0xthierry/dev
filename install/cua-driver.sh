@@ -7,7 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)}"
 
-CUA_DRIVER_VERSION="0.28.1"
+CUA_DRIVER_VERSION="0.28.3"
 CUA_DRIVER_RELEASE_TAG="cua-driver-rs-v${CUA_DRIVER_VERSION}"
 CUA_DRIVER_RELEASE_BASE_URL="${CUA_DRIVER_RELEASE_BASE_URL:-https://github.com/trycua/cua/releases/download/${CUA_DRIVER_RELEASE_TAG}}"
 
@@ -32,8 +32,8 @@ cua_driver_platform() {
 
 cua_driver_binary_checksum() {
   case "$1" in
-    linux-x86_64) printf '%s\n' '71aa92533de90a68a0a2af930243f1770d23e45b896b57d67a1763da4bfaeaf7' ;;
-    linux-arm64) printf '%s\n' '02693499d34d6fe30bef99ef2f3051974ee7989469e3e7a9edc404896bdc6bbd' ;;
+    linux-x86_64) printf '%s\n' '51de56e37e1e57cca613cff06e22a3c64bf8285ed97e518660f3d1cb2a4e6fcf' ;;
+    linux-arm64) printf '%s\n' '392cc554eb916b37d585c2ee2e8090cb1efe8d34b1657df77afd2e7a67d0f83b' ;;
     *) return 1 ;;
   esac
 }

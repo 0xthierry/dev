@@ -743,24 +743,28 @@ configure_voxtype() {
 }
 
 cua_driver_service_needs_restart() {
+  local service_name="${1:-cua-driver.service}"
+  local wayland_enabled="${2:-1}"
   local main_pid=""
   local running_executable=""
   local desired_executable=""
   local proc_root="${CUA_DRIVER_PROC_ROOT:-/proc}"
 
-  main_pid="$(systemctl --user show cua-driver.service --property MainPID --value 2>/dev/null || true)"
+  main_pid="$(systemctl --user show "$service_name" --property MainPID --value 2>/dev/null || true)"
   [[ "$main_pid" =~ ^[1-9][0-9]*$ ]] || return 0
   desired_executable="$(readlink -f "$HOME/.local/bin/cua-driver" 2>/dev/null || true)"
   running_executable="$(readlink -f "$proc_root/$main_pid/exe" 2>/dev/null || true)"
   [[ -n "$desired_executable" && "$running_executable" == "$desired_executable" ]] || return 0
   tr '\0' '\n' < "$proc_root/$main_pid/environ" 2>/dev/null \
-    | grep -Fxq 'CUA_DRIVER_RS_ENABLE_WAYLAND=1' || return 0
+    | grep -Fxq "CUA_DRIVER_RS_ENABLE_WAYLAND=$wayland_enabled" || return 0
   return 1
 }
 
-configure_cua_driver_service() {
-  local source_path="$REPO_ROOT/configs/cua-driver/cua-driver.service"
-  local target_path="$HOME/.config/systemd/user/cua-driver.service"
+configure_cua_driver_backend() {
+  local service_name="$1"
+  local wayland_enabled="$2"
+  local source_path="$REPO_ROOT/configs/cua-driver/$service_name"
+  local target_path="$HOME/.config/systemd/user/$service_name"
 
   log_section "Cua Driver"
 
@@ -790,23 +794,29 @@ configure_cua_driver_service() {
 
   run_cmd systemctl --user daemon-reload
   if (( ${DRY_RUN:-0} )); then
-    run_cmd systemctl --user enable cua-driver.service
-    run_cmd systemctl --user start cua-driver.service
+    run_cmd systemctl --user enable "$service_name"
+    run_cmd systemctl --user start "$service_name"
   else
-    if ! systemctl --user is-enabled --quiet cua-driver.service 2>/dev/null; then
-      run_cmd systemctl --user enable cua-driver.service
+    if ! systemctl --user is-enabled --quiet "$service_name" 2>/dev/null; then
+      run_cmd systemctl --user enable "$service_name"
     fi
-    if ! systemctl --user is-active --quiet cua-driver.service 2>/dev/null; then
-      run_cmd systemctl --user start cua-driver.service
+    if ! systemctl --user is-active --quiet "$service_name" 2>/dev/null; then
+      run_cmd systemctl --user start "$service_name"
       log_item "Cua Driver service: started"
-    elif cua_driver_service_needs_restart; then
-      run_cmd systemctl --user restart cua-driver.service
+    elif cua_driver_service_needs_restart "$service_name" "$wayland_enabled"; then
+      run_cmd systemctl --user restart "$service_name"
       log_item "Cua Driver service: restarted to load the current runtime and Wayland settings"
     else
       log_item "Cua Driver service: already running the current runtime"
     fi
   fi
-  log_item "Cua Driver: native Wayland backend enabled; Hyprland plugin remains uninstalled"
+  log_item "Cua Driver: $service_name configured (native Wayland=$wayland_enabled)"
+}
+
+configure_cua_driver_service() {
+  configure_cua_driver_backend cua-driver.service 1 || return
+  configure_cua_driver_backend cua-driver-x11.service 0 || return
+  log_item "Cua Driver: separate Wayland and X11 endpoints; no compositor plugin installed"
 }
 
 setup_host_machine_state() {

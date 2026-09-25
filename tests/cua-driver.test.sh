@@ -38,7 +38,7 @@ make_fixtures() {
   cat > "$fixture_dir/runtime/cua-driver" <<'SCRIPT'
 #!/usr/bin/env bash
 if [[ "${1:-}" == "--version" ]]; then
-  echo 'cua-driver 0.28.1'
+  echo 'cua-driver 0.28.3'
 fi
 SCRIPT
   cat > "$fixture_dir/runtime/cua-cursor-theme" <<'SCRIPT'
@@ -119,9 +119,9 @@ ln -s \
   cua_driver_binary_checksum() { cat "$fixture_dir/runtime.sha256"; }
 
   apply_cua_driver >/dev/null
-  release="$HOME/.cua-driver/packages/releases/0.28.1-x86_64-unknown-linux-gnu"
+  release="$HOME/.cua-driver/packages/releases/0.28.3-x86_64-unknown-linux-gnu"
   skill="$HOME/.cua-driver/skills/cua-driver"
-  assert_eq 'cua-driver 0.28.1' "$("$HOME/.local/bin/cua-driver" --version)" 'installed binary version'
+  assert_eq 'cua-driver 0.28.3' "$("$HOME/.local/bin/cua-driver" --version)" 'installed binary version'
   [[ -x "$release/cua-cursor-theme" ]] || fail 'cursor theme executable missing'
   assert_file "$release/wayland-helper/install.sh"
   assert_not_exists "$release/libcua_driver_sdk.so"
@@ -191,7 +191,7 @@ chmod +x "$case_root/bin/curl"
   source "$INSTALLER"
   cua_driver_platform() { printf '%s\n' 'linux-x86_64 x86_64-unknown-linux-gnu'; }
   DRY_RUN=1 apply_cua_driver > "$case_root/output"
-  grep -q 'cua-driver-rs-0.28.1-linux-x86_64-binary.tar.gz' "$case_root/output" || fail 'dry-run omitted binary download'
+  grep -q 'cua-driver-rs-0.28.3-linux-x86_64-binary.tar.gz' "$case_root/output" || fail 'dry-run omitted binary download'
   grep -Fq "Would install the repository-owned Linux skill from $REPO_ROOT/configs/cua-driver/skill" \
     "$case_root/output" || fail 'dry-run omitted repository-owned skill install'
   if grep -q -- '-skills.tar.gz' "$case_root/output"; then
@@ -233,7 +233,7 @@ mkdir -p "$case_root/home"
     fail 'wrong checksum was accepted'
   fi
   grep -q 'SHA256 mismatch' "$case_root/output" || fail 'wrong checksum error was not reported'
-  assert_not_exists "$HOME/.cua-driver/packages/releases/0.28.1-x86_64-unknown-linux-gnu"
+  assert_not_exists "$HOME/.cua-driver/packages/releases/0.28.3-x86_64-unknown-linux-gnu"
   assert_eq '1' "$(wc -l < "$case_root/curl.log" | tr -d ' ')" 'downloads before checksum failure'
 )
 
@@ -346,6 +346,11 @@ service="$REPO_ROOT/configs/cua-driver/cua-driver.service"
 assert_file "$service"
 grep -Fxq 'Environment=CUA_DRIVER_RS_ENABLE_WAYLAND=1' "$service" || fail 'service does not enable native Wayland'
 grep -Fxq 'ExecStart=%h/.local/bin/cua-driver serve' "$service" || fail 'service does not start the managed driver'
+x11_service="$REPO_ROOT/configs/cua-driver/cua-driver-x11.service"
+assert_file "$x11_service"
+grep -Fxq 'Environment=CUA_DRIVER_RS_ENABLE_WAYLAND=0' "$x11_service" || fail 'X11 service must disable the native Wayland route'
+grep -Fxq 'ExecStart=%h/.local/bin/cua-driver serve --socket %t/cua-driver-x11/driver.sock' "$x11_service" || fail 'X11 service must have its own endpoint'
+grep -Fxq 'RuntimeDirectoryMode=0700' "$x11_service" || fail 'X11 runtime directory must be private'
 
 printf 'test: Omarchy service starts once and restarts only for stale runtime state\n'
 service_root="$TEST_ROOT/service"
@@ -356,9 +361,9 @@ cat > "$service_root/bin/systemctl" <<'SCRIPT'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$SYSTEMCTL_LOG"
 case "$*" in
-  '--user is-enabled --quiet cua-driver.service') [[ "${SYSTEMCTL_ENABLED:-1}" == 1 ]] ;;
-  '--user is-active --quiet cua-driver.service') [[ "${SYSTEMCTL_ACTIVE:-1}" == 1 ]] ;;
-  '--user show cua-driver.service --property MainPID --value') printf '%s\n' "${SYSTEMCTL_MAIN_PID:-123}" ;;
+  '--user is-enabled --quiet cua-driver.service'|'--user is-enabled --quiet cua-driver-x11.service') [[ "${SYSTEMCTL_ENABLED:-1}" == 1 ]] ;;
+  '--user is-active --quiet cua-driver.service'|'--user is-active --quiet cua-driver-x11.service') [[ "${SYSTEMCTL_ACTIVE:-1}" == 1 ]] ;;
+  '--user show cua-driver.service --property MainPID --value'|'--user show cua-driver-x11.service --property MainPID --value') printf '%s\n' "${SYSTEMCTL_MAIN_PID:-123}" ;;
   *) exit 0 ;;
 esac
 SCRIPT
@@ -393,10 +398,21 @@ chmod +x "$service_root/bin/systemctl"
     fail 'service without native Wayland environment was considered current'
   fi
 
+  printf 'PATH=/usr/bin\0CUA_DRIVER_RS_ENABLE_WAYLAND=0\0' > "$CUA_DRIVER_PROC_ROOT/123/environ"
+  if cua_driver_service_needs_restart cua-driver-x11.service 0; then
+    fail 'matching X11 backend was considered stale'
+  fi
+  if ! cua_driver_service_needs_restart cua-driver-x11.service 1; then
+    fail 'wrong X11 backend setting was considered current'
+  fi
+
   cua_driver_service_needs_restart() { return 0; }
   configure_cua_driver_service >/dev/null
   grep -Fxq -- '--user restart cua-driver.service' "$SYSTEMCTL_LOG" \
     || fail 'active stale Cua Driver service was not restarted'
+  grep -Fxq -- '--user restart cua-driver-x11.service' "$SYSTEMCTL_LOG" \
+    || fail 'active stale X11 service was not restarted'
+  assert_link_target "$HOME/.config/systemd/user/cua-driver-x11.service" "$REPO_ROOT/configs/cua-driver/cua-driver-x11.service"
 
   : > "$SYSTEMCTL_LOG"
   cua_driver_service_needs_restart() { return 1; }
@@ -410,6 +426,9 @@ chmod +x "$service_root/bin/systemctl"
   if grep -Fq -- '--user start cua-driver.service' "$SYSTEMCTL_LOG"; then
     fail 'current Cua Driver service was started unnecessarily'
   fi
+  if grep -Eq -- '--user (restart|enable|start) cua-driver-x11.service' "$SYSTEMCTL_LOG"; then
+    fail 'current X11 service was changed unnecessarily'
+  fi
 
   : > "$SYSTEMCTL_LOG"
   export SYSTEMCTL_ACTIVE=0
@@ -419,6 +438,10 @@ chmod +x "$service_root/bin/systemctl"
     || fail 'disabled Cua Driver service was not enabled'
   grep -Fxq -- '--user start cua-driver.service' "$SYSTEMCTL_LOG" \
     || fail 'inactive Cua Driver service was not started'
+  grep -Fxq -- '--user enable cua-driver-x11.service' "$SYSTEMCTL_LOG" \
+    || fail 'disabled X11 service was not enabled'
+  grep -Fxq -- '--user start cua-driver-x11.service' "$SYSTEMCTL_LOG" \
+    || fail 'inactive X11 service was not started'
 
   : > "$SYSTEMCTL_LOG"
   export SYSTEMCTL_ACTIVE=1
