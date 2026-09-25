@@ -341,7 +341,7 @@ install_ai_clis() {
   install_claude_code_binary "2.1.280"
 
   # Codex (OpenAI)
-  install_npm_global_cli "Codex CLI" "@openai/codex" "0.155.1"
+  install_npm_global_cli "Codex CLI" "@openai/codex" "0.156.1"
 
   # Local multi-account Codex gateway used as Pi's default provider.
   # shellcheck source=install/cliproxyapi.sh
