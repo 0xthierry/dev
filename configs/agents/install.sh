@@ -642,6 +642,12 @@ install_claude_target() {
   fi
   # Sync settings (env, permissions, model, plugins, etc.) + hooks into settings.json
   sync_claude_settings "$SOURCE_CLAUDE_SETTINGS" "$claude_hooks_json" "$target_root/settings.json"
+  # UI preferences live in Claude state, not the settings.json schema.
+  if (( DRY_RUN )); then
+    log "[dry-run] merge Claude preferences into $HOME/.claude.json"
+  else
+    bun "$SCRIPT_DIR/sync-claude-preferences.ts" "$HOME/.claude.json"
+  fi
 }
 
 sync_pi_proxy_models() {

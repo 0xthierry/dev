@@ -95,6 +95,7 @@ EOF
 
   cat > "$test_home/.claude.json" <<'EOF'
 {
+  "autoCompactEnabled": false,
   "mcpServers": {
     "user-server": {
       "type": "http",
@@ -223,7 +224,8 @@ EOF
   assert_json "defaults Claude sessions to Opus 5.5" "$test_home/.claude/settings.json" '.model == "claude-opus-5-5"'
   assert_json "defaults Claude sessions to medium reasoning" "$test_home/.claude/settings.json" '.effortLevel == "medium"'
 
-  if cmp -s "$claude_state_before" "$test_home/.claude.json"; then
+  assert_json "enables Claude auto-compaction" "$test_home/.claude.json" '.autoCompactEnabled == true'
+  if [[ "$(jq -cS 'del(.autoCompactEnabled)' "$claude_state_before")" == "$(jq -cS 'del(.autoCompactEnabled)' "$test_home/.claude.json")" ]]; then
     printf 'ok: preserves Claude user-scoped MCP state\n'
   else
     fail "preserves Claude user-scoped MCP state"
