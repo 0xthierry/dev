@@ -1,26 +1,29 @@
 #!/usr/bin/env bash
-# Local Codex account pool for Pi. Credentials are read only from private user state.
+# Local Codex pool for Pi and Claude pool for Claude Code. Secrets stay in private user state.
 set +x
 set -euo pipefail
 umask 077
 config="$HOME/.config/cliproxyapi/config.yaml"
 key_file="$HOME/.config/cliproxyapi/api-key"
 binary="$HOME/.local/bin/cli-proxy-api"
+export CLIPROXYAPI_MODEL_CACHE="$HOME/.local/share/cliproxyapi/models.json"
 
 usage() {
-  printf '%s\n' 'Usage: cliproxy {login|serve|models|check|pi} [arguments...]' \
+  printf '%s\n' 'Usage: cliproxy {login|login-claude|serve|models|check|pi|claude} [arguments...]' \
     '  login    Add/refresh one Codex account using device OAuth; repeat per account' \
+    '  login-claude Add/refresh one Claude account using browser OAuth; repeat per account' \
     '  serve    Run the proxy in the foreground' \
     '  models   List model IDs currently available from the account pool' \
     '  check    Verify authentication and report available model count (no inference)' \
-    '  pi       Start Pi using the cliproxyapi provider (arguments passed through)'
+    '  pi       Start Pi using the cliproxyapi provider (arguments passed through)' \
+    '  claude   Start Claude Code through the local pool (arguments passed through)'
 }
 
 command_name="${1:-help}"
 [[ $# == 0 ]] || shift
 case "$command_name" in
   help|-h|--help) usage; exit 0 ;;
-  login|serve|models|check|pi) ;;
+  login|login-claude|serve|models|check|pi|claude) ;;
   *) usage >&2; exit 2 ;;
 esac
 if [[ ! -f "$config" || ! -f "$key_file" || ! -x "$binary" ]]; then
@@ -52,6 +55,11 @@ case "$command_name" in
     restart_managed_service_after_login
     exit 0
     ;;
+  login-claude)
+    "$binary" --config "$config" --claude-login "$@"
+    restart_managed_service_after_login
+    exit 0
+    ;;
   serve) exec "$binary" --config "$config" "$@" ;;
 esac
 CLIPROXY_API_KEY="$(< "$key_file")"
@@ -61,6 +69,15 @@ if [[ ! "$CLIPROXY_API_KEY" =~ ^[0-9a-f]{64}$ ]]; then
 fi
 case "$command_name" in
   pi) exec pi --provider cliproxyapi --model gpt-6-sol --thinking high "$@" ;;
+  claude)
+    # Scope proxy authentication to this child; keep ordinary `claude` direct.
+    # Export in the shell, not via `env KEY=value` (which exposes secrets in argv).
+    unset ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR
+    unset CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
+    export ANTHROPIC_BASE_URL="http://127.0.0.1:8317"
+    export ANTHROPIC_AUTH_TOKEN="$CLIPROXY_API_KEY"
+    exec claude "$@"
+    ;;
   models|check)
     # Pass the header via stdin, never expose the key in the process argument list.
     response="$(printf 'header = "Authorization: Bearer %s"\n' "$CLIPROXY_API_KEY" |

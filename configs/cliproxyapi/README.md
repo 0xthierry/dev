@@ -1,4 +1,4 @@
-# Multi-account Codex pool for Pi
+# Multi-account Codex and Claude pools
 
 [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) runs locally and translates
 OpenAI Responses requests into Codex subscription requests. Each account completes
@@ -17,8 +17,10 @@ bash install/cliproxyapi.sh
 bash configs/agents/install.sh --yes
 ```
 
-The proxy installer requires Go and the platform C compiler (`cc`) to build the small
-repo-owned model registrar and scheduler plugin. The second command syncs all
+The proxy installer requires Go, Git, and the platform C compiler (`cc`). It builds
+CLIProxyAPI from checksum-verified v7.3.12 source with the repo-owned catalog-cache
+patch, and builds the model registrar plugin. Both builds use Go 1.26.0 via
+`GOTOOLCHAIN` (Go downloads that toolchain if absent). The second command syncs all
 repository-managed agent configuration, not just the proxy. It preserves unrelated Pi providers and
 Codex MCP entries. Pi defaults to the proxy, while Codex remains direct; enroll
 accounts and start the service before using Pi through the pool.
@@ -121,6 +123,54 @@ from all three models; repeated Daybreak requests stayed on the one account that
 currently advertises it. Image-generation and internal review IDs advertised by the
 proxy are not general Codex chat models and are not included.
 
+## Claude Code subscription pool (opt-in)
+
+The same proxy also accepts Claude OAuth accounts. The pinned v7.3.12 binary
+supports `--claude-login`; the helper exposes it separately from Codex login:
+
+```bash
+cliproxy login-claude
+cliproxy login-claude          # Sign in with the OTHER Claude account
+cliproxy models               # Confirm Claude models appear
+cliproxy claude               # Claude Code through the local Claude account pool
+cliproxy claude --model sonnet
+```
+
+Choose the intended account in the browser each time. Repeating the same account
+refreshes it, rather than adding a second pool member. Browser OAuth uses callback
+port 54545 by default. On an SSH host, use `cliproxy login-claude --no-browser`;
+if completing the browser callback on your laptop, forward the callback port with
+`ssh -L 54545:127.0.0.1:54545 <host>`. Follow the OAuth flow's prompts and never
+paste tokens or callback URLs into chat or commit them.
+
+`cliproxy claude` sets `ANTHROPIC_BASE_URL` to `http://127.0.0.1:8317` and reads the
+existing private proxy key into `ANTHROPIC_AUTH_TOKEN` for that process only. It
+clears inherited API-key, direct OAuth-token, and cloud-provider environment
+selectors so they do not route this launch elsewhere. No global shell exports or
+Claude settings changes are needed. Existing Claude skills, hooks, and settings
+remain available; ordinary `claude` still uses its existing direct authentication.
+Custom settings such as API-key helpers and model overrides may require separate
+review if the client does not route as expected.
+
+The existing round-robin/session-affinity configuration is shared by both providers;
+Claude requests use Claude credentials, while Codex requests use Codex credentials.
+The repo-owned Codex model plugin declines Claude scheduling requests. There is no
+new Claude model mapping in Pi: this addition targets the Claude Code client.
+
+This is third-party subscription routing, not an Anthropic-supported pooling
+feature. Published community reports conflict on compatibility, and Anthropic
+restricts subscription OAuth credential use. Review
+[Anthropic's authentication rules](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use).
+An API key is a separate, metered billing path, not use of your subscription pool.
+Successful login and model discovery do not establish working inference, policy
+compliance, or automatic failover.
+
+After enrolling both accounts, verify a short response with
+`cliproxy claude --model sonnet -p 'Reply with OK only'`, then an interactive tool
+call. Live inference and account failover require verification with your own
+accounts; do not deliberately exhaust quotas to test failover. Use ordinary
+`claude` to bypass the pool. Stopping the shared proxy also stops Pi's Codex pool.
+
 ## Routing and security
 
 - New sessions are distributed round-robin; subsequent turns stay on the same account
@@ -141,8 +191,29 @@ proxy are not general Codex chat models and are not included.
   access them, just as they can access your direct CLI credentials.
 - Request-body logging, including error-only request capture, is disabled via
   `commercial-mode`. Application diagnostics still exist; treat logs as private.
-- Official v7.3.12 binaries are pinned with platform SHA256 hashes in
-  `install/cliproxyapi.sh`. Review upstream changes before updating the pin.
+- v7.3.12 source is pinned by full commit and archive SHA256 in
+  `install/cliproxyapi.sh`. The catalog-cache patch is repo-owned at
+  `configs/cliproxyapi/patches/0001-persist-model-catalog.patch`. The build marker
+  includes the source commit, patch digest, platform, and pinned Go toolchain.
+  Review upstream changes before updating these pins.
+
+## Durable model catalog and recovery
+
+The patched proxy saves successfully validated remote model definitions to
+`~/.local/share/cliproxyapi/models.json`, using private permissions and atomic
+replacement. The helper and both service definitions set `CLIPROXYAPI_MODEL_CACHE`
+to this path. This file contains model metadata, not account credentials.
+
+On startup, the proxy restores a valid cached catalog before fetching updates.
+Missing or corrupt caches fall back to the embedded catalog. Failed downloads
+retain the working catalog and retry with capped exponential backoff and jitter,
+rather than waiting three hours. Successful refreshes return to the normal
+three-hour schedule and update model registrations without restarting the service.
+
+An offline first install still only knows the embedded models until a fetch
+succeeds. Cached model registration is not proof of account entitlement, and
+inference still requires access to the provider. This patch covers the shared
+`models.json` updater; the separate Codex-client and Devin catalogs are unchanged.
 
 ## Usage statistics and management
 

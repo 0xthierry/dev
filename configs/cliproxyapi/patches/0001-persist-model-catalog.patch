@@ -1,0 +1,807 @@
+diff --git i/internal/registry/model_updater.go w/internal/registry/model_updater.go
+index e7bb82d..4104bd6 100644
+--- i/internal/registry/model_updater.go
++++ w/internal/registry/model_updater.go
+@@ -6,7 +6,10 @@ import (
+ 	"encoding/json"
+ 	"fmt"
+ 	"io"
++	"math/rand"
+ 	"net/http"
++	"os"
++	"path/filepath"
+ 	"reflect"
+ 	"strings"
+ 	"sync"
+@@ -18,6 +21,9 @@ import (
+ const (
+ 	modelsFetchTimeout    = 30 * time.Second
+ 	modelsRefreshInterval = 3 * time.Hour
++	modelsRetryBase       = 5 * time.Second
++	modelsRetryMax        = time.Minute
++	maxModelsCatalogBytes = 8 << 20
+ )
+ 
+ var modelsURLs = []string{
+@@ -31,6 +37,7 @@ var embeddedModelsJSON []byte
+ type modelStore struct {
+ 	mu   sync.RWMutex
+ 	data *staticModelsJSON
++	raw  []byte // Validated source JSON, including private native_capabilities fields.
+ }
+ 
+ var modelsCatalogStore = &modelStore{}
+@@ -72,82 +79,241 @@ func init() {
+ 	}
+ }
+ 
+-// StartModelsUpdater starts a background updater that fetches models
+-// immediately on startup and then refreshes the model catalog every 3 hours.
+-// Safe to call multiple times; only one updater will run.
++// StartModelsUpdater restores a valid disk cache before the first network fetch,
++// retries failures with bounded jitter, and refreshes successful fetches every
++// 3 hours. Safe to call multiple times; only one updater will run.
+ func StartModelsUpdater(ctx context.Context) {
+ 	updaterOnce.Do(func() {
++		if err := restoreModelsCache(modelCachePath()); err != nil && !os.IsNotExist(err) {
++			log.Warnf("model catalog cache unavailable; using embedded catalog: %v", err)
++		}
+ 		go runModelsUpdater(ctx)
+ 	})
+ }
+ 
+ func runModelsUpdater(ctx context.Context) {
+-	tryStartupRefresh(ctx)
+-	periodicRefresh(ctx)
++	runModelsUpdaterSchedule(ctx, func(ctx context.Context) bool {
++		return tryRefreshModels(ctx, "model refresh")
++	}, modelsRetryBase, modelsRefreshInterval, rand.Float64)
+ }
+ 
+-func periodicRefresh(ctx context.Context) {
+-	ticker := time.NewTicker(modelsRefreshInterval)
+-	defer ticker.Stop()
+-	log.Infof("periodic model refresh started (interval=%s)", modelsRefreshInterval)
+-	for {
++// runModelsUpdaterSchedule retries failures without waiting for the normal
++// successful refresh interval. A canceled updater never schedules another fetch.
++func runModelsUpdaterSchedule(ctx context.Context, refresh func(context.Context) bool, retryBase, successInterval time.Duration, jitter func() float64) {
++	failures := 0
++	for ctx.Err() == nil {
++		if refresh(ctx) {
++			failures = 0
++		} else {
++			failures++
++		}
++		if ctx.Err() != nil {
++			return
++		}
++		delay := successInterval
++		if failures > 0 {
++			delay = modelsRetryDelay(failures, retryBase, jitter())
++		}
++		timer := time.NewTimer(delay)
+ 		select {
+ 		case <-ctx.Done():
++			if !timer.Stop() {
++				select {
++				case <-timer.C:
++				default:
++				}
++			}
+ 			return
+-		case <-ticker.C:
+-			tryPeriodicRefresh(ctx)
++		case <-timer.C:
+ 		}
+ 	}
+ }
+ 
+-// tryPeriodicRefresh fetches models from remote, compares with the current
+-// catalog, and notifies the registered callback if any provider changed.
+-func tryPeriodicRefresh(ctx context.Context) {
+-	tryRefreshModels(ctx, "periodic model refresh")
++// Half-width jitter prevents a fleet of offline instances from retrying in
++// lockstep; delays stay between half and all of the capped exponential.
++func modelsRetryDelay(failures int, base time.Duration, jitter float64) time.Duration {
++	capDelay := base
++	for i := 1; i < failures && capDelay < modelsRetryMax; i++ {
++		if capDelay > modelsRetryMax/2 {
++			capDelay = modelsRetryMax
++		} else {
++			capDelay *= 2
++		}
++	}
++	if capDelay > modelsRetryMax {
++		capDelay = modelsRetryMax
++	}
++	return capDelay/2 + time.Duration(float64(capDelay/2)*jitter)
+ }
+ 
+-// tryStartupRefresh fetches models from remote in the background during
+-// process startup. It uses the same change detection as periodic refresh so
+-// existing auth registrations can be updated after the callback is registered.
+-func tryStartupRefresh(ctx context.Context) {
+-	tryRefreshModels(ctx, "startup model refresh")
+-}
+-
+-func tryRefreshModels(ctx context.Context, label string) {
+-	oldData := getModels()
+-
+-	parsed, url := fetchModelsFromRemote(ctx)
++func tryRefreshModels(ctx context.Context, label string) bool {
++	oldData, oldRaw := getModelsSnapshot()
++	parsed, raw, url := fetchModelsFromRemote(ctx)
+ 	if parsed == nil {
+-		log.Warnf("%s: fetch failed from all URLs, keeping current data", label)
+-		return
++		if ctx.Err() == nil {
++			log.Warnf("%s: fetch failed from all URLs, keeping current data", label)
++		}
++		return false
+ 	}
+ 
++	// Keep the last known Meta definitions when an otherwise valid remote
++	// catalog omits them. Merge the original JSON, not a ModelInfo re-marshal:
++	// its private native_capabilities fields intentionally have json:"-".
+ 	if len(parsed.Meta) == 0 && oldData != nil && len(oldData.Meta) > 0 {
+-		parsed.Meta = oldData.Meta
++		var err error
++		raw, err = preserveCatalogMeta(raw, oldRaw)
++		if err != nil {
++			log.Warnf("%s: cannot preserve Meta catalog: %v", label, err)
++			return false
++		}
++		if len(raw) > maxModelsCatalogBytes {
++			log.Warnf("%s: merged catalog exceeds %d bytes", label, maxModelsCatalogBytes)
++			return false
++		}
++		parsed, err = parseModelsCatalog(raw, url)
++		if err != nil {
++			log.Warnf("%s: merged catalog invalid: %v", label, err)
++			return false
++		}
+ 	}
+ 
+-	// Detect changes before updating store.
+ 	changed := detectChangedProviders(oldData, parsed)
+-
+-	// Update store with new data regardless.
+ 	modelsCatalogStore.mu.Lock()
+ 	modelsCatalogStore.data = parsed
++	modelsCatalogStore.raw = raw
+ 	modelsCatalogStore.mu.Unlock()
+ 
++	persistErr := persistModelsCache(modelCachePath(), raw)
++	if persistErr != nil {
++		log.Warnf("%s: cannot persist model catalog cache; retrying: %v", label, persistErr)
++	}
+ 	if len(changed) == 0 {
+ 		log.Infof("%s completed from %s, no changes detected", label, url)
+-		return
++	} else {
++		log.Infof("%s completed from %s, changes detected for providers: %v", label, url, changed)
++		notifyModelRefresh(changed)
+ 	}
+-
+-	log.Infof("%s completed from %s, changes detected for providers: %v", label, url, changed)
+-	notifyModelRefresh(changed)
++	return persistErr == nil
+ }
+ 
+-// fetchModelsFromRemote tries all remote URLs and returns the parsed model catalog
+-// along with the URL it was fetched from. Returns (nil, "") if all fetches fail.
+-func fetchModelsFromRemote(ctx context.Context) (*staticModelsJSON, string) {
++func preserveCatalogMeta(newRaw, oldRaw []byte) ([]byte, error) {
++	var newer, older map[string]json.RawMessage
++	if err := json.Unmarshal(newRaw, &newer); err != nil {
++		return nil, err
++	}
++	if err := json.Unmarshal(oldRaw, &older); err != nil {
++		return nil, err
++	}
++	if meta, ok := older["meta"]; ok {
++		newer["meta"] = meta
++	}
++	return json.Marshal(newer)
++}
++
++// modelCachePath can be pinned by the installer. The default follows the OS
++// user cache directory; no cache is used when a home directory is unavailable.
++func modelCachePath() string {
++	if path := os.Getenv("CLIPROXYAPI_MODEL_CACHE"); path != "" {
++		return path
++	}
++	dir, err := os.UserCacheDir()
++	if err != nil {
++		return ""
++	}
++	return filepath.Join(dir, "cliproxyapi", "models.json")
++}
++
++func restoreModelsCache(path string) error {
++	if path == "" {
++		return fmt.Errorf("no model cache directory available")
++	}
++	file, err := os.Open(path)
++	if err != nil {
++		return err
++	}
++	defer file.Close()
++	data, err := readModelsCatalog(file)
++	if err != nil {
++		return fmt.Errorf("read %s: %w", path, err)
++	}
++	parsed, err := parseModelsCatalog(data, path)
++	if err != nil {
++		return err
++	}
++	oldData := getModels()
++	modelsCatalogStore.mu.Lock()
++	modelsCatalogStore.data = parsed
++	modelsCatalogStore.raw = data
++	modelsCatalogStore.mu.Unlock()
++	notifyModelRefresh(detectChangedProviders(oldData, parsed))
++	log.Infof("restored model catalog from %s", path)
++	return nil
++}
++
++func persistModelsCache(path string, data []byte) error {
++	if path == "" {
++		return fmt.Errorf("no model cache directory available")
++	}
++	dir := filepath.Dir(path)
++	if err := os.MkdirAll(dir, 0700); err != nil {
++		return err
++	}
++	file, err := os.CreateTemp(dir, ".models-*.tmp")
++	if err != nil {
++		return err
++	}
++	defer os.Remove(file.Name())
++	if _, err = file.Write(data); err == nil {
++		err = file.Sync()
++	}
++	if closeErr := file.Close(); err == nil {
++		err = closeErr
++	}
++	if err != nil {
++		return err
++	}
++	if err = os.Rename(file.Name(), path); err != nil {
++		return err
++	}
++	// Make the rename durable across a power loss where directory fsync is supported.
++	parent, err := os.Open(dir)
++	if err != nil {
++		return err
++	}
++	defer parent.Close()
++	return parent.Sync()
++}
++
++func readModelsCatalog(reader io.Reader) ([]byte, error) {
++	data, err := io.ReadAll(io.LimitReader(reader, maxModelsCatalogBytes+1))
++	if err != nil {
++		return nil, err
++	}
++	if len(data) > maxModelsCatalogBytes {
++		return nil, fmt.Errorf("model catalog exceeds %d bytes", maxModelsCatalogBytes)
++	}
++	return data, nil
++}
++
++func parseModelsCatalog(data []byte, source string) (*staticModelsJSON, error) {
++	var parsed staticModelsJSON
++	if err := json.Unmarshal(data, &parsed); err != nil {
++		return nil, fmt.Errorf("%s: decode models catalog: %w", source, err)
++	}
++	if err := validateModelsCatalog(&parsed); err != nil {
++		return nil, fmt.Errorf("%s: validate models catalog: %w", source, err)
++	}
++	return &parsed, nil
++}
++
++// fetchModelsFromRemote tries all remote URLs and returns the validated model
++// catalog, its original JSON, and the source URL. Returns nil if all fail.
++func fetchModelsFromRemote(ctx context.Context) (*staticModelsJSON, []byte, string) {
+ 	client := &http.Client{Timeout: modelsFetchTimeout}
+ 	for _, url := range modelsURLs {
++		if ctx.Err() != nil {
++			break
++		}
+ 		reqCtx, cancel := context.WithTimeout(ctx, modelsFetchTimeout)
+ 		req, err := http.NewRequestWithContext(reqCtx, "GET", url, nil)
+ 		if err != nil {
+@@ -155,43 +321,33 @@ func fetchModelsFromRemote(ctx context.Context) (*staticModelsJSON, string) {
+ 			log.Debugf("models fetch request creation failed for %s: %v", url, err)
+ 			continue
+ 		}
+-
+ 		resp, err := client.Do(req)
+ 		if err != nil {
+ 			cancel()
+ 			log.Debugf("models fetch failed from %s: %v", url, err)
+ 			continue
+ 		}
+-
+-		if resp.StatusCode != 200 {
++		if resp.StatusCode != http.StatusOK {
+ 			resp.Body.Close()
+ 			cancel()
+ 			log.Debugf("models fetch returned %d from %s", resp.StatusCode, url)
+ 			continue
+ 		}
+-
+-		data, err := io.ReadAll(resp.Body)
++		data, err := readModelsCatalog(resp.Body)
+ 		resp.Body.Close()
+ 		cancel()
+-
+ 		if err != nil {
+ 			log.Debugf("models fetch read error from %s: %v", url, err)
+ 			continue
+ 		}
+-
+-		var parsed staticModelsJSON
+-		if err := json.Unmarshal(data, &parsed); err != nil {
+-			log.Warnf("models parse failed from %s: %v", url, err)
++		parsed, err := parseModelsCatalog(data, url)
++		if err != nil {
++			log.Warnf("models parse/validate failed from %s: %v", url, err)
+ 			continue
+ 		}
+-		if err := validateModelsCatalog(&parsed); err != nil {
+-			log.Warnf("models validate failed from %s: %v", url, err)
+-			continue
+-		}
+-
+-		return &parsed, url
++		return parsed, data, url
+ 	}
+-	return nil, ""
++	return nil, nil, ""
+ }
+ 
+ // detectChangedProviders compares two model catalogs and returns provider names
+@@ -312,16 +468,13 @@ func mergeProviderNames(existing, incoming []string) []string {
+ }
+ 
+ func loadModelsFromBytes(data []byte, source string) error {
+-	var parsed staticModelsJSON
+-	if err := json.Unmarshal(data, &parsed); err != nil {
+-		return fmt.Errorf("%s: decode models catalog: %w", source, err)
++	parsed, err := parseModelsCatalog(data, source)
++	if err != nil {
++		return err
+ 	}
+-	if err := validateModelsCatalog(&parsed); err != nil {
+-		return fmt.Errorf("%s: validate models catalog: %w", source, err)
+-	}
+-
+ 	modelsCatalogStore.mu.Lock()
+-	modelsCatalogStore.data = &parsed
++	modelsCatalogStore.data = parsed
++	modelsCatalogStore.raw = data
+ 	modelsCatalogStore.mu.Unlock()
+ 	return nil
+ }
+@@ -332,10 +485,21 @@ func getModels() *staticModelsJSON {
+ 	return modelsCatalogStore.data
+ }
+ 
++func getModelsSnapshot() (*staticModelsJSON, []byte) {
++	modelsCatalogStore.mu.RLock()
++	defer modelsCatalogStore.mu.RUnlock()
++	return modelsCatalogStore.data, modelsCatalogStore.raw
++}
++
+ func validateModelsCatalog(data *staticModelsJSON) error {
+ 	if data == nil {
+ 		return fmt.Errorf("catalog is nil")
+ 	}
++	if len(data.Claude)+len(data.Gemini)+len(data.Vertex)+len(data.AIStudio)+
++		len(data.CodexFree)+len(data.CodexTeam)+len(data.CodexPlus)+len(data.CodexPro)+
++		len(data.Kimi)+len(data.Antigravity)+len(data.XAI)+len(data.Devin)+len(data.Meta) == 0 {
++		return fmt.Errorf("catalog contains no models")
++	}
+ 
+ 	requiredSections := []struct {
+ 		name   string
+diff --git i/internal/registry/model_updater_cache_test.go w/internal/registry/model_updater_cache_test.go
+new file mode 100644
+index 0000000..84d0e62
+--- /dev/null
++++ w/internal/registry/model_updater_cache_test.go
+@@ -0,0 +1,391 @@
++package registry
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"os"
++	"path/filepath"
++	"reflect"
++	"strings"
++	"sync"
++	"sync/atomic"
++	"testing"
++	"time"
++)
++
++func isolateModelsUpdater(t *testing.T) {
++	t.Helper()
++	oldURLs := modelsURLs
++	modelsURLs = nil
++	SetModelRefreshCallback(nil)
++	refreshCallbackMu.Lock()
++	pendingRefreshChanges = nil
++	refreshCallbackMu.Unlock()
++	if err := loadModelsFromBytes(embeddedModelsJSON, "embed"); err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() {
++		modelsURLs = oldURLs
++		SetModelRefreshCallback(nil)
++		refreshCallbackMu.Lock()
++		pendingRefreshChanges = nil
++		refreshCallbackMu.Unlock()
++		if err := loadModelsFromBytes(embeddedModelsJSON, "embed"); err != nil {
++			t.Errorf("restore embedded catalog: %v", err)
++		}
++	})
++}
++
++func catalogWithOpus55(t *testing.T) []byte {
++	t.Helper()
++	var catalog map[string]json.RawMessage
++	if err := json.Unmarshal(embeddedModelsJSON, &catalog); err != nil {
++		t.Fatal(err)
++	}
++	var claude []json.RawMessage
++	if err := json.Unmarshal(catalog["claude"], &claude); err != nil {
++		t.Fatal(err)
++	}
++	claude = append(claude, json.RawMessage(`{"id":"claude-opus-5-5","native_capabilities":{"web_search":true}}`))
++	var err error
++	catalog["claude"], err = json.Marshal(claude)
++	if err != nil {
++		t.Fatal(err)
++	}
++	data, err := json.Marshal(catalog)
++	if err != nil {
++		t.Fatal(err)
++	}
++	return data
++}
++
++func hasOpus55() bool {
++	for _, model := range GetClaudeModels() {
++		if model.ID == "claude-opus-5-5" {
++			return model.NativeCapabilities != nil && model.NativeCapabilities.WebSearch != nil && *model.NativeCapabilities.WebSearch
++		}
++	}
++	return false
++}
++
++func TestModelsCacheSurvivesOfflineRefreshAndNotifies(t *testing.T) {
++	isolateModelsUpdater(t)
++	path := filepath.Join(t.TempDir(), "models.json")
++	t.Setenv("CLIPROXYAPI_MODEL_CACHE", path)
++	if err := persistModelsCache(path, catalogWithOpus55(t)); err != nil {
++		t.Fatal(err)
++	}
++	seen := make(chan bool, 1)
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
++		seen <- hasOpus55()
++		w.WriteHeader(http.StatusServiceUnavailable)
++	}))
++	defer server.Close()
++	modelsURLs = []string{server.URL}
++	var notified []string
++	SetModelRefreshCallback(func(providers []string) { notified = append(notified, providers...) })
++
++	if err := restoreModelsCache(path); err != nil {
++		t.Fatal(err)
++	}
++	ctx, cancel := context.WithCancel(context.Background())
++	done := make(chan struct{})
++	go func() { runModelsUpdater(ctx); close(done) }()
++	select {
++	case loaded := <-seen:
++		if !loaded {
++			t.Error("remote fetch began before the cached Opus model was registered")
++		}
++	case <-time.After(3 * time.Second):
++		t.Error("startup fetch was not attempted")
++	}
++	cancel()
++	select {
++	case <-done:
++	case <-time.After(3 * time.Second):
++		t.Fatal("updater failed to stop after cancellation")
++	}
++	if !hasOpus55() {
++		t.Fatal("offline startup replaced cached Opus model")
++	}
++	if !containsProvider(notified, "claude") {
++		t.Fatalf("cache restoration did not notify Claude registration: %v", notified)
++	}
++}
++
++// A canceled context keeps network work out of this test: startup still must
++// synchronously restore and notify before the public call returns.
++func TestStartModelsUpdaterWaitsForCacheRegistration(t *testing.T) {
++	isolateModelsUpdater(t)
++	path := filepath.Join(t.TempDir(), "models.json")
++	t.Setenv("CLIPROXYAPI_MODEL_CACHE", path)
++	if err := persistModelsCache(path, catalogWithOpus55(t)); err != nil {
++		t.Fatal(err)
++	}
++	updaterOnce = sync.Once{}
++	t.Cleanup(func() { updaterOnce = sync.Once{} })
++	entered := make(chan struct{})
++	release := make(chan struct{})
++	SetModelRefreshCallback(func(providers []string) {
++		if containsProvider(providers, "claude") {
++			close(entered)
++			<-release
++		}
++	})
++	ctx, cancel := context.WithCancel(context.Background())
++	cancel()
++	returned := make(chan struct{})
++	go func() { StartModelsUpdater(ctx); close(returned) }()
++	select {
++	case <-entered:
++	case <-time.After(3 * time.Second):
++		close(release)
++		t.Fatal("startup did not notify cached Claude registration")
++	}
++	select {
++	case <-returned:
++		close(release)
++		t.Fatal("StartModelsUpdater returned before cached registration finished")
++	case <-time.After(30 * time.Millisecond):
++	}
++	close(release)
++	select {
++	case <-returned:
++	case <-time.After(3 * time.Second):
++		t.Fatal("StartModelsUpdater did not return after registration")
++	}
++	if !hasOpus55() {
++		t.Fatal("StartModelsUpdater returned without cached Opus model")
++	}
++}
++
++func containsProvider(providers []string, want string) bool {
++	for _, provider := range providers {
++		if provider == want {
++			return true
++		}
++	}
++	return false
++}
++
++func TestModelsCacheRestorationQueuesNotificationUntilCallbackRegistered(t *testing.T) {
++	isolateModelsUpdater(t)
++	path := filepath.Join(t.TempDir(), "models.json")
++	if err := persistModelsCache(path, catalogWithOpus55(t)); err != nil {
++		t.Fatal(err)
++	}
++	if err := restoreModelsCache(path); err != nil {
++		t.Fatal(err)
++	}
++	var notified []string
++	SetModelRefreshCallback(func(providers []string) { notified = append(notified, providers...) })
++	if !containsProvider(notified, "claude") || !hasOpus55() {
++		t.Fatalf("late registration did not get cached Claude model: providers=%v model=%v", notified, hasOpus55())
++	}
++}
++
++func TestModelsCacheRejectsCorruptAndOversizedCatalogWithoutReplacingEmbedded(t *testing.T) {
++	isolateModelsUpdater(t)
++	path := filepath.Join(t.TempDir(), "models.json")
++	for _, data := range [][]byte{[]byte("{"), []byte(`{}`), []byte(`{"claude":[{"id":" "}]}`), []byte(strings.Repeat("x", maxModelsCatalogBytes+1))} {
++		if err := os.WriteFile(path, data, 0600); err != nil {
++			t.Fatal(err)
++		}
++		if err := restoreModelsCache(path); err == nil {
++			t.Fatalf("invalid cache (%d bytes) accepted", len(data))
++		}
++		if hasOpus55() || len(GetClaudeModels()) == 0 {
++			t.Fatal("invalid cache changed embedded fallback")
++		}
++	}
++}
++
++func TestInvalidRemoteDoesNotOverwriteKnownGoodCache(t *testing.T) {
++	isolateModelsUpdater(t)
++	path := filepath.Join(t.TempDir(), "models.json")
++	t.Setenv("CLIPROXYAPI_MODEL_CACHE", path)
++	good := catalogWithOpus55(t)
++	if err := persistModelsCache(path, good); err != nil {
++		t.Fatal(err)
++	}
++	if err := restoreModelsCache(path); err != nil {
++		t.Fatal(err)
++	}
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
++		_, _ = io.WriteString(w, `{}`)
++	}))
++	defer server.Close()
++	modelsURLs = []string{server.URL}
++	if tryRefreshModels(context.Background(), "test") {
++		t.Fatal("empty remote catalog was accepted")
++	}
++	stored, err := os.ReadFile(path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !reflect.DeepEqual(stored, good) || !hasOpus55() {
++		t.Fatal("invalid download erased known-good disk or memory catalog")
++	}
++}
++
++func TestModelsRemoteRefreshAtomicallyPersistsRawCatalog(t *testing.T) {
++	isolateModelsUpdater(t)
++	path := filepath.Join(t.TempDir(), "private", "models.json")
++	t.Setenv("CLIPROXYAPI_MODEL_CACHE", path)
++	good := catalogWithOpus55(t)
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
++		_, _ = w.Write(good)
++	}))
++	defer server.Close()
++	modelsURLs = []string{server.URL}
++	if !tryRefreshModels(context.Background(), "test") {
++		t.Fatal("remote refresh failed")
++	}
++	stored, err := os.ReadFile(path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !hasOpus55() || !strings.Contains(string(stored), `"native_capabilities"`) {
++		t.Fatal("refresh lost private native capabilities")
++	}
++	info, err := os.Stat(path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if info.Mode().Perm() != 0600 {
++		t.Fatalf("cache permissions = %o, want 0600", info.Mode().Perm())
++	}
++	entries, err := os.ReadDir(filepath.Dir(path))
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(entries) != 1 || entries[0].Name() != "models.json" {
++		t.Fatalf("atomic write left temporary files: %v", entries)
++	}
++	if err := loadModelsFromBytes(embeddedModelsJSON, "embed"); err != nil {
++		t.Fatal(err)
++	}
++	if err := restoreModelsCache(path); err != nil || !hasOpus55() {
++		t.Fatalf("persisted model did not survive simulated restart: %v", err)
++	}
++}
++
++func TestModelsRefreshRetriesWhenCatalogCannotBePersisted(t *testing.T) {
++	isolateModelsUpdater(t)
++	path := filepath.Join(t.TempDir(), "models.json")
++	if err := os.Mkdir(path, 0700); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("CLIPROXYAPI_MODEL_CACHE", path)
++	good := catalogWithOpus55(t)
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
++		_, _ = w.Write(good)
++	}))
++	defer server.Close()
++	modelsURLs = []string{server.URL}
++	if tryRefreshModels(context.Background(), "test") {
++		t.Fatal("undurable refresh reported success; scheduler would wait 3 hours")
++	}
++	if !hasOpus55() {
++		t.Fatal("disk error discarded valid remote model in memory")
++	}
++}
++
++func TestModelsCacheFailedAtomicReplaceLeavesExistingDestination(t *testing.T) {
++	isolateModelsUpdater(t)
++	dir := t.TempDir()
++	path := filepath.Join(dir, "models.json")
++	if err := os.Mkdir(path, 0700); err != nil {
++		t.Fatal(err)
++	}
++	if err := persistModelsCache(path, catalogWithOpus55(t)); err == nil {
++		t.Fatal("expected rename onto existing directory to fail")
++	}
++	entries, err := os.ReadDir(dir)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(entries) != 1 || entries[0].Name() != "models.json" || !entries[0].IsDir() {
++		t.Fatalf("failed atomic replace damaged destination or left temp files: %v", entries)
++	}
++}
++
++func TestModelsRetryDelayIsCappedExponentialWithJitter(t *testing.T) {
++	if got := modelsRetryDelay(1, modelsRetryBase, 0); got != 2500*time.Millisecond {
++		t.Fatalf("first retry = %v, want 2.5s", got)
++	}
++	if got := modelsRetryDelay(2, modelsRetryBase, 1); got != 10*time.Second {
++		t.Fatalf("second retry = %v, want 10s", got)
++	}
++	if got := modelsRetryDelay(100, modelsRetryBase, 1); got != time.Minute {
++		t.Fatalf("capped retry = %v, want 1m", got)
++	}
++}
++
++func TestModelsUpdaterRetriesAndResetsAfterRecovery(t *testing.T) {
++	ctx, cancel := context.WithCancel(context.Background())
++	defer cancel()
++	attempts := make(chan time.Time, 4)
++	var count atomic.Int32
++	done := make(chan struct{})
++	go func() {
++		runModelsUpdaterSchedule(ctx, func(context.Context) bool {
++			attempts <- time.Now()
++			return count.Add(1) >= 3
++		}, 30*time.Millisecond, 400*time.Millisecond, func() float64 { return 1 })
++		close(done)
++	}()
++	times := make([]time.Time, 0, 4)
++	for i := 0; i < 4; i++ {
++		select {
++		case at := <-attempts:
++			times = append(times, at)
++		case <-time.After(2 * time.Second):
++			t.Fatal("updater did not retry or resume normal schedule")
++		}
++	}
++	cancel()
++	<-done
++	if elapsed := times[1].Sub(times[0]); elapsed < 20*time.Millisecond || elapsed > 250*time.Millisecond {
++		t.Fatalf("first retry interval = %v", elapsed)
++	}
++	if elapsed := times[2].Sub(times[1]); elapsed < 45*time.Millisecond || elapsed > 250*time.Millisecond {
++		t.Fatalf("second retry interval = %v", elapsed)
++	}
++	if elapsed := times[3].Sub(times[2]); elapsed < 350*time.Millisecond {
++		t.Fatalf("success failed to restore normal schedule: %v", elapsed)
++	}
++}
++
++func TestModelsUpdaterCancellationStopsRetry(t *testing.T) {
++	ctx, cancel := context.WithCancel(context.Background())
++	var calls atomic.Int32
++	done := make(chan struct{})
++	go func() {
++		runModelsUpdaterSchedule(ctx, func(context.Context) bool {
++			calls.Add(1)
++			cancel()
++			return false
++		}, time.Millisecond, time.Hour, func() float64 { return 0 })
++		close(done)
++	}()
++	select {
++	case <-done:
++	case <-time.After(time.Second):
++		t.Fatal("cancellation did not stop updater")
++	}
++	if got := calls.Load(); got != 1 {
++		t.Fatalf("canceled updater fetched %d times, want 1", got)
++	}
++}
++
++func TestModelsCacheMissingIsOrdinaryFallback(t *testing.T) {
++	isolateModelsUpdater(t)
++	if err := restoreModelsCache(filepath.Join(t.TempDir(), "absent")); !errors.Is(err, os.ErrNotExist) {
++		t.Fatalf("missing cache = %v, want os.ErrNotExist", err)
++	}
++}
