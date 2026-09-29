@@ -65,8 +65,10 @@ After upgrading/reconfiguring an already running service, restart it explicitly.
 ```bash
 cliproxy check                  # API authentication + model availability, no inference
 cliproxy models                 # discover models exposed by logged-in accounts
-pi                             # GPT-6 Sol high via pool
-pi --provider cliproxyapi --model gpt-6-sol
+cliproxy usage                  # live quota usage for all local Codex/Claude accounts
+cliproxy usage --json           # normalized report for scripts (no tokens)
+pi                             # GPT-6.1 Sol high via pool
+pi --provider cliproxyapi --model gpt-6.1-sol
 codex                          # Direct built-in OpenAI provider
 ```
 
@@ -103,7 +105,7 @@ The repo-managed Pi catalog maps these nine Codex chat models:
 - `cliproxyapi/gpt-5.6-terra`
 - `cliproxyapi/gpt-6-astra`
 - `cliproxyapi/gpt-6-luna`
-- `cliproxyapi/gpt-6-sol`
+- `cliproxyapi/gpt-6.1-sol`
 - `cliproxyapi/gpt-daybreak-blue-latest`
 
 This is a pinned mapping in `configs/agents/pi/cliproxyapi-models.json`, not automatic
@@ -214,6 +216,29 @@ An offline first install still only knows the embedded models until a fetch
 succeeds. Cached model registration is not proof of account entitlement, and
 inference still requires access to the provider. This patch covers the shared
 `models.json` updater; the separate Codex-client and Devin catalogs are unchanged.
+
+## Account quota usage
+
+`cliproxy usage` queries the Codex and Claude usage endpoints for every supported
+account in `~/.local/share/cliproxyapi/auth/`. It shows provider-reported percent
+**used**, reset times, and Claude extra-usage enablement. Codex window names follow
+the durations returned by the provider: a primary window is not necessarily five
+hours. Missing windows are not reported as zero usage.
+
+The Bun helper reads existing OAuth access tokens privately, never prints them,
+and does not refresh or modify credentials, run inference, restart the service,
+or change billing settings. It works with the proxy stopped. Quotas include usage
+from other clients on the same accounts; they are not just this proxy's traffic.
+The report is not an invoice or a guarantee of model access.
+
+`--json` emits a normalized report without raw provider payloads or credentials.
+Account errors remain visible alongside successful results; failed lookups exit
+nonzero. If a token has expired, allow the running proxy to refresh it or enroll
+that account again with `cliproxy login` / `cliproxy login-claude`. These are
+provider-specific subscription endpoints and their formats may change.
+
+Verify the helper with `bun test configs/cliproxyapi/usage.test.ts` and
+`bunx --no-install tsc -p configs/cliproxyapi/tsconfig.json`.
 
 ## Usage statistics and management
 

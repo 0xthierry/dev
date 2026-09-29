@@ -22,8 +22,8 @@ if os.environ.get('FAIL_COMMAND') == name + ' ' + ' '.join(args[:2]):
 if name == 'pi':
     print('provider model context max-out thinking images')
     if not os.environ.get('MISSING_MODEL'):
-        for provider, model in [('cliproxyapi','gpt-6-astra'), ('cliproxyapi','gpt-6-sol')]:
-            if model != 'gpt-6-sol' or not os.environ.get('MISSING_SOL'):
+        for provider, model in [('cliproxyapi','gpt-6-astra'), ('cliproxyapi','gpt-6.1-sol')]:
+            if model != 'gpt-6.1-sol' or not os.environ.get('MISSING_SOL'):
                 print(provider, model, '272K 128K yes yes')
 elif name == 'claude':
     print(os.environ.get('CLAUDE_VERSION', '2.1.255 (Claude Code)'))
@@ -190,7 +190,7 @@ class SidecarTests(unittest.TestCase):
     def test_profiles_and_prompt_quoting(self):
         profiles = [
             ('pi-gpt6-astra-1', 'cliproxyapi/gpt-6-astra', 'high', True),
-            ('pi-gpt6sol-1', 'cliproxyapi/gpt-6-sol', 'high', False),
+            ('pi-gpt6sol-1', 'cliproxyapi/gpt-6.1-sol', 'high', False),
             ('claude-opus55-xhigh-1', 'claude-opus-5-5', 'xhigh', True),
             ('claude-opus55-high-1', 'claude-opus-5-5', 'high', True),
         ]
@@ -232,7 +232,7 @@ class SidecarTests(unittest.TestCase):
     def test_missing_proxy_sol_model_does_not_split(self):
         r = self.run_helper('launch', '--handle', 'pi-gpt6sol-1', MISSING_SOL='1')
         self.assertNotEqual(r.returncode, 0)
-        self.assertIn('cliproxyapi/gpt-6-sol', r.stderr)
+        self.assertIn('cliproxyapi/gpt-6.1-sol', r.stderr)
         self.assertFalse(any(c[:3] == ['herdr', 'pane', 'split'] for c in self.calls()))
 
     def test_launch_failure_cleans_only_created_pane(self):

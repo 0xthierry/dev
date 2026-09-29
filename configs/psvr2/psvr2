@@ -1,0 +1,430 @@
+#!/usr/bin/env python3
+"""User-local PSVR2Toolkit / Ignition setup; never installs Sony software."""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+import urllib.request
+import zipfile
+
+ASSETS = (
+    ("Ignition", "v1.1.0", "Ignition-Linux-Windows.zip", "2637bb32c3e9d4ce2f8d8af4f1eaa7f2affe4c4f544868988ba4fd7da9e0f7ec", "ignition-v1.1.0", "libdriver_ignition.so"),
+    ("PSVR2Toolkit", "v1.0.0-experimental-2", "PSVR2TK-win64-Ignition.zip", "427462015799cf20b22ffbd78107c009556eb8b1439b447a668fbb7b564b0dd1", "toolkit-v1.0.0-experimental-2", "driver_playstation_vr2.dll"),
+    ("PSVR2Toolkit", "v1.0.0-experimental-2", "CAPIApps-Linux.zip", "4aa115db23fce29d223c6087f005680282f042aeb5e3f40ea502a5efd1a645c7", "capi-v1.0.0-experimental-2", "psvr2_toolkit_legacy_ipc_server"),  # gitleaks:allow -- public release SHA256, not a credential
+    ("PSVR2Toolkit.UnitySetup", "v1.1.0", "PSVR2Toolkit.UnitySetup-Linux.zip", "5e223773e6615f71b9496393ae9e1d74df43cab2a30e67e1a1b389e4cc8ad7da", "unity-v1.1.0", "PSVR2Toolkit.UnitySetup.x86_64"),
+)
+ROOT = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share"))) / "psvr2"
+WRAPPER = "driver_playstation_vr2.dll"
+TOOLKIT_RUNTIME_FILES = (WRAPPER, "libusb-1.0.dll", "psvr2_toolkit_capi.dll", "libcrossipc.so", "libcrossipc.dll", "libpsvr2_toolkit_capi.so")
+ORIGINAL = "driver_playstation_vr2_orig.dll"
+STEAM_ROOTS = (Path.home() / ".local/share/Steam", Path.home() / ".steam/steam", Path.home() / ".steam/root")
+
+
+class SetupError(Exception):
+    pass
+
+
+def digest(path):
+    sha = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            sha.update(chunk)
+    return sha.hexdigest()
+
+
+def release_dir(asset):
+    return ROOT / "releases" / asset[4]
+
+
+def backup(path):
+    candidate = Path(str(path) + ".bak")
+    index = 1
+    while candidate.exists() or candidate.is_symlink():
+        candidate = Path(str(path) + f".bak.{index}")
+        index += 1
+    shutil.copy2(path, candidate, follow_symlinks=False)
+    print(f"backed up {path} to {candidate}")
+
+
+def replace_bytes(path, contents, executable=False):
+    """Never follow an existing destination symlink; preserve its prior state."""
+    if path.is_file() and not path.is_symlink() and path.read_bytes() == contents:
+        return
+    if path.exists() or path.is_symlink():
+        backup(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=".psvr2-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as out:
+            out.write(contents)
+        os.chmod(temp_name, 0o755 if executable else 0o644)
+        os.replace(temp_name, path)
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+
+def extract_verified(archive, target, required):
+    """Extract only regular members, rejecting ZIP traversal, links and duplicate names."""
+    with zipfile.ZipFile(archive) as zf:
+        seen = set()
+        for info in zf.infolist():
+            name = info.filename
+            parts = name.rstrip("/").split("/")
+            mode = (info.external_attr >> 16) & 0o170000
+            if (not name or name.startswith("/") or "\\" in name or
+                    any(part in ("", ".", "..") for part in parts) or
+                    (mode not in (0, 0o040000, 0o100000)) or name in seen):
+                raise SetupError(f"unsafe ZIP entry: {name}")
+            seen.add(name)
+        if required not in seen:
+            raise SetupError(f"archive lacks {required}: {archive.name}")
+        target.mkdir()
+        for info in zf.infolist():
+            output = target.joinpath(*info.filename.rstrip("/").split("/"))
+            if info.is_dir():
+                output.mkdir(parents=True, exist_ok=True)
+            else:
+                output.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(info) as source, output.open("wb") as dest:
+                    shutil.copyfileobj(source, dest)
+                if info.filename in ("proton", "launch_serverhelper.sh", "driver_install.sh", "PSVR2Toolkit.UnitySetup.x86_64", "psvr2_toolkit_legacy_ipc_server", "psvr2_toolkit_capi_test"):
+                    output.chmod(0o755)
+
+
+def install(dry_run=False):
+    if sys.platform != "linux" or os.uname().machine != "x86_64":
+        raise SetupError("PSVR2Toolkit releases require x86_64 Linux")
+    if dry_run:
+        for repo, tag, name, sha, folder, _ in ASSETS:
+            print(f"[dry-run] verify SHA256 {sha} and extract https://github.com/BnuuySolutions/{repo}/releases/download/{tag}/{name} to {ROOT / 'releases' / folder}")
+        print(f"[dry-run] link {Path.home() / '.local/bin/psvr2'} and configure only if Steam app is installed and SteamVR stopped")
+        return
+    ROOT.mkdir(parents=True, exist_ok=True)
+    downloads = ROOT / "downloads"
+    downloads.mkdir(exist_ok=True)
+    # Download/verify ALL archives before installing any release.
+    for repo, tag, name, sha, _, _ in ASSETS:
+        archive = downloads / name
+        if archive.exists() and (archive.is_symlink() or digest(archive) != sha):
+            raise SetupError(f"unverified cached archive: {archive}; remove it manually before retrying")
+        if not archive.exists():
+            url = f"https://github.com/BnuuySolutions/{repo}/releases/download/{tag}/{name}"
+            print(f"downloading {url}")
+            fd, temp_name = tempfile.mkstemp(prefix=".download-", dir=downloads)
+            try:
+                with os.fdopen(fd, "wb") as dest, urllib.request.urlopen(url, timeout=90) as source:
+                    shutil.copyfileobj(source, dest)
+                if digest(Path(temp_name)) != sha:
+                    raise SetupError(f"SHA256 mismatch for {url}")
+                os.replace(temp_name, archive)
+            finally:
+                if os.path.exists(temp_name):
+                    os.unlink(temp_name)
+    releases = ROOT / "releases"
+    releases.mkdir(exist_ok=True)
+    for asset in ASSETS:
+        _, _, name, sha, _, required = asset
+        target = release_dir(asset)
+        receipt = target / ".psvr2-sha256"
+        if target.exists() or target.is_symlink():
+            if (target.is_symlink() or not target.is_dir() or not receipt.is_file() or
+                    receipt.read_text() != sha + "\n" or not (target / required).is_file()):
+                raise SetupError(f"unrecognized release directory, refusing overwrite: {target}")
+            continue
+        with tempfile.TemporaryDirectory(prefix=".extract-", dir=releases) as staging:
+            staged = Path(staging) / "release"
+            extract_verified(downloads / name, staged, required)
+            (staged / ".psvr2-sha256").write_text(sha + "\n")
+            staged.rename(target)
+            print(f"installed {name} to {target}")
+    link = Path.home() / ".local/bin/psvr2"
+    source = Path(__file__).resolve()
+    link.parent.mkdir(parents=True, exist_ok=True)
+    if not link.is_symlink() or link.resolve() != source:
+        if link.exists() or link.is_symlink():
+            backup(link)
+        temp_link = link.parent / f".psvr2-link-{os.getpid()}"
+        try:
+            temp_link.symlink_to(source)
+            temp_link.replace(link)
+        finally:
+            temp_link.unlink(missing_ok=True)
+    print(f"launcher ready: {link}")
+    if locate_driver(None) is None:
+        print("pending: Install PlayStation VR2 App via Steam: steam://install/2580190; then run psvr2 configure")
+        return
+    configure(argparse.Namespace(driver_dir=None, vrpathreg=None, settings=None))
+
+
+def locate_driver(explicit):
+    if explicit:
+        return Path(explicit).expanduser().absolute()
+    for steam in STEAM_ROOTS:
+        candidate = steam / "steamapps/common/PlayStation VR2 App/SteamVR_Plug-In"
+        if (candidate / "driver.vrdrivermanifest").is_file():
+            return candidate
+    return None
+
+
+def locate_steamvr(driver, explicit):
+    if explicit:
+        path = Path(explicit).expanduser().absolute()
+        if not path.is_file():
+            raise SetupError(f"vrpathreg missing: {path}")
+        return path
+    for root in STEAM_ROOTS:
+        path = root / "steamapps/common/SteamVR/bin/vrpathreg.sh"
+        if path.is_file():
+            return path
+    raise SetupError("SteamVR vrpathreg.sh missing; install SteamVR via Steam or pass --vrpathreg")
+
+
+def active_steamvr():
+    for process in Path("/proc").iterdir():
+        if process.name.isdigit():
+            try:
+                if (process / "comm").read_text().strip() in ("vrserver", "vrcompositor"):
+                    return True
+            except (OSError, UnicodeError):
+                pass
+    return False
+
+
+def settings_path(explicit):
+    if explicit:
+        return Path(explicit).expanduser().absolute()
+    for root in STEAM_ROOTS:
+        path = root / "config/steamvr.vrsettings"
+        if path.exists():
+            return path
+    return STEAM_ROOTS[0] / "config/steamvr.vrsettings"
+
+
+def steam_settings(path):
+    if path.is_symlink():
+        raise SetupError(f"refusing symlinked SteamVR settings: {path}")
+    if path.exists():
+        try:
+            data = json.loads(path.read_text())
+        except (ValueError, UnicodeError) as exc:
+            raise SetupError(f"invalid SteamVR settings (left unchanged): {path}: {exc}") from exc
+        if not isinstance(data, dict) or not isinstance(data.get("steamvr", {}), dict):
+            raise SetupError(f"expected object with steamvr object: {path}")
+    else:
+        data = {}
+    data.setdefault("steamvr", {}).update(enableLinuxVulkanAsync=True, useFacetRenderer=True)
+    return (json.dumps(data, indent=2, ensure_ascii=False) + "\n").encode()
+
+
+def validate_driver(driver):
+    if not (driver / "driver.vrdrivermanifest").is_file():
+        raise SetupError(f"Sony Steam driver missing at {driver}; install app from steam://install/2580190")
+    try:
+        manifest = json.loads((driver / "driver.vrdrivermanifest").read_text())
+    except (ValueError, UnicodeError) as exc:
+        raise SetupError(f"invalid driver manifest: {exc}") from exc
+    if manifest.get("name") != "playstation_vr2":
+        raise SetupError(f"unexpected SteamVR driver name in {driver / 'driver.vrdrivermanifest'}")
+    win = driver / "bin/win64"
+    current, original = win / WRAPPER, win / ORIGINAL
+    wrapper = release_dir(ASSETS[1]) / WRAPPER
+    if not wrapper.is_file():
+        raise SetupError("PSVR2Toolkit release missing; run setup first")
+    if current.is_symlink() or original.is_symlink():
+        raise SetupError(f"symlinked Sony driver DLL at {win}; refusing to guess original")
+    if original.exists():
+        if not original.is_file():
+            raise SetupError(f"original driver path is not a file: {original}")
+        # An interrupted first install can leave the Sony DLL safely renamed
+        # but the wrapper not yet copied. Rerun completes that transition.
+        if current.exists() and (not current.is_file() or digest(current) != digest(wrapper)):
+            raise SetupError(f"Steam replaced or modified {current}; preserved {original}. Inspect both files before manually reconciling and retrying")
+    elif not current.is_file():
+        raise SetupError(f"Sony driver DLL missing: {current}; install app via steam://install/2580190")
+    elif digest(current) == digest(wrapper):
+        raise SetupError(f"wrapper exists but Sony original is missing: {original}; reinstall PlayStation VR2 App via Steam")
+    return win, current, original, wrapper
+
+
+def register_openxr(runtime=None):
+    if runtime:
+        manifest = Path(runtime).expanduser().resolve()
+    else:
+        manifest = next((root / "steamapps/common/SteamVR/steamxr_linux64.json"
+                         for root in STEAM_ROOTS
+                         if (root / "steamapps/common/SteamVR/steamxr_linux64.json").is_file()), None)
+    if manifest is None or not manifest.is_file():
+        raise SetupError("SteamVR OpenXR manifest missing; install SteamVR or pass openxr --runtime PATH")
+    manifest = manifest.resolve()
+    data = json.loads(manifest.read_text())
+    if not isinstance(data, dict) or not isinstance(data.get("runtime"), dict):
+        raise SetupError(f"invalid OpenXR manifest: {manifest}")
+    runtime_data = data["runtime"]
+    library = runtime_data.get("library_path")
+    if runtime_data.get("name") != "SteamVR" or not isinstance(library, str) or not (manifest.parent / library).is_file():
+        raise SetupError(f"invalid SteamVR OpenXR runtime or missing library: {manifest}")
+    config = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
+    target = config / "openxr/1/active_runtime.json"
+    # The loader prefers an architecture-specific selection if one exists.
+    architecture_target = target.with_name("active_runtime.x86_64.json")
+    targets = [target]
+    if architecture_target.exists() or architecture_target.is_symlink():
+        targets.append(architecture_target)
+    for target in targets:
+        if target.is_symlink() and target.resolve() == manifest:
+            continue
+        if target.is_dir():
+            raise SetupError(f"refusing runtime directory: {target}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists() or target.is_symlink():
+            backup(target)
+        with tempfile.TemporaryDirectory(prefix=".psvr2-openxr-", dir=target.parent) as stage:
+            link = Path(stage) / "runtime"
+            link.symlink_to(manifest)
+            link.replace(target)
+    print(f"OpenXR runtime: {manifest}; restart any already-running OpenXR game")
+
+
+def configure(args):
+    if active_steamvr():
+        raise SetupError("stop vrserver and vrcompositor before configuring PSVR2")
+    driver = locate_driver(args.driver_dir)
+    if driver is None:
+        raise SetupError("PlayStation VR2 App missing; install via Steam: steam://install/2580190")
+    win, current, original, wrapper = validate_driver(driver)
+    registry = locate_steamvr(driver, args.vrpathreg)
+    if not any((root / "steamapps/common/Proton - Experimental/proton").is_file() for root in STEAM_ROOTS):
+        raise SetupError("Proton Experimental missing; install it through Steam: steam://install/1493710")
+    if not os.access(registry, os.X_OK):
+        raise SetupError(f"vrpathreg is not executable: {registry}")
+    settings = settings_path(args.settings)
+    new_settings = steam_settings(settings)
+    ignition = release_dir(ASSETS[0])
+    if not (ignition / "libdriver_ignition.so").is_file():
+        raise SetupError("Ignition release missing; run setup first")
+    linux = driver / "bin/linux64"
+    managed = ("proton", "launch_serverhelper.sh", "wine_hidraw.reg")
+    for name in (*managed, "ignition.json"):
+        if name in managed and not (ignition / name).is_file():
+            raise SetupError(f"Ignition file missing: {ignition / name}")
+        if (linux / name).is_dir():
+            raise SetupError(f"cannot replace directory: {linux / name}")
+    if linux.is_symlink() or (linux.exists() and not linux.is_dir()):
+        raise SetupError(f"refusing unusual linux64 directory: {linux}")
+    driver_so = linux / "driver_playstation_vr2.so"
+    if driver_so.exists() and not driver_so.is_symlink() and not driver_so.is_file():
+        raise SetupError(f"cannot replace directory: {driver_so}")
+    if settings.is_dir():
+        raise SetupError(f"settings path is directory: {settings}")
+    toolkit = release_dir(ASSETS[1])
+    for name in TOOLKIT_RUNTIME_FILES:
+        if not (toolkit / name).is_file():
+            raise SetupError(f"Toolkit release file missing: {toolkit / name}; run setup first")
+        if (win / name).is_dir():
+            raise SetupError(f"cannot replace directory: {win / name}")
+    vrpaths = Path.home() / ".config/openvr/openvrpaths.vrpath"
+    try:
+        paths_data = json.loads(vrpaths.read_text())
+    except FileNotFoundError:
+        paths_data = {}
+    except (OSError, ValueError) as exc:
+        raise SetupError(f"invalid OpenVR registration file (left unchanged): {vrpaths}: {exc}") from exc
+    if not isinstance(paths_data, dict):
+        raise SetupError(f"expected object in OpenVR registration file: {vrpaths}")
+    external_drivers = paths_data.get("external_drivers")
+    if external_drivers is None:
+        external_drivers = []
+    if not isinstance(external_drivers, list) or any(not isinstance(item, str) for item in external_drivers):
+        raise SetupError(f"expected list or null external_drivers in: {vrpaths}")
+    registered = str(driver) in external_drivers
+    if original.exists():
+        print(f"original preserved: {original}")
+    else:
+        # Original is kept in place forever; later Steam updates are not adopted implicitly.
+        current.rename(original)
+        print(f"preserved Sony original: {original}")
+    for name in TOOLKIT_RUNTIME_FILES:
+        replace_bytes(win / name, (toolkit / name).read_bytes())
+    linux.mkdir(parents=True, exist_ok=True)
+    config = {"server_exe": str(ignition / "ignition_server.exe"), "driver_dll": "../win64/driver_playstation_vr2.dll", "wine_cmd": ["/usr/bin/env", "PROTONVERSION=Proton - Experimental", f"PROTONPREFIX={ROOT / 'proton-prefix'}", "./launch_serverhelper.sh"], "wait_for_debugger": False}
+    replace_bytes(linux / "ignition.json", (json.dumps(config, indent=2) + "\n").encode())
+    for name in managed:
+        replace_bytes(linux / name, (ignition / name).read_bytes(), executable=name != "wine_hidraw.reg")
+    if driver_so.is_symlink() and driver_so.resolve() == (ignition / "libdriver_ignition.so").resolve():
+        pass
+    else:
+        if driver_so.exists() or driver_so.is_symlink():
+            backup(driver_so)
+        temp_link = linux / f".psvr2-driver-{os.getpid()}"
+        try:
+            temp_link.symlink_to(ignition / "libdriver_ignition.so")
+            temp_link.replace(driver_so)
+        finally:
+            temp_link.unlink(missing_ok=True)
+    # Registration is delegated to SteamVR's own tool. It is idempotent when the
+    # driver is already listed, and the path is passed as a single argv entry.
+    if not registered:
+        subprocess.run([str(registry), "adddriver", str(driver)], check=True)
+    replace_bytes(settings, new_settings)
+    register_openxr(registry.parent.parent / "steamxr_linux64.json")
+    print(f"configured {driver}; SteamVR settings: {settings}")
+
+
+def doctor(args):
+    driver = locate_driver(args.driver_dir)
+    print(f"Steam app: {driver if driver else 'pending; steam://install/2580190'}")
+    for asset in ASSETS:
+        target = release_dir(asset)
+        print(f"{asset[2]}: {'installed' if (target / asset[5]).is_file() else 'missing'}")
+    if driver:
+        win = driver / "bin/win64"
+        print(f"Sony original: {'present' if (win / ORIGINAL).is_file() else 'missing'}")
+        print(f"SteamVR: {'running; stop before configure' if active_steamvr() else 'stopped'}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("install", help="install verified user-local releases and configure if Sony app exists").add_argument("--dry-run", action="store_true")
+    for name in ("doctor", "configure"):
+        sub = commands.add_parser(name)
+        sub.add_argument("--driver-dir", help="Steam-installed SteamVR_Plug-In directory (nondefault Steam library)")
+        if name == "configure":
+            sub.add_argument("--vrpathreg", help="SteamVR bin/vrpathreg.sh in nondefault Steam library")
+            sub.add_argument("--settings", help="SteamVR steamvr.vrsettings path in nondefault Steam library")
+    commands.add_parser("openxr", help="select SteamVR as the user's OpenXR runtime").add_argument("--runtime", help="SteamVR steamxr_linux64.json path")
+    commands.add_parser("room-setup", help="launch upstream Unity room setup")
+    commands.add_parser("start", help="start SteamVR through Steam")
+    args = parser.parse_args()
+    try:
+        if args.command == "install":
+            install(args.dry_run)
+        elif args.command == "configure":
+            configure(args)
+        elif args.command == "doctor":
+            doctor(args)
+        elif args.command == "openxr":
+            register_openxr(args.runtime)
+        elif args.command == "room-setup":
+            unity = release_dir(ASSETS[3])
+            binary = unity / "PSVR2Toolkit.UnitySetup.x86_64"
+            if not binary.is_file():
+                raise SetupError("Unity room setup missing; run setup first")
+            raise SystemExit(subprocess.run([str(binary)], cwd=unity).returncode)
+        else:
+            if shutil.which("steam") is None:
+                raise SetupError("Steam missing; install native Steam before starting SteamVR")
+            raise SystemExit(subprocess.run(["steam", "steam://rungameid/250820"]).returncode)
+    except (SetupError, OSError, ValueError, subprocess.CalledProcessError, zipfile.BadZipFile) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+
+
+if __name__ == "__main__":
+    main()

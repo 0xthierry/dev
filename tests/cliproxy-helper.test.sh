@@ -70,7 +70,7 @@ if grep -Fq "$(< "$HOME/.config/cliproxyapi/api-key")" "$CAPTURE"; then
 fi
 "$ROOT/scripts/cliproxy" pi
  grep -qx -- 'cliproxyapi' "$CAPTURE"
- grep -qx -- 'gpt-6-sol' "$CAPTURE"
+ grep -qx -- 'gpt-6.1-sol' "$CAPTURE"
  grep -qx -- 'high' "$CAPTURE"
 "$ROOT/scripts/cliproxy" pi --model gpt-6-luna
  grep -qx -- 'gpt-6-luna' "$CAPTURE"
@@ -92,4 +92,18 @@ if "$ROOT/scripts/cliproxy" claude 2>/dev/null; then
   echo 'not ok: Claude launcher accepted invalid proxy key' >&2
   exit 1
 fi
-printf 'ok: Codex/Claude login, failed-login handling, Pi/Claude routing, argument forwarding, secret handling\n'
+# Usage is read-only provider access: it must not need the proxy key/service/binary.
+ln -s "$tmp/bin/mock" "$tmp/bin/bun"
+touch "$HOME/.local/bin/cliproxy-usage.ts"
+rm "$HOME/.local/bin/cli-proxy-api" "$HOME/.config/cliproxyapi/config.yaml" "$HOME/.config/cliproxyapi/api-key"
+"$ROOT/scripts/cliproxy" usage --json
+ grep -qx -- "$HOME/.local/bin/cliproxy-usage.ts" "$CAPTURE"
+ grep -qx -- '--json' "$CAPTURE"
+[[ ! -s "$CAPTURE_ENV" ]]
+[[ $(wc -l < "$SERVICE_CAPTURE") -eq 2 ]]
+rm "$HOME/.local/bin/cliproxy-usage.ts"
+if "$ROOT/scripts/cliproxy" usage 2>/dev/null; then
+  echo 'not ok: usage accepted missing installed helper' >&2
+  exit 1
+fi
+printf 'ok: Codex/Claude login, failed-login handling, Pi/Claude routing, usage dispatch, argument forwarding, secret handling\n'

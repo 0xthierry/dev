@@ -59,6 +59,7 @@ Names differ between Homebrew and pacman (`tree-sitter-cli` vs `tree-sitter`, `m
 | Brave diagnostics through skills, not native MCP tools | `configs/browser-diagnostics/`, `install/browser-diagnostics.sh`, shared `browser-diagnostics` / `web-performance-investigation` skills; attaches only to local CDP `127.0.0.1:9222` |
 | Add/update Cua Driver | `install/cua-driver.sh`, `configs/cua-driver/` (repo-owned Linux skill and Omarchy display/window helpers), Linux package dependencies, and `cua-driver` in the `dev`/`omarchy` config targets; keep the skill version aligned with the pinned runtime, keep macOS excluded, and do not enable a Hyprland input plugin without an explicit request and release-kit compatibility verification |
 | Add Herdr/Moshi integration | `install/herdr.sh`, `install/moshi.sh`, generated hooks under `configs/agents/{hooks,pi/extensions}/`, and the host's `HOST_CONFIG_TARGETS` |
+| Add/update Omarchy PSVR2 | `install/psvr2.sh`, `configs/psvr2/`, `install/psvr2-permissions.sh`, `configs/omarchy/psvr2/`, Omarchy `psvr2` target and `steamvr-linux-fixes-layer-bin` AUR package; pinned Ignition/Toolkit/UnitySetup, Steam owns Sony driver files; never auto-flash or jailbreak |
 | Add Omarchy dictation (Voxtype + local LLM cleanup) | `configs/voxtype/`, `install/hosts/omarchy.sh` (`configure_voxtype`), Hyprland F9 / Super+Ctrl+X |
 | Add shell behavior | `configs/shell/` plus `install/shell.sh` |
 | Add shared env var | `install/env.sh` |
@@ -85,6 +86,8 @@ bash tests/browser-diagnostics.test.sh
 bash tests/cua-driver.test.sh
 bash tests/cua-omarchy-display.test.sh
 bash tests/cua-omarchy-window.test.sh
+python3 tests/psvr2.test.py
+udevadm verify configs/omarchy/psvr2/70-xrhardware.rules
 bun run test:browser-diagnostics
 bun run typecheck:browser-diagnostics
 bun run lint:browser-diagnostics

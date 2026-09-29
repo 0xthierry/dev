@@ -19,6 +19,8 @@ HOST_CONFIG_TARGETS=(
   cameractrls
   brave
   browser-diagnostics
+  bs-manager
+  psvr2
   voxtype
 )
 
@@ -26,6 +28,7 @@ HOST_CONFIG_TARGETS=(
 HOST_PACMAN_PACKAGES=(
   amdsmi
   bitwarden
+  bluez-utils
   cameractrls
   ccache
   containerd
@@ -39,16 +42,19 @@ HOST_PACMAN_PACKAGES=(
   hicolor-icon-theme
   libnotify
   libsecret
+  libusb
   libxkbfile
   libxss
   obsidian
   pacman-contrib
+  python
   qemu-system-x86
   socat
   steam
   sysstat
   tailscale
   telegram-desktop
+  usbutils
   virtiofsd
   wtype
   xdg-desktop-portal-hyprland
@@ -61,11 +67,13 @@ HOST_PACMAN_PACKAGES=(
 HOST_AUR_PACKAGES=(
   bambustudio-bin
   brave-bin
+  bs-manager-bin
   chatgpt-desktop
   figma-linux
   linear-desktop-bin
   slack-desktop
   spotify
+  steamvr-linux-fixes-layer-bin
   voxtype-bin
 )
 

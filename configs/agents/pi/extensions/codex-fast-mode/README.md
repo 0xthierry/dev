@@ -10,7 +10,7 @@ The extension listens for Pi's `before_provider_request` event and adds:
 
 to Codex-shaped requests for opted-in models: `gpt-5.4`, `gpt-5.5`, `gpt-5.6`, `gpt-5.6-terra`, `gpt-5.6-luna`, and `gpt-6-luna`.
 
-Automatic Fast mode is disabled for Sol and Astra models, including `gpt-5.6-sol`, `gpt-6-sol`, and `gpt-6-astra`: this extension leaves their payloads unchanged and does not add a priority service tier.
+Automatic Fast mode is disabled for Sol and Astra models, including `gpt-5.6-sol`, `gpt-6.1-sol`, and `gpt-6-astra`: this extension leaves their payloads unchanged and does not add a priority service tier.
 
 Codex CLI persists this setting as `service_tier = "fast"`, but the ChatGPT Codex responses backend expects the request-time value `priority`. The matcher requires an opted-in model on either `openai-codex` or `cliproxyapi`, plus the Codex-shaped request fields, so unrelated OpenAI API-key traffic is not moved to Priority processing.
 

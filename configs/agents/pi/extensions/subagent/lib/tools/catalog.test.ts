@@ -48,11 +48,13 @@ test("exposes Luna routing preferences without recommending Terra", () => {
   // Assert
   expect(description).toBe(second.tools.get("agent_spawn")?.description ?? "");
   expect(description).toEndWith(SUBAGENT_MODEL_GUIDANCE);
-  expect(description).toContain("cliproxyapi/gpt-6-sol is the default for implementation and debugging at high effort");
+  expect(description).toContain(
+    "cliproxyapi/gpt-6.1-sol is the default for implementation and debugging at high effort",
+  );
   expect(description).toContain("cliproxyapi/gpt-6-astra is the default for planning");
   expect(description).toContain("Use high effort for planning and design decisions");
   expect(description).toContain(
-    "Use cliproxyapi/gpt-6-sol at high effort when the task requires diagnosing a bug or making changes",
+    "Use cliproxyapi/gpt-6.1-sol at high effort when the task requires diagnosing a bug or making changes",
   );
   expect(description).toContain(
     "cliproxyapi/gpt-6-luna is the default for read-only codebase reconnaissance at xhigh effort",
@@ -62,7 +64,9 @@ test("exposes Luna routing preferences without recommending Terra", () => {
   expect(description).not.toContain("gpt-6-astra is the default for implementation");
   expect(description).toContain("cliproxyapi/gpt-6-luna is the default for code review at xhigh effort");
   expect(description).not.toContain("grok-");
-  expect(description).toContain("should delegate implementation and debugging to cliproxyapi/gpt-6-sol at high effort");
+  expect(description).toContain(
+    "should delegate implementation and debugging to cliproxyapi/gpt-6.1-sol at high effort",
+  );
   expect(description).toContain("Use Astra for code review only when the user explicitly requests it");
   expect(description).toContain(
     "For routine code review, including ordinary correctness and security checks, use cliproxyapi/gpt-6-luna at xhigh effort",

@@ -343,6 +343,7 @@ install_cliproxyapi() {
   configure_cliproxyapi "$os" || return
   ensure_dir "$HOME/.local/bin" || return
   safe_link_path "$CLIPROXYAPI_REPO_ROOT/scripts/cliproxy" "$HOME/.local/bin/cliproxy" "CLIProxyAPI helper" || return
+  safe_link_path "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi/usage.ts" "$HOME/.local/bin/cliproxy-usage.ts" "CLIProxyAPI usage helper" || return
   if [[ "$os" == darwin ]]; then
     enable_cliproxyapi_macos || return
   fi

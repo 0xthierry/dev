@@ -1,6 +1,6 @@
 ---
 name: use-agent
-description: Use only when the user explicitly asks or allows the current Claude or Pi main to orchestrate other agent harnesses over Herdr and AMQ. Routes GPT-6 Astra at high as the most powerful planner, hard-task debugger, and orchestration profile; GPT-6 Sol executes, while Claude Opus 5.5 provides independent review. Otherwise, never invoke it.
+description: Use only when the user explicitly asks or allows the current Claude or Pi main to orchestrate other agent harnesses over Herdr and AMQ. Routes GPT-6 Astra at high as the most powerful planner, hard-task debugger, and orchestration profile; GPT-6.1 Sol executes, while Claude Opus 5.5 provides independent review. Otherwise, never invoke it.
 ---
 
 # Use Agent
@@ -16,15 +16,15 @@ Use only this curated mapping. Roles and capability priority are workflow policy
 | **GPT-6 Astra orchestrator** | Pi / `cliproxyapi/gpt-6-astra` | `high` | **Most powerful profile.** Leads demanding planning, architecture, hard tasks, deep debugging, decomposition, synthesis, and adjudication. Prefer orchestration over execution. Read-only as a sidecar. |
 | **Claude Opus 5.5 second opinion** | Claude / `claude-opus-5-5` | `xhigh` | Read-only second-opinion partner to Astra. Supplies independent evidence, counterarguments, and alternatives. **Not an oracle or final adjudicator**, and never an escalation above Astra. |
 | **Claude Opus 5.5 adversary** | Claude / `claude-opus-5-5` | `high` | Read-only demanding plan, implementation, debugging-hypothesis, security, and correctness review; one explicit lens per task. |
-| **GPT-6 Sol implementer** | Pi / `cliproxyapi/gpt-6-sol` | `high` | Writing workhorse for demanding multi-file features, refactors, reproductions, fix application, integration, and test/fix loops. Exact file ownership required. |
+| **GPT-6.1 Sol implementer** | Pi / `cliproxyapi/gpt-6.1-sol` | `high` | Writing workhorse for demanding multi-file features, refactors, reproductions, fix application, integration, and test/fix loops. Exact file ownership required. |
 
-When Astra is MAIN, keep demanding planning and synthesis local and delegate bounded execution to GPT-6 Sol. Do not launch a duplicate Astra by default. With another model as MAIN, Astra returns actionable plans, debugging hypotheses, discriminating checks, decisions, or worker contracts; it does not launch its own fleet or take over MAIN's user relationship.
+When Astra is MAIN, keep demanding planning and synthesis local and delegate bounded execution to GPT-6.1 Sol. Do not launch a duplicate Astra by default. With another model as MAIN, Astra returns actionable plans, debugging hypotheses, discriminating checks, decisions, or worker contracts; it does not launch its own fleet or take over MAIN's user relationship.
 
 Astra leads demanding reasoning; Opus is its independent second-opinion partner when another perspective adds value. Use Opus `high` for read-only adversarial artifact review; ask independent reviewers before showing either the other's conclusions.
 
 Honor explicit user model/effort requests. The helper pins the profiles above and does not accept arbitrary model/effort overrides. If the user requests something outside the roster, explain that limitation rather than silently changing the request. If a model is unavailable, report the category without credentials and ask before substituting. Higher effort does not make Opus the lead or an oracle.
 
-Effort controls are provider-specific, not comparable token budgets. Astra's curated setting is `high`; verify other levels before requesting them. Opus 5.5 supports `low`, `medium`, `high`, `xhigh`, `max`; this skill uses `high`/`xhigh`. GPT-6 Sol through Pi supports `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, but the writing profile pins `high`. Do not silently promote effort or rely on defaults.
+Effort controls are provider-specific, not comparable token budgets. Astra's curated setting is `high`; verify other levels before requesting them. Opus 5.5 supports `low`, `medium`, `high`, `xhigh`, `max`; this skill uses `high`/`xhigh`. GPT-6.1 Sol through Pi supports `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, but the writing profile pins `high`. Do not silently promote effort or rely on defaults.
 
 ## Plan before launching
 
@@ -41,9 +41,9 @@ For each lane, record:
 Typical fleets (never launch one of every model by habit):
 
 - **Demanding plan/architecture:** Astra `high` defines dependencies, ownership, risks, and validation gates; Opus `xhigh` supplies an independent second opinion when useful. Astra synthesizes against evidence; MAIN accepts and dispatches.
-- **Medium/complex implementation:** N GPT-6 Sol workers on disjoint modules.
-- **Wide feature:** Astra plans, GPT-6 Sol implements, then Opus `high` reviews settled artifacts.
-- **Difficult bug:** Astra leads root-cause reasoning and discriminating checks; GPT-6 Sol gathers evidence/reproductions, applies the accepted fix, and runs tests. Add an independent Opus hypothesis when useful.
+- **Medium/complex implementation:** N GPT-6.1 Sol workers on disjoint modules.
+- **Wide feature:** Astra plans, GPT-6.1 Sol implements, then Opus `high` reviews settled artifacts.
+- **Difficult bug:** Astra leads root-cause reasoning and discriminating checks; GPT-6.1 Sol gathers evidence/reproductions, applies the accepted fix, and runs tests. Add an independent Opus hypothesis when useful.
 - **High-risk design/disagreement:** Astra leads adjudication against evidence, paired with Opus `xhigh` for a second opinion when warranted—not an Opus oracle.
 
 Scale any selected profile from one to N only as justified by the runnable frontier, resources, and provider capacity. Never launch reviewers before their artifact exists or allow concurrent writers to own the same files. Designate one integration owner for shared interfaces.
@@ -88,7 +88,7 @@ This provisions mailboxes only, not processes. It uses `amq init --force` for th
 | `pi-gpt6-astra-N` | Astra `high`, read-only planner/orchestration advisor |
 | `claude-opus55-xhigh-N` | Opus 5.5 `xhigh`, read-only second opinion |
 | `claude-opus55-high-N` | Opus 5.5 `high`, read-only adversary |
-| `pi-gpt6sol-N` | GPT-6 Sol `high`, writer |
+| `pi-gpt6sol-N` | GPT-6.1 Sol `high`, writer |
 
 Handles are reservations, not capacity. Keep one live process per handle. MAIN is provisioned alongside workers and cannot collide with a worker handle. The helper does not maintain a durable handle/pane ledger: MAIN must verify a handle is configured and unused before launching, and must not concurrently launch the same handle.
 

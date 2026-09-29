@@ -9,6 +9,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/herdr.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/browser-diagnostics.sh"
 # shellcheck source=install/cua-driver.sh
 source "$(dirname "${BASH_SOURCE[0]}")/cua-driver.sh"
+# shellcheck source=install/psvr2.sh
+source "$(dirname "${BASH_SOURCE[0]}")/psvr2.sh"
+# shellcheck source=install/bs-manager.sh
+source "$(dirname "${BASH_SOURCE[0]}")/bs-manager.sh"
 
 apply_nvim() {
   ensure_dir "$HOME/.config"

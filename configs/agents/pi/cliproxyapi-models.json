@@ -61,8 +61,8 @@
           "maxTokens": 32768
         },
         {
-          "id": "gpt-6-sol",
-          "name": "GPT-6 Sol (local Codex account pool)",
+          "id": "gpt-6.1-sol",
+          "name": "GPT-6.1 Sol (local Codex account pool)",
           "reasoning": true,
           "thinkingLevelMap": { "off": null, "minimal": null, "xhigh": "xhigh", "max": "max" },
           "input": ["text", "image"],

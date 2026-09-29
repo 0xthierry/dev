@@ -2,6 +2,8 @@ ai_docs/
 .direnv/
 node_modules/
 generated-images/
+__pycache__/
+*.py[cod]
 
 # Sensitive/generated local artifacts
 agent_feedback.md

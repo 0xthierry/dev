@@ -50,7 +50,7 @@ select_profile() {
   WORKER_READONLY=1
   case "$prefix" in
     pi-gpt6-astra) WORKER_MODEL=cliproxyapi/gpt-6-astra ;;
-    pi-gpt6sol) WORKER_MODEL=cliproxyapi/gpt-6-sol; WORKER_READONLY=0 ;;
+    pi-gpt6sol) WORKER_MODEL=cliproxyapi/gpt-6.1-sol; WORKER_READONLY=0 ;;
     claude-opus55-xhigh)
       WORKER_HARNESS=claude; WORKER_MODEL=claude-opus-5-5; WORKER_EFFORT=xhigh ;;
     claude-opus55-high)

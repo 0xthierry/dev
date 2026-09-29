@@ -73,14 +73,14 @@ import (
 const (
 	abiVersion       = 1
 	cacheTTL         = 5 * time.Minute
-	clientVersion    = "0.156.1"
+	clientVersion    = "0.159.0"
 	modelsEndpoint   = "https://chatgpt.com/backend-api/codex/models"
 	maxModelsPayload = 16 << 20
 )
 
 var targetModels = map[string]modelInfo{
-	"gpt-6-sol": {
-		ID: "gpt-6-sol", Object: "model", OwnedBy: "openai", DisplayName: "GPT-6 Sol",
+	"gpt-6.1-sol": {
+		ID: "gpt-6.1-sol", Object: "model", OwnedBy: "openai", DisplayName: "GPT-6.1 Sol",
 		SupportedGenerationMethods: []string{"chat"}, ContextLength: 272000, MaxCompletionTokens: 32768,
 		SupportedInputModalities: []string{"text", "image"}, Thinking: &thinkingInfo{Levels: []string{"low", "medium", "high", "xhigh", "max", "ultra"}}, UserDefined: true,
 	},

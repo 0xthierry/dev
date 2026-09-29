@@ -89,7 +89,7 @@ A trusted project may add `.pi/agents/**/*.md`:
 name: worker
 description: Implements bounded production changes.
 provider: cliproxyapi
-model: gpt-6-sol
+model: gpt-6.1-sol
 effort: high
 ---
 
@@ -147,10 +147,10 @@ Choose a fitting named agent first and omit `execution` unless an override is ne
 | Exact provider / model | Recommended work | Rationale and limitation |
 |---|---|---|
 | `cliproxyapi/gpt-6-astra` | Default for planning and design decisions; code review only when the user explicitly requests Astra | High effort |
-| `cliproxyapi/gpt-6-sol` | Default for implementation and debugging | High effort |
+| `cliproxyapi/gpt-6.1-sol` | Default for implementation and debugging | High effort |
 | `cliproxyapi/gpt-6-luna` | Default for read-only reconnaissance and routine code review, including ordinary correctness and security checks | `xhigh` recommended; require paths/evidence for reconnaissance and provide an artifact plus a specific question for review |
 
-Use `cliproxyapi/gpt-6-sol` at high effort instead of the reconnaissance profile for debugging
+Use `cliproxyapi/gpt-6.1-sol` at high effort instead of the reconnaissance profile for debugging
 or edits. Use `cliproxyapi/gpt-6-astra` with high effort for planning and design
 decisions. Use `cliproxyapi/gpt-6-luna` at xhigh effort for routine code review,
 and Astra for code review only when the user explicitly requests it. These are the
@@ -181,10 +181,10 @@ availability. See `configs/cliproxyapi/README.md` for the complete mapping.
   continue useful local work, and explain each tool's practical behavior.
   Pi's own lifecycle semantics remain authoritative; Codex's defaults and tool
   behavior are not copied blindly.
-- The repo-managed `cliproxyapi` catalog maps GPT-6 Luna, GPT-6 Sol, GPT-6 Astra,
+- The repo-managed `cliproxyapi` catalog maps GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra,
   and GPT-5.6 Terra to the local Codex account pool. Catalog presence proves
   configuration, not live entitlement, quota, or comparative quality.
-- Assigning GPT-6 Sol at high effort to implementation, Astra to planning, and
+- Assigning GPT-6.1 Sol at high effort to implementation, Astra to planning, and
   GPT-6 Luna at xhigh to read-only reconnaissance and routine review is the user's
   workflow policy. Named research agents may instead pin GPT-6 Luna at high effort; the
   repo-managed Fast Mode extension adds priority processing to those proxy-backed
@@ -211,7 +211,7 @@ same stable model-selection guidance.
     "worker": {
       "execution": {
         "provider": "cliproxyapi",
-        "model": "gpt-6-sol",
+        "model": "gpt-6.1-sol",
         "effort": "high"
       },
       "allowInvocationOverride": {

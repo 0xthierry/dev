@@ -145,7 +145,7 @@ EOF
     cmp -s "$test_home/.pi/agent/agents/$profile.md" "$REPO_ROOT/configs/agents/agents/$profile.md" || fail "Pi did not preserve $profile profile"
     printf 'ok: Pi deploys the unchanged %s profile\n' "$profile"
   done
-  assert_file_contains "routes the Pi worker through GPT-6 Sol" "$test_home/.pi/agent/agents/worker.md" 'model: gpt-6-sol'
+  assert_file_excludes "Pi worker inherits the session model" "$test_home/.pi/agent/agents/worker.md" 'model:'
   assert_file_contains "uses high effort for the Pi worker" "$test_home/.pi/agent/agents/worker.md" 'effort: high'
   assert_file_contains "routes codebase-locator through GPT-6 Luna" "$test_home/.pi/agent/agents/rpi/codebase-locator.md" 'model: gpt-6-luna'
   assert_file_contains "uses xhigh effort for codebase-locator" "$test_home/.pi/agent/agents/rpi/codebase-locator.md" 'effort: xhigh'
@@ -153,7 +153,7 @@ EOF
     assert_file_contains "routes $profile through GPT-6 Luna" "$test_home/.pi/agent/agents/rpi/$profile.md" 'model: gpt-6-luna'
     assert_file_contains "uses high effort for $profile" "$test_home/.pi/agent/agents/rpi/$profile.md" 'effort: high'
   done
-  assert_file_contains "routes generated Codex agents through GPT-6 Sol" "$test_home/.codex/agents/worker.toml" 'model = "gpt-6-sol"'
+  assert_file_contains "routes generated Codex agents through GPT-6.1 Sol" "$test_home/.codex/agents/worker.toml" 'model = "gpt-6.1-sol"'
   assert_file_contains "uses high effort for generated Codex agents" "$test_home/.codex/agents/worker.toml" 'model_reasoning_effort = "high"'
   for target in .agents .codex .claude .pi/agent; do
     [[ "$(readlink "$test_home/$target/skills/engineering-principles")" == "$REPO_ROOT/configs/agents/skills/engineering-principles" ]] || fail "missing engineering-principles skill link: $target"
@@ -187,7 +187,7 @@ EOF
     [.providers.cliproxyapi.models[].id] | sort == [
       "gpt-5.3-codex-spark", "gpt-5.5", "gpt-5.6-luna",
       "gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-astra", "gpt-6-luna",
-      "gpt-6-sol", "gpt-daybreak-blue-latest"
+      "gpt-6.1-sol", "gpt-daybreak-blue-latest"
     ]'
   assert_json "preserves Spark text-only input and smaller context" "$test_home/.pi/agent/models.json" '
     .providers.cliproxyapi.models[] | select(.id == "gpt-5.3-codex-spark") |
@@ -204,7 +204,7 @@ EOF
        else (.thinkingLevelMap | has("max") | not) end)
     )'
   assert_json "defaults Pi to proxy" "$test_home/.pi/agent/settings.json" '.defaultProvider == "cliproxyapi"'
-  assert_json "defaults Pi sessions to GPT-6 Sol" "$test_home/.pi/agent/settings.json" '.defaultModel == "gpt-6-sol"'
+  assert_json "defaults Pi sessions to GPT-6.1 Sol" "$test_home/.pi/agent/settings.json" '.defaultModel == "gpt-6.1-sol"'
   assert_json "defaults Pi sessions to high reasoning" "$test_home/.pi/agent/settings.json" '.defaultThinkingLevel == "high"'
   assert_file_contains "keeps Codex on the direct OpenAI provider" "$test_home/.codex/config.toml" 'model_provider = "openai"'
   assert_file_excludes "does not add the proxy provider to Codex" "$test_home/.codex/config.toml" 'cliproxyapi'

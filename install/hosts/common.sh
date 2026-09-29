@@ -124,6 +124,13 @@ apply_host_configs() {
       voxtype)
         apply_voxtype
         ;;
+      bs-manager)
+        apply_bs_manager
+        ;;
+      psvr2)
+        run_cmd sudo /usr/bin/bash "$REPO_ROOT/install/psvr2-permissions.sh"
+        apply_psvr2
+        ;;
       moshi)
         apply_moshi
         ;;

@@ -48,8 +48,8 @@ func TestDiscoverRegisteredModelsUsesUnionOfLiveAccountCatalogs(t *testing.T) {
 	installDiscoveryFakes(t,
 		[]hostAuthFile{{ID: "auth-a", AuthIndex: "index-a"}, {ID: "auth-b", AuthIndex: "index-b"}},
 		map[string]map[string]bool{
-			"auth-a": {"gpt-6-sol": true, "gpt-6-luna": true, "gpt-daybreak-blue-latest": true},
-			"auth-b": {"gpt-6-sol": true, "gpt-6-luna": true},
+			"auth-a": {"gpt-6.1-sol": true, "gpt-6-luna": true, "gpt-daybreak-blue-latest": true},
+			"auth-b": {"gpt-6.1-sol": true, "gpt-6-luna": true},
 		},
 		nil,
 	)
@@ -65,7 +65,7 @@ func TestDiscoverRegisteredModelsUsesUnionOfLiveAccountCatalogs(t *testing.T) {
 	for _, model := range models {
 		ids = append(ids, model.ID)
 	}
-	want := []string{"gpt-6-luna", "gpt-6-sol", "gpt-daybreak-blue-latest"}
+	want := []string{"gpt-6-luna", "gpt-6.1-sol", "gpt-daybreak-blue-latest"}
 	if !reflect.DeepEqual(ids, want) {
 		t.Fatalf("model IDs = %v, want %v", ids, want)
 	}
@@ -108,14 +108,14 @@ func TestSchedulerDelegatesWhenEveryCandidateSupportsModel(t *testing.T) {
 	installDiscoveryFakes(t,
 		[]hostAuthFile{{ID: "auth-a", AuthIndex: "index-a"}, {ID: "auth-b", AuthIndex: "index-b"}},
 		map[string]map[string]bool{
-			"auth-a": {"gpt-6-sol": true},
-			"auth-b": {"gpt-6-sol": true},
+			"auth-a": {"gpt-6.1-sol": true},
+			"auth-b": {"gpt-6.1-sol": true},
 		},
 		nil,
 	)
 	req := schedulerPickRequest{
 		Provider: "codex",
-		Model:    "gpt-6-sol",
+		Model:    "gpt-6.1-sol",
 		Candidates: []schedulerCandidate{
 			{ID: "auth-a", Provider: "codex"},
 			{ID: "auth-b", Provider: "codex"},

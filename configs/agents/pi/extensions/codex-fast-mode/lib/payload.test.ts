@@ -27,7 +27,7 @@ describe("applyCodexFastMode", () => {
     expect(result).toBeUndefined();
   });
 
-  for (const model of ["gpt-5.4-mini", "gpt-5.6-sol", "gpt-6-astra", "gpt-6-sol"] as const) {
+  for (const model of ["gpt-5.4-mini", "gpt-5.6-sol", "gpt-6-astra", "gpt-6.1-sol"] as const) {
     test(`does not opt excluded ${model} Codex payloads into fast mode`, () => {
       // Arrange
       const payload = codexPayload({ model });

@@ -15,6 +15,7 @@ cp "$REPO_ROOT/configs/cliproxyapi/config.yaml" "$CLIPROXYAPI_REPO_ROOT/configs/
 cp -R "$REPO_ROOT/configs/cliproxyapi/patches" "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi/patches"
 cp -R "$REPO_ROOT/configs/cliproxyapi/plugins/codex-current-models" "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi/plugins/codex-current-models"
 printf '#!/bin/sh\n' > "$CLIPROXYAPI_REPO_ROOT/scripts/cliproxy"
+printf '// usage fixture\n' > "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi/usage.ts"
 python3 - "$REPO_ROOT" <<'PY'
 import pathlib
 import re
@@ -93,6 +94,7 @@ cp "$HOME/.config/cliproxyapi/api-key" "$TEST_TMP/original-key"
 TEST_OS=Linux TEST_ARCH=x86_64 DRY_RUN=0 install_cliproxyapi >> "$TEST_TMP/install.log" 2>&1
 [[ "$(wc -l < "$TEST_TMP/downloads")" -eq 1 ]]
 [[ -L "$HOME/.local/bin/cliproxy" ]]
+[[ "$(readlink "$HOME/.local/bin/cliproxy-usage.ts")" == "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi/usage.ts" ]]
 python3 - "$HOME" "$TEST_TMP" <<'PY'
 import pathlib, re, stat, sys
 home, tmp = map(pathlib.Path, sys.argv[1:])
