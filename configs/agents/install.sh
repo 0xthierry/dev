@@ -582,9 +582,27 @@ sync_claude_settings() {
     return 0
   fi
 
-  # Build the desired settings: base settings + hooks merged in.
+  # Render host-specific absolute paths into user settings, not project settings.
+  # Set both Claude's scratch directory and the conventional child-tool temp dir.
+  local claude_tmp_dir="$HOME/.cache/claude-tmp"
+  if (( DRY_RUN )); then
+    log "[dry-run] create private Claude temp directory at $claude_tmp_dir"
+  else
+    if [[ -L "$claude_tmp_dir" ]]; then
+      warn "Refusing symlink for Claude temp directory: $claude_tmp_dir"
+      return 1
+    fi
+    mkdir -p "$claude_tmp_dir"
+    chmod 700 "$claude_tmp_dir"
+  fi
+
+  # Build the desired settings: base settings + hooks + host-specific temp paths.
   local desired
-  desired="$(jq -cS --argjson hooks "$(jq -cS '.' "$hooks_json")" '. + {hooks: $hooks}' "$base_settings")"
+  desired="$(jq -cS --argjson hooks "$(jq -cS '.' "$hooks_json")" --arg tmp "$claude_tmp_dir" '
+    . + {hooks: $hooks}
+    | .env.CLAUDE_CODE_TMPDIR = $tmp
+    | .env.TMPDIR = $tmp
+  ' "$base_settings")"
 
   if [[ -f "$settings_path" ]]; then
     local current_sorted

@@ -122,8 +122,21 @@ EOF
   [[ ! -e "$test_home/.pi/agent/skills/engineering-principles" ]] || fail "dry-run installed engineering-principles"
   assert_file_contains "dry-run includes global instructions" "$TEST_TMP_DIR/dry-run.log" 'pi AGENTS.md'
 
+  [[ ! -e "$test_home/.cache/claude-tmp" ]] || fail "dry-run created Claude temp directory"
+
   # Act
   HOME="$test_home" "$REPO_ROOT/configs/agents/install.sh" --yes >/dev/null
+
+  # Assert: temp paths are absolute, host-specific, private, and restored on rerun.
+  jq -e --arg tmp "$test_home/.cache/claude-tmp" '
+    .env.CLAUDE_CODE_TMPDIR == $tmp and .env.TMPDIR == $tmp
+    and .env.DISABLE_AUTOUPDATER == "1"
+  ' "$test_home/.claude/settings.json" >/dev/null || fail "incorrect Claude temp settings"
+  [[ -d "$test_home/.cache/claude-tmp" && ! -L "$test_home/.cache/claude-tmp" ]] || fail "missing private Claude temp directory"
+  chmod 755 "$test_home/.cache/claude-tmp"
+  HOME="$test_home" "$REPO_ROOT/configs/agents/install.sh" --yes >/dev/null
+  python3 -c 'import os, stat, sys; assert stat.S_IMODE(os.stat(sys.argv[1]).st_mode) == 0o700' "$test_home/.cache/claude-tmp"
+  printf 'ok: Claude temp settings and private directory survive repeated installs\n'
 
   # Assert
   local target
