@@ -76,7 +76,7 @@
     ],
     "defaultMode": "default"
   },
-  "model": "claude-opus-5-5",
+  "model": "claude-opus-5-5[1m]",
   "enableAllProjectMcpServers": false,
   "statusLine": {
     "type": "command",

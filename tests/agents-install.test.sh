@@ -234,8 +234,8 @@ EOF
   assert_json "canonical Claude plugin value wins" "$test_home/.claude/settings.json" '.enabledPlugins["typescript-lsp@claude-plugins-official"] == true'
   assert_json "drops runtime-injected Claude env" "$test_home/.claude/settings.json" '.env.PATH == null'
   assert_json "drops other local-only Claude settings" "$test_home/.claude/settings.json" '.agentPushNotifEnabled == null'
-  assert_json "defaults Claude sessions to Opus 5.5" "$test_home/.claude/settings.json" '.model == "claude-opus-5-5"'
-  assert_json "defaults Claude sessions to medium reasoning" "$test_home/.claude/settings.json" '.effortLevel == "medium"'
+  assert_json "defaults Claude sessions to Opus 5.5 with explicit 1M context" "$test_home/.claude/settings.json" '.model == "claude-opus-5-5[1m]"'
+  assert_json "defaults Claude sessions to high reasoning" "$test_home/.claude/settings.json" '.effortLevel == "high"'
 
   assert_json "enables Claude auto-compaction" "$test_home/.claude.json" '.autoCompactEnabled == true'
   if [[ "$(jq -cS 'del(.autoCompactEnabled)' "$claude_state_before")" == "$(jq -cS 'del(.autoCompactEnabled)' "$test_home/.claude.json")" ]]; then

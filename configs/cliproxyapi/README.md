@@ -151,6 +151,13 @@ clears inherited API-key, direct OAuth-token, and cloud-provider environment
 selectors so they do not route this launch elsewhere. No global shell exports or
 Claude settings changes are needed. Existing Claude skills, hooks, and settings
 remain available; ordinary `claude` still uses its existing direct authentication.
+Repo-managed Claude settings default to `claude-opus-5-5[1m]`. The explicit `[1m]`
+suffix selects the 1M context window through the proxy; without it, Claude Code can
+budget Opus 5.5 at 200K when using a custom base URL. Existing sessions must switch
+with `/model claude-opus-5-5[1m]`, or resume with
+`cliproxy claude --model 'claude-opus-5-5[1m]' --resume`. This selects the client's
+context budget; upstream acceptance still depends on the proxy and account.
+
 Custom settings such as API-key helpers and model overrides may require separate
 review if the client does not route as expected.
 
