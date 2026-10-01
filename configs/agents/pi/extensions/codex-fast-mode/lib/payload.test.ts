@@ -2,7 +2,19 @@ import { describe, expect, test } from "bun:test";
 import { applyCodexFastMode } from "./payload";
 
 describe("applyCodexFastMode", () => {
-  for (const model of ["gpt-5.4", "gpt-5.5", "gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-luna"] as const) {
+  for (const model of [
+    "gpt-5.4",
+    "gpt-5.5",
+    "gpt-5.6",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+    "gpt-6-luna",
+    "gpt-5.4-mini",
+    "gpt-5.6-sol",
+    "gpt-6-astra",
+    "gpt-6.1-sol",
+    "gpt-future",
+  ] as const) {
     test(`sets priority service tier on eligible ${model} Codex payloads`, () => {
       // Arrange
       const payload = codexPayload({ model });
@@ -27,8 +39,8 @@ describe("applyCodexFastMode", () => {
     expect(result).toBeUndefined();
   });
 
-  for (const model of ["gpt-5.4-mini", "gpt-5.6-sol", "gpt-6-astra", "gpt-6.1-sol"] as const) {
-    test(`does not opt excluded ${model} Codex payloads into fast mode`, () => {
+  for (const model of ["claude-opus-4-6", "grok-4", "o3"] as const) {
+    test(`does not opt non-GPT ${model} payloads into fast mode`, () => {
       // Arrange
       const payload = codexPayload({ model });
 

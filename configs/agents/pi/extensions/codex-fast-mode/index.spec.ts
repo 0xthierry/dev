@@ -28,9 +28,9 @@ describe("codex-fast-mode extension E2E", () => {
   for (const [model, expectedTier] of [
     ["gpt-5.6", "priority"],
     ["gpt-6-luna", "priority"],
-    ["gpt-5.6-sol", "missing"],
-    ["gpt-6-astra", "missing"],
-    ["gpt-6.1-sol", "missing"],
+    ["gpt-5.6-sol", "priority"],
+    ["gpt-6-astra", "priority"],
+    ["gpt-6.1-sol", "priority"],
   ] as const) {
     test(`uses service_tier=${expectedTier} for ${CODEX_FAST_MODE_TEST_PROVIDER}/${model}`, async () => {
       // Arrange
@@ -56,6 +56,13 @@ describe("codex-fast-mode extension E2E", () => {
       });
 
       // Act
+      const commands = await harness.request({ type: "get_commands" });
+      const offResponse = await harness.request({ type: "prompt", message: "/fast off" });
+      await harness.request({ type: "prompt", message: "Report the service tier while fast mode is off." });
+      const offEnd = await harness.waitForEvent((event) => event.type === "agent_end", 60_000);
+      const offEvents = [...harness.events];
+      harness.events.length = 0;
+      const onResponse = await harness.request({ type: "prompt", message: "/fast on" });
       const promptResponse = await harness.request({
         type: "prompt",
         message: "Report the provider payload service tier.",
@@ -63,6 +70,26 @@ describe("codex-fast-mode extension E2E", () => {
       const agentEnd = await harness.waitForEvent((event) => event.type === "agent_end", 60_000);
 
       // Assert
+      expect(JSON.stringify(commands)).toContain('"name":"fast"');
+      expect(offResponse.success).toBe(true);
+      expect(onResponse.success).toBe(true);
+      expect(eventText(offEnd)).toContain("service_tier=missing");
+      if (expectedTier === "priority") {
+        expect(offEvents).toContainEqual(
+          expect.objectContaining({
+            method: "setStatus",
+            statusKey: "codex-fast-mode",
+            statusText: expect.stringContaining("[fast]"),
+          }),
+        );
+        expect(harness.events).toContainEqual(
+          expect.objectContaining({
+            method: "setStatus",
+            statusKey: "codex-fast-mode",
+            statusText: expect.stringContaining("[fast]"),
+          }),
+        );
+      }
       expect(promptResponse.success).toBe(true);
       expect(eventText(agentEnd)).toContain(`service_tier=${expectedTier}`);
       expect(harness.stderr()).toBe("");

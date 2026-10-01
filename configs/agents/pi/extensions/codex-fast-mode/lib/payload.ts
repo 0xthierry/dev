@@ -1,13 +1,5 @@
 const CODEX_FAST_MODE_SERVICE_TIER = "priority";
 const CODEX_FAST_MODE_PROVIDERS = new Set(["openai-codex", "cliproxyapi"]);
-const CODEX_FAST_MODE_MODELS = new Set([
-  "gpt-5.4",
-  "gpt-5.5",
-  "gpt-5.6",
-  "gpt-5.6-terra",
-  "gpt-5.6-luna",
-  "gpt-6-luna",
-]);
 
 type JsonObject = Record<string, unknown>;
 export type CodexFastModeModel = { provider: string; id: string };
@@ -28,8 +20,12 @@ export function applyCodexFastMode(payload: unknown, model: CodexFastModeModel |
   };
 }
 
+export function supportsCodexFastMode(model: CodexFastModeModel | undefined): boolean {
+  return !!model && CODEX_FAST_MODE_PROVIDERS.has(model.provider) && model.id.startsWith("gpt-");
+}
+
 function isCodexFastModePayload(payload: unknown, model: CodexFastModeModel | undefined): payload is JsonObject {
-  if (!model || !CODEX_FAST_MODE_PROVIDERS.has(model.provider) || !CODEX_FAST_MODE_MODELS.has(model.id)) return false;
+  if (!model || !supportsCodexFastMode(model)) return false;
   if (!isJsonObject(payload) || payload.model !== model.id) return false;
 
   return (
