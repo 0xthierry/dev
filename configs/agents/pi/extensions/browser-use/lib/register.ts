@@ -46,7 +46,10 @@ export function registerBrowserUseExtension(pi: ExtensionAPI, host: BrowserUseHo
     description: "Show Browser Use runtime file availability",
     handler: async (_args, ctx) => {
       if (!ctx.hasUI) return;
-      ctx.ui.notify(JSON.stringify({ enabled, acceptPermissions, ...paths }, null, 2), paths.available ? "info" : "warning");
+      ctx.ui.notify(
+        JSON.stringify({ enabled, acceptPermissions, ...paths }, null, 2),
+        paths.available ? "info" : "warning",
+      );
     },
   });
 

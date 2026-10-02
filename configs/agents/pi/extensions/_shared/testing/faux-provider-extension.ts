@@ -1,6 +1,16 @@
-import { type Context, fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import {
+  fauxAssistantMessage,
+  fauxToolCall,
+  getCurrentSystemPrompt,
+  getCurrentTools,
+  type JsonObject,
+  type TranscriptContext,
+} from "@earendil-works/pi-ai";
 import { registerFauxProvider } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { z } from "zod";
+
+const toolArgumentsSchema = z.record(z.string(), z.json());
 
 export const FAUX_PROVIDER_NAME = "pi-extension-e2e-faux";
 export const FAUX_MODEL_ID = "pi-extension-e2e-faux-model";
@@ -60,31 +70,34 @@ export default function (pi: ExtensionAPI) {
   });
 }
 
-function getFauxResponses() {
-  const plan = resolveFauxResponsePlan(process.env);
-  const promptPlans = resolveFauxPromptPlans(process.env);
+export function getFauxResponses(environment: NodeJS.ProcessEnv = process.env) {
+  const plan = resolveFauxResponsePlan(environment);
+  const promptPlans = resolveFauxPromptPlans(environment);
   if (promptPlans) {
     const length = Math.max(plan?.length ?? 0, ...promptPlans.map((candidate) => candidate.plan.length));
-    return Array.from({ length }, (_, index) => (context: Context) => {
-      const selected = promptPlans.find((candidate) => context.systemPrompt?.includes(candidate.selector))?.plan;
+    return Array.from({ length }, (_, index) => (context: TranscriptContext) => {
+      const systemPrompt = getCurrentSystemPrompt(context.messages);
+      const selected = promptPlans.find((candidate) => systemPrompt.includes(candidate.selector))?.plan;
       const step = selected?.[index] ?? plan?.[index] ?? { text: DEFAULT_FAUX_RESPONSE_TEXT };
       return responseFromPlanStep(step, context);
     });
   }
   if (plan) {
     return plan.map((step) =>
-      isContextualStep(step) ? (context: Context) => responseFromPlanStep(step, context) : responseFromPlanStep(step),
+      isContextualStep(step)
+        ? (context: TranscriptContext) => responseFromPlanStep(step, context)
+        : responseFromPlanStep(step),
     );
   }
-  const toolCalls = getFauxToolCalls();
-  const finalMessage = fauxAssistantMessage(getFauxResponseText());
+  const toolCalls = getFauxToolCalls(environment);
+  const finalMessage = fauxAssistantMessage(getFauxResponseText(environment));
   if (toolCalls.length === 0) return [finalMessage];
   return [fauxAssistantMessage(toolCalls, { stopReason: "toolUse" }), finalMessage];
 }
 
 export type FauxResponsePlanStep =
   | { text: string }
-  | { toolCalls: Array<{ name: string; arguments?: Record<string, unknown>; id?: string }> }
+  | { toolCalls: Array<{ name: string; arguments?: JsonObject; id?: string }> }
   | { contextEcho: { sentinel: string; prefix?: string } }
   | { finalAnswerEcho: { payloadSentinel: string; prefix?: string } }
   | { toolCatalogAudit: { expected: string[]; forbidden?: string[] } };
@@ -124,7 +137,7 @@ export function resolveFauxPromptPlans(
   return plans.length ? plans : undefined;
 }
 
-function responseFromPlanStep(step: FauxResponsePlanStep, context?: Context) {
+function responseFromPlanStep(step: FauxResponsePlanStep, context?: TranscriptContext) {
   if ("text" in step) return fauxAssistantMessage(step.text);
   if ("toolCalls" in step) {
     return fauxAssistantMessage(
@@ -154,7 +167,7 @@ function responseFromPlanStep(step: FauxResponsePlanStep, context?: Context) {
         : `MISSING_FINAL_ANSWER ${step.finalAnswerEcho.payloadSentinel}`,
     );
   }
-  const names = Array.isArray(context?.tools) ? context.tools.map((tool) => tool.name) : [];
+  const names = context ? getCurrentTools(context.messages).map((tool) => tool.name) : [];
   const audit = auditToolCatalog(names, step.toolCatalogAudit.expected, step.toolCatalogAudit.forbidden ?? []);
   return fauxAssistantMessage(
     `TOOL_CATALOG_AUDIT exact=${audit.exact} names=${audit.collaboration.join(",")} forbidden=${audit.presentForbidden.join(",") || "none"}`,
@@ -190,8 +203,8 @@ function collectStrings(value: unknown): string[] {
   return Object.values(value as Record<string, unknown>).flatMap(collectStrings);
 }
 
-function getFauxToolCalls() {
-  const raw = process.env[FAUX_TOOL_CALLS_ENV];
+function getFauxToolCalls(environment: NodeJS.ProcessEnv) {
+  const raw = environment[FAUX_TOOL_CALLS_ENV];
   if (!raw) return [];
   const parsed = JSON.parse(raw) as unknown;
   if (!Array.isArray(parsed)) throw new Error(`${FAUX_TOOL_CALLS_ENV} must be a JSON array`);
@@ -206,12 +219,16 @@ function getFauxToolCalls() {
       throw new Error(`${FAUX_TOOL_CALLS_ENV}[${index}].arguments must be an object when provided`);
     }
     const id = typeof value.id === "string" && value.id ? value.id : undefined;
-    return fauxToolCall(value.name, args as Record<string, unknown>, id ? { id } : undefined);
+    return fauxToolCall(
+      value.name,
+      parseToolArguments(args, `${FAUX_TOOL_CALLS_ENV}[${index}].arguments`),
+      id ? { id } : undefined,
+    );
   });
 }
 
-function getFauxResponseText(): string {
-  return process.env[FAUX_RESPONSE_TEXT_ENV] || DEFAULT_FAUX_RESPONSE_TEXT;
+function getFauxResponseText(environment: NodeJS.ProcessEnv): string {
+  return environment[FAUX_RESPONSE_TEXT_ENV] || DEFAULT_FAUX_RESPONSE_TEXT;
 }
 
 function getTokensPerSecond(environment: NodeJS.ProcessEnv): number {
@@ -323,9 +340,18 @@ function parsePlanToolCall(value: unknown, stepIndex: number, callIndex: number)
   }
   return {
     name: record.name,
-    arguments: argumentsValue as Record<string, unknown>,
+    arguments: parseToolArguments(
+      argumentsValue,
+      `${FAUX_RESPONSE_PLAN_ENV}[${stepIndex}].toolCalls[${callIndex}].arguments`,
+    ),
     ...(typeof record.id === "string" ? { id: record.id } : {}),
   };
+}
+
+function parseToolArguments(value: unknown, name: string): JsonObject {
+  const result = toolArgumentsSchema.safeParse(value);
+  if (!result.success) throw new Error(`${name} must be a JSON object`);
+  return result.data;
 }
 
 function parseRecord(raw: string, name: string): Record<string, unknown> {

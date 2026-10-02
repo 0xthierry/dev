@@ -21,17 +21,21 @@ function eventText(event: JsonObject): string {
 describe("xai-grok-fast-mode extension E2E", () => {
   let harness: PiRpcHarness | undefined;
   let tempProject: string | undefined;
+  let tempAgentDir: string | undefined;
 
   afterEach(async () => {
     await harness?.stop();
     harness = undefined;
     if (tempProject) await rm(tempProject, { recursive: true, force: true });
     tempProject = undefined;
+    if (tempAgentDir) await rm(tempAgentDir, { recursive: true, force: true });
+    tempAgentDir = undefined;
   });
 
   test("adds priority processing to direct xAI Grok requests", async () => {
     // Arrange
     tempProject = await mkdtemp(join(tmpdir(), "pi-xai-grok-fast-mode-e2e-"));
+    tempAgentDir = await mkdtemp(join(tmpdir(), "pi-xai-grok-fast-mode-agent-"));
     harness = await startPiRpcHarness({
       cwd: tempProject,
       args: [
@@ -48,6 +52,7 @@ describe("xai-grok-fast-mode extension E2E", () => {
         XAI_GROK_FAST_MODE_TEST_MODEL,
       ],
       env: {
+        PI_CODING_AGENT_DIR: tempAgentDir,
         [XAI_GROK_FAST_MODE_TEST_API_KEY_ENV]: "test-key",
       },
     });

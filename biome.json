@@ -8,7 +8,8 @@
       "!configs/agents/pi/extensions/ai-memory-pi.ts",
       "scripts/pi-extension-tests.ts",
       "package.json",
-      "tsconfig.pi-extensions.json"
+      "tsconfig.pi-extensions.json",
+      "!!configs/browser-diagnostics"
     ]
   },
   "formatter": {

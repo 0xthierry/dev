@@ -76,7 +76,7 @@ describe("control-browser skill contract", () => {
     expect(bootstrap).toContain("do not reuse old bindings or recommend reinstalling");
   });
 
-  test("keeps approvals fail-closed and explains screenshot error loss", () => {
+  test("distinguishes user-selected auto-accept from plain confirmation and explains screenshot error loss", () => {
     // Arrange
     const heading = "## Screenshots and approvals";
 
@@ -87,8 +87,12 @@ describe("control-browser skill contract", () => {
     expect(guidance).toContain("discards buffered images when JavaScript throws");
     expect(guidance).toContain("separate successful screenshot call");
     expect(guidance).toContain("Pi's confirmation UI");
-    expect(guidance).toContain("never bypass it or auto-approve");
-    expect(guidance).toContain("Strict automatic review is unsupported and fails closed");
+    expect(guidance).toContain("With `/browser-use on` (no extra flag)");
+    expect(guidance).toContain("Do not auto-approve in JavaScript");
+    expect(guidance).toContain("With `/browser-use on --accept-permissions`");
+    expect(guidance).toContain("Pi auto-accepts every kernel elicitation for this session");
+    expect(guidance).toContain("Do not turn that flag on yourself");
+    expect(guidance).toContain("Strict automatic review metadata is not something you forge");
   });
 
   test("documents permission categories separately from action and browser-native confirmations", () => {
@@ -115,9 +119,12 @@ describe("control-browser skill contract", () => {
     expect(guidance).toContain("Action confirmation");
     expect(guidance).toContain("Browser-native permission");
     expect(guidance).toContain("never inspect history speculatively");
-    expect(guidance).toContain("does not grant website access");
+    expect(guidance).toContain("Enabling `/browser-use on` only enables tool execution");
+    expect(guidance).toContain("`--accept-permissions` additionally auto-answers kernel permission asks");
+    expect(guidance).toContain("Neither is consent for consequential actions in chat");
     expect(guidance).toContain("does not request persistent grants");
-    expect(guidance).toContain("mandatory automated safety reviews");
+    expect(guidance).toContain("some require an automated safety review");
+    expect(guidance).toContain("It does not forge reviewer metadata");
     expect(guidance).toContain("read the selected capability's `documentation()`");
   });
 
@@ -133,8 +140,10 @@ describe("control-browser skill contract", () => {
     expect(guidance).toContain("read-only CDP debugging observations");
     expect(guidance).toContain("Keep CDP and recording capabilities available");
     expect(guidance).toContain("Do not ask the same permission question in chat and then again through Pi's dialog");
-    expect(guidance).toContain("Do not suppress runtime CDP permission requests");
-    expect(guidance).toContain("not first-party permission checks");
+    expect(guidance).toContain("When the runtime requests permission and `--accept-permissions` is off");
+    expect(guidance).toContain("When it is on, continue; the kernel ask is already accepted");
+    expect(guidance).toContain("`--accept-permissions` only auto-answers kernel elicitations");
+    expect(guidance).toContain("it does not change those chat-level checks");
   });
 
   test("keeps platform-neutral bootstrap and explicit-family constraints", () => {

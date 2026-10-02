@@ -15,7 +15,7 @@ write_mise_config() {
   cat > "$tmp" <<'EOF'
 [tools]
 node = "latest"
-"npm:@earendil-works/pi-coding-agent" = "0.87.0"
+"npm:@earendil-works/pi-coding-agent" = "1.0.0"
 pnpm = "latest"
 python = "3.12"
 go = "latest"

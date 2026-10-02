@@ -1,9 +1,10 @@
 import {
   type Api,
   type AssistantMessage,
-  type Context,
   createAssistantMessageEventStream,
+  getCurrentSystemPrompt,
   type Model,
+  type TranscriptContext,
 } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -44,11 +45,11 @@ export default function (pi: ExtensionAPI) {
   }
 }
 
-function streamSimple(model: Model<Api>, context: Context) {
+export function streamSimple(model: Model<Api>, context: TranscriptContext) {
   const stream = createAssistantMessageEventStream();
 
   queueMicrotask(() => {
-    const text = context.systemPrompt ?? "";
+    const text = getCurrentSystemPrompt(context.messages);
     const message = buildAssistantMessage(model, text);
 
     stream.push({ type: "start", partial: { ...message, content: [] } });
