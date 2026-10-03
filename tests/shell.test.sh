@@ -4,9 +4,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
-mkdir -p "$tmp/home" "$tmp/zdot"
+mkdir -p "$tmp/home" "$tmp/zdot" "$tmp/bin"
+cat > "$tmp/bin/mise" <<'EOF'
+#!/usr/bin/env bash
+# Keep this shell-unit test isolated from the user's active mise session.
+exit 0
+EOF
+chmod +x "$tmp/bin/mise"
 
-output="$({ HOME="$tmp/home" ZDOTDIR="$tmp/zdot" zsh -fc '
+output="$({ HOME="$tmp/home" ZDOTDIR="$tmp/zdot" PATH="$tmp/bin:$PATH" zsh -fc '
   source "$1"
   pi() { printf "%s\n" "$@"; }
   if (( $+functions[glm] )); then

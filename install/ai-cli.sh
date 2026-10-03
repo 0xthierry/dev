@@ -9,6 +9,33 @@ AMQ_SOURCE_URL="https://github.com/avivsinai/agent-message-queue.git"
 AMQ_VERSION="v0.77.1"
 AMQ_COMMIT="05678d46cb989b191657aaa29f4a5195f5de416c"
 
+run_with_version_timeout() {
+  local seconds="$1"
+  shift
+
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$seconds" "$@"
+    return
+  fi
+  if command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$seconds" "$@"
+    return
+  fi
+
+  # macOS has neither timeout command by default. Python is installed by mise
+  # before the AI CLI phase and preserves the same bounded version probe.
+  python3 - "$seconds" "$@" <<'PY'
+import subprocess
+import sys
+
+try:
+    result = subprocess.run(sys.argv[2:], timeout=float(sys.argv[1]))
+except (OSError, subprocess.TimeoutExpired):
+    raise SystemExit(1)
+raise SystemExit(result.returncode)
+PY
+}
+
 # True when an already-installed binary reports the pinned version. Each vendor
 # prints a different shape ("plannotator 0.27.14", "2.1.219 (Claude Code)",
 # "0.9.3"), so match the first semver-looking token and compare with any
@@ -22,7 +49,7 @@ installed_binary_is_pinned() {
   bin_path="$(command -v "$bin_name" 2>/dev/null)" || return 1
   [[ -x "$bin_path" ]] || return 1
 
-  actual="$(timeout 15 "$bin_path" --version 2>/dev/null \
+  actual="$(run_with_version_timeout 15 "$bin_path" --version 2>/dev/null \
     | head -1 \
     | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[^[:space:]]*' \
     | head -1)"

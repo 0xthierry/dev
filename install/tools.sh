@@ -15,9 +15,9 @@ apply_pnpm_security_defaults() {
     return 0
   fi
 
-  log_item "pnpm config: frozen lockfile + 24h minimum release age"
-  run_cmd pnpm config set -g frozen-lockfile true
-  run_cmd pnpm config set -g minimum-release-age 1440
+  # pnpm 12 rejects project-only settings in the global config.yaml. The
+  # generated shell environment applies the same defaults to every invocation.
+  log_item "pnpm config: frozen lockfile + 24h minimum release age via environment"
 }
 
 apply_bun_config() {

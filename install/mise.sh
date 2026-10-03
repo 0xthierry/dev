@@ -61,6 +61,12 @@ install_runtimes() {
   log_item "Installing language runtimes..."
   run_cmd "$mise_bin" install
 
+  # `mise install` considers an already-installed floating selector (such as
+  # `latest` or `3.12`) satisfied. Upgrade those selectors while retaining old
+  # installs to preserve setup's non-destructive behavior.
+  log_item "Upgrading floating language runtimes..."
+  run_cmd "$mise_bin" upgrade --no-prune
+
   log_item "Activating mise shims..."
   if (( ${DRY_RUN:-0} )); then
     dry_run_cmd /bin/bash -lc "eval \"\$(mise activate bash)\""

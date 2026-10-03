@@ -58,12 +58,14 @@ verify_github_cli_checksum() {
   local archive="$1"
   local checksum="$2"
 
-  if command -v sha256sum >/dev/null 2>&1; then
-    printf '%s  %s\n' "$checksum" "$archive" | sha256sum --check --status
+  # macOS ships /sbin/sha256sum, but its BSD-style CLI does not support
+  # GNU's --check/--status flags. Prefer the native shasum there.
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    printf '%s  %s\n' "$checksum" "$archive" | shasum -a 256 --check --status
     return
   fi
 
-  printf '%s  %s\n' "$checksum" "$archive" | shasum -a 256 --check --status
+  printf '%s  %s\n' "$checksum" "$archive" | sha256sum --check --status
 }
 
 install_github_cli() (

@@ -54,6 +54,18 @@ main() {
   export HOME PATH
   mkdir -p "$HOME/.local/bin" "$TEST_TMP_DIR/fake-bin"
 
+  cat > "$TEST_TMP_DIR/fake-bin/pinned-tool" <<'EOF'
+#!/usr/bin/env bash
+printf 'pinned-tool 1.2.3\n'
+EOF
+  chmod +x "$TEST_TMP_DIR/fake-bin/pinned-tool"
+  if installed_binary_is_pinned pinned-tool 1.2.3; then
+    printf 'ok: detects pinned binaries without requiring GNU timeout\n'
+  else
+    printf 'not ok: detects pinned binaries without requiring GNU timeout\n' >&2
+    return 1
+  fi
+
   mkdir -p "$HOME/.grok/downloads"
   printf '#!/usr/bin/env bash\n' > "$HOME/.grok/downloads/grok-linux-x86_64"
   chmod +x "$HOME/.grok/downloads/grok-linux-x86_64"
