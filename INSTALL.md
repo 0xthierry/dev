@@ -48,6 +48,55 @@ Use `--dry-run` first when changing the setup flow or validating a host:
 - Uses OrbStack as the container engine and installs the `docker` CLI through Homebrew
 - Applies `nvim`, `agents`, and Moshi host integration
 
+## Roblox: play and develop
+
+Run the normal setup on each desktop (the `dev` server is unchanged):
+
+```bash
+./setup.sh macbook   # On macOS: native Roblox and Roblox Studio via Homebrew
+./setup.sh omarchy   # On Linux: Flatpak, Sober (play), and Vinegar (Studio)
+```
+
+### macOS
+
+Open **Roblox** or **RobloxStudio** from Applications and sign in with your Roblox
+account. Both are native apps. Homebrew casks: `roblox` and `robloxstudio`.
+
+### Omarchy
+
+Setup installs the [upstream-supported Flatpaks](https://vinegarhq.org/Vinegar/Installation.html)
+from Flathub for the current user, including their required runtimes. It preserves
+existing app data and permissions and skips already-installed user apps on reruns.
+It does not install a separate system Wine or change sandbox permissions.
+
+Log out and back in after installing Flatpak for the first time if the apps do
+not appear in the launcher. Launch **Sober** to play or **Vinegar** to develop:
+
+```bash
+flatpak run org.vinegarhq.Sober
+flatpak run org.vinegarhq.Vinegar
+```
+
+On Sober's first launch, leave **Automatic** Roblox installation selected.
+Vinegar downloads/configures Studio on first launch. Complete the prompts and
+sign in yourself; setup does not handle credentials or launch the apps.
+
+Linux is unofficial: Sober is experimental, and Roblox updates can break either
+tool. Both currently require an x86-64 CPU; Sober also requires SSE4.1 (SSE4.2 is
+recommended). See the current [Sober requirements](https://vinegarhq.org/Sober/Installation.html)
+and [Vinegar requirements](https://vinegarhq.org/Vinegar/Installation.html) for GPU
+and OS support. Native macOS remains the fallback if Linux compatibility breaks.
+
+Update the Linux apps explicitly when needed:
+
+```bash
+flatpak update --user org.vinegarhq.Sober org.vinegarhq.Vinegar
+```
+
+After installation, verify **both outcomes**: join an experience in Roblox/Sober,
+then create a Baseplate in Studio/Vinegar, press Play, stop, and save it. Package
+installation alone does not verify gameplay or the Studio graphics/runtime path.
+
 ## What Setup Applies
 
 `./setup.sh <host>` applies the Bash-managed machine state in this order:
@@ -73,6 +122,7 @@ Run the Bash checks after changing the setup code:
 bash -n setup.sh install/*.sh install/hosts/*.sh
 shellcheck setup.sh install/*.sh install/hosts/*.sh
 bash tests/moshi.test.sh
+bash tests/flatpak.test.sh
 ./setup.sh dev --dry-run
 ./setup.sh omarchy --dry-run
 ./setup.sh macbook --dry-run

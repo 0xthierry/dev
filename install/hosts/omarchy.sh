@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# shellcheck source=install/flatpak.sh
+source "$REPO_ROOT/install/flatpak.sh"
+
 # shellcheck disable=SC2034
 HOST_ENV_VARS=(
   "OLLAMA_HOST=0.0.0.0:11434"
@@ -35,6 +38,7 @@ HOST_PACMAN_PACKAGES=(
   dbeaver
   discord
   edk2-ovmf
+  flatpak
   fuse2
   ghostty
   gnome-keyring
@@ -77,6 +81,11 @@ HOST_AUR_PACKAGES=(
   voxtype-bin
 )
 
+HOST_FLATPAK_APPS=(
+  org.vinegarhq.Sober
+  org.vinegarhq.Vinegar
+)
+
 setup_host_prereqs() {
   log_section "Host Prerequisites"
   log_item "Preparing omarchy host prerequisites"
@@ -86,6 +95,7 @@ setup_host_packages() {
   log_section "Host Packages"
   log_item "Installing shared CLI package set for omarchy"
   setup_shared_cli_packages
+  install_flatpak_apps "${HOST_FLATPAK_APPS[@]}"
   install_zed_linux
   install_ai_desktop_apps_linux
   log_item "Skipping unsupported Omarchy apps: ChatGPT desktop, Codex.app, Conductor, Rectangle"

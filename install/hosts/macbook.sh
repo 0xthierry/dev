@@ -49,6 +49,8 @@ HOST_BREW_CASKS=(
   obsidian
   orbstack
   rectangle
+  roblox
+  robloxstudio
   slack
   signal
   spotify
