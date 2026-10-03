@@ -69,8 +69,22 @@ from Flathub for the current user, including their required runtimes. It preserv
 existing app data and permissions and skips already-installed user apps on reruns.
 It does not install a separate system Wine or change sandbox permissions.
 
-Log out and back in after installing Flatpak for the first time if the apps do
-not appear in the launcher. Launch **Sober** to play or **Vinegar** to develop:
+Omarchy's frozen package database can reference older Flatpak/OSTree files that
+its mirror no longer serves (HTTP 404). For official `core`, `extra`, and
+`multilib` packages, setup adds the official Arch Linux Archive as the last
+server in a temporary pacman configuration. It requests the exact versions in
+the existing database and keeps pacman's checksum and signature checks. Custom
+repositories do not use this fallback. Setup does not refresh package databases,
+run a full system update, edit `/etc/pacman.conf` or the mirrorlist, or invoke the
+Omarchy/Quattro upgrade. This does not provide newer security fixes; system
+updates remain a separate maintenance task. If both sources fail, setup stops
+rather than changing versions or bypassing verification.
+
+Setup adds Flatpak's app directories to the running user-service environment
+and restarts active Elephant/Walker services so the apps appear without logging
+out. It preserves custom data directories and leaves inactive services stopped.
+If setup runs without a user service manager, log out and back in to refresh the
+desktop environment. Launch **Sober** to play or **Vinegar** to develop:
 
 ```bash
 flatpak run org.vinegarhq.Sober
@@ -123,6 +137,8 @@ bash -n setup.sh install/*.sh install/hosts/*.sh
 shellcheck setup.sh install/*.sh install/hosts/*.sh
 bash tests/moshi.test.sh
 bash tests/flatpak.test.sh
+bash tests/flatpak-launchers.test.sh
+bash tests/pacman-archive.test.sh
 ./setup.sh dev --dry-run
 ./setup.sh omarchy --dry-run
 ./setup.sh macbook --dry-run

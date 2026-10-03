@@ -116,8 +116,45 @@ install_pacman_packages() {
   fi
 
   log_item "Installing: ${packages[*]}"
-  run_cmd sudo pacman -S --needed --noconfirm "${packages[@]}"
+  if [[ "${HOST_PACMAN_ARCHIVE_FALLBACK:-0}" == 1 ]]; then
+    install_pacman_packages_with_archive_fallback "${packages[@]}"
+  else
+    run_cmd sudo pacman -S --needed --noconfirm "${packages[@]}"
+  fi
 }
+
+install_pacman_packages_with_archive_fallback() (
+  # Frozen Omarchy databases can reference packages removed from its mirror.
+  # Add a package-only fallback, never refresh databases or upgrade the system.
+  log_item "Arch Linux Archive fallback for core/extra/multilib; keeping current package databases"
+  if (( ${DRY_RUN:-0} )); then
+    log_item "Would append https://archive.archlinux.org/packages/.all in a temporary pacman config"
+    run_cmd sudo pacman -S --needed --noconfirm "$@"
+    return
+  fi
+
+  local temp_dir
+  temp_dir=$(mktemp -d) || return $?
+  trap 'rm -rf -- "$temp_dir"' EXIT
+
+  # Expand Include directives first, preserving repository order, signature
+  # policy, custom paths, and all existing servers. Do not edit /etc/pacman*.
+  pacman-conf > "$temp_dir/current.conf" || return $?
+  awk '
+    /^\[/ {
+      if (arch_repo) print "Server = https://archive.archlinux.org/packages/.all"
+      arch_repo = ($0 ~ /^\[(core|extra|multilib)\]$/)
+    }
+    { print }
+    END {
+      if (arch_repo) print "Server = https://archive.archlinux.org/packages/.all"
+    }
+  ' "$temp_dir/current.conf" > "$temp_dir/archive.conf" || return $?
+
+  # Pacman requests the database-selected filenames and still validates their
+  # checksums/signatures. Custom repositories never use the Arch archive.
+  run_cmd sudo pacman --config "$temp_dir/archive.conf" -S --needed --noconfirm "$@"
+)
 
 install_common_pacman_packages() {
   log_section "Shared CLI Packages (pacman)"

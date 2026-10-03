@@ -27,6 +27,12 @@ HOST_CONFIG_TARGETS=(
   voxtype
 )
 
+# Keep the frozen package database usable when a mirror drops older packages.
+# Temporary until the Quattro upgrade: then remove this flag and archive helper.
+# This adds a download fallback, not a system or Omarchy upgrade.
+# shellcheck disable=SC2034
+HOST_PACMAN_ARCHIVE_FALLBACK=1
+
 # shellcheck disable=SC2034
 HOST_PACMAN_PACKAGES=(
   amdsmi
@@ -96,6 +102,7 @@ setup_host_packages() {
   log_item "Installing shared CLI package set for omarchy"
   setup_shared_cli_packages
   install_flatpak_apps "${HOST_FLATPAK_APPS[@]}"
+  refresh_flatpak_launchers
   install_zed_linux
   install_ai_desktop_apps_linux
   log_item "Skipping unsupported Omarchy apps: ChatGPT desktop, Codex.app, Conductor, Rectangle"
@@ -398,8 +405,6 @@ configure_omarchy_sysstat_activities() {
 }
 
 configure_omarchy_storage_maintenance() {
-  local luks_device=""
-
   log_section "Storage Maintenance"
 
   # An SSD only learns a block is free when the filesystem says so. Without
@@ -644,7 +649,7 @@ stop_handy_if_running() {
     return 0
   fi
 
-  for attempt in {1..50}; do
+  for ((attempt = 0; attempt < 50; attempt++)); do
     pgrep -x handy >/dev/null 2>&1 || return 0
     sleep 0.1
   done
