@@ -344,6 +344,7 @@ install_cliproxyapi() {
   ensure_dir "$HOME/.local/bin" || return
   safe_link_path "$CLIPROXYAPI_REPO_ROOT/scripts/cliproxy" "$HOME/.local/bin/cliproxy" "CLIProxyAPI helper" || return
   safe_link_path "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi/usage.ts" "$HOME/.local/bin/cliproxy-usage.ts" "CLIProxyAPI usage helper" || return
+  safe_link_path "$CLIPROXYAPI_REPO_ROOT/configs/cliproxyapi/priority.py" "$HOME/.local/bin/cliproxy-priority.py" "CLIProxyAPI priority helper" || return
   if [[ "$os" == darwin ]]; then
     enable_cliproxyapi_macos || return
   fi

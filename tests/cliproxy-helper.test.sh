@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Resolve mise's Python before the isolated HOME changes its configuration.
+PYTHON_BIN="$(python3 -c 'import sys; print(sys.executable)')"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 export HOME="$tmp/home" CAPTURE="$tmp/args" CAPTURE_ENV="$tmp/env" SERVICE_CAPTURE="$tmp/service"
@@ -14,14 +16,15 @@ printf '%s' "${CLIPROXY_API_KEY:-}" > "$CAPTURE_ENV"
 EOF
 cat > "$tmp/bin/uname" <<'EOF'
 #!/bin/sh
-[ "$1" = -s ] && printf 'Linux\n'
+[ "$1" = -s ] && printf '%s\n' "${TEST_OS:-Linux}"
 EOF
 cat > "$tmp/bin/systemctl" <<'EOF'
 #!/bin/sh
 if [ "$1 $2 $3" = "--user is-active --quiet" ]; then
-  exit 0
+  exit "${SERVICE_ACTIVE_RESULT:-0}"
 fi
 printf '%s\n' "$*" >> "$SERVICE_CAPTURE"
+exit "${SERVICE_RESTART_RESULT:-0}"
 EOF
 chmod +x "$tmp/bin/mock" "$tmp/bin/uname" "$tmp/bin/systemctl"
 ln -s "$tmp/bin/mock" "$tmp/bin/pi"
@@ -106,4 +109,51 @@ if "$ROOT/scripts/cliproxy" usage 2>/dev/null; then
   echo 'not ok: usage accepted missing installed helper' >&2
   exit 1
 fi
-printf 'ok: Codex/Claude login, failed-login handling, Pi/Claude routing, usage dispatch, argument forwarding, secret handling\n'
+# Priority must work without the proxy binary, key, or config, using real isolated auth files.
+ln -s "$PYTHON_BIN" "$tmp/bin/python3"
+ln -s "$ROOT/configs/cliproxyapi/priority.py" "$HOME/.local/bin/cliproxy-priority.py"
+mkdir -p "$HOME/.local/share/cliproxyapi/auth"
+printf '%s\n' '{"type":"codex","access_token":"fixture-secret","keep":{"value":7}}' > "$HOME/.local/share/cliproxyapi/auth/codex-one.json"
+chmod 0600 "$HOME/.local/share/cliproxyapi/auth/codex-one.json"
+"$ROOT/scripts/cliproxy" priority > "$tmp/priority-list"
+grep -qx $'"codex-one.json"\tcodex\t0' "$tmp/priority-list"
+[[ $(wc -l < "$SERVICE_CAPTURE") -eq 2 ]]
+"$ROOT/scripts/cliproxy" priority one 10 > "$tmp/priority-set"
+grep -qx $'"codex-one.json"\tcodex\t10' "$tmp/priority-set"
+grep -q 'load account priorities and clear session affinity' "$tmp/priority-set"
+[[ $(wc -l < "$SERVICE_CAPTURE") -eq 3 ]]
+python3 - "$HOME/.local/share/cliproxyapi/auth/codex-one.json" <<'PY'
+import json, pathlib, stat, sys
+path = pathlib.Path(sys.argv[1])
+assert json.loads(path.read_text()) == {"type": "codex", "access_token": "fixture-secret", "keep": {"value": 7}, "priority": 10}
+assert stat.S_IMODE(path.stat().st_mode) == 0o600
+PY
+if "$ROOT/scripts/cliproxy" priority one bad > "$tmp/priority-error" 2>&1; then
+  echo 'not ok: priority accepted noninteger' >&2; exit 1
+fi
+[[ $(wc -l < "$SERVICE_CAPTURE") -eq 3 ]]
+SERVICE_ACTIVE_RESULT=1 "$ROOT/scripts/cliproxy" priority one 0 > "$tmp/priority-revert"
+grep -q 'No active managed service. Restart any manually running cliproxy serve' "$tmp/priority-revert"
+[[ $(wc -l < "$SERVICE_CAPTURE") -eq 3 ]]
+cat > "$tmp/bin/launchctl" <<'EOF'
+#!/bin/sh
+[ "$1" = print ] && exit "${SERVICE_ACTIVE_RESULT:-0}"
+printf '%s\n' "$*" >> "$SERVICE_CAPTURE"
+EOF
+chmod +x "$tmp/bin/launchctl"
+TEST_OS=Darwin "$ROOT/scripts/cliproxy" priority one 5 > "$tmp/priority-darwin"
+grep -qx "kickstart -k gui/$(id -u)/dev.cliproxyapi" "$SERVICE_CAPTURE"
+grep -q 'Restarted the CLIProxyAPI LaunchAgent' "$tmp/priority-darwin"
+[[ $(wc -l < "$SERVICE_CAPTURE") -eq 4 ]]
+if SERVICE_RESTART_RESULT=1 "$ROOT/scripts/cliproxy" priority one 6 > "$tmp/priority-restart-error" 2>&1; then
+  echo 'not ok: priority ignored managed restart failure' >&2; exit 1
+fi
+[[ $(wc -l < "$SERVICE_CAPTURE") -eq 5 ]]
+if grep -Fq 'fixture-secret' "$tmp"/priority-*; then
+  echo 'not ok: priority exposed auth contents' >&2; exit 1
+fi
+rm "$HOME/.local/bin/cliproxy-priority.py"
+if "$ROOT/scripts/cliproxy" priority 2>/dev/null; then
+  echo 'not ok: priority accepted missing helper' >&2; exit 1
+fi
+printf 'ok: Codex/Claude login, failed-login handling, Pi/Claude routing, usage/priority dispatch, safe atomic priority/revert, Linux/macOS restart and inactive/failure handling, secret handling\n'

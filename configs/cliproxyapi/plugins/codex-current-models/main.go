@@ -382,7 +382,21 @@ func handleSchedulerPick(req schedulerPickRequest) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("no pooled Codex credential advertises %s", model)
 	}
-	selected := eligible[int(roundRobinCounter.Add(1)-1)%len(eligible)]
+	// Match the host scheduler: prefer the highest priority among accounts that
+	// actually support the model, then round-robin only within that priority.
+	highestPriority := eligible[0].Priority
+	for _, candidate := range eligible[1:] {
+		if candidate.Priority > highestPriority {
+			highestPriority = candidate.Priority
+		}
+	}
+	preferred := eligible[:0]
+	for _, candidate := range eligible {
+		if candidate.Priority == highestPriority {
+			preferred = append(preferred, candidate)
+		}
+	}
+	selected := preferred[int(roundRobinCounter.Add(1)-1)%len(preferred)]
 	return okEnvelope(schedulerPickResponse{AuthID: selected.ID, Handled: true})
 }
 

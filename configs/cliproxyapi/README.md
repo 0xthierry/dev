@@ -224,6 +224,59 @@ succeeds. Cached model registration is not proof of account entitlement, and
 inference still requires access to the provider. This patch covers the shared
 `models.json` updater; the separate Codex-client and Devin catalogs are unchanged.
 
+## Reversible account priority
+
+```bash
+cliproxy priority                 # safe filename / provider / priority listing
+cliproxy priority list            # same listing; no credentials or quota requests
+cliproxy priority <unique-auth-filename-substring> 10
+cliproxy priority <unique-auth-filename-substring> 0  # explicitly revert to default
+```
+
+Use a unique substring from the listed auth **filename**, not an email or token
+copied from an auth file. Ambiguous selectors and malformed integers are rejected
+without changing credentials. Priority is a signed 64-bit integer; absent priority
+means `0`, and higher values are preferred among eligible, ready accounts for the
+requested provider/model. Equal-priority accounts retain round-robin routing.
+Priority does not grant model access or bypass account cooldowns.
+
+Existing sticky sessions retain their current account, even when a different
+account has a higher priority. If the preferred account becomes unavailable,
+requests may fall back to another eligible account; that session can remain on
+the fallback after the preferred account recovers, until affinity expires or the
+proxy restarts. A successful priority command restarts an active repository-managed
+Linux user service or macOS LaunchAgent to load the preference and clear affinity.
+If none is active, it prints a manual-restart note; it never starts a stopped service.
+A restart failure exits nonzero, but the priority change remains saved.
+
+The repo-installed Python stdlib helper edits only the top-level `priority` in
+`~/.local/share/cliproxyapi/auth/*.json`. It preserves unrelated auth fields and
+file owner/group/permissions, stages an atomic replacement, and never prints
+JSON payloads, tokens, or raw exception details. Python 3.12 is already supplied
+by the shared mise setup. No automatic expiry is installed: revert explicitly
+with `0`.
+
+Concurrent priority commands serialize through a private state-directory lock.
+OAuth refresh writers do not share that lock: the helper detects content/metadata
+changes immediately before replacement and refuses to overwrite them, but this
+check is not a filesystem compare-and-swap. To eliminate the final check/replace
+race with managed OAuth refresh, stop the service first, set priority, then start
+it again (and stop any manually running proxy too). For example on Linux:
+
+```bash
+systemctl --user stop cliproxyapi.service
+cliproxy priority <unique-auth-filename-substring> 10
+systemctl --user start cliproxyapi.service
+```
+
+On macOS, use the existing `launchctl bootout` / `launchctl bootstrap` commands
+for the `dev.cliproxyapi` LaunchAgent. If an update reports a concurrent change,
+retry after stopping the writer rather than editing OAuth JSON by hand.
+
+Verify without live OAuth or services:
+`python3 configs/cliproxyapi/priority.test.py` and
+`bash tests/cliproxy-helper.test.sh`.
+
 ## Account quota usage
 
 `cliproxy usage` queries the Codex and Claude usage endpoints for every supported

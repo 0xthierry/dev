@@ -103,6 +103,45 @@ func TestSchedulerPinsPartiallyAvailableModelToEligibleAccount(t *testing.T) {
 	}
 }
 
+func TestSchedulerHonorsPriorityAfterFilteringModelEligibility(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		candidates []schedulerCandidate
+		want       []string
+	}{
+		{"prefer eligible high priority", []schedulerCandidate{{ID: "low", Priority: 0}, {ID: "high", Priority: 100}, {ID: "unsupported", Priority: 200}}, []string{"high", "high", "high"}},
+		{"fallback when preferred unavailable", []schedulerCandidate{{ID: "low", Priority: 0}, {ID: "unsupported", Priority: 200}}, []string{"low", "low", "low"}},
+		{"round robin equal priorities", []schedulerCandidate{{ID: "low", Priority: 100}, {ID: "high", Priority: 100}, {ID: "unsupported", Priority: 200}}, []string{"low", "high", "low"}},
+		{"negative priorities", []schedulerCandidate{{ID: "low", Priority: -20}, {ID: "high", Priority: -10}, {ID: "unsupported", Priority: 0}}, []string{"high", "high", "high"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			installDiscoveryFakes(t,
+				[]hostAuthFile{{ID: "low", AuthIndex: "index-low"}, {ID: "high", AuthIndex: "index-high"}, {ID: "unsupported", AuthIndex: "index-unsupported"}},
+				map[string]map[string]bool{
+					"low": {"gpt-6.1-sol": true}, "high": {"gpt-6.1-sol": true}, "unsupported": {},
+				}, nil,
+			)
+			request := schedulerPickRequest{Provider: "codex", Model: "gpt-6.1-sol", Candidates: tc.candidates}
+
+			// Act
+			var got []string
+			for range tc.want {
+				raw, err := handleSchedulerPick(request)
+				if err != nil {
+					t.Fatalf("handleSchedulerPick() error = %v", err)
+				}
+				got = append(got, decodeSchedulerResponse(t, raw).AuthID)
+			}
+
+			// Assert
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("selected accounts = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestSchedulerDelegatesWhenEveryCandidateSupportsModel(t *testing.T) {
 	// Arrange
 	installDiscoveryFakes(t,
