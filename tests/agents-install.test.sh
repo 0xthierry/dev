@@ -205,9 +205,10 @@ EOF
   assert_json "preserves Spark text-only input and smaller context" "$test_home/.pi/agent/models.json" '
     .providers.cliproxyapi.models[] | select(.id == "gpt-5.3-codex-spark") |
     .input == ["text"] and .contextWindow == 128000'
-  assert_json "preserves image input and context for other Codex models" "$test_home/.pi/agent/models.json" '
+  assert_json "uses 300k context for larger Codex models while preserving GPT-5.5 at 272k" "$test_home/.pi/agent/models.json" '
     [.providers.cliproxyapi.models[] | select(.id != "gpt-5.3-codex-spark")] |
-    all(.input == ["text", "image"] and .contextWindow == 272000)'
+    all(.input == ["text", "image"] and
+      .contextWindow == (if .id == "gpt-5.5" then 272000 else 300000 end))'
   assert_json "keeps conservative proxy output and reasoning settings" "$test_home/.pi/agent/models.json" '
     .providers.cliproxyapi.models | all(
       .maxTokens == 32768 and .reasoning == true and
