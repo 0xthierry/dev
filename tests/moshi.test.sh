@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Fixture commands are invoked indirectly by the sourced installer.
+# shellcheck disable=SC2329
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -96,3 +98,47 @@ PY
 [[ "$(grep -c '^kickstart -k gui/.*/app.getmoshi.moshi-hook$' "$TEST_TMP/launchctl.log")" -eq 1 ]]
 echo 'ok: Moshi setup enables inbound Tailscale connections idempotently'
 echo 'ok: macOS setup installs and reconciles the pinned Moshi LaunchAgent'
+
+# Linux must use the same privileged connection for setting and verification.
+uname() { printf 'Linux\n'; }
+id() { printf '%s\n' "${TEST_UID:-1000}"; }
+sudo() {
+  printf '%s\n' "$*" >> "$TEST_TMP/sudo.log"
+  if [[ "${DENY_SUDO:-0}" == 1 ]]; then return 1; fi
+  "$@"
+}
+tailscale() {
+  printf '%s\n' "$*" >> "$TEST_TMP/linux-tailscale.log"
+  if [[ "$*" == 'debug prefs' ]]; then
+    printf '{"ShieldsUp":%s}\n' "${TEST_SHIELDS_UP:-false}"
+  fi
+}
+configure_moshi_tailscale_incoming
+printf 'tailscale set --shields-up=false\ntailscale debug prefs\n' > "$TEST_TMP/expected-sudo.log"
+cmp "$TEST_TMP/expected-sudo.log" "$TEST_TMP/sudo.log"
+echo 'ok: Linux elevates only the setting and its verification'
+
+before="$(wc -l < "$TEST_TMP/sudo.log")"
+TEST_UID=0 configure_moshi_tailscale_incoming
+[[ "$(wc -l < "$TEST_TMP/sudo.log")" == "$before" ]]
+[[ "$(grep -c '^debug prefs$' "$TEST_TMP/linux-tailscale.log")" == 2 ]]
+echo 'ok: root configures and verifies without nested sudo'
+
+before="$(wc -l < "$TEST_TMP/linux-tailscale.log")"
+if DENY_SUDO=1 configure_moshi_tailscale_incoming > "$TEST_TMP/denied.log" 2>&1; then
+  echo 'not ok: denied elevation reported success' >&2; exit 1
+fi
+[[ "$(wc -l < "$TEST_TMP/linux-tailscale.log")" == "$before" ]]
+echo 'ok: elevation denial propagates without verification or permission fallback'
+
+if TEST_SHIELDS_UP=true configure_moshi_tailscale_incoming > "$TEST_TMP/blocked.log" 2>&1; then
+  echo 'not ok: still-blocked inbound connections reported success' >&2; exit 1
+fi
+grep -q 'Tailscale still blocks incoming connections' "$TEST_TMP/blocked.log"
+echo 'ok: verification rejects a setting that did not take effect'
+
+before="$(wc -l < "$TEST_TMP/sudo.log")"
+DRY_RUN=1 configure_moshi_tailscale_incoming > "$TEST_TMP/tailscale-dry.log"
+[[ "$(wc -l < "$TEST_TMP/sudo.log")" == "$before" ]]
+grep -Fq '[dry-run] sudo tailscale set --shields-up=false' "$TEST_TMP/tailscale-dry.log"
+echo 'ok: dry-run describes elevation without invoking it'

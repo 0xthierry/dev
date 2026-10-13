@@ -151,14 +151,21 @@ expose_herdr_for_moshi_probe() {
 }
 
 configure_moshi_tailscale_incoming() {
+  local -a tailscale_cmd=(tailscale)
   if ! check_installed tailscale; then
     log_item "Tailscale not available, skipping inbound connection setting"
     return 0
   fi
 
-  run_cmd tailscale set --shields-up=false
+  # Linux tailscaled restricts preference changes to root or its configured
+  # operator. Elevate this operation, not the user's permanent permissions.
+  # macOS uses the logged-in user's app connection and must remain unprivileged.
+  if [[ "$(uname -s)" == Linux && "$(id -u)" != 0 ]]; then
+    tailscale_cmd=(sudo tailscale)
+  fi
+  run_cmd "${tailscale_cmd[@]}" set --shields-up=false || return $?
   if (( ! ${DRY_RUN:-0} )) \
-    && ! tailscale debug prefs 2>/dev/null | jq -e '.ShieldsUp == false' >/dev/null; then
+    && ! "${tailscale_cmd[@]}" debug prefs 2>/dev/null | jq -e '.ShieldsUp == false' >/dev/null; then
     printf 'error: Tailscale still blocks incoming connections after disabling Shields Up\n' >&2
     return 1
   fi
