@@ -26,12 +26,19 @@ HOST_CONFIG_TARGETS=(
   moshi
   brave
   browser-diagnostics
+  creative-mcp
+)
+
+HOST_BREW_FORMULAE=(
+  openai/tools/tunnel-client
+  uv
 )
 
 # shellcheck disable=SC2034
 HOST_BREW_CASKS=(
   bambu-studio
   bitwarden
+  blender
   brave-browser
   chatgpt
   claude
@@ -90,6 +97,7 @@ setup_host_packages() {
   log_section "Host Packages"
   log_item "Installing shared CLI package set for macbook"
   setup_shared_cli_packages
+  install_brew_formulae "${HOST_BREW_FORMULAE[@]}"
   upgrade_brew_casks_to_latest chatgpt claude grok-bot
 }
 

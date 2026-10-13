@@ -31,6 +31,7 @@ The two layers don't validate each other. **Most recurring bug:** config deploye
 | `configs/herdr/config.toml` | `~/.config/herdr/config.toml` | symlink |
 | `configs/browser-diagnostics/` | `~/.local/bin/chrome-devtools-cli`, `~/.local/bin/browser-diagnostics` | `install/browser-diagnostics.sh`; frozen package-local Bun dependencies and launcher links (omarchy/macbook only) |
 | Cua Driver | `~/.local/bin/cua-driver`, `~/.cua-driver/`, repo-owned Linux skill links; `~/.local/bin/cua-omarchy-{display,window}` and `~/.config/systemd/user/cua-driver{,-x11}.service` on Omarchy | `install/cua-driver.sh`; pinned Linux runtime and concise repo-owned `configs/cua-driver/skill/` on `dev`/`omarchy`, never macOS; Omarchy adds `grim`, allowlisted display/window helpers, native Wayland capture, and a separate private X11 endpoint for verified Alacritty foreground input; no Hyprland plugin |
+| `configs/creative-mcp/` | Blender add-on/runtime, `~/.local/bin/{blender-mcp,roblox-studio-mcp,chatgpt-creative-mcp}`, Claude/Codex MCP entries | `install/creative-mcp.sh`; macbook/omarchy only; native Studio on Mac, Vinegar on Linux; ChatGPT tunnel is explicit-start and requires account authorization |
 | Moshi host integration | `~/.local/bin/herdr`, refreshed agent hooks, `moshi-hook` user service, mosh firewall rule | `install/moshi.sh` |
 | `configs/shell/` | sourced via `~/.zshrc` / `~/.zshenv` | written by `install/shell.sh` |
 | `configs/agents/` | `~/.agents/`, `~/.claude/`, `~/.codex/`, `~/.pi/agent/` | special installer |
@@ -58,6 +59,7 @@ Names differ between Homebrew and pacman (`tree-sitter-cli` vs `tree-sitter`, `m
 | Add tool config | `configs/cli/` plus `install/tools.sh` if needed |
 | Brave diagnostics through skills, not native MCP tools | `configs/browser-diagnostics/`, `install/browser-diagnostics.sh`, shared `browser-diagnostics` / `web-performance-investigation` skills; attaches only to local CDP `127.0.0.1:9222` |
 | Add/update Cua Driver | `install/cua-driver.sh`, `configs/cua-driver/` (repo-owned Linux skill and Omarchy display/window helpers), Linux package dependencies, and `cua-driver` in the `dev`/`omarchy` config targets; keep the skill version aligned with the pinned runtime, keep macOS excluded, and do not enable a Hyprland input plugin without an explicit request and release-kit compatibility verification |
+| Add/update Blender or Roblox MCP | `install/creative-mcp.sh`, `install/blender-mcp.sh`, `install/creative-mcp-tunnel.sh`, `configs/creative-mcp/`; preserve unrelated client entries, pin Blender dependencies and Linux tunnel releases; never start a ChatGPT tunnel during setup |
 | Add Herdr/Moshi integration | `install/herdr.sh`, `install/moshi.sh`, generated hooks under `configs/agents/{hooks,pi/extensions}/`, and the host's `HOST_CONFIG_TARGETS` |
 | Add/update Omarchy PSVR2 | `install/psvr2.sh`, `configs/psvr2/`, `install/psvr2-permissions.sh`, `configs/omarchy/psvr2/`, Omarchy `psvr2` target and `steamvr-linux-fixes-layer-bin` AUR package; pinned Ignition/Toolkit/UnitySetup, Steam owns Sony driver files; never auto-flash or jailbreak |
 | Add Omarchy dictation (Voxtype + local LLM cleanup) | `configs/voxtype/`, `install/hosts/omarchy.sh` (`configure_voxtype`), Hyprland F9 / Super+Ctrl+X |
@@ -82,6 +84,9 @@ Default to shared. Only touch `install/hosts/{host}.sh` when the user names a ho
 bash -n setup.sh install/*.sh install/hosts/*.sh
 shellcheck setup.sh install/*.sh install/hosts/*.sh
 bash tests/ai-memory.test.sh
+bash tests/blender-mcp.test.sh
+python3 tests/creative-mcp.test.py
+python3 tests/creative-mcp-tunnel.test.py
 bash tests/browser-diagnostics.test.sh
 bash tests/cua-driver.test.sh
 bash tests/cua-omarchy-display.test.sh

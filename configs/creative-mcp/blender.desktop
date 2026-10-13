@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Blender
+GenericName=3D modeler
+Comment=3D modeling, animation, rendering and post-production
+Exec=/usr/bin/env PATH=/usr/bin:/bin /usr/bin/blender %f
+Icon=blender
+Terminal=false
+Type=Application
+PrefersNonDefaultGPU=true
+Categories=Graphics;3DGraphics;
+MimeType=application/x-blender;
+StartupWMClass=Blender

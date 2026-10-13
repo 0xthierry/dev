@@ -22,6 +22,7 @@ HOST_CONFIG_TARGETS=(
   cameractrls
   brave
   browser-diagnostics
+  creative-mcp
   bs-manager
   psvr2
   voxtype
@@ -37,6 +38,7 @@ HOST_PACMAN_ARCHIVE_FALLBACK=1
 HOST_PACMAN_PACKAGES=(
   amdsmi
   bitwarden
+  blender
   bluez-utils
   cameractrls
   ccache
@@ -58,6 +60,7 @@ HOST_PACMAN_PACKAGES=(
   obsidian
   pacman-contrib
   python
+  python-cattrs
   qemu-system-x86
   socat
   steam
@@ -65,6 +68,7 @@ HOST_PACMAN_PACKAGES=(
   tailscale
   telegram-desktop
   usbutils
+  uv
   virtiofsd
   wtype
   xdg-desktop-portal-hyprland

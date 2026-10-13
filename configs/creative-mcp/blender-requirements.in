@@ -1,0 +1,7 @@
+# Regenerate (review updates, then smoke the real runtime and desktop wheel sets):
+# uv pip compile --python-version 3.12 --universal --generate-hashes --no-annotate \
+#   --no-header configs/creative-mcp/blender-requirements.in \
+#   -o configs/creative-mcp/blender-requirements.lock
+mcp-for-blender==2.1.9
+# Last cryptography line providing Intel macOS universal2 wheels; 49+ is ARM-only.
+cryptography==48.0.1

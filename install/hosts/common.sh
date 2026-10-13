@@ -152,6 +152,9 @@ apply_host_configs() {
       browser-diagnostics)
         apply_browser_diagnostics
         ;;
+      creative-mcp)
+        apply_creative_mcp
+        ;;
       *)
         log_item "Unknown config target: $target"
         ;;

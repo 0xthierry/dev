@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Explicit foreground-only entrypoint; never store API keys or tunnel profiles.
+set +x
+set -euo pipefail
+
+usage() {
+  printf 'Usage: chatgpt-creative-mcp <blender|roblox>\n'
+  printf 'Requires CONTROL_PLANE_API_KEY (runtime key) and CONTROL_PLANE_TUNNEL_ID in the environment.\n'
+  printf 'Create a tunnel: https://platform.openai.com/settings/organization/tunnels\n'
+  printf 'Create a runtime key with Tunnels Read + Use: https://platform.openai.com/settings/organization/api-keys\n'
+  printf 'Keep this foreground process running; stop it with Ctrl+C. One active instance per tunnel ID.\n'
+}
+
+if [[ $# -eq 1 && "$1" == --help ]]; then usage; exit 0; fi
+if [[ $# -ne 1 ]]; then usage >&2; exit 2; fi
+case "$1" in
+  blender) command_path="$HOME/.local/bin/blender-mcp" ;;
+  roblox) command_path="$HOME/.local/bin/roblox-studio-mcp" ;;
+  *) printf 'error: select blender or roblox; arbitrary commands and tunnel flags are not accepted\n' >&2; usage >&2; exit 2 ;;
+esac
+if [[ -z "${CONTROL_PLANE_API_KEY:-}" ]]; then
+  printf 'error: missing CONTROL_PLANE_API_KEY; supply a runtime key from https://platform.openai.com/settings/organization/api-keys (Tunnels Read + Use), not an admin key\n' >&2
+  exit 1
+fi
+if [[ -z "${CONTROL_PLANE_TUNNEL_ID:-}" ]]; then
+  printf 'error: missing CONTROL_PLANE_TUNNEL_ID; create/inspect a tunnel at https://platform.openai.com/settings/organization/tunnels\n' >&2
+  exit 1
+fi
+if [[ ! -x "$command_path" ]]; then
+  printf 'error: local stdio MCP launcher is missing or not executable: %s; run host setup first\n' "$command_path" >&2
+  exit 1
+fi
+case "$(uname -s)" in
+  Linux) client="$HOME/.local/share/creative-mcp/tunnel-client/runtime" ;;
+  Darwin)
+    # Resolve the official formula directly, including shells with a minimal PATH.
+    brew_bin="$(command -v brew || true)"
+    [[ -n "$brew_bin" ]] || { [[ ! -x /opt/homebrew/bin/brew ]] || brew_bin=/opt/homebrew/bin/brew; }
+    [[ -n "$brew_bin" ]] || { [[ ! -x /usr/local/bin/brew ]] || brew_bin=/usr/local/bin/brew; }
+    if [[ -z "$brew_bin" ]] || ! prefix="$("$brew_bin" --prefix openai/tools/tunnel-client 2>/dev/null)"; then
+      printf 'error: supported Homebrew formula openai/tools/tunnel-client is missing; run macbook setup\n' >&2
+      exit 1
+    fi
+    client="$prefix/bin/tunnel-client"
+    ;;
+  *) printf 'error: ChatGPT creative MCP tunnel supports macOS and Linux desktops only\n' >&2; exit 1 ;;
+esac
+if [[ ! -x "$client" ]]; then
+  printf 'error: tunnel-client is missing or not executable: %s; run host setup\n' "$client" >&2
+  exit 1
+fi
+
+# Ambient tunnel profiles/settings must not add servers, public listeners,
+# Cloudflared, disk logs, raw HTTP logging, or extra MCP/Harpoon channels.
+# Preserve ordinary application environment (PATH, Blender settings, proxies).
+while IFS= read -r name; do
+  case "$name" in
+    CONTROL_PLANE_API_KEY|CONTROL_PLANE_TUNNEL_ID) ;;
+    CONTROL_PLANE_*|TUNNEL_CLIENT_*|MCP_*|HARPOON_*|CLOUDFLARED_*|HEALTH_*|LOG_*|ALLOW_REMOTE_UI|OPEN_WEB_UI|PID_FILE) unset "$name" ;;
+  esac
+done < <(compgen -e)
+help_output="$("$client" run --help 2>&1)" || {
+  printf 'error: cannot inspect tunnel-client run flags; reinstall the supported client\n' >&2
+  exit 1
+}
+for flag in --control-plane.api-key --control-plane.poll-channel --mcp.command --health.listen-addr --health.url-file --log.http-raw-unsafe; do
+  if [[ "$help_output" != *"$flag "* ]]; then
+    printf 'error: tunnel-client does not support required flag %s; update through host setup (verified upstream v0.0.16)\n' "$flag" >&2
+    exit 1
+  fi
+done
+# Upstream parses quotes/backslashes itself, then execs argv without a shell.
+# Double-quote escaping preserves spaces, apostrophes, quotes, and backslashes.
+command_string="${command_path//\\/\\\\}"
+command_string="\"${command_string//\"/\\\"}\""
+# With all TUNNEL_CLIENT_* selectors unset and no profile/config flags, upstream
+# ResolveConfigSource returns no file (it does not auto-load saved profiles).
+exec "$client" run \
+  --control-plane.api-key env:CONTROL_PLANE_API_KEY \
+  --control-plane.poll-channel main \
+  --mcp.command "$command_string" \
+  --health.listen-addr 127.0.0.1:0 \
+  --health.url-file "${CHATGPT_CREATIVE_MCP_HEALTH_URL_FILE:-}" \
+  --log.http-raw-unsafe=false

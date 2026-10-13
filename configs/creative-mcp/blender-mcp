@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Fixed, offline-at-launch stdio MCP entrypoint. Installation belongs to setup.
+set -euo pipefail
+
+case "${1:-}" in
+  setup|update|install-addon)
+    printf 'error: upstream %s is disabled; use repository host setup to preserve the pinned runtime and client configuration\n' "$1" >&2
+    exit 2
+    ;;
+esac
+
+runtime="$HOME/.local/share/creative-mcp/blender-mcp/venv/bin/mcp-for-blender"
+if [[ ! -x "$runtime" ]]; then
+  printf 'error: Blender MCP runtime is missing; run repository setup for macbook or omarchy\n' >&2
+  exit 1
+fi
+
+# Force opt-out even if a client or shell inherited an opt-in environment.
+export BLENDER_MCP_DISABLE_TELEMETRY=1
+export BLENDER_HOST="${BLENDER_HOST:-127.0.0.1}"
+export BLENDER_PORT="${BLENDER_PORT:-9876}"
+exec "$runtime" "$@"

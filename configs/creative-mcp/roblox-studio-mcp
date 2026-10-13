@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Roblox owns the MCP binary. Resolve it through Studio's current launcher,
+# not a version directory that becomes stale after an update.
+set -euo pipefail
+
+case "$(uname -s)" in
+  Darwin)
+    studio_mcp="/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP"
+    if [[ ! -x "$studio_mcp" ]]; then
+      printf 'error: install/open Roblox Studio first; missing %s\n' "$studio_mcp" >&2
+      exit 1
+    fi
+    exec "$studio_mcp" "$@"
+    ;;
+  Linux)
+    # Use the same sandbox, Wine build, and prefix as Vinegar. Host Wine can
+    # disagree with the running Studio wineserver and break the connection.
+    # Variables expand inside the Flatpak sandbox, not on the host.
+    # shellcheck disable=SC2016
+    exec flatpak run --command=sh org.vinegarhq.Vinegar -eu -c '
+      root="$XDG_DATA_HOME/vinegar"
+      export WINEPREFIX="$root/prefixes/studio"
+      export WINEDEBUG=-all
+      batch="$root/appdata/Roblox/mcp.bat"
+      if [ ! -f "$batch" ] || [ ! -d "$WINEPREFIX" ]; then
+        echo "error: open Roblox Studio through Vinegar, then enable Assistant > Manage MCP Servers > Enable Studio as MCP server." >&2
+        exit 1
+      fi
+      if [ -x "$root/kombucha/bin/wine" ]; then
+        wine="$root/kombucha/bin/wine"
+      elif [ -x /app/bin/wine64 ]; then
+        wine=/app/bin/wine64
+      else
+        echo "error: Vinegar Wine runtime missing; open/update Vinegar first." >&2
+        exit 1
+      fi
+      # Resolve relative to the launcher directory so Wine/cmd quoting does
+      # not break when the Unix home path contains spaces.
+      cd "$root/appdata/Roblox"
+      exec "$wine" cmd.exe /d /c mcp.bat "$@"
+    ' roblox-studio-mcp "$@"
+    ;;
+  *)
+    printf 'error: Roblox MCP launcher supports macOS and Vinegar on Linux only\n' >&2
+    exit 1
+    ;;
+esac

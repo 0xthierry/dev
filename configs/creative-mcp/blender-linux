@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Arch Blender embeds system Python; a mise/uv Python found first on PATH can
+# make it load an incompatible standard library. Keep tools available after it.
+set -euo pipefail
+export PATH="/usr/bin:/bin:${PATH:-}"
+exec /usr/bin/blender "$@"
