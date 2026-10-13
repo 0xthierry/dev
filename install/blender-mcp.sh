@@ -22,6 +22,31 @@ apply_blender_linux_launcher() {
   fi
 }
 
+blender_is_running() {
+  pgrep -xi blender >/dev/null 2>&1
+}
+
+# Enable the installed add-on in Blender's saved preferences. Installing the
+# file alone leaves it disabled, so the MCP server never starts. Skips (with a
+# warning) while Blender is open: a running Blender rewrites preferences on exit.
+enable_blender_mcp_addon() {
+  local blender_bin="$1"
+  local assets="$2"
+  if (( ${DRY_RUN:-0} )); then
+    log_item "Would enable the MCP for Blender add-on in saved preferences (skipped while Blender is open; backup kept)"
+    dry_run_cmd "$blender_bin" --background --python-exit-code 1 --python "$assets/enable-blender-mcp.py"
+    return 0
+  fi
+  if blender_is_running; then
+    log_item "warning: Blender is open; close it and rerun setup to enable MCP for Blender, or enable it in Preferences > Add-ons"
+    return 0
+  fi
+  "$blender_bin" --background --python-exit-code 1 --python "$assets/enable-blender-mcp.py" || {
+    printf 'error: could not enable the MCP for Blender add-on; enable it in Preferences > Add-ons\n' >&2
+    return 1
+  }
+}
+
 apply_blender_mcp() {
   local host="${1:-}"
   local assets="$REPO_ROOT/configs/creative-mcp"
@@ -41,7 +66,7 @@ apply_blender_mcp() {
   esac
   log_section "Blender MCP"
 
-  if [[ ! -x "$assets/blender-mcp" || ! -f "$assets/install-blender-addon.py" || ! -f "$assets/blender-requirements.lock" ]]; then
+  if [[ ! -x "$assets/blender-mcp" || ! -f "$assets/install-blender-addon.py" || ! -f "$assets/enable-blender-mcp.py" || ! -f "$assets/blender-requirements.lock" ]]; then
     printf 'error: Blender MCP launcher, addon installer or dependency lock is missing: %s\n' "$assets" >&2
     return 1
   fi
@@ -102,9 +127,9 @@ apply_blender_mcp() {
     printf 'error: Blender MCP launcher was not linked: %s\n' "$launcher" >&2
     return 1
   fi
-  log_item "Blender preferences and MCP client configuration are unchanged"
-  log_item "In Blender: Preferences > Add-ons, enable Interface: MCP for Blender (or restart/re-enable after an update)"
-  log_item "Open the 3D View sidebar (N) > MCP for Blender; click Connect to MCP server if it is not already running (default localhost:9876)"
+  enable_blender_mcp_addon "$blender_bin" "$assets" || return $?
+  log_item "MCP client configuration is unchanged"
+  log_item "Open Blender: the 3D View sidebar (N) > MCP for Blender shows the local server (default localhost:9876); click Connect if it is not running"
   log_item "Keep Allow Telemetry off; the MCP launcher also forces telemetry off. No generation API key is needed for local Blender tools"
 }
 

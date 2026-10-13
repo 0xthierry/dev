@@ -14,7 +14,7 @@ export REPO_ROOT="$TEMP/repo with spaces"
 export COMMAND_LOG="$TEMP/commands.log"
 export PYTHONPATH="$TEMP/packages"
 mkdir -p "$REPO_ROOT/configs/creative-mcp" "$TEMP/bin" "$PYTHONPATH/blender_mcp" "$PYTHONPATH/mcp_for_blender-2.1.9.dist-info"
-cp "$ROOT/configs/creative-mcp/"blender-* "$ROOT/configs/creative-mcp/blender.desktop" "$ROOT/configs/creative-mcp/install-blender-addon.py" "$REPO_ROOT/configs/creative-mcp/"
+cp "$ROOT/configs/creative-mcp/"blender-* "$ROOT/configs/creative-mcp/blender.desktop" "$ROOT/configs/creative-mcp/install-blender-addon.py" "$ROOT/configs/creative-mcp/enable-blender-mcp.py" "$REPO_ROOT/configs/creative-mcp/"
 printf 'Name: mcp-for-blender\nVersion: 2.1.9\n' > "$PYTHONPATH/mcp_for_blender-2.1.9.dist-info/METADATA"
 printf 'bl_info = {"name": "MCP for Blender", "version": (2, 1, 9)}\n# pinned bundled fixture\n' > "$PYTHONPATH/blender_mcp/addon.py"
 printf 'from pathlib import Path\ndef get_bundled_addon_path():\n    return Path(__file__).parent / "addon.py"\n' > "$PYTHONPATH/blender_mcp/addon_manager.py"
@@ -22,8 +22,17 @@ cat > "$TEMP/bin/blender" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'blender|%s\n' "$*" >> "$COMMAND_LOG"
+if [[ "${1:-}" == --background ]]; then
+  [[ "$*" == "--background --python-exit-code 1 --python "*/enable-blender-mcp.py ]] || exit 92
+  exit "${BLENDER_ENABLE_FAIL:-0}"
+fi
 [[ "$*" == --version ]] || exit 91
 printf '%s\n' "${BLENDER_VERSION_OUTPUT:-Blender 4.5.2}"
+EOF
+cat > "$TEMP/bin/pgrep" <<'EOF'
+#!/usr/bin/env bash
+# Fixture: Blender is closed unless BLENDER_RUNNING=1.
+[[ "${BLENDER_RUNNING:-0}" == 1 ]]
 EOF
 cat > "$TEMP/bin/uv" <<'EOF'
 #!/usr/bin/env bash
@@ -42,7 +51,7 @@ SERVER
   chmod +x "$venv/bin/mcp-for-blender"
 fi
 EOF
-chmod +x "$TEMP/bin/uv" "$TEMP/bin/blender"
+chmod +x "$TEMP/bin/uv" "$TEMP/bin/blender" "$TEMP/bin/pgrep"
 export PATH="$TEMP/bin:$PATH"
 export HOME="$TEMP/dry home"
 mkdir -p "$HOME"
@@ -52,6 +61,7 @@ DRY_RUN=1 apply_blender_mcp omarchy > "$TEMP/dry.log"
 [[ ! -e "$COMMAND_LOG" && ! -e "$HOME/.local" && ! -e "$HOME/.config" ]] || fail 'dry-run mutated HOME or invoked runtime commands'
 grep -Fq -- '--require-hashes' "$TEMP/dry.log" || fail 'dry-run omitted hashed installation'
 grep -Fq 'scripts/addons' "$TEMP/dry.log" || fail 'dry-run omitted addon placement'
+grep -Fq 'enable-blender-mcp.py' "$TEMP/dry.log" || fail 'dry-run omitted addon enablement'
 printf 'ok: dry-run reports pinned runtime and addon without writes or processes\n'
 
 # Act / Assert: remote server is explicitly ineligible, even in dry-run.
@@ -89,7 +99,20 @@ grep -Fq -- 'pip sync --no-config --python ' "$COMMAND_LOG" || fail 'did not syn
 grep -Fq -- '--require-hashes --only-binary :all: --default-index https://pypi.org/simple ' "$COMMAND_LOG" || fail 'did not use hashed PyPI wheel-only install'
 [[ "$(readlink "$HOME/.local/bin/blender")" == "$REPO_ROOT/configs/creative-mcp/blender-linux" ]] || fail 'missing system-Python Blender launcher'
 [[ "$(readlink "$HOME/.local/share/applications/blender.desktop")" == "$REPO_ROOT/configs/creative-mcp/blender.desktop" ]] || fail 'missing desktop Blender launcher'
-printf 'ok: install repairs partial runtime, installs bundled addon, preserves preferences and launcher\n'
+grep -Eq '^blender\|--background --python-exit-code 1 --python .*/enable-blender-mcp.py$' "$COMMAND_LOG" || fail 'install did not enable the addon'
+printf 'ok: install repairs partial runtime, installs and enables bundled addon, preserves launcher\n'
+
+# Act / Assert: an open Blender is never asked to save preferences under the user.
+cp "$COMMAND_LOG" "$TEMP/commands.before"
+BLENDER_RUNNING=1 DRY_RUN=0 apply_blender_mcp omarchy > "$TEMP/running.log"
+grep -Fq 'warning: Blender is open' "$TEMP/running.log" || fail 'running Blender omitted enable warning'
+if diff "$TEMP/commands.before" "$COMMAND_LOG" | grep -Fq -- '--background'; then fail 'enabled addon while Blender was open'; fi
+printf 'ok: enablement is skipped with a warning while Blender is open\n'
+
+# Act / Assert: a failed enablement is reported, not swallowed.
+if BLENDER_ENABLE_FAIL=1 DRY_RUN=0 apply_blender_mcp omarchy > "$TEMP/enable-fail.log" 2>&1; then fail 'enable failure was swallowed'; fi
+grep -Fq 'could not enable the MCP for Blender add-on' "$TEMP/enable-fail.log" || fail 'enable failure omitted actionable error'
+printf 'ok: enablement failure is actionable\n'
 
 # Act / Assert: repeated setup leaves original backups intact.
 DRY_RUN=0 apply_blender_mcp omarchy > "$TEMP/repeat.log"
