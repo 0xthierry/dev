@@ -142,7 +142,11 @@ install_deb_payload_to_system() {
     return 0
   fi
 
-  (cd "$tmp_dir" && ar x "$deb_path")
+  if ! (cd "$tmp_dir" && ar x "$deb_path"); then
+    printf 'error: could not extract deb archive: %s\n' "$deb_path" >&2
+    rm -rf "$tmp_dir"
+    return 1
+  fi
 
   data_archive="$(find "$tmp_dir" -maxdepth 1 -name 'data.tar.*' -print -quit)"
   if [[ -z "$data_archive" ]]; then
@@ -151,7 +155,10 @@ install_deb_payload_to_system() {
     return 1
   fi
 
-  run_cmd sudo tar -xf "$data_archive" -C /
+  if ! run_cmd sudo tar -xf "$data_archive" -C /; then
+    rm -rf "$tmp_dir"
+    return 1
+  fi
   rm -rf "$tmp_dir"
 }
 
@@ -161,13 +168,15 @@ install_linux_deb_app() {
   local url="$3"
   local executable_relpath="$4"
   local desktop_name="$5"
+  local expected_sha256="${6:-}"
+  local force_install="${7:-0}"
   local wrapper_path="$HOME/.local/bin/$bin_name"
   local deb_path=""
   local executable_path=""
 
   log_section "$name"
 
-  if check_installed "$bin_name" || [[ -x "$wrapper_path" ]]; then
+  if (( ! force_install )) && { check_installed "$bin_name" || [[ -x "$wrapper_path" ]]; }; then
     log_item "$name: installed"
     return 0
   fi
@@ -178,16 +187,35 @@ install_linux_deb_app() {
   log_item "Installing $name from upstream deb..."
   if (( ${DRY_RUN:-0} )); then
     dry_run_cmd curl -fL "$url" -o "$deb_path"
+    if [[ -n "$expected_sha256" ]]; then
+      log_item "Would verify SHA256 $expected_sha256 before extraction"
+    fi
     dry_run_cmd ar x "$deb_path"
     dry_run_cmd sudo tar -xf data.tar.xz -C /
-    dry_run_cmd install -Dm755 /dev/stdin "$wrapper_path"
+    if [[ -L "$wrapper_path" ]]; then
+      log_item "$name: preserving existing symlink launcher $wrapper_path"
+    else
+      dry_run_cmd install -Dm755 /dev/stdin "$wrapper_path"
+    fi
     dry_run_cmd install -Dm644 /dev/stdin "$HOME/.local/share/applications/${bin_name}.desktop"
     rm -f "$deb_path"
     return 0
   fi
 
-  run_cmd curl -fL "$url" -o "$deb_path"
-  install_deb_payload_to_system "$deb_path"
+  if ! run_cmd curl -fL "$url" -o "$deb_path"; then
+    printf 'error: could not download %s package from %s\n' "$name" "$url" >&2
+    rm -f "$deb_path"
+    return 1
+  fi
+  if [[ -n "$expected_sha256" ]] && ! printf '%s  %s\n' "$expected_sha256" "$deb_path" | sha256sum --check --status; then
+    printf 'error: %s package SHA256 mismatch; refusing installation\n' "$name" >&2
+    rm -f "$deb_path"
+    return 1
+  fi
+  if ! install_deb_payload_to_system "$deb_path"; then
+    rm -f "$deb_path"
+    return 1
+  fi
   rm -f "$deb_path"
 
   executable_path="/$executable_relpath"
@@ -200,11 +228,16 @@ install_linux_deb_app() {
     return 1
   fi
 
-  cat > "$wrapper_path" <<EOF
+  # Symlink launchers belong to the config layer and may carry required flags.
+  if [[ -L "$wrapper_path" ]]; then
+    log_item "$name: preserving existing symlink launcher $wrapper_path"
+  else
+    cat > "$wrapper_path" <<EOF
 #!/usr/bin/env bash
 exec "$executable_path" "\$@"
 EOF
-  run_cmd chmod +x "$wrapper_path"
+    run_cmd chmod +x "$wrapper_path"
+  fi
   write_desktop_entry "$bin_name" "$desktop_name" "$wrapper_path" "$bin_name"
   log_item "$name: installed"
 }
@@ -228,32 +261,111 @@ install_linux_devin_desktop() {
   install_linux_deb_app "Devin Desktop" "devin-desktop" "$url" "usr/share/devin-desktop/bin/devin-desktop" "Devin"
 }
 
-latest_claude_desktop_deb_url() {
-  local arch=""
-  local packages_url=""
-  local filename=""
+latest_claude_desktop_deb_metadata() {
+  local arch="$1"
+  local packages_url="https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/main/binary-${arch}/Packages"
+  local metadata=""
 
-  arch="$(linux_arch_deb)" || return 1
-  packages_url="https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/main/binary-${arch}/Packages"
-  filename="$(curl -fsSL "$packages_url" | grep '^Filename: pool/main/c/claude-desktop/claude-desktop_' | sort -V | tail -n 1 | cut -d' ' -f2)"
-
-  if [[ -z "$filename" ]]; then
-    printf 'error: could not resolve latest Claude Desktop package for %s\n' "$arch" >&2
+  if ! metadata="$(curl -fsSL "$packages_url")"; then
+    printf 'error: could not download Claude Desktop package metadata from %s\n' "$packages_url" >&2
     return 1
   fi
 
-  printf 'https://downloads.claude.ai/claude-desktop/apt/stable/%s\n' "$filename"
+  # Keep the version, filename, and checksum from the same Packages stanza.
+  printf '%s' "$metadata" | python3 -c '
+import re
+import sys
+
+arch = sys.argv[1]
+try:
+    packages = []
+    for stanza in re.split(r"\n\s*\n", sys.stdin.read()):
+        fields = {}
+        for line in stanza.splitlines():
+            if line and not line[0].isspace() and ": " in line:
+                key, value = line.split(": ", 1)
+                fields[key] = value
+        if fields.get("Package") != "claude-desktop" or fields.get("Architecture") != arch:
+            continue
+        version = fields.get("Version", "")
+        filename = fields.get("Filename", "")
+        checksum = fields.get("SHA256", "")
+        if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+            raise ValueError("invalid or missing Version")
+        if filename != f"pool/main/c/claude-desktop/claude-desktop_{version}_{arch}.deb":
+            raise ValueError("invalid or missing Filename")
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", checksum):
+            raise ValueError("invalid or missing SHA256")
+        packages.append((tuple(map(int, version.split("."))), version, filename, checksum.lower()))
+    if not packages:
+        raise ValueError(f"no Claude Desktop packages for {arch}")
+    _, version, filename, checksum = max(packages)
+    print(f"{version}\thttps://downloads.claude.ai/claude-desktop/apt/stable/{filename}\t{checksum}")
+except ValueError as error:
+    sys.exit(f"error: invalid Claude Desktop package metadata: {error}")
+' "$arch"
+}
+
+installed_claude_desktop_version() {
+  local asar_path="${1:-/usr/lib/claude-desktop/resources/app.asar}"
+  [[ -e "$asar_path" ]] || return 0
+
+  # ASAR stores a Chromium Pickle JSON header, then files at header-relative offsets.
+  python3 - "$asar_path" <<'PY'
+import json
+import re
+import struct
+import sys
+
+try:
+    with open(sys.argv[1], "rb") as archive:
+        size_pickle, header_size, payload_size, json_size = struct.unpack("<4I", archive.read(16))
+        if size_pickle != 4 or not 8 <= header_size <= 64 * 1024 * 1024 or json_size > header_size - 8 or payload_size != header_size - 4:
+            raise ValueError("invalid ASAR header")
+        header = json.loads(archive.read(json_size))
+        package = header["files"]["package.json"]
+        if package.get("unpacked") or "link" in package:
+            raise ValueError("package.json is not packed in app.asar")
+        offset, size = int(package["offset"]), int(package["size"])
+        if offset < 0 or not 0 < size <= 1024 * 1024:
+            raise ValueError("invalid package.json bounds")
+        archive.seek(8 + header_size + offset)
+        version = json.loads(archive.read(size))["version"]
+        if not isinstance(version, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+            raise ValueError("invalid package.json version")
+        print(version)
+except (OSError, ValueError, KeyError, TypeError, struct.error) as error:
+    sys.exit(f"warning: could not read installed Claude Desktop version: {error}")
+PY
 }
 
 install_linux_claude_desktop() {
+  local arch=""
+  local metadata=""
+  local version=""
   local url=""
+  local checksum=""
+  local installed_version=""
 
-  url="$(latest_claude_desktop_deb_url)" || {
+  arch="$(linux_arch_deb)" || {
     log_item "Claude Desktop: unsupported architecture $(uname -m)"
     return 0
   }
+  if ! check_installed python3; then
+    printf 'error: python3 is required to resolve Claude Desktop versions\n' >&2
+    return 1
+  fi
+  metadata="$(latest_claude_desktop_deb_metadata "$arch")" || return 1
+  IFS=$'\t' read -r version url checksum <<< "$metadata"
+  # Missing or unreadable installed metadata must not suppress an install/repair.
+  installed_version="$(installed_claude_desktop_version)" || installed_version=""
+  if [[ -n "$installed_version" ]] && [[ "$(printf '%s\n%s\n' "$version" "$installed_version" | sort -V | tail -n 1)" == "$installed_version" ]]; then
+    log_item "Claude Desktop: up to date (installed $installed_version, latest $version)"
+    return 0
+  fi
 
-  install_linux_deb_app "Claude Desktop" "claude-desktop" "$url" "usr/lib/claude-desktop/claude-desktop" "Claude"
+  log_item "Claude Desktop: ${installed_version:-not installed} -> $version"
+  install_linux_deb_app "Claude Desktop" "claude-desktop" "$url" "usr/lib/claude-desktop/claude-desktop" "Claude" "$checksum" 1
 }
 
 install_linux_conductor_desktop() {
