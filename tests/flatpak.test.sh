@@ -30,6 +30,12 @@ case "$1" in
     if [[ "${FAIL_APP:-}" == "$6" ]]; then exit 24; fi
     printf 'installed\n' >> "$FLATPAK_STATE/$6"
     ;;
+  update)
+    [[ "$#" == 5 && "$2 $3 $4" == '--user --noninteractive --assumeyes' ]] || exit 96
+    [[ -f "$FLATPAK_STATE/$5" ]] || exit 97
+    if [[ "${FAIL_UPDATE:-}" == "$5" ]]; then exit 25; fi
+    printf 'current\n' > "$FLATPAK_STATE/$5.revision"
+    ;;
   *) exit 95 ;;
 esac
 EOF
@@ -41,6 +47,8 @@ DRY_RUN=1 PATH="$TEMP/no-flatpak" install_flatpak_apps org.vinegarhq.Sober org.v
 grep -Fxq '[dry-run] flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo' "$TEMP/dry.log" || fail 'dry-run omitted remote'
 grep -Fxq '[dry-run] flatpak install --user --noninteractive --assumeyes flathub org.vinegarhq.Sober' "$TEMP/dry.log" || fail 'dry-run omitted player'
 grep -Fxq '[dry-run] flatpak install --user --noninteractive --assumeyes flathub org.vinegarhq.Vinegar' "$TEMP/dry.log" || fail 'dry-run omitted Studio'
+grep -Fxq '[dry-run] flatpak update --user --noninteractive --assumeyes org.vinegarhq.Sober' "$TEMP/dry.log" || fail 'dry-run omitted player update'
+grep -Fxq '[dry-run] flatpak update --user --noninteractive --assumeyes org.vinegarhq.Vinegar' "$TEMP/dry.log" || fail 'dry-run omitted Studio update'
 [[ ! -e "$FLATPAK_STATE/remote" ]] || fail 'dry-run changed state'
 printf 'ok: dry-run plans both apps without requiring Flatpak\n'
 
@@ -77,8 +85,38 @@ DRY_RUN=0 install_flatpak_apps org.vinegarhq.Sober org.vinegarhq.Vinegar > "$TEM
 [[ "$(< "$FLATPAK_STATE/org.vinegarhq.Vinegar")" == installed ]] || fail 'retry did not install Studio'
 printf 'ok: retry converges after partial installation\n'
 
+# Existing apps converge to current versions without reinstalling or touching
+# other apps, system installations, or app-owned data.
+printf 'stale\n' > "$FLATPAK_STATE/org.vinegarhq.Sober.revision"
+printf 'stale\n' > "$FLATPAK_STATE/org.vinegarhq.Vinegar.revision"
+printf 'stale\n' > "$FLATPAK_STATE/unrelated.revision"
+printf 'user data\n' > "$FLATPAK_STATE/app-data"
+DRY_RUN=0 install_flatpak_apps org.vinegarhq.Sober org.vinegarhq.Vinegar > "$TEMP/update.log"
+[[ "$(< "$FLATPAK_STATE/org.vinegarhq.Sober.revision")" == current ]] || fail 'player not updated'
+[[ "$(< "$FLATPAK_STATE/org.vinegarhq.Vinegar.revision")" == current ]] || fail 'Studio not updated'
+[[ "$(< "$FLATPAK_STATE/unrelated.revision")" == stale ]] || fail 'unrelated app changed'
+[[ "$(< "$FLATPAK_STATE/app-data")" == 'user data' ]] || fail 'app data changed'
+printf 'ok: existing declared apps update in user scope without unrelated changes\n'
+
 DRY_RUN=0 install_flatpak_apps org.vinegarhq.Sober org.vinegarhq.Vinegar > "$TEMP/repeat.log"
-[[ "$(< "$FLATPAK_STATE/org.vinegarhq.Sober")" == installed ]] || fail 'rerun changed player'
-[[ "$(< "$FLATPAK_STATE/org.vinegarhq.Vinegar")" == installed ]] || fail 'rerun changed Studio'
-grep -Fq 'org.vinegarhq.Vinegar: already installed' "$TEMP/repeat.log" || fail 'rerun omitted installed status'
-printf 'ok: repeated setup skips installed apps\n'
+[[ "$(< "$FLATPAK_STATE/org.vinegarhq.Sober")" == installed ]] || fail 'rerun reinstalled player'
+[[ "$(< "$FLATPAK_STATE/org.vinegarhq.Vinegar")" == installed ]] || fail 'rerun reinstalled Studio'
+[[ "$(< "$FLATPAK_STATE/org.vinegarhq.Sober.revision")" == current ]] || fail 'rerun regressed player'
+[[ "$(< "$FLATPAK_STATE/org.vinegarhq.Vinegar.revision")" == current ]] || fail 'rerun regressed Studio'
+printf 'ok: repeated setup converges without reinstalling apps\n'
+
+# Failure is propagated and does not proceed to the next declared app.
+printf 'stale\n' > "$FLATPAK_STATE/org.vinegarhq.Sober.revision"
+printf 'stale\n' > "$FLATPAK_STATE/org.vinegarhq.Vinegar.revision"
+if DRY_RUN=0 FAIL_UPDATE=org.vinegarhq.Sober install_flatpak_apps org.vinegarhq.Sober org.vinegarhq.Vinegar > "$TEMP/update-error.log" 2>&1; then
+  fail 'update failure succeeded'
+else
+  status=$?
+fi
+[[ "$status" == 25 ]] || fail 'update failure status lost'
+[[ "$(< "$FLATPAK_STATE/org.vinegarhq.Sober.revision")" == stale ]] || fail 'failed update changed player'
+[[ "$(< "$FLATPAK_STATE/org.vinegarhq.Vinegar.revision")" == stale ]] || fail 'continued after update failure'
+DRY_RUN=0 install_flatpak_apps org.vinegarhq.Sober org.vinegarhq.Vinegar > "$TEMP/update-retry.log"
+[[ "$(< "$FLATPAK_STATE/org.vinegarhq.Sober.revision")" == current ]] || fail 'retry did not update player'
+[[ "$(< "$FLATPAK_STATE/org.vinegarhq.Vinegar.revision")" == current ]] || fail 'retry did not update Studio'
+printf 'ok: update failures propagate and retry converges\n'

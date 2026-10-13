@@ -20,11 +20,18 @@ install_flatpak_apps() {
     https://flathub.org/repo/flathub.flatpakrepo || return $?
 
   for app in "$@"; do
-    if (( ! ${DRY_RUN:-0} )) && flatpak info --user "$app" >/dev/null 2>&1; then
-      log_item "$app: already installed"
-      continue
+    if (( ${DRY_RUN:-0} )); then
+      log_item "$app: update if installed in user scope; otherwise install from Flathub"
+      run_cmd flatpak update --user --noninteractive --assumeyes "$app" || return $?
+      run_cmd flatpak install --user --noninteractive --assumeyes flathub "$app" || return $?
+    elif flatpak info --user "$app" >/dev/null 2>&1; then
+      # Keep dependency/extension updates enabled: a current app can still have
+      # an outdated runtime. Never update unrelated apps or the system scope.
+      log_item "$app: checking for updates"
+      run_cmd flatpak update --user --noninteractive --assumeyes "$app" || return $?
+    else
+      run_cmd flatpak install --user --noninteractive --assumeyes flathub "$app" || return $?
     fi
-    run_cmd flatpak install --user --noninteractive --assumeyes flathub "$app" || return $?
   done
 }
 
