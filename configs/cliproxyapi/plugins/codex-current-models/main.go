@@ -73,7 +73,7 @@ import (
 const (
 	abiVersion       = 1
 	cacheTTL         = 5 * time.Minute
-	clientVersion    = "0.159.0"
+	clientVersion    = "0.162.1"
 	modelsEndpoint   = "https://chatgpt.com/backend-api/codex/models"
 	maxModelsPayload = 16 << 20
 )
