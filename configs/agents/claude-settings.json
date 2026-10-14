@@ -39,9 +39,9 @@
       "Bash(ilspy:*)",
       "Bash(codex exec:*)",
       "Bash(claude:*)",
-      "Bash(~/.agents/bin/*:*)",
-      "Bash(bash ~/.agents/bin/*:*)",
-      "Bash(bun ~/.agents/hooks/*:*)",
+      "Bash(~/.agents/bin/*)",
+      "Bash(bash ~/.agents/bin/*)",
+      "Bash(bun ~/.agents/hooks/*)",
       "Read(~/.agents/**)"
     ],
     "deny": [
