@@ -155,10 +155,15 @@ grep -Fq 'install-hooks --agent claude-code --apply --server-url http://127.0.0.
 grep -Fq 'install-mcp --client codex --apply --server-url http://127.0.0.1:49374' "$TEST_TMP/ai-memory-args"
 grep -Fq 'install-hooks --agent codex --apply --server-url http://127.0.0.1:49374 --hooks-dir' "$TEST_TMP/ai-memory-args"
 if grep -Fq 'install-hooks --agent pi' "$TEST_TMP/ai-memory-args"; then
-  echo 'not ok: Pi hooks were applied over the vendored extension' >&2
+  echo 'not ok: Pi hooks were overwritten instead of using the repository-managed hook-only extension' >&2
   exit 1
 fi
-echo 'ok: agent wiring targets Claude and Codex and leaves the pinned Pi extension alone'
+[[ -f "$REPO_ROOT/configs/agents/pi/extensions/ai-memory-pi.ts" ]]
+if grep -q 'registerTool\|bootstrapMcpBridge' "$REPO_ROOT/configs/agents/pi/extensions/ai-memory-pi.ts"; then
+  echo 'not ok: Pi capture extension must not register memory tools' >&2
+  exit 1
+fi
+echo 'ok: agent wiring targets Claude and Codex; Pi retains capture hooks with native MCP tools'
 
 DRY_RUN=1 configure_ai_memory_agents >> "$TEST_TMP/configure.log"
 echo 'ok: agent wiring dry-run does not invoke ai-memory'

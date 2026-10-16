@@ -175,6 +175,8 @@ run_post_setup_tasks() {
   # After Claude/Codex/Pi configs and Herdr/Moshi hooks, so ai-memory merges
   # into the rendered files instead of being overwritten.
   configure_ai_memory_agents
+  # Last writer: merge the shared service catalog after all client installers.
+  configure_shared_mcp "$SETUP_HOST"
 }
 
 setup_host_prereqs() { :; }

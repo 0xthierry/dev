@@ -36,7 +36,7 @@ The two layers don't validate each other. **Most recurring bug:** config deploye
 | `configs/shell/` | sourced via `~/.zshrc` / `~/.zshenv` | written by `install/shell.sh` |
 | `configs/agents/` | `~/.agents/`, `~/.claude/`, `~/.codex/`, `~/.pi/agent/` | special installer |
 
-**Agent config is special-cased.** `configs/agents/install.sh` installs shared agents/skills/hooks (Codex gets agent copies with model stripping); syncs `claude-settings.json` into `~/.claude/settings.json`; copies `codex-config.toml`; copies `pi-settings.json` into `~/.pi/agent/settings.json`; removes the legacy repo-managed `~/.pi/agent/models.json` symlink and merges only the `cliproxyapi` custom provider into that file, preserving other providers and Pi's built-in model catalog; links shared `configs/agents/agents` to `~/.pi/agent/agents`; symlinks each shared skill into `~/.pi/agent/skills` without rewriting skill frontmatter; links Pi-owned `configs/agents/pi/{prompts,extensions}` to `~/.pi/agent/{prompts,extensions}` (including pinned, vendor-generated Herdr, Moshi, and ai-memory Pi hooks); and links `configs/agents/pi/APPEND_SYSTEM.md` to `~/.pi/agent/APPEND_SYSTEM.md` for Pi-specific appended system instructions. Claude-only skills live in `configs/agents/claude/skills/` and are linked into `~/.claude/skills` only (not `~/.agents`, `~/.codex`, or `~/.pi`). Vendored Plannotator core skills live in `configs/agents/plannotator/skills/` and are linked into Claude and Codex only; Pi gets the equivalent commands from its pinned extension package. The installer links shared `configs/agents/AGENTS.md` into `~/.agents/AGENTS.md`, `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`, and `~/.pi/agent/AGENTS.md`, backing up existing entries. Shared skills include `writing-pr` for pull request titles and bodies. Pi settings exclude `~/.agents`, `~/.claude`, and `~/.codex` resources so Pi only sees repo-managed Pi resources.
+**Agent config is special-cased.** `configs/agents/install.sh` installs shared agents/skills/hooks (Codex gets agent copies with model stripping); syncs `claude-settings.json` into `~/.claude/settings.json`; copies `codex-config.toml`; copies `pi-settings.json` into `~/.pi/agent/settings.json`; removes the legacy repo-managed `~/.pi/agent/models.json` symlink and merges only the `cliproxyapi` custom provider into that file, preserving other providers and Pi's built-in model catalog; links shared `configs/agents/agents` to `~/.pi/agent/agents`; symlinks each shared skill into `~/.pi/agent/skills` without rewriting skill frontmatter; links Pi-owned `configs/agents/pi/{prompts,extensions}` to `~/.pi/agent/{prompts,extensions}` (including pinned, vendor-generated Herdr and Moshi Pi hooks and the patched ai-memory capture-only extension; ai-memory tools use native MCP); and links `configs/agents/pi/APPEND_SYSTEM.md` to `~/.pi/agent/APPEND_SYSTEM.md` for Pi-specific appended system instructions. Claude-only skills live in `configs/agents/claude/skills/` and are linked into `~/.claude/skills` only (not `~/.agents`, `~/.codex`, or `~/.pi`). Vendored Plannotator core skills live in `configs/agents/plannotator/skills/` and are linked into Claude and Codex only; Pi gets the equivalent commands from its pinned extension package. The installer links shared `configs/agents/AGENTS.md` into `~/.agents/AGENTS.md`, `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`, and `~/.pi/agent/AGENTS.md`, backing up existing entries. Shared skills include `writing-pr` for pull request titles and bodies. Pi settings exclude `~/.agents`, `~/.claude`, and `~/.codex` resources so Pi only sees repo-managed Pi resources.
 
 ## Principles
 
@@ -53,9 +53,10 @@ Names differ between Homebrew and pacman (`tree-sitter-cli` vs `tree-sitter`, `m
 
 | Task | Location |
 |---|---|
+| Shared Neon/Datadog US5/Figma/ai-memory/Blender/Roblox MCP | `configs/mcp/`, `install/mcp.sh`; merge after agent/hook installers; OAuth and ChatGPT authorization remain explicit |
 | Add shared CLI tool | `install/packages/common.sh` |
 | Multi-account Codex proxy for Pi | `install/cliproxyapi.sh`, `configs/cliproxyapi/`, `scripts/cliproxy` (default Pi provider; Codex CLI stays direct; OAuth state stays local) |
-| Shared Claude/Codex/Pi project memory | `install/ai-memory.sh`, vendored `configs/agents/pi/extensions/ai-memory-pi.ts` (pinned `ai-memory` release; do not run `install-hooks --agent pi --apply`) |
+| Shared Claude/Codex/Pi project memory | `install/ai-memory.sh`, `install/mcp.sh` and `configs/mcp/` for Pi native MCP tools, plus `configs/agents/pi/extensions/ai-memory-pi.ts` for capture/handoff hooks only (do not run `install-hooks --agent pi --apply`) |
 | Add tool config | `configs/cli/` plus `install/tools.sh` if needed |
 | Brave diagnostics through skills, not native MCP tools | `configs/browser-diagnostics/`, `install/browser-diagnostics.sh`, shared `browser-diagnostics` / `web-performance-investigation` skills; attaches only to local CDP `127.0.0.1:9222` |
 | Add/update Cua Driver | `install/cua-driver.sh`, `configs/cua-driver/` (repo-owned Linux skill and Omarchy display/window helpers), Linux package dependencies, and `cua-driver` in the `dev`/`omarchy` config targets; keep the skill version aligned with the pinned runtime, keep macOS excluded, and do not enable a Hyprland input plugin without an explicit request and release-kit compatibility verification |
@@ -84,6 +85,9 @@ Default to shared. Only touch `install/hosts/{host}.sh` when the user names a ho
 bash -n setup.sh install/*.sh install/hosts/*.sh
 shellcheck setup.sh install/*.sh install/hosts/*.sh
 bash tests/ai-memory.test.sh
+python3 tests/ai-memory-skills.test.py
+~/.local/share/mcp-services/venv/bin/python tests/mcp-clients.test.py
+python3 tests/mcp-runtime.test.py
 bash tests/blender-mcp.test.sh
 python3 tests/creative-mcp.test.py
 python3 tests/creative-mcp-tunnel.test.py

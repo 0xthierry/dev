@@ -4,7 +4,7 @@ set +x
 set -euo pipefail
 
 usage() {
-  printf 'Usage: chatgpt-creative-mcp <blender|roblox>\n'
+  printf 'Usage: chatgpt-creative-mcp <blender|roblox|ai-memory>\n'
   printf 'Requires CONTROL_PLANE_API_KEY (runtime key) and CONTROL_PLANE_TUNNEL_ID in the environment.\n'
   printf 'Create a tunnel: https://platform.openai.com/settings/organization/tunnels\n'
   printf 'Create a runtime key with Tunnels Read + Use: https://platform.openai.com/settings/organization/api-keys\n'
@@ -16,7 +16,8 @@ if [[ $# -ne 1 ]]; then usage >&2; exit 2; fi
 case "$1" in
   blender) command_path="$HOME/.local/bin/blender-mcp" ;;
   roblox) command_path="$HOME/.local/bin/roblox-studio-mcp" ;;
-  *) printf 'error: select blender or roblox; arbitrary commands and tunnel flags are not accepted\n' >&2; usage >&2; exit 2 ;;
+  ai-memory) command_path="$HOME/.local/bin/mcp-service" ;;
+  *) printf 'error: select blender, roblox, or ai-memory; arbitrary commands and tunnel flags are not accepted\n' >&2; usage >&2; exit 2 ;;
 esac
 if [[ -z "${CONTROL_PLANE_API_KEY:-}" ]]; then
   printf 'error: missing CONTROL_PLANE_API_KEY; supply a runtime key from https://platform.openai.com/settings/organization/api-keys (Tunnels Read + Use), not an admin key\n' >&2
@@ -73,6 +74,8 @@ done
 # Double-quote escaping preserves spaces, apostrophes, quotes, and backslashes.
 command_string="${command_path//\\/\\\\}"
 command_string="\"${command_string//\"/\\\"}\""
+# Fixed catalog name, never an arbitrary user-supplied argument or shell command.
+if [[ "$1" == ai-memory ]]; then command_string+=' ai-memory'; fi
 # With all TUNNEL_CLIENT_* selectors unset and no profile/config flags, upstream
 # ResolveConfigSource returns no file (it does not auto-load saved profiles).
 exec "$client" run \

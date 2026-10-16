@@ -1,10 +1,12 @@
-# Optional ChatGPT connection for creative MCPs
+# Optional ChatGPT connection for local MCPs
 
 Host setup installs transport support on **macbook and omarchy only**. It does
 not configure a ChatGPT connector, create an OpenAI tunnel/key, launch a tunnel,
 or enable a public application listener. Blender/Roblox's local integration must
 already work through `~/.local/bin/blender-mcp` or
-`~/.local/bin/roblox-studio-mcp`.
+`~/.local/bin/roblox-studio-mcp`. For ai-memory, the shared setup provides
+`~/.local/bin/mcp-service ai-memory`; the local memory service must be running.
+See the [shared MCP guide](../mcp/README.md) for remote services.
 
 ## Account setup (manual)
 
@@ -33,12 +35,14 @@ already work through `~/.local/bin/blender-mcp` or
    chatgpt-creative-mcp blender
    # Or, with a different tunnel ID for an independent concurrent connection:
    chatgpt-creative-mcp roblox
+   # Or, to expose the local read/write memory service deliberately:
+   chatgpt-creative-mcp ai-memory
    ```
 
    Keep this terminal attached. Stop with Ctrl+C. **Only one active stdio
    tunnel-client instance per tunnel ID is supported**, including across hosts
    and during replacement. Stop the previous instance before reusing its ID.
-   Use separate IDs for concurrent Blender and Roblox connections.
+   Use separate IDs for concurrent Blender, Roblox, and ai-memory connections.
 
 5. For a discoverable health URL, opt in to a private per-run URL file before
    launching (the file contains a loopback URL, not credentials):
@@ -90,7 +94,7 @@ permissions; connect only when you intend to grant that access.
   Modified/conflicting payloads fail closed and are not overwritten.
 - The only public launcher is `~/.local/bin/chatgpt-creative-mcp`.
   Existing regular command files are backed up; unrelated symlinks are refused.
-- No profile/secret file, service, HTTP bridge, Cloudflare tunnel, public endpoint,
+- The tunnel installer adds no profile/secret file, service, Cloudflare tunnel, public endpoint,
   automatic browser opening, or automatic startup is added. Native
   `--mcp.command` supplies stdio directly. Ambient tunnel/MCP/Harpoon/Cloudflared,
   health, profile, and logging settings are removed from the tunnel environment

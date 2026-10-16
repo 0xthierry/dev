@@ -68,7 +68,6 @@ HOST_PACMAN_PACKAGES=(
   tailscale
   telegram-desktop
   usbutils
-  uv
   virtiofsd
   wtype
   xdg-desktop-portal-hyprland

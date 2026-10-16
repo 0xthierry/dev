@@ -31,7 +31,6 @@ HOST_CONFIG_TARGETS=(
 
 HOST_BREW_FORMULAE=(
   openai/tools/tunnel-client
-  uv
 )
 
 # shellcheck disable=SC2034

@@ -41,7 +41,7 @@ else:
     print(json.dumps({{"argv": sys.argv[1:], "ambient": {{n: os.environ[n] for n in names if n in os.environ}}, "credentials_present": [bool(os.environ.get("CONTROL_PLANE_API_KEY")), bool(os.environ.get("CONTROL_PLANE_TUNNEL_ID"))]}}))
     sys.exit(int(os.environ.get("FIXTURE_EXIT", "0")))
 ''')
-        for name in ("blender-mcp", "roblox-studio-mcp"):
+        for name in ("blender-mcp", "roblox-studio-mcp", "mcp-service"):
             self.executable(self.home / ".local/bin" / name, "#!/bin/sh\nexit 99\n")
         self.env.update(CONTROL_PLANE_API_KEY="fixture-runtime-key", CONTROL_PLANE_TUNNEL_ID="tunnel_0123456789abcdef0123456789abcdef")
 
@@ -75,6 +75,14 @@ else:
         result = self.launch("roblox")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["argv"], self.expected_args("roblox-studio-mcp"))
+
+    def test_ai_memory_uses_only_the_fixed_catalog_service(self):
+        result = self.launch("ai-memory")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        expected = self.expected_args("mcp-service")
+        expected[expected.index("--mcp.command") + 1] += " ai-memory"
+        self.assertEqual(json.loads(result.stdout)["argv"], expected)
+        self.assertNotIn("fixture-runtime-key", result.stdout + result.stderr)
 
     def test_ambient_profiles_public_listeners_and_logging_cannot_expand_scope(self):
         result = self.launch("blender", MCP_SERVER_URL="http://unwanted", TUNNEL_CLIENT_PROFILE="foreign", TUNNEL_CLIENT_CONFIG="foreign.yaml",

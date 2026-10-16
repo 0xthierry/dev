@@ -125,7 +125,8 @@ class CreativeMcpTests(unittest.TestCase):
         result = subprocess.run([str(ROOT / "setup.sh"), "macbook", "--dry-run"], cwd=ROOT,
                                 env=self.env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("brew install openai/tools/tunnel-client uv", result.stdout)
+        self.assertIn("brew install openai/tools/tunnel-client", result.stdout)
+        self.assertIn("neovim mise uv", result.stdout)
         self.assertIn("bitwarden blender brave-browser", result.stdout)
         self.assertIn("Merge blender and Roblox_Studio into Claude Code, Claude Desktop, and Codex configs (macbook)", result.stdout)
         self.assertFalse((self.home / ".local/share/creative-mcp").exists())
@@ -136,7 +137,7 @@ class CreativeMcpTests(unittest.TestCase):
                                 env=self.env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("bitwarden blender bluez-utils", result.stdout)
-        self.assertIn("usbutils uv virtiofsd", result.stdout)
+        self.assertIn("git-delta mise uv", result.stdout)
         self.assertIn("Merge blender and Roblox_Studio into Claude Code, Claude Desktop, and Codex configs (omarchy)", result.stdout)
         self.assertFalse((self.home / ".local/share/creative-mcp").exists())
         self.assertFalse(self.desktop.exists())

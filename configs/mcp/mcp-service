@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Offline-at-launch bridge for desktop clients that only accept stdio servers.
+set -euo pipefail
+runtime="$HOME/.local/share/mcp-services"
+if [[ ! -x "$runtime/venv/bin/python" || ! -f "$runtime/source/bridge.py" ]]; then
+  printf 'error: shared MCP runtime missing; run repository install/mcp.sh for this host\n' >&2
+  exit 1
+fi
+exec "$runtime/venv/bin/python" "$runtime/source/bridge.py" "$@"

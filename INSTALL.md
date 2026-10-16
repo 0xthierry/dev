@@ -124,7 +124,8 @@ installation alone does not verify gameplay or the Studio graphics/runtime path.
 7. Herdr integrations for installed/configured agents, with the Pi integration loaded from the pinned repository-generated extension
 8. Agent hook dependencies from `configs/agents/hooks`
 9. Agent code review tools from `configs/agents/bin/install-cr-tools.sh`
-10. Claude Code / Codex ai-memory MCP and lifecycle hooks merged into the rendered agent configs. Pi uses the vendored `ai-memory-pi.ts` extension; do not run `ai-memory install-hooks --agent pi --apply`
+10. Claude Code / Codex ai-memory MCP and lifecycle hooks merged into the rendered agent configs. Pi uses native ai-memory MCP registered by `install/mcp.sh`, plus the repository-managed hook-only extension for automatic capture and handoff injection; do not run `ai-memory install-hooks --agent pi --apply`
+11. The [shared six-service MCP catalog](configs/mcp/README.md) merges Neon, Datadog US5, Figma, ai-memory, and desktop-only Blender/Roblox registrations. Five official ai-memory skills are deployed with the shared agent skills. OAuth and ChatGPT account authorization remain explicit; setup starts no tunnels.
 
 The setup is intended to be idempotent and non-destructive. Existing unrelated paths are warned about and left in place instead of being overwritten.
 
@@ -167,7 +168,7 @@ ai-memory --version
 systemctl --user status ai-memory.service   # Linux
 # launchctl print gui/$(id -u)/dev.ai-memory  # macOS
 curl -sS http://127.0.0.1:49374/mcp | head
-ls -la ~/.pi/agent/extensions/ai-memory-pi.ts
+pi mcp list
 grep -n 'ai-memory' ~/.claude/settings.json ~/.codex/config.toml ~/.codex/hooks.json
 ```
 

@@ -15,6 +15,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/psvr2.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/bs-manager.sh"
 # shellcheck source=install/creative-mcp.sh
 source "$(dirname "${BASH_SOURCE[0]}")/creative-mcp.sh"
+# shellcheck source=install/mcp.sh
+source "$(dirname "${BASH_SOURCE[0]}")/mcp.sh"
 
 apply_nvim() {
   ensure_dir "$HOME/.config"

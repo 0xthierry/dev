@@ -1,0 +1,28 @@
+{
+  "neon": {
+    "url": "https://mcp.neon.tech/mcp",
+    "description": "Manage Neon Postgres projects, branches, and SQL."
+  },
+  "datadog": {
+    "url": "https://mcp.us5.datadoghq.com/v1/mcp",
+    "description": "Query Datadog US5 telemetry and observability resources."
+  },
+  "figma": {
+    "url": "https://mcp.figma.com/mcp",
+    "description": "Read Figma design context and use Figma tools."
+  },
+  "ai-memory": {
+    "url": "http://127.0.0.1:49374/mcp",
+    "description": "Shared local project memory."
+  },
+  "blender": {
+    "launcher": "blender-mcp",
+    "description": "Inspect and edit scenes in the running local Blender application.",
+    "hosts": ["macbook", "omarchy"]
+  },
+  "Roblox_Studio": {
+    "launcher": "roblox-studio-mcp",
+    "description": "Inspect and edit open Roblox Studio places.",
+    "hosts": ["macbook", "omarchy"]
+  }
+}

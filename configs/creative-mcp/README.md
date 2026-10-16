@@ -4,6 +4,7 @@ Repository-owned desktop setup for **MacBook and Omarchy**, not the `dev` server
 
 | Client | Connection |
 |---|---|
+| Pi | Native `blender` and `Roblox_Studio` stdio servers |
 | Claude Code | User-level `blender` and `Roblox_Studio` stdio servers |
 | Claude Desktop | The same two servers in its native MCP config (macOS and the existing Linux desktop package) |
 | Codex CLI / desktop app | The same two servers in the shared Codex `config.toml` |
@@ -29,8 +30,10 @@ Add `--dry-run` to inspect the plan without applying it. Setup installs:
 - `mcp-for-blender==2.1.9` in a dedicated Python 3.12 environment. The checked-in
   dependency lock has hashes. Startup does not download packages.
 - The matching bundled Blender add-on in the installed Blender version's user
-  add-ons directory, without changing Blender preferences. Existing recognized
-  MCP add-ons are updated with numbered backups; unrelated modules are preserved.
+  add-ons directory. Setup enables it and disables telemetry when Blender is
+  closed, backing up preferences first. If Blender is running, setup defers
+  enablement. Existing recognized MCP add-ons receive numbered backups;
+  unrelated modules are preserved.
 - `~/.local/bin/blender-mcp` and `~/.local/bin/roblox-studio-mcp`.
 - The official OpenAI tunnel client: Homebrew's `openai/tools/tunnel-client` on
   macOS; checksum-verified Linux runtime **v0.0.16** on Omarchy.
@@ -46,17 +49,23 @@ MacBook and `org.vinegarhq.Vinegar` on Omarchy. Omarchy setup now checks for upd
 to installed Sober/Vinegar apps and their runtimes instead of skipping them. Roblox owns and updates its MCP
 binary with Studio. The old standalone `studio-rust-mcp-server` is not installed.
 
-The installer owns only the `blender` and `Roblox_Studio` client entries. It
+The creative installer owns only the `blender` and `Roblox_Studio` client entries.
+The final [shared MCP setup](../mcp/README.md) also registers Neon, Datadog US5,
+Figma, and ai-memory across the supported clients. It
 preserves other servers and client settings. Modified client configs get numbered,
 owner-only backups. Run setup with clients closed to avoid concurrent config writes.
-Codex's native `mcp add` command writes its TOML, rather than a custom TOML rewriter.
+The creative installer uses Codex's native `mcp add` for local stdio entries.
+The shared catalog uses pinned `tomlkit` for HTTP entries to avoid automatic OAuth
+login during setup.
 The existing agent installer preserves these MCP tables on later setup runs.
 
 ## Enable the applications once
 
 ### Blender
 
-1. Open Blender. In **Preferences → Add-ons**, enable **Interface: MCP for Blender**.
+1. Open Blender. Setup normally enables **Interface: MCP for Blender** already.
+   If setup deferred enablement because Blender was open, enable it in
+   **Preferences → Add-ons**.
 2. In the 3D viewport press **N** and open **MCP for Blender**.
 3. If the server is not running, click **Connect to MCP server**.
 4. Keep **Allow Telemetry** off. The repo's MCP launcher also forces telemetry off.
@@ -70,7 +79,7 @@ For explicit command-line enablement on Omarchy, close Blender first, then run:
 
 This backs up existing preferences, enables the installed add-on, disables its
 telemetry, and saves preferences. It never saves a scene or startup file. This is
-an explicit opt-in command, not an automatic preference change during setup.
+also the helper used by setup when Blender is closed.
 Open Blender afterward so the MCP server can run.
 
 The default socket is localhost port **9876**. No external asset-generation API key

@@ -1,0 +1,9 @@
+{
+  "name": "dev-setup-mcp-services",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinned stdio-to-HTTP bridge for desktop MCP clients",
+  "dependencies": {
+    "mcp-remote": "0.15.1"
+  }
+}

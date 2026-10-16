@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # Pinned local ai-memory server. Setup enables the user service and wires
-# Claude Code, Codex, and the repository-owned Pi extension.
+# Claude Code and Codex hooks; Pi uses native MCP plus a hook-only extension.
 set -euo pipefail
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 AI_MEMORY_VERSION="2.1.0"
-AI_MEMORY_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AI_MEMORY_SERVER_URL="${AI_MEMORY_SERVER_URL:-http://127.0.0.1:49374}"
 
 # From the official v2.1.0 release's companion .sha256 files. Keep these in the
@@ -367,20 +366,15 @@ enable_ai_memory_macos() {
 
 configure_ai_memory_agents() {
   local bin=""
-  local pi_extension="$AI_MEMORY_REPO_ROOT/configs/agents/pi/extensions/ai-memory-pi.ts"
 
   if (( ${DRY_RUN:-0} )); then
-    log_item "[dry-run] Wire ai-memory MCP and hooks for Claude Code and Codex; keep the pinned Pi extension"
+    log_item "[dry-run] Wire ai-memory MCP and hooks for Claude Code and Codex; Pi uses native MCP with the repository-managed capture hooks"
     return 0
   fi
 
   if ! bin="$(resolve_ai_memory_bin 2>/dev/null)"; then
     log_item "ai-memory not available, skipping agent wiring"
     return 0
-  fi
-
-  if [[ ! -f "$pi_extension" ]] || ! grep -q 'const AGENT = "pi";' "$pi_extension"; then
-    log_item "ai-memory Pi extension is not current; refresh configs/agents/pi/extensions/ai-memory-pi.ts from the pinned ai-memory release"
   fi
 
   if [[ -d "$HOME/.claude" ]]; then

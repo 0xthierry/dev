@@ -59,6 +59,7 @@ COMMON_PACMAN_PACKAGES=(
   lazygit
   git-delta
   mise
+  uv
 )
 
 COMMON_PACMAN_LINUX_PACKAGES=(
@@ -139,4 +140,5 @@ COMMON_BREW_FORMULAE=(
   git-delta
   neovim
   mise
+  uv
 )
