@@ -67,10 +67,33 @@ def load_catalog():
             raise ValueError(f"invalid catalog launcher for {name}")
         if not isinstance(service.get("description"), str):
             raise ValueError(f"missing catalog description for {name}")
+        if not isinstance(service.get("desktop_opt_in", False), bool):
+            raise ValueError(f"invalid catalog desktop_opt_in for {name}")
         hosts = service.get("hosts", list(HOSTS))
         if not isinstance(hosts, list) or not hosts or any(host not in HOSTS for host in hosts):
             raise ValueError(f"invalid catalog hosts for {name}")
     return catalog
+
+
+def desktop_remote_services(path, catalog):
+    """Read persistent, per-service Desktop opt-ins; never rewrite preferences."""
+    # Like plugin settings, this is a read-only input and may be repo-symlinked.
+    preferences = parse_json(path.read_bytes() if path.exists() or path.is_symlink() else None, path)
+    if set(preferences) - {"claude_desktop_remote_services"}:
+        raise ValueError(f"unknown MCP preference in {path}")
+    names = preferences.get("claude_desktop_remote_services", [])
+    allowed = {name for name, service in catalog.items() if service.get("desktop_opt_in", False)}
+    if not isinstance(names, list) or any(not isinstance(name, str) or name not in allowed
+                                          for name in names):
+        raise ValueError(f"claude_desktop_remote_services in {path} must be a list of "
+                         f"opt-in service names: {', '.join(sorted(allowed))}")
+    return set(names)
+
+
+def managed_desktop_entry(entry, home, name):
+    """Identify repo ownership by the bridge executable and exact service args."""
+    return (entry.get("command") == str(home / ".local/bin/mcp-service")
+            and entry.get("args") == [name])
 
 
 def figma_plugin_active(claude_dir, url):
@@ -198,6 +221,10 @@ def configure(host):
     catalog = load_catalog()
     selected = {name: service for name, service in catalog.items()
                 if host in service.get("hosts", HOSTS)}
+    preferences_path = (Path(os.environ.get("XDG_CONFIG_HOME", home / ".config"))
+                        / "mcp-services/preferences.json")
+    desktop_enabled = (desktop_remote_services(preferences_path, catalog)
+                       if "desktop" in paths else set())
     # Preflight every output before planning or writing any client configuration.
     originals = {client: read_bytes(path) for client, path in paths.items()}
     configs = {}
@@ -230,6 +257,16 @@ def configure(host):
             config[key] = tomlkit.table() if client == "codex" else {}
         servers = config[key]
         for name, service in selected.items():
+            if client == "desktop" and service.get("desktop_opt_in", False):
+                existing = servers.get(name)
+                managed = existing is not None and managed_desktop_entry(existing, home, name)
+                if existing is not None and not managed:
+                    print(f"warning: preserving custom Claude Desktop {name} entry", file=sys.stderr)
+                    continue
+                if name not in desktop_enabled:
+                    if managed:
+                        del servers[name]
+                    continue
             desired = render_entry(service, home, client, name)
             if client == "claude" and name == "figma" and plugin_active:
                 if name in servers:

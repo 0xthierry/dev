@@ -1,15 +1,18 @@
 {
   "neon": {
     "url": "https://mcp.neon.tech/mcp",
-    "description": "Manage Neon Postgres projects, branches, and SQL."
+    "description": "Manage Neon Postgres projects, branches, and SQL.",
+    "desktop_opt_in": true
   },
   "datadog": {
     "url": "https://mcp.us5.datadoghq.com/v1/mcp",
-    "description": "Query Datadog US5 telemetry and observability resources."
+    "description": "Query Datadog US5 telemetry and observability resources.",
+    "desktop_opt_in": true
   },
   "figma": {
     "url": "https://mcp.figma.com/mcp",
-    "description": "Read Figma design context and use Figma tools."
+    "description": "Read Figma design context and use Figma tools.",
+    "desktop_opt_in": true
   },
   "ai-memory": {
     "url": "http://127.0.0.1:49374/mcp",

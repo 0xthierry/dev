@@ -32,6 +32,7 @@ class McpClientTests(unittest.TestCase):
         self.pi = self.home / ".pi/agent/mcp.json"
         self.codex = self.home / ".codex/config.toml"
         self.desktop = self.home / ".config/Claude/claude_desktop_config.json"
+        self.preferences = self.home / ".config/mcp-services/preferences.json"
 
     def run_config(self, host="omarchy"):
         return subprocess.run([sys.executable, str(RENDERER), host], env=self.env,
@@ -55,7 +56,7 @@ class McpClientTests(unittest.TestCase):
                 "version": 2, "plugins": {"figma@official": [{"scope": "user", "installPath": str(cache)}]}}))
         return settings
 
-    def test_all_desktop_clients_receive_six_native_or_bridged_services(self):
+    def test_fresh_default_keeps_native_services_but_omits_desktop_remote_services(self):
         result = self.run_config()
         self.assertEqual(result.returncode, 0, result.stderr)
         code = json.loads(self.code.read_text())["mcpServers"]
@@ -68,14 +69,102 @@ class McpClientTests(unittest.TestCase):
                          "description": "Shared local project memory.", "exposure": "deferred"})
         self.assertEqual(set(pi), set(code))
         desktop = json.loads(self.desktop.read_text())["mcpServers"]
-        self.assertEqual(desktop["neon"], {"command": f"{self.home}/.local/bin/mcp-service", "args": ["neon"]})
+        self.assertEqual(set(desktop), {"ai-memory", "blender", "Roblox_Studio"})
+        self.assertEqual(desktop["ai-memory"], {"command": f"{self.home}/.local/bin/mcp-service", "args": ["ai-memory"]})
         self.assertEqual(desktop["Roblox_Studio"], {"command": f"{self.home}/.local/bin/roblox-studio-mcp", "args": []})
         codex = tomllib.loads(self.codex.read_text())["mcp_servers"]
         self.assertEqual(codex["figma"], {"url": "https://mcp.figma.com/mcp"})
         self.assertEqual(set(codex), set(code))
 
+    def test_persistent_opt_in_enables_all_three_desktop_remote_services(self):
+        self.put(self.preferences, '{"claude_desktop_remote_services":["neon","datadog","figma"]}')
+        original = self.preferences.read_bytes()
+        result = self.run_config()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        desktop = json.loads(self.desktop.read_text())["mcpServers"]
+        self.assertEqual(desktop, {
+            "neon": {"command": f"{self.home}/.local/bin/mcp-service", "args": ["neon"]},
+            "datadog": {"command": f"{self.home}/.local/bin/mcp-service", "args": ["datadog"]},
+            "figma": {"command": f"{self.home}/.local/bin/mcp-service", "args": ["figma"]},
+            "ai-memory": {"command": f"{self.home}/.local/bin/mcp-service", "args": ["ai-memory"]},
+            "blender": {"command": f"{self.home}/.local/bin/blender-mcp", "args": []},
+            "Roblox_Studio": {"command": f"{self.home}/.local/bin/roblox-studio-mcp", "args": []}})
+        before = self.desktop.read_bytes(), self.desktop.stat().st_mtime_ns
+        repeated = self.run_config()
+        self.assertEqual(repeated.returncode, 0, repeated.stderr)
+        self.assertEqual((self.desktop.read_bytes(), self.desktop.stat().st_mtime_ns), before)
+        self.assertEqual(self.preferences.read_bytes(), original)
+        self.assertFalse(Path(f"{self.desktop}.bak").exists())
+
+    def test_partial_opt_in_enables_only_listed_desktop_remote_service(self):
+        self.put(self.preferences, '{"claude_desktop_remote_services":["figma"]}')
+        result = self.run_config("macbook")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        desktop = self.home / "Library/Application Support/Claude/claude_desktop_config.json"
+        servers = json.loads(desktop.read_text())["mcpServers"]
+        self.assertEqual(set(servers), {"figma", "ai-memory", "blender", "Roblox_Studio"})
+        self.assertEqual(servers["figma"], {
+            "command": f"{self.home}/.local/bin/mcp-service", "args": ["figma"]})
+
+    def test_default_migrates_managed_remote_entries_and_preserves_other_clients(self):
+        self.put(self.preferences, '{"claude_desktop_remote_services":["neon","datadog","figma"]}')
+        first = self.run_config()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        config = json.loads(self.desktop.read_text())
+        config["preferences"] = {"keep": True}
+        config["mcpServers"]["other"] = {"command": "user-owned", "args": ["app"]}
+        config["mcpServers"]["neon"]["env"] = {"EXAMPLE": "managed extra option"}
+        self.put(self.desktop, json.dumps(config))
+        original = self.desktop.read_bytes()
+        code_original = self.code.read_bytes()
+        pi_original = self.pi.read_bytes()
+        codex_original = self.codex.read_bytes()
+        self.preferences.unlink()
+        result = self.run_config()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        migrated = json.loads(self.desktop.read_text())
+        self.assertEqual(set(migrated["mcpServers"]), {"ai-memory", "blender", "Roblox_Studio", "other"})
+        self.assertEqual(migrated["mcpServers"]["other"], {"command": "user-owned", "args": ["app"]})
+        self.assertEqual(migrated["preferences"], {"keep": True})
+        self.assertEqual(self.code.read_bytes(), code_original)
+        self.assertEqual(self.pi.read_bytes(), pi_original)
+        self.assertEqual(self.codex.read_bytes(), codex_original)
+        self.assertEqual(Path(f"{self.desktop}.bak").read_bytes(), original)
+        self.assertEqual(Path(f"{self.desktop}.bak").stat().st_mode & 0o777, 0o600)
+        before = self.desktop.read_bytes(), self.desktop.stat().st_mtime_ns
+        repeated = self.run_config()
+        self.assertEqual(repeated.returncode, 0, repeated.stderr)
+        self.assertEqual((self.desktop.read_bytes(), self.desktop.stat().st_mtime_ns), before)
+        self.assertFalse(Path(f"{self.desktop}.bak.1").exists())
+
+    def test_default_preserves_same_name_custom_desktop_transports_with_warning(self):
+        custom = {
+            "neon": {"command": "/custom/mcp-service", "args": ["neon"]},
+            "datadog": {"command": f"{self.home}/.local/bin/mcp-service", "args": ["datadog", "custom"]},
+            "figma": {"url": "https://custom.invalid/mcp", "headers": {"X-Custom": "keep"}}}
+        self.put(self.desktop, json.dumps({"mcpServers": custom}))
+        result = self.run_config()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        desktop = json.loads(self.desktop.read_text())["mcpServers"]
+        self.assertEqual(desktop["neon"], custom["neon"])
+        self.assertEqual(desktop["datadog"], custom["datadog"])
+        self.assertEqual(desktop["figma"], custom["figma"])
+        self.assertIn("preserving custom Claude Desktop neon entry", result.stderr)
+        self.assertIn("preserving custom Claude Desktop datadog entry", result.stderr)
+        self.assertIn("preserving custom Claude Desktop figma entry", result.stderr)
+
+    def test_opt_in_preserves_same_name_custom_desktop_entry_with_warning(self):
+        self.put(self.preferences, '{"claude_desktop_remote_services":["neon"]}')
+        self.put(self.desktop, '{"mcpServers":{"neon":{"command":"custom","args":["neon"]}}}')
+        result = self.run_config()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.desktop.read_text())["mcpServers"]["neon"],
+                         {"command": "custom", "args": ["neon"]})
+        self.assertIn("preserving custom Claude Desktop neon entry", result.stderr)
+
     def test_dev_only_receives_four_services_and_does_not_touch_desktop(self):
         self.put(self.desktop, "do not read desktop on dev")
+        self.put(self.preferences, "do not read Desktop preferences on dev")
         result = self.run_config("dev")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(set(json.loads(self.code.read_text())["mcpServers"]), {"neon", "datadog", "figma", "ai-memory"})
@@ -87,8 +176,8 @@ class McpClientTests(unittest.TestCase):
         result = self.run_config("macbook")
         self.assertEqual(result.returncode, 0, result.stderr)
         desktop = self.home / "Library/Application Support/Claude/claude_desktop_config.json"
-        self.assertEqual(json.loads(desktop.read_text())["mcpServers"]["figma"], {
-            "command": f"{self.home}/.local/bin/mcp-service", "args": ["figma"]})
+        self.assertEqual(set(json.loads(desktop.read_text())["mcpServers"]),
+                         {"ai-memory", "blender", "Roblox_Studio"})
         self.assertFalse(self.desktop.exists())
 
     def test_config_directory_environment_overrides(self):
@@ -96,6 +185,8 @@ class McpClientTests(unittest.TestCase):
                         CODEX_HOME=str(self.home / "codex override"),
                         PI_CODING_AGENT_DIR=str(self.home / "pi override"),
                         XDG_CONFIG_HOME=str(self.home / "xdg override"))
+        self.put(self.home / "xdg override/mcp-services/preferences.json",
+                 '{"claude_desktop_remote_services":["figma"]}')
         result = self.run_config()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads((self.home / "claude override/.claude.json").read_text())["mcpServers"]["figma"],
@@ -170,6 +261,86 @@ class McpClientTests(unittest.TestCase):
         self.assertEqual(self.codex.stat().st_mode & 0o777, 0o600)
         self.assertEqual(Path(f"{self.code}.bak").stat().st_mode & 0o777, 0o600)
         self.assertEqual(Path(f"{self.codex}.bak").stat().st_mode & 0o777, 0o600)
+
+    def test_empty_opt_in_list_removes_managed_desktop_remote_entries(self):
+        self.put(self.preferences, '{"claude_desktop_remote_services":[]}')
+        self.put(self.desktop, json.dumps({"mcpServers": {
+            "neon": {"command": f"{self.home}/.local/bin/mcp-service", "args": ["neon"]}}}))
+        result = self.run_config()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(set(json.loads(self.desktop.read_text())["mcpServers"]),
+                         {"ai-memory", "blender", "Roblox_Studio"})
+
+    def test_preferences_without_opt_in_key_keep_desktop_remotes_disabled(self):
+        self.put(self.preferences, '{}')
+        result = self.run_config()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(set(json.loads(self.desktop.read_text())["mcpServers"]),
+                         {"ai-memory", "blender", "Roblox_Studio"})
+
+    def test_malformed_preferences_preflight_before_any_write(self):
+        self.put(self.preferences, '{broken')
+        self.put(self.desktop, '{"mcpServers":{"other":{"command":"keep"}}}')
+        original = self.desktop.read_bytes()
+        result = self.run_config()
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(self.desktop.read_bytes(), original)
+        self.assertFalse(self.code.exists())
+        self.assertFalse(self.pi.exists())
+        self.assertFalse(self.codex.exists())
+        self.assertFalse(list(self.home.rglob("*.bak*")))
+
+    def test_unknown_opt_in_service_preflights_before_any_write(self):
+        self.put(self.preferences, '{"claude_desktop_remote_services":["ai-memory"]}')
+        result = self.run_config()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("must be a list of opt-in service names", result.stderr)
+        self.assertFalse(self.code.exists())
+        self.assertFalse(self.pi.exists())
+        self.assertFalse(self.codex.exists())
+        self.assertFalse(self.desktop.exists())
+
+    def test_wrong_opt_in_shape_preflights_before_any_write(self):
+        self.put(self.preferences, '{"claude_desktop_remote_services":true}')
+        result = self.run_config()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("must be a list", result.stderr)
+        self.assertFalse(self.code.exists())
+        self.assertFalse(self.pi.exists())
+        self.assertFalse(self.codex.exists())
+        self.assertFalse(self.desktop.exists())
+
+    def test_unknown_preference_key_fails_closed(self):
+        self.put(self.preferences, '{"claude_desktop_remote_service":["neon"]}')
+        result = self.run_config()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("unknown MCP preference", result.stderr)
+        self.assertFalse(self.code.exists())
+        self.assertFalse(self.desktop.exists())
+
+    def test_repo_symlinked_preferences_are_read_only(self):
+        target = self.home / "repo/preferences.json"
+        self.put(target, '{"claude_desktop_remote_services":["neon"]}')
+        self.preferences.parent.mkdir(parents=True)
+        self.preferences.symlink_to(target)
+        original = target.read_bytes()
+        result = self.run_config()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.desktop.read_text())["mcpServers"]["neon"],
+                         {"command": f"{self.home}/.local/bin/mcp-service", "args": ["neon"]})
+        self.assertEqual(target.read_bytes(), original)
+        self.assertTrue(self.preferences.is_symlink())
+
+    def test_dangling_preference_symlink_fails_before_any_client_write(self):
+        self.preferences.parent.mkdir(parents=True)
+        self.preferences.symlink_to(self.home / "missing-preferences.json")
+        result = self.run_config()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("No such file", result.stderr)
+        self.assertFalse(self.code.exists())
+        self.assertFalse(self.pi.exists())
+        self.assertFalse(self.codex.exists())
+        self.assertFalse(self.desktop.exists())
 
     def test_malformed_json_preflights_before_any_write(self):
         self.put(self.desktop, '{broken')

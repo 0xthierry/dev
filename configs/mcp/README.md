@@ -19,9 +19,9 @@ atomic per file; an interrupted multi-client update converges on retry.
 
 | Service | Pi | Claude Code | Codex CLI/app | Claude Desktop | ChatGPT |
 |---|---|---|---|---|---|
-| Neon | Native HTTP | Native HTTP | Native HTTP | Pinned stdio bridge | Authorize remote MCP/app in account |
-| Datadog US5 | Native HTTP | Native HTTP | Native HTTP | Pinned stdio bridge | Official Datadog app does **not** support US5; custom MCP support must be verified separately |
-| Figma | Native HTTP | Existing enabled/installed plugin, otherwise native HTTP | Native HTTP | Pinned stdio bridge | Authorize remote MCP/app in account |
+| Neon | Native HTTP | Native HTTP | Native HTTP | Opt-in stdio bridge | Authorize remote MCP/app in account |
+| Datadog US5 | Native HTTP | Native HTTP | Native HTTP | Opt-in stdio bridge | Official Datadog app does **not** support US5; custom MCP support must be verified separately |
+| Figma | Native HTTP | Existing enabled/installed plugin, otherwise native HTTP | Native HTTP | Opt-in stdio bridge | Authorize remote MCP/app in account |
 | ai-memory | Native HTTP + capture hooks | Native HTTP + capture hooks | Native HTTP + capture hooks | Pinned stdio bridge | Explicit local-server tunnel |
 | Blender | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel |
 | Roblox Studio | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel |
@@ -78,6 +78,36 @@ ai-memory install-skills --target-dir "$PWD/configs/agents/skills"
 
 No custom copies or client-specific rewrites are needed.
 
+## Claude Desktop: remote services are opt-in
+
+Neon, Datadog, and Figma are **off by default in Claude Desktop**. Their
+`mcp-remote` bridges can open OAuth browser tabs when Desktop starts them,
+even if you have not chosen to authorize the services. Setup removes existing
+repo-managed registrations for these three services unless explicitly opted in.
+Pi, Claude Code, Codex, and the other Desktop MCP services are unchanged.
+Same-name custom Desktop commands are preserved with a warning; inspect those
+separately if they still open login pages. Changed files receive the backups
+described above. No credentials or provider authorizations are deleted.
+
+The optional local preference file is
+`$XDG_CONFIG_HOME/mcp-services/preferences.json`, or
+`~/.config/mcp-services/preferences.json` when `XDG_CONFIG_HOME` is unset
+(including on macOS). To opt in, list only the services you want:
+
+```json
+{
+  "claude_desktop_remote_services": ["neon", "datadog", "figma"]
+}
+```
+
+An absent file/key or an empty list leaves all three off. This file is a local
+user preference, not a generated client configuration; setup reads but does not
+write it. Unknown service names or malformed preferences stop configuration
+before client files are changed. The `dev` host ignores Desktop preferences.
+Run `bash install/mcp.sh macbook` (or `omarchy`) after changing the preference,
+then fully quit and reopen Claude Desktop. Opting in permits the bridge to
+request authorization; it does not authorize an account during setup.
+
 ## Authorization
 
 For Pi, explicitly sign in when ready:
@@ -102,8 +132,21 @@ service; it does not read or export ai-memory token files.
 
 ## ChatGPT
 
-ChatGPT does not read local Pi/Codex/Claude configuration. Add/authorize remote
-services in the account separately. The catalog records these endpoints:
+ChatGPT Desktop does not read local Pi/Codex/Claude configuration. Setup never
+registers or authorizes its account apps, so Neon, Datadog, and Figma remain
+opt-in there without a local configuration change. Existing account connections
+cannot be disconnected by this installer.
+
+To stop using an existing connection, open ChatGPT **Settings → Apps** (or
+**Plugins**, depending on the interface), select Neon, Datadog, or Figma, and
+choose **Disconnect** under **Connection** or the connected account's **•••**
+menu. Repeat for each connected account if present. Leave unconnected apps
+unconnected; do not select Connect/Reconnect just to clear a prompt. This is
+account-wide, not a Desktop-only preference, and does not delete existing chats.
+See [OpenAI's account connection controls](https://help.openai.com/en/articles/20001494-connecting-and-managing-app-accounts-in-chatgpt).
+
+Add/authorize remote services in the account separately when wanted. The catalog
+records these endpoints:
 
 - Neon: `https://mcp.neon.tech/mcp`
 - Figma: `https://mcp.figma.com/mcp`
