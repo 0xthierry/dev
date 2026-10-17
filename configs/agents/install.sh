@@ -465,33 +465,33 @@ generate_codex_agent_tomls() {
   done
 }
 
-extract_codex_mcp_config() {
+extract_codex_local_config() {
   local config_path="$1"
 
   [[ -f "$config_path" ]] || return 0
 
-  # Codex stores each server in a [mcp_servers.*] TOML table. Preserve those
-  # tables (including nested env/header tables) while the repo remains
-  # authoritative for every other Codex setting.
+  # Preserve local MCP servers and Codex-written hook approvals/preferences.
+  # Never generate trusted_hash values: new or changed hooks still need review.
+  # The repo remains authoritative for hook definitions and other settings.
   awk '
-    /^[[:space:]]*\[[^]]+\][[:space:]]*(#.*)?$/ {
-      in_mcp = ($0 ~ /^[[:space:]]*\[[[:space:]]*mcp_servers([[:space:]]*\]|\.)/)
+    /^[[:space:]]*\[\[?[^]]+\]\]?[[:space:]]*(#.*)?$/ {
+      preserve = ($0 ~ /^[[:space:]]*\[[[:space:]]*(mcp_servers|hooks\.state)([[:space:]]*\]|\.)/)
     }
-    in_mcp { print }
+    preserve { print }
   ' "$config_path"
 }
 
 render_codex_config() {
   local target_path="$1"
   local label="codex config.toml"
-  local instructions rendered preserved_mcp
+  local instructions rendered preserved_local
 
   instructions="$(cat "$SOURCE_DEV_INSTRUCTIONS")"
   rendered="$(INSTR="$instructions" awk '{ gsub(/\{\{DEVELOPER_INSTRUCTIONS\}\}/, ENVIRON["INSTR"]); print }' "$SOURCE_CODEX_CONFIG")"
-  preserved_mcp="$(extract_codex_mcp_config "$target_path")"
-  if [[ -n "$preserved_mcp" ]]; then
+  preserved_local="$(extract_codex_local_config "$target_path")"
+  if [[ -n "$preserved_local" ]]; then
     rendered+=$'\n\n'
-    rendered+="$preserved_mcp"
+    rendered+="$preserved_local"
   fi
 
   if [[ -f "$target_path" ]] && [[ "$(cat "$target_path")" == "$rendered" ]]; then
