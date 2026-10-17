@@ -22,7 +22,7 @@ atomic per file; an interrupted multi-client update converges on retry.
 | Neon | Native HTTP | Native HTTP | Native HTTP | Opt-in stdio bridge | Authorize remote MCP/app in account |
 | Datadog US5 | Native HTTP | Native HTTP | Native HTTP | Opt-in stdio bridge | Official Datadog app does **not** support US5; custom MCP support must be verified separately |
 | Figma | Native HTTP | Existing enabled/installed plugin, otherwise native HTTP | Native HTTP | Opt-in stdio bridge | Authorize remote MCP/app in account |
-| ai-memory | Native HTTP + capture hooks | Native HTTP + capture hooks | Native HTTP + capture hooks | Pinned stdio bridge | Explicit local-server tunnel |
+| ai-memory | Native HTTP + capture hooks | Native HTTP + capture hooks | Native HTTP + capture hooks | Native ai-memory stdio bridge | Private Tailscale service, not exposed |
 | Blender | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel |
 | Roblox Studio | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel |
 
@@ -124,11 +124,12 @@ Claude Desktop launches the pinned `mcp-remote` bridge through
 The bridge installs nothing at launch. Its Node executable is recorded during
 setup so GUI clients do not depend on an interactive shell's Node PATH.
 
-Local ai-memory uses `http://127.0.0.1:49374/mcp`. If bearer authentication is
-enabled, configure a supported local token reference for each native client;
-do not commit tokens. Existing native auth options survive catalog refresh.
-The desktop bridge currently assumes the repository's unauthenticated loopback
-service; it does not read or export ai-memory token files.
+On macbook/omarchy, ai-memory uses the private HTTPS Tailscale endpoint with a
+per-machine native user API key. CLI, capture hooks, native MCP, and Desktop are
+configured together; no localhost fallback or embeddings run. See the
+[remote client deployment notes](../ai-memory/README.md) for credential locations,
+targeted setup, rotation, and validation. The `dev` host retains its old local
+`http://127.0.0.1:49374/mcp` configuration and receives no remote credentials.
 
 ## ChatGPT
 
@@ -161,7 +162,6 @@ For local services, follow [the tunnel setup](../creative-mcp/chatgpt-setup.md),
 then explicitly run one foreground tunnel per authorized tunnel ID:
 
 ```bash
-chatgpt-creative-mcp ai-memory
 chatgpt-creative-mcp blender
 chatgpt-creative-mcp roblox
 ```

@@ -12,8 +12,12 @@ export default function hookServer(pi: ExtensionAPI) {
   globalThis.fetch = Object.assign(
     async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
       const url = new URL(String(input));
-      if (url.origin !== "http://127.0.0.1:49374") throw new Error(`Unexpected spec network request: ${url.origin}`);
-      appendFileSync(log, `${JSON.stringify({ url: url.toString(), body: JSON.parse(String(init?.body ?? "{}")) })}\n`);
+      if (url.origin !== "https://ai-memory-cloud.tail4e339.ts.net")
+        throw new Error(`Unexpected spec network request: ${url.origin}`);
+      appendFileSync(
+        log,
+        `${JSON.stringify({ url: url.toString(), body: JSON.parse(String(init?.body ?? "{}")), authorization: new Headers(init?.headers).get("Authorization") })}\n`,
+      );
       return new Response(url.pathname === "/handoff" ? "Isolated prior-session handoff" : "ok");
     },
     { preconnect: originalFetch.preconnect },

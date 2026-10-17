@@ -1,17 +1,84 @@
-diff --git c/configs/agents/pi/extensions/ai-memory-pi.ts i/configs/agents/pi/extensions/ai-memory-pi.ts
-index ef93d4c..58f14e3 100644
---- c/configs/agents/pi/extensions/ai-memory-pi.ts
-+++ i/configs/agents/pi/extensions/ai-memory-pi.ts
-@@ -2,3 +2,3 @@
+--- a/configs/agents/pi/extensions/ai-memory-pi.ts
++++ b/configs/agents/pi/extensions/ai-memory-pi.ts
+@@ -2,3 +2,2 @@
 -// Edit by re-running the command, not by hand — install-hooks
 -// will overwrite this file (with a `.bak-<ts>` backup) on each
 -// re-run.
-+// Repository patch: hooks only; Pi's native MCP owns all memory tools.
-+// Regenerate without --apply, then apply vendor/ai-memory-pi-native-mcp.patch.
-+// See vendor/README.md for the pinned regeneration and verification procedure.
-@@ -501,81 +501 @@ async function fetchHandoff(cwd: string, id: string | undefined): Promise<string
++// Repository patch: capture only, native Pi MCP owns tools.
++// Regenerate with vendor/refresh-ai-memory-pi.py; see vendor/README.md.
+@@ -7 +6 @@
+-import { closeSync, existsSync, mkdirSync, opendirSync, openSync, readFileSync as readMarkerText, readSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
++import { closeSync, existsSync, mkdirSync, lstatSync, opendirSync, openSync, readFileSync as readMarkerText, readSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+@@ -10,2 +9,20 @@
+-
+-const SERVER = "http://127.0.0.1:49374".replace(/\/+$/, "");
++import LocalCapture from "./vendor/ai-memory-pi-local";
++
++// Marker existence is the host-mode boundary. Invalid remote configuration must
++// never fall back to a local server or an environment-supplied root bearer.
++const REMOTE_ORIGIN = "https://ai-memory-cloud.tail4e339.ts.net";
++function clientHome(): string { return process.env.HOME || homedir(); }
++function remoteServer(): string | null {
++  const REMOTE_MARKER = join(clientHome(), ".config", "ai-memory", "client.json");
++  if (!existsSync(REMOTE_MARKER)) return null;
++  const config: unknown = JSON.parse(readMarkerText(REMOTE_MARKER, "utf8"));
++  if (!config || typeof config !== "object" || !("server_url" in config) || typeof config.server_url !== "string")
++    throw new Error("Invalid ai-memory remote client configuration");
++  const url = new URL(config.server_url);
++  if (url.protocol !== "https:" || !url.hostname.endsWith(".ts.net") || url.username || url.password ||
++      url.search || url.hash || !["", "/"].includes(url.pathname) || (url.port && url.port !== "443"))
++    throw new Error("ai-memory remote capture requires an HTTPS Tailscale origin");
++  if (url.origin !== REMOTE_ORIGIN) throw new Error("ai-memory remote capture requires the configured deployment origin");
++  return REMOTE_ORIGIN;
++}
++let SERVER = "";
+@@ -403,21 +420,7 @@
+-  if (TOKEN) return TOKEN;
+-  const envToken = process.env.AI_MEMORY_AUTH_TOKEN;
+-  if (envToken && envToken.trim()) return envToken.trim();
+-  try {
+-    const dataDir = process.env.AI_MEMORY_DATA_DIR?.trim();
+-    const base = dataDir
+-      ? dataDir
+-      : process.platform === "darwin"
+-        ? join(homedir(), "Library", "Application Support", "ai-memory")
+-        : process.platform === "win32"
+-          ? join(process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"), "ai-memory")
+-          : join(process.env.XDG_DATA_HOME?.trim() || join(homedir(), ".local", "share"), "ai-memory");
+-    const tokenPath = join(base, "auth-token");
+-    if (existsSync(tokenPath)) {
+-      const fromFile = readMarkerText(tokenPath, "utf-8").trim();
+-      if (fromFile) return fromFile;
+-    }
+-  } catch {
+-    // Best effort: an unreadable token file leaves auth absent.
+-  }
+-  return null;
++  const path = join(clientHome(), ".config", "ai-memory", "api-key");
++  const info = lstatSync(path);
++  if (!info.isFile() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0)
++    throw new Error("ai-memory API key must be an owner-only regular file");
++  const key = readMarkerText(path, "utf8").trim();
++  if (!/^aim_[A-Za-z0-9_-]{16,}$/.test(key)) throw new Error("ai-memory requires a native machine API key");
++  return key;
+@@ -431,10 +434 @@
+-  const env = process.env.AI_MEMORY_DATA_DIR;
+-  if (env && env.trim()) return join(env, "hook-spool");
+-  const home = homedir();
+-  const base =
+-    process.platform === "darwin"
+-      ? join(home, "Library", "Application Support", "ai-memory")
+-      : process.platform === "win32"
+-        ? join(process.env.LOCALAPPDATA ?? join(home, "AppData", "Local"), "ai-memory")
+-        : join(process.env.XDG_DATA_HOME?.trim() || join(home, ".local", "share"), "ai-memory");
+-  return join(base, "hook-spool");
++  return join(clientHome(), ".local", "share", "ai-memory-client", "hook-spool");
+@@ -1160,98 +1154 @@
 -// ---- MCP bridge ------------------------------------------------------------
--const MCP_SERVER = deriveMcpServer(SERVER);
+-// Pi forwards tool schemas to whichever provider it runs on, and Moonshot
+-// rejects any `$ref` (#1157). The moonshot dialect inlines every reference,
+-// which every provider accepts; it changes nothing but `tools/list`.
+-const MCP_SERVER = `${deriveMcpServer(SERVER)}?flavor=moonshot`;
 -const MCP_REQUEST_TIMEOUT_MS = 10000;
 -let mcpRequestId = 0;
 -
@@ -33,8 +100,7 @@ index ef93d4c..58f14e3 100644
 -  return anyFactory ? anyFactory([signal, timeout]) : timeout;
 -}
 -
--async function mcpRpc(method: string, params?: unknown, ctx?: any, signal?: AbortSignal): Promise<any> {
--  const id = ++mcpRequestId;
+-function mcpHeaders(ctx?: any): Record<string, string> {
 -  const headers: Record<string, string> = {
 -    "Content-Type": "application/json",
 -    "Accept": "application/json, text/event-stream",
@@ -45,9 +111,14 @@ index ef93d4c..58f14e3 100644
 -    headers["X-Memory-Actor-Session-Id"] = session;
 -    headers["Mcp-Session-Id"] = session;
 -  }
+-  return headers;
+-}
+-
+-async function mcpRpc(method: string, params?: unknown, ctx?: any, signal?: AbortSignal): Promise<any> {
+-  const id = ++mcpRequestId;
 -  const response = await fetch(MCP_SERVER, {
 -    method: "POST",
--    headers,
+-    headers: mcpHeaders(ctx),
 -    body: JSON.stringify({ jsonrpc: "2.0", id, method, params: params ?? {} }),
 -    signal: mcpSignal(signal),
 -  });
@@ -56,6 +127,16 @@ index ef93d4c..58f14e3 100644
 -  if (payload?.error) throw new Error(`ai-memory MCP ${method} failed: ${payload.error.message ?? JSON.stringify(payload.error)}`);
 -  if (payload?.result?.isError) throw new Error(`ai-memory MCP ${method} returned isError`);
 -  return payload?.result;
+-}
+-
+-async function mcpNotify(method: string, params?: unknown, ctx?: any, signal?: AbortSignal): Promise<void> {
+-  const response = await fetch(MCP_SERVER, {
+-    method: "POST",
+-    headers: mcpHeaders(ctx),
+-    body: JSON.stringify({ jsonrpc: "2.0", method, params: params ?? {} }),
+-    signal: mcpSignal(signal),
+-  });
+-  if (!response.ok) throw new Error(`ai-memory MCP notification ${method} failed: HTTP ${response.status}`);
 -}
 -
 -function toolInputSchema(tool: any): any {
@@ -69,7 +150,7 @@ index ef93d4c..58f14e3 100644
 -      capabilities: {},
 -      clientInfo: { name: "ai-memory-pi-extension", version: "0.0.0" },
 -    });
--    try { await mcpRpc("notifications/initialized"); } catch (_e) {}
+-    try { await mcpNotify("notifications/initialized"); } catch (_e) {}
 -    const listed = await mcpRpc("tools/list");
 -    for (const tool of listed?.tools ?? []) {
 -      try {
@@ -92,11 +173,13 @@ index ef93d4c..58f14e3 100644
 -  }
 -}
 +const NATIVE_MCP_GUIDANCE = "ai-memory tools use Pi native MCP (server ai-memory, namespace mcp__ai_memory). This is a static MCP client: pass both workspace and project explicitly on every project-scoped memory call, or explicit scopes/global for an intentional cross-project query. Resolve the current scope from .ai-memory.toml/routing guidance; do not rely on the server's latest active project. Lifecycle capture and automatic handoff injection remain session-aware, but native tool calls do not carry the hook session ID. Pass session_id explicitly for session-specific operations when supported.";
-@@ -584 +503,0 @@ export default function AiMemoryExtension(pi: any): void {
+@@ -1260 +1157,8 @@
 -  try { void bootstrapMcpBridge(pi); } catch (_e) {}
-@@ -588,0 +508,5 @@ export default function AiMemoryExtension(pi: any): void {
-+  // Stable guidance only: keep cwd, session IDs, and other volatile data out of the prefix.
++  const server = remoteServer();
++  if (!server) return LocalCapture(pi);
++  SERVER = server;
++  // Validate canonical machine key before any capture/handoff request.
++  resolveToken();
 +  pi.on("before_agent_start", (event: any) => ({
 +    systemPrompt: `${event.systemPrompt}\n\n${NATIVE_MCP_GUIDANCE}`,
 +  }));
-+

@@ -11,6 +11,16 @@ AI_MEMORY_SERVER_URL="${AI_MEMORY_SERVER_URL:-http://127.0.0.1:49374}"
 # From the official v2.1.0 release's companion .sha256 files. Keep these in the
 # repo, rather than trusting a checksum downloaded alongside the archive.
 ai_memory_checksum() {
+  if [[ "$AI_MEMORY_VERSION" == 3.1.0 ]]; then
+    case "$1" in
+      linux-x86_64) echo 10b2411ff6988e2a275e17734170a617341a51eec8162ba3166bdd4284cde651 ;;
+      linux-aarch64) echo 670f9cffd2e9aeb6c8b533c15ec9c3fddd0a3070d5ef2fd3dc6fa8251cb7990d ;;
+      macos-aarch64) echo 7f83c0e4415b73549495e1418e6487e7363d9114cced879c4b19d16f80c542e7 ;;
+      macos-x86_64) echo 2c9f3594b67c75a005c9e51f6aeac5ded97f1d909fb700e7b0b2930e14e2553a ;;
+      *) return 1 ;;
+    esac
+    return
+  fi
   case "$1" in
     linux-x86_64) echo b4d911f392fea7f151c9c1ff83521922417570e5104ffb02a5e82253afc877ac ;;
     linux-aarch64) echo 3eafda7afaba63008c2b0e27713c1076dff3b366c377c30f43a7b04a0d78b6c1 ;;
@@ -50,9 +60,10 @@ ai_memory_platform() {
 install_ai_memory_binary() (
   set -euo pipefail
   local platform="$1" checksum="$2"
-  local bin="$HOME/.local/bin/ai-memory"
-  local marker="$HOME/.local/share/ai-memory/version"
-  local hooks_dir="$HOME/.local/share/ai-memory/hooks"
+  local bin="${AI_MEMORY_BIN_PATH:-$HOME/.local/bin/ai-memory}"
+  local data="${AI_MEMORY_INSTALL_DATA:-$HOME/.local/share/ai-memory}"
+  local marker="$data/version"
+  local hooks_dir="$data/hooks"
   local expected="$AI_MEMORY_VERSION $platform"
   local archive="ai-memory-${platform}.tar.gz"
   local tmp="" backup=""
@@ -66,9 +77,9 @@ install_ai_memory_binary() (
     return 0
   fi
 
-  ensure_dir "$HOME/.local/bin" || return
+  ensure_dir "$(dirname "$bin")" || return
   ensure_dir "$(dirname "$marker")" || return
-  tmp="$(mktemp -d "$HOME/.local/bin/.ai-memory.XXXXXXXX")" || return
+  tmp="$(mktemp -d "$(dirname "$bin")/.ai-memory.XXXXXXXX")" || return
   trap 'rm -rf "$tmp"' EXIT
   curl --fail --silent --show-error --location --retry 3 \
     "https://github.com/akitaonrails/ai-memory/releases/download/v${AI_MEMORY_VERSION}/$archive" \
@@ -365,7 +376,21 @@ enable_ai_memory_macos() {
 }
 
 configure_ai_memory_agents() {
-  local bin=""
+  local bin="" agent
+  if [[ "${SETUP_HOST:-}" == macbook || "${SETUP_HOST:-}" == omarchy ]]; then
+    if (( ${DRY_RUN:-0} )); then
+      log_item "[dry-run] Install remote ai-memory 3.1 capture hooks; shared catalog owns native MCP"
+      return
+    fi
+    bin="$HOME/.local/bin/ai-memory"
+    for agent in claude-code codex; do
+      "$bin" install-hooks --agent "$agent" --apply \
+        --server-url "$(python3 -c 'import json,pathlib; print(json.loads((pathlib.Path.home()/".config/ai-memory/client.json").read_text())["server_url"])')" \
+        --hooks-dir "$HOME/.local/share/ai-memory-client/hooks" || return
+    done
+    python3 "$REPO_ROOT/configs/ai-memory/client.py" route-hooks || return
+    return
+  fi
 
   if (( ${DRY_RUN:-0} )); then
     log_item "[dry-run] Wire ai-memory MCP and hooks for Claude Code and Codex; Pi uses native MCP with the repository-managed capture hooks"
@@ -394,7 +419,46 @@ configure_ai_memory_agents() {
   fi
 }
 
+install_ai_memory_remote() {
+  local AI_MEMORY_VERSION=3.1.0
+  local AI_MEMORY_INSTALL_DATA="$HOME/.local/share/ai-memory-client"
+  local AI_MEMORY_BIN_PATH="$AI_MEMORY_INSTALL_DATA/bin/ai-memory"
+  local platform checksum
+  platform="$(ai_memory_platform)" || return
+  checksum="$(ai_memory_checksum "$platform")" || return
+  if (( ${DRY_RUN:-0} )); then
+    install_ai_memory_binary "$platform" "$checksum" || return
+    log_item "[dry-run] Require ~/.config/ai-memory/api-key (0600 native user key); configure private HTTPS client"
+    log_item "[dry-run] Disable old managed local ai-memory service; preserve all local memory data"
+    return
+  fi
+  # Validate the external credential first; a missing key never changes services.
+  python3 "$REPO_ROOT/configs/ai-memory/client.py" configure || return
+  install_ai_memory_binary "$platform" "$checksum" || return
+  ensure_dir "$HOME/.local/bin" || return
+  safe_link_path "$REPO_ROOT/configs/ai-memory/client.py" "$HOME/.local/bin/ai-memory" "Remote ai-memory client" || return
+  # Only stop the service label/unit owned by this repo. Definitions/data remain
+  # available for an explicit rollback; no database is opened or migrated.
+  if [[ "${SETUP_HOST:-}" == macbook ]]; then
+    local service
+    service="gui/$(id -u)/dev.ai-memory" || return
+    if launchctl print "$service" >/dev/null 2>&1; then
+      launchctl bootout "$service" || return
+    fi
+    if [[ -f "$HOME/Library/LaunchAgents/dev.ai-memory.plist" ]]; then
+      launchctl disable "$service" || return
+    fi
+  elif check_installed systemctl && [[ -f "$HOME/.config/systemd/user/ai-memory.service" ]]; then
+    systemctl --user disable --now ai-memory.service || return
+  fi
+  log_item "ai-memory: remote 3.1 client installed; no local server, initialization, embeddings, or memory import"
+}
+
 install_ai_memory() {
+  if [[ "${SETUP_HOST:-}" == macbook || "${SETUP_HOST:-}" == omarchy ]]; then
+    install_ai_memory_remote
+    return
+  fi
   local os="" platform="" checksum=""
   case "$(uname -s)" in
     Linux) os=linux ;;
@@ -415,5 +479,26 @@ install_ai_memory() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+  SETUP_HOST="${1:-}"
+  DRY_RUN=0
+  case "$SETUP_HOST" in
+    macbook|omarchy|dev) ;;
+    *) printf 'Usage: bash install/ai-memory.sh <macbook|omarchy|dev> [--dry-run]\n' >&2; exit 2 ;;
+  esac
+  if [[ $# -eq 2 && "$2" == --dry-run ]]; then DRY_RUN=1
+  elif [[ $# -ne 1 ]]; then
+    printf 'Usage: bash install/ai-memory.sh <macbook|omarchy|dev> [--dry-run]\n' >&2
+    exit 2
+  fi
+  # Targeted refresh needs the already-provisioned native MCP renderer. Fail
+  # before touching services when the machine has never completed shared setup.
+  runtime="$HOME/.local/share/mcp-services/venv/bin/python"
+  if (( ! DRY_RUN )) && [[ ! -x "$runtime" ]]; then
+    printf 'error: shared MCP runtime missing; run normal host setup first\n' >&2
+    exit 1
+  fi
   install_ai_memory
+  configure_ai_memory_agents
+  run_cmd "$runtime" "$REPO_ROOT/configs/mcp/configure-clients.py" "$SETUP_HOST"
 fi

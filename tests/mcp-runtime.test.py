@@ -20,7 +20,7 @@ class McpRuntimeTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="mcp-runtime-test-")
         self.addCleanup(self.temp.cleanup)
-        self.fixture = Path(self.temp.name)
+        self.fixture = Path(self.temp.name).resolve()
         self.home = self.fixture / "home with spaces"
         self.home.mkdir()
         self.repo = self.fixture / "repo with spaces"
@@ -113,27 +113,23 @@ sys.exit("unexpected package/runtime command")
         self.assertEqual(json.loads(result.stdout), [str(self.proxy), "https://mcp.figma.com/mcp",
                          "--transport", "http-only", "--host", "127.0.0.1"])
 
-    def test_ai_memory_allows_http_only_for_fixed_loopback_endpoint(self):
-        self.bridge_runtime()
+    def test_ai_memory_uses_native_bridge_without_node_or_oauth_runtime(self):
+        self.executable(self.home / ".local/bin/ai-memory", "import json,sys\nprint(json.dumps(sys.argv[1:]))\n")
         result = self.bridge("ai-memory")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout), [str(self.proxy), "http://127.0.0.1:49374/mcp",
-                         "--transport", "http-only", "--host", "127.0.0.1", "--allow-http"])
+        self.assertEqual(json.loads(result.stdout), ["mcp-bridge", "--no-session-id"])
 
-    def test_ai_memory_rejects_plaintext_nonloopback_endpoint(self):
-        self.bridge_runtime()
+    def test_ai_memory_does_not_take_its_endpoint_from_legacy_catalog(self):
         self.change_url("ai-memory", "http://example.invalid:49374/mcp")
+        self.executable(self.home / ".local/bin/ai-memory", "import json,sys\nprint(json.dumps(sys.argv[1:]))\n")
         result = self.bridge("ai-memory")
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("ai-memory bridge must remain on its declared loopback endpoint", result.stderr)
-        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), ["mcp-bridge", "--no-session-id"])
 
-    def test_ai_memory_rejects_even_a_different_loopback_port(self):
-        self.bridge_runtime()
-        self.change_url("ai-memory", "http://127.0.0.1:49375/mcp")
+    def test_ai_memory_missing_client_fails_instead_of_falling_back_to_localhost(self):
         result = self.bridge("ai-memory")
         self.assertEqual(result.returncode, 1)
-        self.assertIn("ai-memory bridge must remain on its declared loopback endpoint", result.stderr)
+        self.assertIn("ai-memory", result.stderr)
         self.assertEqual(result.stdout, "")
 
     def test_remote_services_reject_plaintext_even_on_loopback(self):

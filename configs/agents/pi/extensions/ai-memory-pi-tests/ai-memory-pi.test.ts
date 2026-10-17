@@ -10,13 +10,16 @@ const { default: register } = await import(extensionPath);
 const originalFetch = globalThis.fetch;
 const originalDataDir = process.env.AI_MEMORY_DATA_DIR;
 const originalRunId = process.env.AI_MEMORY_RUN_ID;
+const originalHome = process.env.HOME;
+const originalAuthToken = process.env.AI_MEMORY_AUTH_TOKEN;
 let root: string;
-let requests: Array<{ url: URL; body: Record<string, unknown> }>;
+let requests: Array<{ url: URL; body: Record<string, unknown>; authorization: string | null }>;
 let sessionEnded: Promise<void>;
 let endSession: () => void;
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "ai-memory-native-"));
+  process.env.HOME = root;
   process.env.AI_MEMORY_DATA_DIR = join(root, "data");
   delete process.env.AI_MEMORY_RUN_ID;
   mkdirSync(join(root, "data"));
@@ -28,7 +31,7 @@ beforeEach(() => {
     mock(async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
       const url = new URL(String(input));
       const body = JSON.parse(String(init?.body ?? "{}"));
-      requests.push({ url, body });
+      requests.push({ url, body, authorization: new Headers(init?.headers).get("Authorization") });
       if (url.searchParams.get("event") === "session-end") endSession();
       return new Response(url.pathname === "/handoff" ? "Prior session context" : "ok");
     }),
@@ -41,6 +44,8 @@ afterEach(async () => {
   globalThis.fetch = originalFetch;
   process.env.AI_MEMORY_DATA_DIR = originalDataDir;
   process.env.AI_MEMORY_RUN_ID = originalRunId;
+  process.env.HOME = originalHome;
+  process.env.AI_MEMORY_AUTH_TOKEN = originalAuthToken;
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -189,4 +194,94 @@ test("managed runs still inject handoff once and do not double-post session star
     "fixture-run",
     "fixture-run",
   ]);
+});
+
+test("remote capture and handoff use the canonical machine key and never ambient root credentials", async () => {
+  // Arrange
+  const config = join(root, ".config", "ai-memory");
+  mkdirSync(config, { recursive: true });
+  writeFileSync(
+    join(config, "client.json"),
+    JSON.stringify({ server_url: "https://ai-memory-cloud.tail4e339.ts.net" }),
+  );
+  writeFileSync(join(config, "api-key"), "aim_fixture_machine_key_0123456789", { mode: 0o600 });
+  process.env.AI_MEMORY_AUTH_TOKEN = "old-root-bearer-never-use";
+  writeFileSync(join(root, ".ai-memory.toml"), 'workspace = "fixture"\nproject = "remote"\n');
+  const fake = fixture();
+  register(fake.pi);
+
+  // Act
+  await fake.emit("session_start");
+  const context = await fake.emit("before_agent_start", { systemPrompt: "Base", prompt: "Remote fixture" });
+  await fake.emit("session_shutdown");
+  await sessionEnded;
+
+  // Assert
+  expect([...fake.tools.keys()]).toEqual([]);
+  expect(requests.map(({ url, authorization }) => ({ origin: url.origin, path: url.pathname, authorization }))).toEqual(
+    [
+      {
+        origin: "https://ai-memory-cloud.tail4e339.ts.net",
+        path: "/hook",
+        authorization: "Bearer aim_fixture_machine_key_0123456789",
+      },
+      {
+        origin: "https://ai-memory-cloud.tail4e339.ts.net",
+        path: "/handoff",
+        authorization: "Bearer aim_fixture_machine_key_0123456789",
+      },
+      {
+        origin: "https://ai-memory-cloud.tail4e339.ts.net",
+        path: "/hook",
+        authorization: "Bearer aim_fixture_machine_key_0123456789",
+      },
+      {
+        origin: "https://ai-memory-cloud.tail4e339.ts.net",
+        path: "/hook",
+        authorization: "Bearer aim_fixture_machine_key_0123456789",
+      },
+    ],
+  );
+  expect(context[1]).toEqual({
+    message: {
+      customType: "ai-memory-handoff",
+      content: "Prior session context",
+      display: false,
+      attribution: "agent",
+    },
+  });
+  expect(requests.find(({ url }) => url.searchParams.get("event") === "user-prompt")?.body).toMatchObject({
+    prompt: "Remote fixture",
+    cwd: root,
+    sessionID: root,
+  });
+});
+
+test("a malformed remote marker fails closed instead of silently using local memory", () => {
+  // Arrange
+  const config = join(root, ".config", "ai-memory");
+  mkdirSync(config, { recursive: true });
+  writeFileSync(join(config, "client.json"), '{"server_url":"http://127.0.0.1:49374"}');
+  const fake = fixture();
+
+  // Act / Assert
+  expect(() => register(fake.pi)).toThrow("HTTPS Tailscale origin");
+  expect(requests).toEqual([]);
+  endSession();
+});
+
+test("a different tailnet origin is refused before key lookup or any request", () => {
+  // Arrange
+  const config = join(root, ".config", "ai-memory");
+  mkdirSync(config, { recursive: true });
+  writeFileSync(join(config, "client.json"), '{"server_url":"https://unrelated.tail4e339.ts.net"}');
+  const fake = fixture();
+
+  // Act / Assert
+  try {
+    expect(() => register(fake.pi)).toThrow("configured deployment origin");
+    expect(requests).toEqual([]);
+  } finally {
+    endSession();
+  }
 });

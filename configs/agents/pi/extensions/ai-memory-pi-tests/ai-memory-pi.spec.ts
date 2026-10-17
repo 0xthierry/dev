@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -22,9 +22,15 @@ afterEach(async () => {
 
 test("real Pi injects a handoff and captures a prompt using hook-only extension", async () => {
   // Arrange
-  root = await mkdtemp(join(tmpdir(), "pi-memory-hooks-e2e-"));
+  root = await realpath(await mkdtemp(join(tmpdir(), "pi-memory-hooks-e2e-")));
   const log = join(root, "hooks.jsonl");
   await writeFile(join(root, ".ai-memory.toml"), 'workspace = "fixture"\nproject = "native"\n');
+  await mkdir(join(root, ".config/ai-memory"), { recursive: true });
+  await writeFile(
+    join(root, ".config/ai-memory/client.json"),
+    '{"server_url":"https://ai-memory-cloud.tail4e339.ts.net"}',
+  );
+  await writeFile(join(root, ".config/ai-memory/api-key"), "aim_fixture_rpc_machine_key_0123456789", { mode: 0o600 });
   harness = await startPiRpcHarness({
     cwd: root,
     extensionPath: resolve("configs/agents/pi/extensions/ai-memory-pi-tests/fixtures/hook-server.ts"),
@@ -41,6 +47,7 @@ test("real Pi injects a handoff and captures a prompt using hook-only extension"
       FAUX_MODEL_ID,
     ],
     env: {
+      HOME: root,
       PI_CODING_AGENT_DIR: join(root, "agent"),
       AI_MEMORY_DATA_DIR: join(root, "data"),
       AI_MEMORY_RUN_ID: "",
@@ -65,6 +72,24 @@ test("real Pi injects a handoff and captures a prompt using hook-only extension"
   expect(JSON.stringify(messages)).toContain("Isolated prior-session handoff");
   expect(JSON.stringify(messages)).toContain("Hook-only run complete.");
   expect(captured.map(({ url }) => new URL(url).pathname)).not.toContain("/mcp");
+  expect(captured.map(({ url, authorization }) => ({ origin: new URL(url).origin, authorization }))).toEqual([
+    {
+      origin: "https://ai-memory-cloud.tail4e339.ts.net",
+      authorization: "Bearer aim_fixture_rpc_machine_key_0123456789",
+    },
+    {
+      origin: "https://ai-memory-cloud.tail4e339.ts.net",
+      authorization: "Bearer aim_fixture_rpc_machine_key_0123456789",
+    },
+    {
+      origin: "https://ai-memory-cloud.tail4e339.ts.net",
+      authorization: "Bearer aim_fixture_rpc_machine_key_0123456789",
+    },
+    {
+      origin: "https://ai-memory-cloud.tail4e339.ts.net",
+      authorization: "Bearer aim_fixture_rpc_machine_key_0123456789",
+    },
+  ]);
   expect(captured.find(({ url }) => new URL(url).searchParams.get("event") === "user-prompt")?.body).toMatchObject({
     cwd: root,
     prompt: "Remember the isolated fixture.",

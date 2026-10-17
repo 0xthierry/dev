@@ -7,7 +7,9 @@ performs OAuth discovery/login, so its native writer is unsafe during setup.
 import argparse
 import copy
 import json
+import importlib.util
 import os
+import shlex
 from pathlib import Path
 import re
 import sys
@@ -219,6 +221,16 @@ def configure(host):
     if len({path.absolute() for path in paths.values()}) != len(paths):
         raise ValueError("client configuration paths must be distinct")
     catalog = load_catalog()
+    remote_memory = None
+    if host in ("macbook", "omarchy"):
+        module_path = Path(__file__).resolve().parents[1] / "ai-memory/client.py"
+        spec = importlib.util.spec_from_file_location("ai_memory_client", module_path)
+        memory = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(memory)
+        url, token, _ = memory.load_client()
+        remote_memory = (token, module_path)
+        catalog["ai-memory"] = {**catalog["ai-memory"], "url": url + "/mcp",
+                                "description": "Shared private cloud project memory."}
     selected = {name: service for name, service in catalog.items()
                 if host in service.get("hosts", HOSTS)}
     preferences_path = (Path(os.environ.get("XDG_CONFIG_HOME", home / ".config"))
@@ -268,6 +280,23 @@ def configure(host):
                         del servers[name]
                     continue
             desired = render_entry(service, home, client, name)
+            if name == "ai-memory" and remote_memory and client == "desktop":
+                desired = {"command": str(home / ".local/bin/ai-memory"),
+                           "args": ["mcp-bridge", "--no-session-id"]}
+            if name == "ai-memory" and remote_memory and client != "desktop":
+                token, module_path = remote_memory
+                if client == "pi":
+                    desired["headers"] = {"Authorization": "!" + shlex.join(
+                        [sys.executable, str(module_path), "auth-header"])}
+                else:
+                    desired["http_headers" if client == "codex" else "headers"] = {
+                        "Authorization": "Bearer " + token}
+                # Authentication is repo-managed for this service, not preserved
+                # from the old local server or a previous root credential.
+                existing = servers.get(name, {})
+                for auth in ("headers", "http_headers", "env_http_headers", "bearer_token_env_var", "oauth"):
+                    if auth in existing:
+                        del existing[auth]
             if client == "claude" and name == "figma" and plugin_active:
                 if name in servers:
                     if servers[name] == desired:

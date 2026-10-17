@@ -13,6 +13,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("service", choices=names)
     args = parser.parse_args()
+    if args.service == "ai-memory":
+        # The dedicated client supplies the HTTPS endpoint and file-backed user
+        # key. No token arguments, mcp-remote OAuth, or localhost fallback.
+        launcher = Path.home() / ".local/bin/ai-memory"
+        if not launcher.is_file() or not os.access(launcher, os.X_OK):
+            raise ValueError("ai-memory remote client is missing; rerun host setup")
+        os.execv(launcher, [str(launcher), "mcp-bridge", "--no-session-id"])
     runtime = Path.home() / ".local/share/mcp-services"
     config = json.loads((runtime / "runtime.json").read_text())
     node = config["node"]
@@ -21,12 +28,7 @@ def main():
         raise ValueError("MCP bridge runtime is incomplete; rerun install/mcp.sh")
     entry = catalog[args.service]
     command = [node, str(proxy), entry["url"], "--transport", "http-only", "--host", "127.0.0.1"]
-    if args.service == "ai-memory":
-        # ai-memory is deliberately loopback-only, not a plaintext remote server.
-        if entry["url"] != "http://127.0.0.1:49374/mcp":
-            raise ValueError("ai-memory bridge must remain on its declared loopback endpoint")
-        command.append("--allow-http")
-    elif not entry["url"].startswith("https://"):
+    if not entry["url"].startswith("https://"):
         raise ValueError("remote MCP services require HTTPS")
     os.execv(node, command)
 
