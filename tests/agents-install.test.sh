@@ -127,6 +127,37 @@ EOF
   # Act
   HOME="$test_home" "$REPO_ROOT/configs/agents/install.sh" --yes >/dev/null
 
+  # Assert: deployed Plannotator integrations can reach plan review in each harness.
+  python3 - "$test_home" <<'PY'
+import json
+import pathlib
+import sys
+import tomllib
+
+home = pathlib.Path(sys.argv[1])
+claude = json.loads((home / '.claude/settings.json').read_text())
+assert {'EnterPlanMode', 'ExitPlanMode'}.isdisjoint(claude['permissions']['deny'])
+assert claude['hooks']['PermissionRequest'] == [{
+    'matcher': 'ExitPlanMode',
+    'hooks': [{'type': 'command', 'command': 'plannotator', 'timeout': 345600}],
+}]
+codex = tomllib.loads((home / '.codex/config.toml').read_text())
+assert codex['features']['hooks'] is True
+assert json.loads((home / '.codex/hooks.json').read_text()) == {
+    'hooks': {'Stop': [{'hooks': [{
+        'type': 'command', 'command': str(home / '.local/bin/plannotator'),
+        'timeout': 345600,
+    }]}]},
+}
+pi = json.loads((home / '.pi/agent/settings.json').read_text())
+assert len([p for p in pi['packages'] if isinstance(p, str)
+            and p.startswith('npm:@plannotator/pi-extension@')]) == 1
+assert (home / '.claude/skills/plannotator-review/SKILL.md').is_file()
+assert (home / '.codex/skills/plannotator-review/SKILL.md').is_file()
+assert not (home / '.pi/agent/skills/plannotator-review').exists()
+print('ok: deploys Claude plan permissions, Codex Stop hook, and Pi package without duplicate review skills')
+PY
+
   # Assert: temp paths are absolute, host-specific, private, and restored on rerun.
   jq -e --arg tmp "$test_home/.cache/claude-tmp" '
     .env.CLAUDE_CODE_TMPDIR == $tmp and .env.TMPDIR == $tmp

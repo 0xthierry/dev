@@ -48,8 +48,6 @@
       "AskUserQuestion",
       "Artifact",
       "RemoteTrigger",
-      "EnterPlanMode",
-      "ExitPlanMode",
       "Bash(rm -rf *)",
       "Bash(rm -fr *)",
       "Bash(rm -Rf *)",

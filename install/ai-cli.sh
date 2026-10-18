@@ -37,7 +37,7 @@ PY
 }
 
 # True when an already-installed binary reports the pinned version. Each vendor
-# prints a different shape ("plannotator 0.27.14", "2.1.219 (Claude Code)",
+# prints a different shape ("plannotator 0.28.23", "2.1.219 (Claude Code)",
 # "0.9.3"), so match the first semver-looking token and compare with any
 # leading "v" stripped from both sides.
 installed_binary_is_pinned() {
@@ -387,7 +387,7 @@ install_ai_clis() {
   # This keeps one Pi version active even when a project pins a different Node version.
 
   # Plannotator — plan and code review UI; hooks and skills are deployed from this repo
-  install_plannotator_binary "v0.27.14"
+  install_plannotator_binary "v0.28.23"
 
   # Agent Slack (Stably) — standalone binary
   install_agent_slack_binary "0.10.2"
