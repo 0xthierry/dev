@@ -100,6 +100,7 @@ udevadm verify configs/omarchy/psvr2/70-xrhardware.rules
 bun run test:browser-diagnostics
 bun run typecheck:browser-diagnostics
 bun run lint:browser-diagnostics
+bun test configs/agents/skills/roblox-open-cloud-api/scripts
 # Uses an isolated browser fixture, not the user's Brave session:
 bun run test:browser-diagnostics:e2e
 ./setup.sh dev --dry-run
