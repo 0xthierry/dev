@@ -1,19 +1,19 @@
 // Stable routing instructions; GPT-5.6 Terra effort is enforced by the execution runtime.
 // Evidence and routing details: ../../README.md#model-routing-evidence.
-export const SUBAGENT_MODEL_GUIDANCE = `Model selection:
+export const SUBAGENT_MODEL_GUIDANCE = `Model and reasoning selection:
 
-Choose a named agent that fits the task first. Unless the user or assignment needs an override, omit execution and use repository settings and the agent's declared model and effort. The general recommendations below apply when no named profile fits or when choosing a deliberate override; they do not replace matching named-agent defaults.
+Choose a named agent for its role and instructions, then choose execution settings for the concrete assignment. Repo-managed agent profiles do not pin a model or effort. Do not infer reasoning effort from the agent name, the parent's effort, or read-only versus write access alone.
 
-- cliproxyapi/gpt-6-astra is the default for implementation and debugging at high effort.
+Model guidance:
+- Prefer cliproxyapi/gpt-6.1-sol for read-only codebase reconnaissance: locating files, tracing call paths, mapping dependencies, finding patterns, and explaining existing code. Require file paths and supporting evidence.
+- Prefer cliproxyapi/gpt-6-astra for implementation, debugging, planning, design decisions, and code review. Give reviewers an artifact and a specific review question; require evidence.
 
-- cliproxyapi/gpt-6-astra is the default for planning. Use high effort for planning and design decisions.
+Choose reasoning effort by difficulty, uncertainty, and consequences of a wrong answer:
+- low: a narrow lookup, a straightforward code explanation, or a small change with a clear pattern and direct verification.
+- medium: several connected files, moderate branching, or a bounded implementation or investigation requiring comparison of alternatives.
+- high: ambiguous behavior, complex cross-component reasoning, difficult debugging, or consequential design and correctness decisions.
+- xhigh: exceptionally difficult or high-risk work with unresolved interacting constraints; not a default for reconnaissance or review.
 
-- cliproxyapi/gpt-6.1-sol is the default for read-only codebase reconnaissance at xhigh effort. Use it to locate relevant files and symbols, trace call paths, map dependencies, find existing implementation patterns, and summarize how a component works. Require file paths and supporting evidence.
+Use the lowest effort adequate for the assignment. Read-only analysis can require high effort when the code or question is difficult; writing code does not automatically require high effort. Increase effort when investigation reveals deeper uncertainty or complexity, not merely because an agent is an analyzer or reviewer. State a brief task-specific reason when selecting high or xhigh.
 
-Use cliproxyapi/gpt-6-astra at high effort when the task requires diagnosing a bug or making changes; use cliproxyapi/gpt-6-astra with high effort for planning and design decisions. For routine code review, including ordinary correctness and security checks, use cliproxyapi/gpt-6-astra at xhigh effort.
-
-- cliproxyapi/gpt-6-astra is the default for code review at xhigh effort. Give it the artifact and a specific review question; require evidence.
-
-Honor explicit user choices and repository settings. Choose by the delegated task, not by the parent's model. A parent using cliproxyapi/gpt-6-astra should delegate implementation and debugging to cliproxyapi/gpt-6-astra at high effort with non-overlapping ownership.
-
-Prefer a named agent whose file defaults match the assignment, and omit execution so those defaults can apply. Set execution only when the user or the concrete assignment requests an override. For a model override, supply provider and model together; effort normally resolves independently unless a runtime model policy fixes the effective level. Omitted settings follow repository configuration, agent defaults, then the parent. Repository model locks and non-policy effort locks still apply. Check the effective settings returned by the tool.`;
+Pass the chosen effort in execution when spawning; use agent_followup with execution to change it for a later task. For a model override, supply provider and model together. Omitted settings inherit repository configuration, any external agent defaults, then the parent; omission does not dynamically choose effort. Honor explicit user choices and repository locks. Model-specific runtime policies can override the requested effort, so inspect the effective settings returned by the tool. Assign non-overlapping ownership for parallel implementation.`;

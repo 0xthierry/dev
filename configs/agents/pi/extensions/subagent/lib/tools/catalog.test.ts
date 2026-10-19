@@ -35,7 +35,7 @@ test("keeps every flattened guideline attributable and prompts stable", () => {
   }
 });
 
-test("exposes Astra and Sol routing preferences without recommending Luna or Terra", () => {
+test("exposes task-dependent reasoning guidance through the spawn tool", () => {
   // Arrange
   const first = createFakePi();
   const second = createFakePi();
@@ -48,36 +48,28 @@ test("exposes Astra and Sol routing preferences without recommending Luna or Ter
   // Assert
   expect(description).toBe(second.tools.get("agent_spawn")?.description ?? "");
   expect(description).toEndWith(SUBAGENT_MODEL_GUIDANCE);
+  expect(description).toContain("Prefer cliproxyapi/gpt-6.1-sol for read-only codebase reconnaissance");
   expect(description).toContain(
-    "cliproxyapi/gpt-6-astra is the default for implementation and debugging at high effort",
-  );
-  expect(description).toContain("cliproxyapi/gpt-6-astra is the default for planning");
-  expect(description).toContain("Use high effort for planning and design decisions");
-  expect(description).toContain(
-    "Use cliproxyapi/gpt-6-astra at high effort when the task requires diagnosing a bug or making changes",
+    "Prefer cliproxyapi/gpt-6-astra for implementation, debugging, planning, design decisions, and code review",
   );
   expect(description).toContain(
-    "cliproxyapi/gpt-6.1-sol is the default for read-only codebase reconnaissance at xhigh effort",
+    "Choose reasoning effort by difficulty, uncertainty, and consequences of a wrong answer",
   );
+  expect(description).toContain("low: a narrow lookup");
+  expect(description).toContain("medium: several connected files");
+  expect(description).toContain("high: ambiguous behavior");
+  expect(description).toContain("xhigh: exceptionally difficult or high-risk work");
   expect(description).not.toContain("gpt-5.6-terra");
   expect(description).not.toContain("implementation fallback");
   expect(description).not.toContain("gpt-6-luna");
-  expect(description).toContain("cliproxyapi/gpt-6-astra is the default for code review at xhigh effort");
   expect(description).not.toContain("grok-");
-  expect(description).toContain(
-    "should delegate implementation and debugging to cliproxyapi/gpt-6-astra at high effort",
-  );
-  expect(description).not.toContain("Use Astra for code review only when the user explicitly requests it");
-  expect(description).toContain(
-    "For routine code review, including ordinary correctness and security checks, use cliproxyapi/gpt-6-astra at xhigh effort",
-  );
-  expect(description).not.toContain("implementation, debugging, planning, and review");
-  expect(description).not.toContain("judging correctness");
-  expect(description).toContain("omit execution so those defaults can apply");
-  expect(description).toContain("they do not replace matching named-agent defaults");
-  expect(description).toContain("Set execution only when the user or the concrete assignment requests an override");
-  expect(description).toContain("Repository model locks and non-policy effort locks still apply");
-  expect(description).not.toContain("set effort explicitly");
+  expect(description).toContain("Use the lowest effort adequate for the assignment");
+  expect(description).toContain("Read-only analysis can require high effort");
+  expect(description).toContain("Repo-managed agent profiles do not pin a model or effort");
+  expect(description).toContain("Pass the chosen effort in execution when spawning");
+  expect(description).toContain("use agent_followup with execution to change it for a later task");
+  expect(description).toContain("omission does not dynamically choose effort");
+  expect(description).toContain("Honor explicit user choices and repository locks");
   expect(description).not.toMatch(/\bsubscription\b/);
   expect(first.tools.get("agent_followup")?.description).toContain("guidance in agent_spawn");
 });

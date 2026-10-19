@@ -189,16 +189,59 @@ PY
     cmp -s "$test_home/.pi/agent/agents/$profile.md" "$REPO_ROOT/configs/agents/agents/$profile.md" || fail "Pi did not preserve $profile profile"
     printf 'ok: Pi deploys the unchanged %s profile\n' "$profile"
   done
-  assert_file_excludes "Pi worker inherits the session model" "$test_home/.pi/agent/agents/worker.md" 'model:'
-  assert_file_contains "uses high effort for the Pi worker" "$test_home/.pi/agent/agents/worker.md" 'effort: high'
-  assert_file_contains "routes codebase-locator through GPT-6 Luna" "$test_home/.pi/agent/agents/rpi/codebase-locator.md" 'model: gpt-6-luna'
-  assert_file_contains "uses xhigh effort for codebase-locator" "$test_home/.pi/agent/agents/rpi/codebase-locator.md" 'effort: xhigh'
-  for profile in codebase-analyzer codebase-pattern-finder web-search-researcher; do
-    assert_file_contains "routes $profile through GPT-6 Luna" "$test_home/.pi/agent/agents/rpi/$profile.md" 'model: gpt-6-luna'
-    assert_file_contains "uses high effort for $profile" "$test_home/.pi/agent/agents/rpi/$profile.md" 'effort: high'
-  done
-  assert_file_contains "routes generated Codex agents through GPT-6.1 Sol" "$test_home/.codex/agents/worker.toml" 'model = "gpt-6.1-sol"'
-  assert_file_contains "uses high effort for generated Codex agents" "$test_home/.codex/agents/worker.toml" 'model_reasoning_effort = "high"'
+  python3 - "$REPO_ROOT/configs/agents/agents" "$test_home" <<'PY'
+import pathlib
+import re
+import sys
+import tomllib
+
+source, home = map(pathlib.Path, sys.argv[1:])
+profiles = {path.relative_to(source): path.read_text()
+            for path in source.rglob('*.md') if path.read_text().startswith('---\n')}
+assert profiles, 'no source profiles discovered'
+assert not {str(path): text.split('---', 2)[1] for path, text in profiles.items()
+            if re.search(r'^(provider|model|effort):', text.split('---', 2)[1], re.M)}
+deployed = {path: (home / '.pi/agent/agents' / path).read_text() for path in profiles}
+assert deployed == profiles, 'Pi changed shipped profiles during deployment'
+codex = {path.stem: tomllib.loads(path.read_text())
+         for path in (home / '.codex/agents').glob('*.toml')}
+assert set(codex) == {path.stem for path in profiles
+                      if len(path.parts) == 1 and path.stem != 'oracle'}
+assert all(set(profile) == {'name', 'description', 'sandbox_mode', 'developer_instructions'}
+           for profile in codex.values()), 'generated Codex profiles contain execution pins'
+assert all(profile['name'] == name and profile['sandbox_mode'] == 'workspace-write'
+           and profile['developer_instructions'].strip() == profiles[pathlib.Path(name + '.md')].split('---', 2)[2].strip()
+           for name, profile in codex.items()), 'Codex changed profile identity or instructions'
+print('ok: deploys every Pi profile unchanged without execution pins and generates inheriting Codex profiles')
+PY
+
+  # Assert: even legacy source execution settings cannot re-pin generated Codex agents.
+  mkdir -p "$TEST_TMP_DIR/converter-source"
+  cat > "$TEST_TMP_DIR/converter-source/inherited.md" <<'EOF'
+---
+name: inherited
+description: Keep the profile instructions.
+provider: old-provider
+model: haiku
+effort: low
+---
+
+Follow the assigned task.
+EOF
+  "$REPO_ROOT/configs/agents/md-to-codex-toml.sh" "$TEST_TMP_DIR/converter-source" "$TEST_TMP_DIR/converter-target" >/dev/null
+  python3 - "$TEST_TMP_DIR/converter-target/inherited.toml" <<'PY'
+import pathlib
+import sys
+import tomllib
+
+assert tomllib.loads(pathlib.Path(sys.argv[1]).read_text()) == {
+    'name': 'inherited',
+    'description': 'Keep the profile instructions.',
+    'sandbox_mode': 'workspace-write',
+    'developer_instructions': 'Follow the assigned task.\n',
+}
+print('ok: Codex conversion preserves profile content without translating legacy execution pins')
+PY
   for target in .agents .codex .claude .pi/agent; do
     [[ "$(readlink "$test_home/$target/skills/engineering-principles")" == "$REPO_ROOT/configs/agents/skills/engineering-principles" ]] || fail "missing engineering-principles skill link: $target"
     for reference in "$REPO_ROOT/configs/agents/skills/engineering-principles/SKILL.md" "$REPO_ROOT/configs/agents/skills/engineering-principles/references/"*.md; do

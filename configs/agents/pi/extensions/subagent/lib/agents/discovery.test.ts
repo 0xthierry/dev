@@ -6,7 +6,7 @@ import { resolveAgentExecution } from "../execution/resolution";
 import { discoverAgents, readAgentDirectory } from "./discovery";
 
 describe("discoverAgents", () => {
-  test("loads shipped agent definitions and resolves their routed file defaults", async () => {
+  test("loads shipped roles without execution pins and inherits parent settings", async () => {
     // Arrange
     const globalAgentsDir = join(import.meta.dir, "../../../../../agents");
     const parent = { provider: "test", model: "parent", effort: "low" as const };
@@ -27,8 +27,8 @@ describe("discoverAgents", () => {
         execution: {
           ok: true,
           value: {
-            profile: { provider: "test", model: "parent", effort: "xhigh" },
-            source: { model: "parent", effort: "agent" },
+            profile: { provider: "test", model: "parent", effort: "low" },
+            source: { model: "parent", effort: "parent" },
           },
         },
       },
@@ -38,8 +38,8 @@ describe("discoverAgents", () => {
         execution: {
           ok: true,
           value: {
-            profile: { provider: "test", model: "parent", effort: "high" },
-            source: { model: "parent", effort: "agent" },
+            profile: { provider: "test", model: "parent", effort: "low" },
+            source: { model: "parent", effort: "parent" },
           },
         },
       },
@@ -49,8 +49,8 @@ describe("discoverAgents", () => {
         execution: {
           ok: true,
           value: {
-            profile: { provider: "test", model: "parent", effort: "xhigh" },
-            source: { model: "parent", effort: "agent" },
+            profile: { provider: "test", model: "parent", effort: "low" },
+            source: { model: "parent", effort: "parent" },
           },
         },
       },
@@ -60,8 +60,8 @@ describe("discoverAgents", () => {
         execution: {
           ok: true,
           value: {
-            profile: { provider: "test", model: "parent", effort: "high" },
-            source: { model: "parent", effort: "agent" },
+            profile: { provider: "test", model: "parent", effort: "low" },
+            source: { model: "parent", effort: "parent" },
           },
         },
       },
@@ -71,8 +71,8 @@ describe("discoverAgents", () => {
         execution: {
           ok: true,
           value: {
-            profile: { provider: "test", model: "parent", effort: "high" },
-            source: { model: "parent", effort: "agent" },
+            profile: { provider: "test", model: "parent", effort: "low" },
+            source: { model: "parent", effort: "parent" },
           },
         },
       },
@@ -82,8 +82,8 @@ describe("discoverAgents", () => {
         execution: {
           ok: true,
           value: {
-            profile: { provider: "test", model: "parent", effort: "high" },
-            source: { model: "parent", effort: "agent" },
+            profile: { provider: "test", model: "parent", effort: "low" },
+            source: { model: "parent", effort: "parent" },
           },
         },
       },

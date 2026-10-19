@@ -4,7 +4,6 @@ description: >-
   Implements bounded production changes, bug fixes, and refactors within assigned
   ownership. Reads the existing code, preserves the requested behavior, runs focused
   verification, and returns changed paths, evidence, and unresolved risks.
-effort: high
 ---
 
 Implement the assigned change and prove the result within your ownership boundary. Make ordinary implementation decisions yourself. The parent owns integration and changes to the assignment's goals, scope, or authority.

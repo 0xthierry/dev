@@ -4,9 +4,9 @@
 # Usage: md-to-codex-toml.sh <source_agents_dir> <target_agents_dir>
 #
 # Reads each .md file from source, extracts YAML frontmatter (name,
-# description, model) and body, then writes a .toml file with:
-#   name, description, model, sandbox_mode, model_reasoning_effort,
-#   developer_instructions (= body after frontmatter)
+# description) and body, then writes a .toml file with:
+#   name, description, sandbox_mode, developer_instructions (= body)
+# Execution settings are omitted so agents inherit the caller's settings.
 #
 # Agents listed in SKIP_AGENTS are excluded (e.g. oracle, which is
 # Claude Code-specific).
@@ -14,7 +14,6 @@
 set -euo pipefail
 
 SKIP_AGENTS=(oracle)
-CODEX_MODEL="gpt-6.1-sol"
 
 usage() {
   printf 'Usage: %s <source_agents_dir> <target_agents_dir>\n' "$(basename "$0")" >&2
@@ -32,14 +31,6 @@ should_skip() {
   return 1
 }
 
-reasoning_effort_for_model() {
-  local model="$1"
-  case "$model" in
-    sonnet|haiku) echo "medium" ;;
-    *)            echo "high" ;;
-  esac
-}
-
 escape_toml_multiline() {
   # For TOML multiline basic strings ("""), we only need to escape
   # sequences of 3+ consecutive quotes and backslashes.
@@ -52,7 +43,7 @@ convert_md_to_toml() {
 
   local in_frontmatter=0
   local seen_open=0
-  local fm_name="" fm_description="" fm_model=""
+  local fm_name="" fm_description=""
   local body=""
   local line=""
 
@@ -78,10 +69,6 @@ convert_md_to_toml() {
         fm_description="${BASH_REMATCH[1]}"
         fm_description="${fm_description#\"}"
         fm_description="${fm_description%\"}"
-      elif [[ "$line" =~ ^model:[[:space:]]*(.*) ]]; then
-        fm_model="${BASH_REMATCH[1]}"
-        fm_model="${fm_model#\"}"
-        fm_model="${fm_model%\"}"
       fi
     else
       body+="$line"$'\n'
@@ -96,9 +83,6 @@ convert_md_to_toml() {
   if should_skip "$fm_name"; then
     return 0
   fi
-
-  local effort
-  effort="$(reasoning_effort_for_model "$fm_model")"
 
   # Strip leading blank lines, then trailing blank lines (portable)
   body="$(printf '%s' "$body" | sed '/./,$!d')"
@@ -120,9 +104,7 @@ convert_md_to_toml() {
   cat > "$target_path" <<TOML
 name = "$fm_name"
 description = "$escaped_description"
-model = "$CODEX_MODEL"
 sandbox_mode = "workspace-write"
-model_reasoning_effort = "$effort"
 developer_instructions = """
 $escaped_body
 """

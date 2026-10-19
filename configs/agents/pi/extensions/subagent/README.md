@@ -77,8 +77,8 @@ A built-in `worker` fallback is always available. The repo-managed global `worke
 
 | Repo-managed agent | File default | Responsibility |
 | --- | --- | --- |
-| [advisor](../../../agents/advisor.md) | `xhigh` effort; inherits the parent model | Read-only decision advice through selected lenses |
-| [worker](../../../agents/worker.md) | `high` effort; inherits the parent model | Bounded implementation and verification |
+| [advisor](../../../agents/advisor.md) | No execution pins | Read-only decision advice through selected lenses |
+| [worker](../../../agents/worker.md) | No execution pins | Bounded implementation and verification |
 
 Both select and read definitions through the shared [engineering-principles skill](../../../skills/engineering-principles/SKILL.md). The skill includes progressive TypeScript and testing/Bun references. The built-in fallback remains minimal for standalone installations without these files.
 
@@ -88,15 +88,12 @@ A trusted project may add `.pi/agents/**/*.md`:
 ---
 name: worker
 description: Implements bounded production changes.
-provider: cliproxyapi
-model: gpt-6-astra
-effort: high
 ---
 
 Project-specific worker instructions.
 ```
 
-`provider` and `model` are optional but atomic: specify both or neither. These frontmatter values are agent file defaults. When a named agent's defaults match the assignment, callers should omit `execution` instead of restating them as invocation overrides. Project definitions and repository configuration are ignored when Pi does not trust the project. Discovery rejects duplicates within one source, applies deterministic project-over-global-over-built-in precedence across sources, and renders a name-sorted parent catalog without absolute paths or runtime state.
+`provider` and `model` are optional but atomic: specify both or neither. External project profiles can still provide execution defaults, but this repo's shared profiles omit them so the parent can select settings per task. Project definitions and repository configuration are ignored when Pi does not trust the project. Discovery rejects duplicates within one source, applies deterministic project-over-global-over-built-in precedence across sources, and renders a name-sorted parent catalog without absolute paths or runtime state.
 
 ## Execution resolution
 
@@ -107,7 +104,7 @@ Provider, model, and effort are assignment settings. Model and effort resolve in
 3. agent Markdown frontmatter;
 4. current parent execution.
 
-Provider and model must always be supplied together and the provider is never guessed from a model name. After model precedence resolves, the runtime applies model-specific effort policy: `cliproxyapi/gpt-5.6-terra` always resolves to `medium`, regardless of invocation, repository, agent, or inherited parent effort. This invariant supersedes repository effort locks for Terra while model locks continue to apply, and returned execution provenance reports the effort source as `policy`. Every other selected Pi model must support the exact normally resolved effort. General task recommendations include `high` and `xhigh`; they do not override named profiles such as the advisor's `xhigh` default. The runtime retains Pi's broader effort support for other agent files, explicit requests, and repository settings. Pi's model registry validates provider/model existence and authentication at the boundary, then credentials are immediately discarded. Children confirm their effective model and effort through RPC before accepting work. Follow-up execution changes perform model/thinking updates and state verification before prompting.
+Provider and model must always be supplied together and the provider is never guessed from a model name. After model precedence resolves, the runtime applies model-specific effort policy: `cliproxyapi/gpt-5.6-terra` always resolves to `medium`, regardless of invocation, repository, agent, or inherited parent effort. This invariant supersedes repository effort locks for Terra while model locks continue to apply, and returned execution provenance reports the effort source as `policy`. Every other selected Pi model must support the exact normally resolved effort. Task-dependent guidance covers `low` through `xhigh`; repo-managed roles do not impose a fixed effort. The runtime retains Pi's broader effort support for other agent files, explicit requests, and repository settings. Pi's model registry validates provider/model existence and authentication at the boundary, then credentials are immediately discarded. Children confirm their effective model and effort through RPC before accepting work. Follow-up execution changes perform model/thinking updates and state verification before prompting.
 
 Example spawn override:
 
@@ -119,55 +116,52 @@ Example spawn override:
   "execution": {
     "provider": "cliproxyapi",
     "model": "gpt-6-astra",
-    "effort": "xhigh"
+    "effort": "medium"
   }
 }
 ```
 
-This routine-review example explicitly selects Astra at `xhigh` effort instead of
-inheriting the parent model. For advisor decision work whose inherited model fits
-the assignment, omit `execution` so normal defaults apply.
+This bounded-review example selects Astra at `medium` effort. A narrow, obvious
+patch may warrant `low`; a review involving subtle concurrency or data-loss risks
+may warrant `high` or `xhigh`. Base the selection on the actual review question.
 
 ## Model routing evidence
 
-The `agent_spawn` description contains a stable, advisory provider/model selection
-policy; `agent_followup` refers to the same policy. It directs callers to choose a
-named agent whose file defaults fit the assignment and omit `execution` in that
-case. Callers should set `execution` only when the user or concrete assignment
-requests an override. The prose is advisory; the separately documented Terra
-`medium` runtime policy is enforced during execution resolution. This guidance does
-not install providers, bypass model locks, or promise authentication on another
-machine. An omitted execution override still follows normal resolution and any
-applicable model effort policy.
+The `agent_spawn` description contains stable guidance for choosing a model and
+reasoning effort per assignment; `agent_followup` refers to the same guidance.
+Repo-managed agent profiles define roles and instructions, not model or effort
+pins. The parent chooses execution settings based on the actual task. This is
+prompt-guided selection, not an automatic runtime difficulty classifier.
+Omitted settings inherit repository configuration, external agent defaults, then
+the parent. Repository locks and model-specific runtime policies still apply.
 
 ### Recommended use
 
-Choose a fitting named agent first and omit `execution` unless an override is needed. The table below guides tasks without a fitting named profile and deliberate overrides. It does not replace the model or effort declared by a matching profile: advisor decision work keeps `xhigh`, not the generic planning recommendation of `high`.
+Choose a named agent for its role, then select model and effort independently.
+Prefer `cliproxyapi/gpt-6.1-sol` for read-only reconnaissance and
+`cliproxyapi/gpt-6-astra` for implementation, debugging, planning, design, and review.
+These model preferences do not prescribe an effort level.
 
-| Exact provider / model | Recommended work | Rationale and limitation |
-|---|---|---|
-| `cliproxyapi/gpt-6-astra` | Default for implementation, debugging, planning, and design decisions | High effort |
-| `cliproxyapi/gpt-6-astra` | Default for code review, including ordinary correctness and security checks | `xhigh` recommended; provide an artifact plus a specific review question and require evidence |
-| `cliproxyapi/gpt-6.1-sol` | Default for read-only reconnaissance | `xhigh` recommended; require file paths and supporting evidence |
+| Effort | Task characteristics |
+|---|---|
+| `low` | Narrow lookup, straightforward explanation, or small change with direct verification |
+| `medium` | Several connected files, moderate branching, or bounded comparison of alternatives |
+| `high` | Ambiguous behavior, complex cross-component reasoning, difficult debugging, or consequential decisions |
+| `xhigh` | Exceptionally difficult or high-risk work with unresolved interacting constraints |
 
-Use `cliproxyapi/gpt-6-astra` at high effort instead of the reconnaissance profile for debugging
-or edits. Use `cliproxyapi/gpt-6-astra` with high effort for planning and design
-decisions, and at xhigh effort for code review. Use `cliproxyapi/gpt-6.1-sol` at
-xhigh effort for read-only reconnaissance. These are the user's routing preferences,
-not benchmark claims.
-An Astra parent should delegate implementation and debugging to Astra with
-non-overlapping ownership. Honor user choices and repository locks, except that the
-Terra `medium` invariant always supersedes effort inputs and effort locks. Prefer a
-named agent with matching file defaults and omit `execution`; when an override is
-needed, supply provider and model together while effort remains independently
-overridable for models without a runtime effort policy. Inspect the returned
-effective settings.
+Use the lowest adequate effort. A difficult read-only analysis may need `high`;
+a small implementation may need only `low`. Do not choose effort from the agent
+name or access mode alone. Give a brief task-specific reason for `high` or `xhigh`.
+Pass the chosen effort in `agent_spawn.execution`; use `agent_followup.execution`
+to adjust it for a later task when new evidence changes the difficulty assessment.
+Supply provider and model together when choosing a model. Check the returned
+effective settings, rather than assuming the request won over repository locks
+or runtime policy. The existing Terra `medium` runtime invariant is unchanged.
 
-**Effort is workflow policy, not a benchmark-proven optimum.** The general task
-recommendations include high and xhigh. Named profiles can declare other supported
-levels. The Terra `medium` rule still applies when Terra is explicitly selected. The reconnaissance and review
-`xhigh` recommendations are advisory and do not override matching agent defaults,
-repository precedence, or accepted schema values.
+The shared Markdown profiles and generated Codex agent TOMLs omit execution pins.
+Removing pins permits inheritance; it does not itself implement adaptive reasoning
+in Claude or Codex. Pi's parent applies the task-selection guidance above.
+**Effort is a task-dependent judgment, not a benchmark-proven optimum.**
 
 The repo-managed `configs/agents/pi/cliproxyapi-models.json` maps the full pinned
 Pi Codex catalog, including the models recommended here. Deploy catalog changes
@@ -184,11 +178,10 @@ availability. See `configs/cliproxyapi/README.md` for the complete mapping.
 - The repo-managed `cliproxyapi` catalog maps GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra,
   and GPT-5.6 Terra to the local Codex account pool. Catalog presence proves
   configuration, not live entitlement, quota, or comparative quality.
-- Assigning Astra at high effort to implementation, debugging, and planning,
-  Astra at xhigh to review, and GPT-6.1 Sol at xhigh to read-only reconnaissance
-  is the user's workflow policy. Named agent effort defaults still take precedence
-  over these general recommendations. These are not benchmark claims, and no
-  same-task, same-harness Pi comparison of these exact routes has been run locally.
+- Prefer Astra for implementation and judgment-heavy work, and Sol for
+  reconnaissance, while choosing effort separately for each assignment. These are
+  workflow preferences, not benchmark claims; no same-task, same-harness Pi
+  comparison establishing an optimal effort for these routes has been run locally.
 
 Keep volatile benchmark and price claims out of the model-facing tool prompt. Track
 completed-task quality, wall time, retries, allowance consumption, and cache reuse
