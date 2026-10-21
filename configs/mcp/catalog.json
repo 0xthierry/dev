@@ -22,6 +22,14 @@
     "launcher": "rea-mcp",
     "description": "Analyze and reverse-engineer binaries with REA."
   },
+  "playwriter": {
+    "launcher": "playwriter-mcp",
+    "description": "Automate the user's existing browser through the Playwriter extension."
+  },
+  "chrome-devtools": {
+    "launcher": "chrome-devtools-mcp",
+    "description": "Diagnose and inspect the existing local browser at 127.0.0.1:9222."
+  },
   "blender": {
     "launcher": "blender-mcp",
     "description": "Inspect and edit scenes in the running local Blender application.",

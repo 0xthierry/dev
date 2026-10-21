@@ -68,7 +68,7 @@ install_creative_mcp_tunnel_linux() (
 apply_creative_mcp_tunnel() {
   local host="${1:-${HOST:-}}" arch="" checksum="" brew_bin=""
   local launcher="$REPO_ROOT/configs/creative-mcp/chatgpt-creative-mcp"
-  log_section "Optional ChatGPT Creative MCP Tunnel"
+  log_section "Optional ChatGPT Local MCP Tunnel"
   case "$host" in
     macbook|omarchy) ;;
     *) printf 'error: creative MCP tunnel supports only macbook and omarchy, not %s\n' "${host:-an unspecified host}" >&2; return 1 ;;
@@ -78,6 +78,7 @@ apply_creative_mcp_tunnel() {
     return 1
   }
   creative_mcp_tunnel_check_link "$launcher" "$HOME/.local/bin/chatgpt-creative-mcp" || return
+  creative_mcp_tunnel_check_link "$launcher" "$HOME/.local/bin/chatgpt-browser-mcp" || return
   if [[ "$host" == macbook ]]; then
     # The macbook package layer owns brew install openai/tools/tunnel-client.
     if (( ${DRY_RUN:-0} )); then
@@ -100,9 +101,10 @@ apply_creative_mcp_tunnel() {
     install_creative_mcp_tunnel_linux "$arch" "$checksum" || return
   fi
   ensure_dir "$HOME/.local/bin" || return
-  safe_link_path "$launcher" "$HOME/.local/bin/chatgpt-creative-mcp" "ChatGPT creative MCP launcher"
+  safe_link_path "$launcher" "$HOME/.local/bin/chatgpt-creative-mcp" "ChatGPT local MCP launcher" || return
+  safe_link_path "$launcher" "$HOME/.local/bin/chatgpt-browser-mcp" "ChatGPT browser MCP launcher" || return
   log_item "No tunnel, public listener, connector, or background service was started"
-  log_item "Supply CONTROL_PLANE_API_KEY and CONTROL_PLANE_TUNNEL_ID at runtime; explicitly run chatgpt-creative-mcp blender|roblox"
+  log_item "Supply CONTROL_PLANE_API_KEY and CONTROL_PLANE_TUNNEL_ID at runtime; explicitly run chatgpt-browser-mcp playwriter|chrome-devtools or chatgpt-creative-mcp blender|roblox|ai-memory"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

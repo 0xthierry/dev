@@ -4,7 +4,7 @@ import { BROWSER_USE_PROMPT_GUIDELINES, BROWSER_USE_PROMPT_SNIPPET } from "./def
 import { browserUseToolDescription } from "./tool";
 
 const skill = readFileSync(new URL("../skills/control-browser/SKILL.md", import.meta.url), "utf8");
-const agentBrowserSkill = readFileSync(new URL("../../../../skills/agent-browser/SKILL.md", import.meta.url), "utf8");
+const playwriterSkill = readFileSync(new URL("../../../../skills/playwriter/SKILL.md", import.meta.url), "utf8");
 
 function section(heading: string): string {
   const start = skill.indexOf(heading);
@@ -18,16 +18,15 @@ describe("control-browser skill contract", () => {
     ["injected guidelines", BROWSER_USE_PROMPT_GUIDELINES.join("\n")],
     ["tool description", browserUseToolDescription("/test/browser-client.mjs")],
     ["control-browser skill", skill],
-    ["agent-browser skill", agentBrowserSkill],
-  ])("%s preserves explicit extension opt-in and agent-browser CDP access", (_name, guidance) => {
+  ])("%s preserves explicit extension opt-in and the selected browser MCPs", (_name, guidance) => {
     expect(guidance).toContain("only when the user explicitly requests");
-    expect(guidance).toContain("agent-browser");
+    expect(guidance).toContain("Playwriter");
+    expect(guidance).toContain("Chrome DevTools MCP");
     expect(guidance).toContain("CDP");
     expect(guidance).toContain("/browser-use on");
     expect(guidance).toContain("alone");
     expect(guidance).toContain("explicit permission denial");
-    expect(guidance).not.toContain("For existing-browser tasks, do not substitute agent-browser");
-    expect(guidance).not.toContain("Do not use agent-browser, Playwright MCP, or Computer Use for this surface");
+    expect(guidance).not.toContain("agent-browser");
     expect(guidance).not.toContain("mandatory reading before browser work");
     expect(guidance).not.toContain("separate managed automation and QA sessions");
   });
@@ -36,11 +35,12 @@ describe("control-browser skill contract", () => {
     const guidance = section("## Choose the workflow");
     expect(skill.split("---")[1]).toContain("Use only when the user explicitly requests");
     expect(BROWSER_USE_PROMPT_SNIPPET).toContain("only when the user explicitly requests");
-    expect(BROWSER_USE_PROMPT_SNIPPET).toContain("otherwise use agent-browser");
+    expect(BROWSER_USE_PROMPT_SNIPPET).toContain("otherwise use Playwriter MCP");
     expect(guidance).toContain("Naming Chrome, Brave, Edge, an existing login, or a URL does not select this tool");
-    expect(guidance).toContain("Do not ask to enable it during an `agent-browser` task");
+    expect(guidance).toContain("Do not ask to enable it during a Playwriter or Chrome DevTools MCP task");
     expect(guidance).toContain("The rest of this skill applies only after the user selects `browser_use`");
-    expect(agentBrowserSkill).toContain("A named session does not prove browser isolation");
+    expect(playwriterSkill).toContain("all extension-enabled tabs are shared");
+    expect(playwriterSkill).toContain("Never switch tools to bypass an explicit permission denial");
   });
 
   test("distinguishes user discovery, claiming, and playback evidence", () => {

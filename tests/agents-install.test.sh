@@ -58,6 +58,12 @@ main() {
   local test_home="$TEST_TMP_DIR/home"
   local claude_state_before="$TEST_TMP_DIR/claude-state-before.json"
   mkdir -p "$test_home/.claude" "$test_home/.codex"
+  # A previous setup linked the retired browser skill into all agent clients.
+  local legacy_target
+  for legacy_target in .agents .codex .claude .pi/agent; do
+    mkdir -p "$test_home/$legacy_target/skills"
+    ln -s "$REPO_ROOT/configs/agents/skills/agent-browser" "$test_home/$legacy_target/skills/agent-browser"
+  done
 
   cat > "$test_home/.codex/config.toml" <<'EOF'
 model = "locally-overridden-model"
@@ -253,20 +259,22 @@ PY
 
   local skill
   for target in .agents .codex .claude .pi/agent; do
-    for skill in browser-diagnostics web-performance-investigation; do
+    for skill in playwriter chrome-devtools browser-diagnostics web-performance-investigation; do
       [[ "$(readlink "$test_home/$target/skills/$skill")" == "$REPO_ROOT/configs/agents/skills/$skill" ]] || fail "missing $skill skill link: $target"
       cmp -s "$test_home/$target/skills/$skill/SKILL.md" "$REPO_ROOT/configs/agents/skills/$skill/SKILL.md" || fail "installer rewrote $skill for $target"
     done
     cmp -s "$test_home/$target/skills/browser-diagnostics/references/mcp-tools.md" "$REPO_ROOT/configs/agents/skills/browser-diagnostics/references/mcp-tools.md" || fail "missing progressively disclosed MCP reference: $target"
   done
-  assert_file_excludes "does not register Chrome DevTools MCP in Codex" "$test_home/.codex/config.toml" 'chrome-devtools'
+  assert_file_excludes "leaves native MCP registration to shared catalog installer" "$test_home/.codex/config.toml" '[mcp_servers.chrome-devtools]'
   assert_file_excludes "does not register diagnostics as a Pi extension" "$test_home/.pi/agent/settings.json" 'chrome-devtools'
-  printf 'ok: installs diagnostics as shared skills without native MCP registration\n'
+  printf 'ok: installs browser skills; shared MCP setup owns native registrations\n'
 
-  [[ "$(readlink "$test_home/.pi/agent/skills/agent-browser")" == "$REPO_ROOT/configs/agents/skills/agent-browser" ]] || fail "missing original agent-browser skill in Pi"
-  cmp -s "$test_home/.pi/agent/skills/agent-browser/SKILL.md" "$REPO_ROOT/configs/agents/skills/agent-browser/SKILL.md" || fail "Pi rewrote agent-browser skill"
+  for legacy_target in .agents .codex .claude .pi/agent; do
+    [[ ! -e "$test_home/$legacy_target/skills/agent-browser" && ! -L "$test_home/$legacy_target/skills/agent-browser" ]] || fail "retired agent-browser skill remains: $legacy_target"
+  done
+  assert_json "replaces retired CLI permissions with Playwriter" "$test_home/.claude/settings.json" '.permissions.allow | index("Bash(playwriter:*)") != null and index("Bash(agent-browser:*)") == null and index("Bash(npx agent-browser:*)") == null'
   [[ "$(readlink "$test_home/.pi/agent/skills/control-browser")" == "$REPO_ROOT/configs/agents/pi/extensions/browser-use/skills/control-browser" ]] || fail "missing control-browser skill in Pi"
-  printf 'ok: Pi installs both browser skills without rewriting agent-browser\n'
+  printf 'ok: migrates browser skills and retains explicit control-browser opt-in\n'
 
   assert_json "preserves unrelated Pi provider" "$test_home/.pi/agent/models.json" '.providers["local-test"].baseUrl == "http://localhost:1234/v1"'
   assert_json "adds Pi Responses proxy provider" "$test_home/.pi/agent/models.json" '.providers.cliproxyapi.api == "openai-responses"'

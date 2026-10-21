@@ -281,28 +281,6 @@ install_grok_pi_launcher() {
   safe_link_path "$source_path" "$target_path" "Grok Pi launcher"
 }
 
-install_agent_browser_binary() {
-  local version="$1"
-  local npm_bin=""
-  local mise_bin=""
-  local -a install_cmd=()
-
-  if npm_bin="$(command -v npm 2>/dev/null)"; then
-    install_cmd=("$npm_bin" install -g "agent-browser@${version}")
-  elif mise_bin="$(resolve_mise_bin 2>/dev/null)"; then
-    install_cmd=("$mise_bin" exec node -- npm install -g "agent-browser@${version}")
-  else
-    printf 'error: npm is unavailable and mise is not installed; cannot install agent-browser\n' >&2
-    return 1
-  fi
-
-  log_item "Installing Agent Browser @ $version..."
-  run_cmd "${install_cmd[@]}"
-
-  log_item "Running Agent Browser setup..."
-  run_cmd agent-browser install
-}
-
 install_amq_from_source() {
   local source_dir="$HOME/.local/share/dev-setup/sources/agent-message-queue"
   local install_dir="$HOME/.local/bin"
@@ -392,8 +370,8 @@ install_ai_clis() {
   # Agent Slack (Stably) — standalone binary
   install_agent_slack_binary "0.10.2"
 
-  # Agent Browser — npm package (crates.io lags behind)
-  install_agent_browser_binary "0.36.0"
+  # Browser automation runtimes are installed with the shared MCP catalog.
+  # Keep legacy browser profiles/data; setup no longer installs agent-browser.
 
   # Agent Message Queue — local file-based inter-agent bus, built from a pinned source tag+commit
   install_amq_from_source

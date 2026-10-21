@@ -66,7 +66,7 @@ class McpClientTests(unittest.TestCase):
         result = self.run_config()
         self.assertEqual(result.returncode, 0, result.stderr)
         code = json.loads(self.code.read_text())["mcpServers"]
-        self.assertEqual(set(code), {"neon", "datadog", "figma", "ai-memory", "rea", "blender", "Roblox_Studio"})
+        self.assertEqual(set(code), {"neon", "datadog", "figma", "ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(code["rea"], {"command": f"{self.home}/.local/bin/rea-mcp", "args": []})
         self.assertEqual(code["neon"], {"type": "http", "url": "https://mcp.neon.tech/mcp"})
         self.assertEqual(code["datadog"], {"type": "http", "url": "https://mcp.us5.datadoghq.com/v1/mcp"})
@@ -82,7 +82,7 @@ class McpClientTests(unittest.TestCase):
             "command": f"{self.home}/.local/bin/rea-mcp", "args": [],
             "description": "Analyze and reverse-engineer binaries with REA.", "exposure": "deferred"})
         desktop = json.loads(self.desktop.read_text())["mcpServers"]
-        self.assertEqual(set(desktop), {"ai-memory", "rea", "blender", "Roblox_Studio"})
+        self.assertEqual(set(desktop), {"ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(desktop["rea"], {"command": f"{self.home}/.local/bin/rea-mcp", "args": []})
         self.assertEqual(desktop["ai-memory"], {"command": f"{self.home}/.local/bin/ai-memory", "args": ["mcp-bridge", "--no-session-id"]})
         self.assertEqual(desktop["Roblox_Studio"], {"command": f"{self.home}/.local/bin/roblox-studio-mcp", "args": []})
@@ -90,6 +90,47 @@ class McpClientTests(unittest.TestCase):
         self.assertEqual(codex["figma"], {"url": "https://mcp.figma.com/mcp"})
         self.assertEqual(set(codex), set(code))
         self.assertEqual(codex["rea"], {"command": f"{self.home}/.local/bin/rea-mcp", "args": []})
+
+    def test_browser_stdio_launchers_reach_every_client_with_absolute_commands(self):
+        result = self.run_config()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        expected = {
+            "playwriter": {"command": f"{self.home}/.local/bin/playwriter-mcp", "args": []},
+            "chrome-devtools": {"command": f"{self.home}/.local/bin/chrome-devtools-mcp", "args": []},
+        }
+        code = json.loads(self.code.read_text())["mcpServers"]
+        desktop = json.loads(self.desktop.read_text())["mcpServers"]
+        codex = tomllib.loads(self.codex.read_text())["mcp_servers"]
+        pi = json.loads(self.pi.read_text())["mcpServers"]
+        self.assertEqual({name: code[name] for name in expected}, expected)
+        self.assertEqual({name: desktop[name] for name in expected}, expected)
+        self.assertEqual({name: codex[name] for name in expected}, expected)
+        self.assertEqual(pi["playwriter"], {
+            "command": f"{self.home}/.local/bin/playwriter-mcp", "args": [],
+            "description": "Automate the user's existing browser through the Playwriter extension.",
+            "exposure": "deferred"})
+        self.assertEqual(pi["chrome-devtools"], {
+            "command": f"{self.home}/.local/bin/chrome-devtools-mcp", "args": [],
+            "description": "Diagnose and inspect the existing local browser at 127.0.0.1:9222.",
+            "exposure": "deferred"})
+
+    def test_browser_transport_migration_preserves_credentials_and_user_settings(self):
+        self.put(self.code, '{"mcpServers":{"playwriter":{"command":"npx","args":["playwriter"],"env":{"PLAYWRITER_TOKEN":"keep"},"timeout":90}}}')
+        self.put(self.pi, '{"mcpServers":{"chrome-devtools":{"command":"npx","args":["chrome-devtools-mcp"],"timeout":90}}}')
+        self.put(self.codex, '# browser preferences\n[mcp_servers.playwriter]\ncommand="npx"\nargs=["playwriter"]\ntool_timeout_sec=90\n[mcp_servers.playwriter.env]\nPLAYWRITER_TOKEN="keep"\n')
+        result = self.run_config()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.code.read_text())["mcpServers"]["playwriter"], {
+            "command": f"{self.home}/.local/bin/playwriter-mcp", "args": [],
+            "env": {"PLAYWRITER_TOKEN": "keep"}, "timeout": 90})
+        self.assertEqual(tomllib.loads(self.codex.read_text())["mcp_servers"]["playwriter"], {
+            "command": f"{self.home}/.local/bin/playwriter-mcp", "args": [],
+            "env": {"PLAYWRITER_TOKEN": "keep"}, "tool_timeout_sec": 90})
+        self.assertEqual(json.loads(self.pi.read_text())["mcpServers"]["chrome-devtools"], {
+            "command": f"{self.home}/.local/bin/chrome-devtools-mcp", "args": [],
+            "description": "Diagnose and inspect the existing local browser at 127.0.0.1:9222.",
+            "exposure": "deferred", "timeout": 90})
+        self.assertIn("# browser preferences", self.codex.read_text())
 
     def test_remote_memory_replaces_old_root_auth_and_pi_reads_canonical_key(self):
         self.put(self.code, '{"mcpServers":{"ai-memory":{"url":"http://127.0.0.1:49374/mcp","headers":{"Authorization":"Bearer old-root"},"timeout":90}}}')
@@ -129,6 +170,8 @@ class McpClientTests(unittest.TestCase):
             "figma": {"command": f"{self.home}/.local/bin/mcp-service", "args": ["figma"]},
             "ai-memory": {"command": f"{self.home}/.local/bin/ai-memory", "args": ["mcp-bridge", "--no-session-id"]},
             "rea": {"command": f"{self.home}/.local/bin/rea-mcp", "args": []},
+            "playwriter": {"command": f"{self.home}/.local/bin/playwriter-mcp", "args": []},
+            "chrome-devtools": {"command": f"{self.home}/.local/bin/chrome-devtools-mcp", "args": []},
             "blender": {"command": f"{self.home}/.local/bin/blender-mcp", "args": []},
             "Roblox_Studio": {"command": f"{self.home}/.local/bin/roblox-studio-mcp", "args": []}})
         before = self.desktop.read_bytes(), self.desktop.stat().st_mtime_ns
@@ -144,7 +187,7 @@ class McpClientTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         desktop = self.home / "Library/Application Support/Claude/claude_desktop_config.json"
         servers = json.loads(desktop.read_text())["mcpServers"]
-        self.assertEqual(set(servers), {"figma", "ai-memory", "rea", "blender", "Roblox_Studio"})
+        self.assertEqual(set(servers), {"figma", "ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(servers["figma"], {
             "command": f"{self.home}/.local/bin/mcp-service", "args": ["figma"]})
 
@@ -165,7 +208,7 @@ class McpClientTests(unittest.TestCase):
         result = self.run_config()
         self.assertEqual(result.returncode, 0, result.stderr)
         migrated = json.loads(self.desktop.read_text())
-        self.assertEqual(set(migrated["mcpServers"]), {"ai-memory", "rea", "blender", "Roblox_Studio", "other"})
+        self.assertEqual(set(migrated["mcpServers"]), {"ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio", "other"})
         self.assertEqual(migrated["mcpServers"]["other"], {"command": "user-owned", "args": ["app"]})
         self.assertEqual(migrated["preferences"], {"keep": True})
         self.assertEqual(self.code.read_bytes(), code_original)
@@ -204,14 +247,14 @@ class McpClientTests(unittest.TestCase):
                          {"command": "custom", "args": ["neon"]})
         self.assertIn("preserving custom Claude Desktop neon entry", result.stderr)
 
-    def test_dev_receives_rea_and_four_http_services_without_touching_desktop(self):
+    def test_dev_receives_shared_stdio_and_http_services_without_touching_desktop(self):
         self.put(self.desktop, "do not read desktop on dev")
         self.put(self.preferences, "do not read Desktop preferences on dev")
         result = self.run_config("dev")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(set(json.loads(self.code.read_text())["mcpServers"]), {"neon", "datadog", "figma", "ai-memory", "rea"})
-        self.assertEqual(set(json.loads(self.pi.read_text())["mcpServers"]), {"neon", "datadog", "figma", "ai-memory", "rea"})
-        self.assertEqual(set(tomllib.loads(self.codex.read_text())["mcp_servers"]), {"neon", "datadog", "figma", "ai-memory", "rea"})
+        self.assertEqual(set(json.loads(self.code.read_text())["mcpServers"]), {"neon", "datadog", "figma", "ai-memory", "rea", "playwriter", "chrome-devtools"})
+        self.assertEqual(set(json.loads(self.pi.read_text())["mcpServers"]), {"neon", "datadog", "figma", "ai-memory", "rea", "playwriter", "chrome-devtools"})
+        self.assertEqual(set(tomllib.loads(self.codex.read_text())["mcp_servers"]), {"neon", "datadog", "figma", "ai-memory", "rea", "playwriter", "chrome-devtools"})
         self.assertEqual(json.loads(self.code.read_text())["mcpServers"]["rea"],
                          {"command": f"{self.home}/.local/bin/rea-mcp", "args": []})
         self.assertEqual(self.desktop.read_text(), "do not read desktop on dev")
@@ -221,13 +264,13 @@ class McpClientTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         desktop = self.home / "Library/Application Support/Claude/claude_desktop_config.json"
         self.assertEqual(set(json.loads(desktop.read_text())["mcpServers"]),
-                         {"ai-memory", "rea", "blender", "Roblox_Studio"})
+                         {"ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(set(json.loads(self.code.read_text())["mcpServers"]),
-                         {"neon", "datadog", "figma", "ai-memory", "rea", "blender", "Roblox_Studio"})
+                         {"neon", "datadog", "figma", "ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(set(json.loads(self.pi.read_text())["mcpServers"]),
-                         {"neon", "datadog", "figma", "ai-memory", "rea", "blender", "Roblox_Studio"})
+                         {"neon", "datadog", "figma", "ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(set(tomllib.loads(self.codex.read_text())["mcp_servers"]),
-                         {"neon", "datadog", "figma", "ai-memory", "rea", "blender", "Roblox_Studio"})
+                         {"neon", "datadog", "figma", "ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(json.loads(desktop.read_text())["mcpServers"]["rea"],
                          {"command": f"{self.home}/.local/bin/rea-mcp", "args": []})
         self.assertFalse(self.desktop.exists())
@@ -345,14 +388,14 @@ class McpClientTests(unittest.TestCase):
         result = self.run_config()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(set(json.loads(self.desktop.read_text())["mcpServers"]),
-                         {"ai-memory", "rea", "blender", "Roblox_Studio"})
+                         {"ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
 
     def test_preferences_without_opt_in_key_keep_desktop_remotes_disabled(self):
         self.put(self.preferences, '{}')
         result = self.run_config()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(set(json.loads(self.desktop.read_text())["mcpServers"]),
-                         {"ai-memory", "rea", "blender", "Roblox_Studio"})
+                         {"ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
 
     def test_malformed_preferences_preflight_before_any_write(self):
         self.put(self.preferences, '{broken')

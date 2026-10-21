@@ -8,6 +8,50 @@ already work through `~/.local/bin/blender-mcp` or
 `~/.local/bin/mcp-service ai-memory`; the local memory service must be running.
 See the [shared MCP guide](../mcp/README.md) for remote services.
 
+## Browser MCP connections
+
+The same explicit transport supports **Playwriter** and **Chrome DevTools MCP**.
+Host setup installs `chatgpt-browser-mcp` as an alias of the fixed-command launcher.
+First run `bash install/mcp.sh <host>` to install/register the browser servers,
+and install/authorize the Playwriter extension in your intended browser/profile.
+On an already provisioned desktop, refresh the alias with
+`bash install/creative-mcp-tunnel.sh omarchy` (or `macbook`). Neither command starts a tunnel.
+
+Create **two separate tunnels** if both MCP servers will run concurrently. Follow
+the account/key steps below for each, then explicitly start:
+
+```bash
+# Terminal 1, with the Playwriter tunnel ID in CONTROL_PLANE_TUNNEL_ID:
+chatgpt-browser-mcp playwriter
+# Terminal 2, with a different Chrome DevTools tunnel ID:
+chatgpt-browser-mcp chrome-devtools
+```
+
+In ChatGPT **Plugins → Add custom MCP server** (or the older connector settings),
+create one connection for each server, choose **Tunnel**, and select its matching
+ID. Review the risk warning and tool access yourself. Confirm tool discovery and
+one harmless operation before declaring either connected. Account/workspace
+eligibility and authorization cannot be created by writing local client files.
+
+Add the [browser workflow instructions](../browser-automation/client-instructions.md)
+to ChatGPT's project/custom instructions and connector descriptions where supported:
+Playwriter is primary; Chrome DevTools supplies diagnostics/capability fallback,
+with `new_page.background=true` and `select_page.bringToFront=false`. Preserve the
+same browser/page and never bypass permission or authentication failures. These
+are per-call choices, not server-enforced background defaults. Claude Desktop
+needs the same instructions; neither app automatically reads the local agent skills.
+
+Playwriter controls authorized extension tabs in the existing signed-in profile.
+Chrome DevTools attaches locally to `127.0.0.1:9222`; verify this is the same browser
+before a handover. These servers can read sensitive pages and modify websites.
+This tunnel forwards MCP, **not the raw browser debugging port**, and stays off
+until you explicitly start it. Do not expose a public unauthenticated MCP endpoint.
+
+OpenAI's [custom MCP guide](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)
+documents HTTPS/Tunnel connections. Its [desktop-only plugin submission guide](https://developers.openai.com/plugins/deploy/desktop-only)
+describes a different local-stdio packaging route restricted to approved partners;
+setup does not assume that eligibility or pretend Codex config registers a ChatGPT plugin.
+
 ## Account setup (manual)
 
 1. Open [Platform Tunnels](https://platform.openai.com/settings/organization/tunnels)
@@ -92,7 +136,9 @@ permissions; connect only when you intend to grant that access.
   staging directory before publication. Repeated setup compares all installed
   payload bytes against the verified retained ZIP without downloading again.
   Modified/conflicting payloads fail closed and are not overwritten.
-- The only public launcher is `~/.local/bin/chatgpt-creative-mcp`.
+- Public launchers are `~/.local/bin/chatgpt-creative-mcp` and its
+  `~/.local/bin/chatgpt-browser-mcp` alias. Both accept only the fixed services
+  `blender`, `roblox`, `ai-memory`, `playwriter`, and `chrome-devtools`.
   Existing regular command files are backed up; unrelated symlinks are refused.
 - The tunnel installer adds no profile/secret file, service, Cloudflare tunnel, public endpoint,
   automatic browser opening, or automatic startup is added. Native

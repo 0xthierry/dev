@@ -4,7 +4,7 @@ set +x
 set -euo pipefail
 
 usage() {
-  printf 'Usage: chatgpt-creative-mcp <blender|roblox|ai-memory>\n'
+  printf 'Usage: %s <blender|roblox|ai-memory|playwriter|chrome-devtools>\n' "${0##*/}"
   printf 'Requires CONTROL_PLANE_API_KEY (runtime key) and CONTROL_PLANE_TUNNEL_ID in the environment.\n'
   printf 'Create a tunnel: https://platform.openai.com/settings/organization/tunnels\n'
   printf 'Create a runtime key with Tunnels Read + Use: https://platform.openai.com/settings/organization/api-keys\n'
@@ -17,7 +17,9 @@ case "$1" in
   blender) command_path="$HOME/.local/bin/blender-mcp" ;;
   roblox) command_path="$HOME/.local/bin/roblox-studio-mcp" ;;
   ai-memory) command_path="$HOME/.local/bin/mcp-service" ;;
-  *) printf 'error: select blender, roblox, or ai-memory; arbitrary commands and tunnel flags are not accepted\n' >&2; usage >&2; exit 2 ;;
+  playwriter) command_path="$HOME/.local/bin/playwriter-mcp" ;;
+  chrome-devtools) command_path="$HOME/.local/bin/chrome-devtools-mcp" ;;
+  *) printf 'error: select blender, roblox, ai-memory, playwriter, or chrome-devtools; arbitrary commands and tunnel flags are not accepted\n' >&2; usage >&2; exit 2 ;;
 esac
 if [[ -z "${CONTROL_PLANE_API_KEY:-}" ]]; then
   printf 'error: missing CONTROL_PLANE_API_KEY; supply a runtime key from https://platform.openai.com/settings/organization/api-keys (Tunnels Read + Use), not an admin key\n' >&2
@@ -44,7 +46,7 @@ case "$(uname -s)" in
     fi
     client="$prefix/bin/tunnel-client"
     ;;
-  *) printf 'error: ChatGPT creative MCP tunnel supports macOS and Linux desktops only\n' >&2; exit 1 ;;
+  *) printf 'error: ChatGPT local MCP tunnel supports macOS and Linux desktops only\n' >&2; exit 1 ;;
 esac
 if [[ ! -x "$client" ]]; then
   printf 'error: tunnel-client is missing or not executable: %s; run host setup\n' "$client" >&2

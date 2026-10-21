@@ -1,0 +1,14 @@
+#!/bin/bash
+# Attach only. Do not permit arguments to override the existing loopback browser.
+set -euo pipefail
+if [[ $# -gt 0 && ! ( $# -eq 1 && ( "$1" == --help || "$1" == --version ) ) ]]; then
+  printf 'error: chrome-devtools-mcp uses the fixed existing browser at 127.0.0.1:9222; no arguments allowed\n' >&2
+  exit 1
+fi
+# shellcheck source=configs/browser-automation/runtime.sh
+source "$HOME/.local/share/browser-automation/source/runtime.sh"
+# Pinned by setup; suppress upstream's detached registry-update checker.
+export CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS=1
+exec "$node_bin" "$assets/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js" \
+  --browserUrl=http://127.0.0.1:9222 \
+  --no-usage-statistics --no-performance-crux --memory-debugging --redact-network-headers "$@"

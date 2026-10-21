@@ -1,6 +1,6 @@
 # Portable browser diagnostics runtime
 
-This package ports the bounded browser capture CLI and the persistent, skill-driven Chrome DevTools MCP client. It attaches only to the existing local browser at `http://127.0.0.1:9222`. It does not register an MCP server, start a browser, select an alternate browser, accept a remote endpoint, or create a tunnel.
+This package ports the bounded browser capture CLI and the persistent, skill-driven Chrome DevTools MCP client. It attaches only to the existing local browser at `http://127.0.0.1:9222`. This package does not itself register an MCP server, start a browser, select an alternate browser, accept a remote endpoint, or create a tunnel. The separate [browser automation runtime](../browser-automation/README.md) registers native Playwriter and Chrome DevTools MCP through the shared catalog. Its controller/fallback role does not change this package's diagnostic-only allowlist.
 
 ## Installed entrypoints
 

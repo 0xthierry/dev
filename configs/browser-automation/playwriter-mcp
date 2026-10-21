@@ -1,0 +1,18 @@
+#!/bin/bash
+# No arguments starts upstream's extension-backed stdio MCP, not a new browser.
+set -euo pipefail
+if [[ $# -gt 0 && ! ( $# -eq 1 && ( "$1" == --help || "$1" == --version ) ) ]]; then
+  printf 'error: playwriter-mcp takes no arguments (use playwriter for CLI commands)\n' >&2
+  exit 1
+fi
+# Pinned 0.9.0 mcp.js reads these two inherited transport selectors. Reject them
+# rather than silently changing an explicitly extension/local-only registration.
+for selector in PLAYWRITER_DIRECT PLAYWRITER_HOST; do
+  if [[ -n "${!selector:-}" ]]; then
+    printf 'error: playwriter-mcp requires the local browser extension; unset %s in the MCP client environment (use playwriter for explicit alternate modes)\n' "$selector" >&2
+    exit 1
+  fi
+done
+# shellcheck source=configs/browser-automation/runtime.sh
+source "$HOME/.local/share/browser-automation/source/runtime.sh"
+exec "$node_bin" "$assets/node_modules/playwriter/bin.js" "$@"

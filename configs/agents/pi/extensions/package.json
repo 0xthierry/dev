@@ -8,7 +8,6 @@
       "./desktop-notification",
       "./personality",
       "./web-access",
-      "./create-image",
       "./oracle",
       "./agent-feedback",
       "./subagent",

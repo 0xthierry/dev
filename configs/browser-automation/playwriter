@@ -1,0 +1,6 @@
+#!/bin/bash
+# CLI: sessions and evaluations use the user's explicitly selected browser mode.
+set -euo pipefail
+# shellcheck source=configs/browser-automation/runtime.sh
+source "$HOME/.local/share/browser-automation/source/runtime.sh"
+exec "$node_bin" "$assets/node_modules/playwriter/bin.js" "$@"

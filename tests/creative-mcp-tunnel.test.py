@@ -41,7 +41,7 @@ else:
     print(json.dumps({{"argv": sys.argv[1:], "ambient": {{n: os.environ[n] for n in names if n in os.environ}}, "credentials_present": [bool(os.environ.get("CONTROL_PLANE_API_KEY")), bool(os.environ.get("CONTROL_PLANE_TUNNEL_ID"))]}}))
     sys.exit(int(os.environ.get("FIXTURE_EXIT", "0")))
 ''')
-        for name in ("blender-mcp", "roblox-studio-mcp", "mcp-service"):
+        for name in ("blender-mcp", "roblox-studio-mcp", "mcp-service", "playwriter-mcp", "chrome-devtools-mcp"):
             self.executable(self.home / ".local/bin" / name, "#!/bin/sh\nexit 99\n")
         self.env.update(CONTROL_PLANE_API_KEY="fixture-runtime-key", CONTROL_PLANE_TUNNEL_ID="tunnel_0123456789abcdef0123456789abcdef")
 
@@ -82,6 +82,18 @@ else:
         expected = self.expected_args("mcp-service")
         expected[expected.index("--mcp.command") + 1] += " ai-memory"
         self.assertEqual(json.loads(result.stdout)["argv"], expected)
+        self.assertNotIn("fixture-runtime-key", result.stdout + result.stderr)
+
+    def test_playwriter_selects_existing_browser_stdio_server(self):
+        result = self.launch("playwriter")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["argv"], self.expected_args("playwriter-mcp"))
+        self.assertNotIn("fixture-runtime-key", result.stdout + result.stderr)
+
+    def test_chrome_devtools_selects_fixed_stdio_server(self):
+        result = self.launch("chrome-devtools")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["argv"], self.expected_args("chrome-devtools-mcp"))
         self.assertNotIn("fixture-runtime-key", result.stdout + result.stderr)
 
     def test_ambient_profiles_public_listeners_and_logging_cannot_expand_scope(self):
@@ -277,10 +289,25 @@ exit 99
         result = self.install('DRY_RUN=0 apply_creative_mcp_tunnel macbook')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(command.resolve(), LAUNCHER)
+        browser_command = self.home / ".local/bin/chatgpt-browser-mcp"
+        self.assertEqual(browser_command.resolve(), LAUNCHER)
+        browser_help = subprocess.run([str(browser_command), "--help"], env=self.env, text=True, capture_output=True)
+        self.assertEqual(browser_help.returncode, 0, browser_help.stderr)
+        self.assertIn("Usage: chatgpt-browser-mcp", browser_help.stdout)
+        self.assertIn("playwriter|chrome-devtools", browser_help.stdout)
         self.assertEqual(command.with_suffix(".bak").read_text(), "user command")
         repeated = self.install('DRY_RUN=0 apply_creative_mcp_tunnel macbook')
         self.assertEqual(repeated.returncode, 0, repeated.stderr)
         self.assertFalse(command.with_suffix(".bak.1").exists())
+
+    def test_foreign_browser_alias_is_preserved_before_installing(self):
+        command = self.home / ".local/bin/chatgpt-browser-mcp"
+        command.symlink_to(self.runtime)
+        result = self.install('DRY_RUN=0 apply_creative_mcp_tunnel macbook')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("refusing unrelated ChatGPT tunnel symlink", result.stderr)
+        self.assertEqual(command.readlink(), self.runtime)
+        self.assertFalse((self.home / ".local/bin/chatgpt-creative-mcp").exists())
 
     def test_foreign_launcher_symlink_is_preserved_and_reported(self):
         command = self.home / ".local/bin/chatgpt-creative-mcp"

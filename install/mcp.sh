@@ -66,15 +66,19 @@ PY
 }
 
 configure_shared_mcp() {
-  local host="${1:-${SETUP_HOST:-}}"
-  case "$host" in
+  local mcp_host="${1:-${SETUP_HOST:-}}"
+  case "$mcp_host" in
     dev|macbook|omarchy) ;;
     *) printf 'error: shared MCP setup requires dev, macbook, or omarchy\n' >&2; return 1 ;;
   esac
   log_section "Shared MCP Services (Datadog US5)"
   install_shared_mcp_runtime || return
+  # Install local browser servers before publishing their client registrations.
+  # shellcheck source=install/browser-automation.sh
+  source "$REPO_ROOT/install/browser-automation.sh"
+  apply_browser_automation "$mcp_host" || return
   run_cmd "$HOME/.local/share/mcp-services/venv/bin/python" \
-    "$REPO_ROOT/configs/mcp/configure-clients.py" "$host" || return
+    "$REPO_ROOT/configs/mcp/configure-clients.py" "$mcp_host" || return
   log_item "MCP configuration installed; remote OAuth authorization is separate. No tunnel started."
 }
 

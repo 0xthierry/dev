@@ -1,6 +1,6 @@
 # Browser Use
 
-Pi extension for the user's connected Chrome, Brave, or Edge browser. It uses the ChatGPT/Codex desktop sidecar (`node_repl`, bundled plugins, native messaging host). It is not `agent-browser`, a separate Playwright browser, the Electron in-app browser, or OS Computer Use.
+Pi extension for the user's connected Chrome, Brave, or Edge browser. It uses the ChatGPT/Codex desktop sidecar (`node_repl`, bundled plugins, native messaging host). It is separate from Playwriter MCP, Chrome DevTools MCP, the Electron in-app browser, and OS Computer Use.
 
 ## Requirements and platforms
 
@@ -19,7 +19,7 @@ Set `PI_BROWSER_USE_RESOURCES_ROOT` to the desktop **Resources directory** for a
 
 ## Tool routing
 
-`agent-browser` is the default for browser automation, including CDP attachment to the user's existing browser and logins. Use `browser_use` only when the user explicitly requests `browser_use`, `control-browser`, or the ChatGPT browser extension for the task. Naming a browser, URL, or existing login does not select this extension. Tool availability or `/browser-use on` alone does not select it either.
+Playwriter MCP is the default for browser automation in the user's existing browser/profile. Chrome DevTools MCP is the diagnostic and capability fallback, with explicit browser/page identity checks and background tab controls. Use `browser_use` only when the user explicitly requests `browser_use`, `control-browser`, or the ChatGPT browser extension for the task. Naming a browser, URL, or existing login does not select this extension. Tool availability or `/browser-use on` alone does not select it either.
 
 Preserve the selected browser and tool. Report failures rather than silently switching tools. A disabled extension is not a prohibition on CDP, but never switch tools to bypass an explicit permission denial. This policy changes routing instructions only, not either tool's capabilities or permission checks.
 

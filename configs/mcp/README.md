@@ -1,7 +1,7 @@
 # Shared MCP services
 
 `catalog.json` is the shared source for Neon, Datadog **US5**, Figma,
-ai-memory, REA, Blender, and Roblox Studio. `./setup.sh <host>` merges it after
+ai-memory, REA, Playwriter, Chrome DevTools, Blender, and Roblox Studio. `./setup.sh <host>` merges it after
 agent settings and ai-memory hooks have been installed. To refresh just these
 registrations on an already provisioned host:
 
@@ -24,18 +24,64 @@ atomic per file; an interrupted multi-client update converges on retry.
 | Figma | Native HTTP | Existing enabled/installed plugin, otherwise native HTTP | Native HTTP | Opt-in stdio bridge | Authorize remote MCP/app in account |
 | ai-memory | Native HTTP + capture hooks | Native HTTP + capture hooks | Native HTTP + capture hooks | Native ai-memory stdio bridge | Private Tailscale service, not exposed |
 | REA | Native stdio | Native stdio | Native stdio | Native stdio | Not configured |
+| Playwriter | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel + account authorization |
+| Chrome DevTools | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel + account authorization |
 | Blender | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel |
 | Roblox Studio | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel |
 
 Blender, Roblox Studio, and Claude Desktop registrations are desktop-host-only
-(`macbook` and `omarchy`). REA is shared across all three hosts; `dev` receives
-REA plus the four HTTP services. Existing out-of-host-scope entries are
+(`macbook` and `omarchy`). REA and both browser MCP runtimes are shared across all three hosts; `dev` receives
+those three stdio servers plus the four HTTP services. Browser control still needs
+a browser on the machine running the server; registration on `dev` does not
+connect it to a desktop elsewhere. Existing out-of-host-scope entries are
 preserved, not deleted.
 
 The renderer honors `CLAUDE_CONFIG_DIR`, `PI_CODING_AGENT_DIR`, `CODEX_HOME`,
 and Linux `XDG_CONFIG_HOME`. It uses pinned `tomlkit` rather than `codex mcp add`:
 that command can initiate OAuth during setup. Codex CLI and Codex app use the
 same `~/.codex/config.toml` registration; account authorization is separate.
+
+## Browser automation: Playwriter + Chrome DevTools
+
+The shared installer first provisions the [pinned browser runtime](../browser-automation/README.md),
+then registers `playwriter` and `chrome-devtools`. GUI clients use absolute launchers
+and a recorded Node executable; nothing downloads at MCP startup.
+
+- **Playwriter is the default controller.** Install its [browser extension](https://chromewebstore.google.com/detail/playwriter/jfeammnjpkecdekppnclgkkffahnhfhe)
+  in the existing browser/profile and enable it on a tab. Existing logins stay in
+  that profile. Setup does not silently install/authorize an extension or launch
+  a separate browser. Read the shared `playwriter` skill.
+- **Chrome DevTools MCP supplies diagnostics and capability fallback.** Its launcher
+  attaches to the existing loopback browser at `127.0.0.1:9222`; it never launches
+  a fresh profile. Use `new_page` with `background: true` and `select_page` with
+  `bringToFront: false`. Verify the same browser/profile and page when handing
+  over from Playwriter. Read `chrome-devtools` before use.
+- The old diagnostic CLI remains restricted to its diagnostic allowlist. Native
+  MCP is a separate surface, not a bypass of that CLI's restrictions. Do not run
+  conflicting controllers or captures on one page. Neither tool may bypass a
+  permission denial, required approval, or missing authentication.
+- Setup no longer installs agent-browser. Its skill/default routing and active
+  application dependencies are migrated. Existing binaries, profiles, cookies,
+  and session data are not deleted by setup. The separate `create-image` Pi
+  extension was removed at the user's request; it is not a browser dependency.
+
+Claude Desktop and ChatGPT do not automatically receive the local skills. Add the
+[copyable browser workflow instructions](../browser-automation/client-instructions.md)
+to their project/custom instructions. Chrome DevTools' new-tab default is foreground;
+background operation requires explicit per-call choices. Its page discovery also
+emulates focus for all discovered pages, so selecting one page does not isolate
+attention-sensitive website changes.
+
+Fully quit/reopen Claude Desktop and reload/restart CLI clients after rendering.
+A server's `tools/list` response proves discovery, not extension connectivity,
+website authentication, background behavior, or a completed browser action.
+
+For **ChatGPT**, local registrations are insufficient. The documented custom-MCP
+connection uses HTTPS or a Secure MCP Tunnel. Desktop-host setup also provides
+`chatgpt-browser-mcp playwriter` and `chatgpt-browser-mcp chrome-devtools`; each
+requires a separately authorized tunnel ID/runtime key. See the
+[browser connector steps](../creative-mcp/chatgpt-setup.md#browser-mcp-connections).
+Until that account step and live discovery succeed, ChatGPT is **prepared, not connected**.
 
 ## REA runtime and registration
 
@@ -180,6 +226,9 @@ then explicitly run one foreground tunnel per authorized tunnel ID:
 ```bash
 chatgpt-creative-mcp blender
 chatgpt-creative-mcp roblox
+# Browser servers use separate tunnel IDs for concurrent connections:
+chatgpt-browser-mcp playwriter
+chatgpt-browser-mcp chrome-devtools
 ```
 
 No tunnel starts during setup. ai-memory is a read/write memory service, so
@@ -193,6 +242,9 @@ handoffs deliberately.
 ```bash
 ~/.local/share/mcp-services/venv/bin/python tests/mcp-clients.test.py
 python3 tests/mcp-runtime.test.py
+python3 tests/browser-automation.test.py
+# After deployment, connects only the two browser MCPs and lists tools:
+node scripts/check-browser-mcp.mjs
 python3 tests/creative-mcp-tunnel.test.py
 ```
 

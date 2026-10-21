@@ -1,13 +1,13 @@
 ---
 name: control-browser
-description: "Use only when the user explicitly requests browser_use, control-browser, or the ChatGPT browser extension for the task. Otherwise use agent-browser for browser automation, including existing Chromium tabs and logins through CDP."
+description: "Use only when the user explicitly requests browser_use, control-browser, or the ChatGPT browser extension for the task. Otherwise use Playwriter MCP for browser automation and Chrome DevTools MCP for diagnostics or capability fallback."
 ---
 
 # Browser
 ## Choose the workflow
-Default to `agent-browser` for browser automation, including the user's existing browser, tabs, and logins through CDP. Use `browser_use` only when the user explicitly requests `browser_use`, `control-browser`, or the ChatGPT browser extension for the task. Naming Chrome, Brave, Edge, an existing login, or a URL does not select this tool.
+Default to Playwriter MCP for browser automation in the user's existing browser/profile. Use Chrome DevTools MCP for diagnostics or an authorized capability fallback through CDP, preserving the same browser/profile and exact page. Use `browser_use` only when the user explicitly requests `browser_use`, `control-browser`, or the ChatGPT browser extension for the task. Naming Chrome, Brave, Edge, an existing login, or a URL does not select this tool.
 
-Tool availability or `/browser-use on` alone does not select `browser_use`. Do not ask to enable it during an `agent-browser` task. Preserve the user's chosen browser and tool; report failures instead of silently switching tools. A disabled extension is not a ban on independently requested CDP work. Never switch tools to bypass an explicit permission denial.
+Tool availability or `/browser-use on` alone does not select `browser_use`. Do not ask to enable it during a Playwriter or Chrome DevTools MCP task. Preserve the user's chosen browser and tool; report failures instead of silently switching tools. A disabled extension is not a ban on independently requested CDP work. Never switch tools to bypass an explicit permission denial.
 
 The rest of this skill applies only after the user selects `browser_use`. It describes this extension's APIs, not exclusive ownership of the user's browser.
 
@@ -18,7 +18,7 @@ Otherwise, treat a URL or open browser tab as context, not browser intent. Earli
 
 Use this skill for those tasks in the user's connected browser: inspecting pages, navigating, testing local apps, clicking, typing, taking screenshots, and reading visible page state.
 
-Read this skill before using the explicitly requested `browser_use` tool. Do not load it merely because a task needs an existing browser. `agent-browser` has its own skill and supports both managed browsers and CDP attachment; those tasks do not require this extension.
+Read this skill before using the explicitly requested `browser_use` tool. Do not load it merely because a task needs an existing browser. Playwriter and Chrome DevTools MCP have their own skills; those tasks do not require this extension.
 
 ## Setup Documentation
 Use `await agent.documentation.get("<name>")` when one of these setup topics applies:
@@ -97,7 +97,7 @@ const browser = await agent.browsers.get("extension");
 nodeRepl.write(await browser.documentation());
 ```
 
-If no extension instance is available, report that the explicitly requested extension is unavailable. Do not silently switch to agent-browser; the user can explicitly choose that tool instead.
+If no extension instance is available, report that the explicitly requested extension is unavailable. Do not silently switch to Playwriter or Chrome DevTools MCP; the user can explicitly choose another tool instead.
 
 ### The task requires browser interaction, the user does not specify a browser, and the task has a target URL
 When the user supplies a URL or the intended URL can be reasonably inferred, replace the example below with that URL. Continue only with a supported Chromium extension connection; an in-app selection is not supported:
@@ -143,7 +143,7 @@ With `/browser-use on` (no extra flag), origin and other kernel permission asks 
 
 With `/browser-use on --accept-permissions`, Pi auto-accepts every kernel elicitation for this session (origin, CDP, extra form fields). Do not wait for a permission dialog. Do not ask the user to click Allow. Do not treat a missing dialog as failure. Do not turn that flag on yourself.
 
-Chrome/Brave/Edge OS dialogs (camera, microphone, location) are still outside Pi. Strict automatic review metadata is not something you forge. Report a real failure instead of switching to agent-browser or Computer Use.
+Chrome/Brave/Edge OS dialogs (camera, microphone, location) are still outside Pi. Strict automatic review metadata is not something you forge. Report a real failure instead of switching to Playwriter, Chrome DevTools MCP, or Computer Use.
 
 ## Permission categories and available APIs
 These are first-party runtime permission categories, not Pi on/off options or a guarantee that every operation prompts. Existing grants, runtime policy, and the requested operation determine whether approval is needed. Discover capabilities and read their documentation before use; a permission category does not mean its API is exposed in every browser version.
@@ -180,8 +180,8 @@ Do not restart the browser session unnecessarily; reuse valid bindings and grant
 - The adapter does not fill permission-form field values. Auto-accept sends `{ action: "accept", content: {} }`. It does not forge reviewer metadata.
 - Enabling `/browser-use on` only enables tool execution. `--accept-permissions` additionally auto-answers kernel permission asks. Neither is consent for consequential actions in chat (money, deletion, a different-site login).
 - The adapter does not request persistent grants. `/browser-use off`, `/reload`, or a crash turns auto-accept off.
-- A denied request and an unavailable approval mechanism are different failures. Report which occurred. Do not switch to agent-browser or Computer Use to work around a permission failure.
+- A denied request and an unavailable approval mechanism are different failures. Report which occurred. Do not switch to Playwriter, Chrome DevTools MCP, or Computer Use to work around a permission failure.
 
-Only `browser_use` executes the extension APIs documented here. This does not prohibit independently requested `agent-browser` CDP attachment to the same browser. References to Playwright mean the documented `tab.playwright` API, not Playwright MCP. The in-app browser is not supported by this integration.
+Only `browser_use` executes the extension APIs documented here. This does not prohibit independently authorized Playwriter or Chrome DevTools MCP work in the same browser. References to Playwright mean the documented `tab.playwright` API, not Playwright MCP. The in-app browser is not supported by this integration.
 
 <!-- BROWSER_SKILL_EOF: This is the complete Browser skill. Do not request additional lines. -->

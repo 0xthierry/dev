@@ -29,8 +29,12 @@ class McpRuntimeTests(unittest.TestCase):
         (self.repo / "install").mkdir()
         for name in ("bridge.py", "catalog.json", "mcp-service"):
             shutil.copy2(ROOT / "configs/mcp" / name, self.assets / name)
-        for name in ("mcp.sh", "lib.sh"):
+        for name in ("mcp.sh", "lib.sh", "browser-automation.sh"):
             shutil.copy2(ROOT / "install" / name, self.repo / "install" / name)
+        self.browser_assets = self.repo / "configs/browser-automation"
+        self.browser_assets.mkdir()
+        for name in ("package.json", "package-lock.json", "runtime.sh", "playwriter", "playwriter-mcp", "chrome-devtools-mcp"):
+            shutil.copy2(ROOT / "configs/browser-automation" / name, self.browser_assets / name)
         self.runtime = self.home / ".local/share/mcp-services"
         self.launcher = self.home / ".local/bin/mcp-service"
         self.tools = self.fixture / "fake tools"
@@ -298,12 +302,17 @@ print(pathlib.Path(__file__).resolve())
         self.assertEqual((self.runtime / "source").readlink(), self.assets)
         self.assertEqual(self.launcher.readlink(), self.assets / "mcp-service")
         self.assertEqual(json.loads((self.home / "renderer-arguments.json").read_text()), ["omarchy"])
+        self.assertEqual((self.home / ".local/bin/playwriter-mcp").readlink(), self.browser_assets / "playwriter-mcp")
+        self.assertEqual((self.home / ".local/bin/chrome-devtools-mcp").readlink(), self.browser_assets / "chrome-devtools-mcp")
         self.assertEqual([json.loads(line) for line in self.calls.read_text().splitlines()], [
             ["uv", "venv", "--no-config", "--no-project", "--allow-existing", "--python", "3.12", str(self.runtime / "venv")],
             ["uv", "pip", "sync", "--no-config", "--python", str(self.runtime / "venv/bin/python"),
              "--require-hashes", "--only-binary", ":all:", str(self.assets / "requirements.lock")],
             ["npm", "ci", "--prefix", str(self.assets), "--ignore-scripts", "--no-audit", "--no-fund"],
             ["node", "-p", "process.execPath"],
+            ["node", "-p", "process.execPath"],
+            ["npm", "ci", "--prefix", str(self.browser_assets), "--ignore-scripts", "--no-audit", "--no-fund"],
+            ["node", "--input-type=module", "-", str(self.browser_assets)],
         ])
 
 
