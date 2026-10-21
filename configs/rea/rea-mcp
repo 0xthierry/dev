@@ -1,0 +1,8 @@
+#!/bin/bash
+set -euo pipefail
+launcher="$HOME/.local/share/rea/source/rea"
+if [[ ! -x "$launcher" ]]; then
+  printf 'error: REA runtime is incomplete; run repository install/rea.sh for this host\n' >&2
+  exit 1
+fi
+exec "$launcher" mcp "$@"

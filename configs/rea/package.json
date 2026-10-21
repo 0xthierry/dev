@@ -1,0 +1,9 @@
+{
+  "name": "dev-setup-rea",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Repository-managed REA MCP runtime; never install dependencies at launch.",
+  "dependencies": {
+    "rea-agents": "6.7.0"
+  }
+}

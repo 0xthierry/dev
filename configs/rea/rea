@@ -1,0 +1,15 @@
+#!/bin/bash
+# Launch only the installed, locked runtime. No network or package manager here.
+set -euo pipefail
+runtime="$HOME/.local/share/rea"
+node=""
+if [[ -f "$runtime/node-path" ]]; then IFS= read -r node < "$runtime/node-path"; fi
+entry="$runtime/source/node_modules/rea-agents/scripts/rea.mjs"
+if [[ "$node" != /* || ! -x "$node" || ! -f "$entry" ]]; then
+  printf 'error: REA runtime is incomplete; run repository install/rea.sh for this host\n' >&2
+  exit 1
+fi
+# GUI clients need the real Node executable and the platform's process utilities.
+PATH="$(dirname "$node"):${PATH:-/usr/bin:/bin}:/usr/bin:/bin:/usr/sbin:/sbin"
+export PATH
+exec "$node" "$entry" "$@"

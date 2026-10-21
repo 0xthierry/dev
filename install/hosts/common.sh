@@ -14,6 +14,7 @@ source "$REPO_ROOT/install/ai-desktop.sh"
 source "$REPO_ROOT/install/google-workspace-cli.sh"
 source "$REPO_ROOT/install/docker.sh"
 source "$REPO_ROOT/install/ghidra-tools.sh"
+source "$REPO_ROOT/install/rea.sh"
 source "$REPO_ROOT/install/neovim.sh"
 source "$REPO_ROOT/install/github-cli.sh"
 source "$REPO_ROOT/install/tools.sh"
@@ -172,6 +173,7 @@ run_post_setup_tasks() {
   install_hooks "$REPO_ROOT"
   install_agent_review_tools "$REPO_ROOT"
   install_ghidra_cli_tools
+  install_rea "$SETUP_HOST"
   # After Claude/Codex/Pi configs and Herdr/Moshi hooks, so ai-memory merges
   # into the rendered files instead of being overwritten.
   configure_ai_memory_agents

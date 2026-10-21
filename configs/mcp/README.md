@@ -1,7 +1,7 @@
 # Shared MCP services
 
 `catalog.json` is the shared source for Neon, Datadog **US5**, Figma,
-ai-memory, Blender, and Roblox Studio. `./setup.sh <host>` merges it after
+ai-memory, REA, Blender, and Roblox Studio. `./setup.sh <host>` merges it after
 agent settings and ai-memory hooks have been installed. To refresh just these
 registrations on an already provisioned host:
 
@@ -23,21 +23,37 @@ atomic per file; an interrupted multi-client update converges on retry.
 | Datadog US5 | Native HTTP | Native HTTP | Native HTTP | Opt-in stdio bridge | Official Datadog app does **not** support US5; custom MCP support must be verified separately |
 | Figma | Native HTTP | Existing enabled/installed plugin, otherwise native HTTP | Native HTTP | Opt-in stdio bridge | Authorize remote MCP/app in account |
 | ai-memory | Native HTTP + capture hooks | Native HTTP + capture hooks | Native HTTP + capture hooks | Native ai-memory stdio bridge | Private Tailscale service, not exposed |
+| REA | Native stdio | Native stdio | Native stdio | Native stdio | Not configured |
 | Blender | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel |
 | Roblox Studio | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel |
 
 Blender, Roblox Studio, and Claude Desktop registrations are desktop-host-only
-(`macbook` and `omarchy`). `dev` receives the four HTTP services. Existing
-out-of-host-scope entries are preserved, not deleted.
+(`macbook` and `omarchy`). REA is shared across all three hosts; `dev` receives
+REA plus the four HTTP services. Existing out-of-host-scope entries are
+preserved, not deleted.
 
 The renderer honors `CLAUDE_CONFIG_DIR`, `PI_CODING_AGENT_DIR`, `CODEX_HOME`,
 and Linux `XDG_CONFIG_HOME`. It uses pinned `tomlkit` rather than `codex mcp add`:
 that command can initiate OAuth during setup. Codex CLI and Codex app use the
 same `~/.codex/config.toml` registration; account authorization is separate.
 
+## REA runtime and registration
+
+REA 6.7.0 uses native stdio through the absolute `~/.local/bin/rea-mcp`
+launcher, with no arguments. To install only its pinned runtime and prerequisites:
+
+```bash
+bash install/rea.sh <host> [--dry-run]
+```
+
+This runtime installer does not register clients or invoke upstream `rea setup`.
+Run `bash install/mcp.sh <host>` separately for shared client registration;
+`./setup.sh <host>` performs both steps. REA is not configured for ChatGPT.
+See [REA runtime details](../rea/README.md).
+
 ## Pi: native ai-memory tools with automatic capture
 
-Pi 1.2 supports `~/.pi/agent/mcp.json`. All six in-scope services use that native
+Pi 1.2 supports `~/.pi/agent/mcp.json`. All in-scope services use that native
 MCP implementation, with deferred tool exposure. In Pi, use `/mcp`; restart Pi
 or `/reload` after changing the extension/configuration.
 

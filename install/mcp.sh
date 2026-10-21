@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared six-service MCP catalog. Never performs OAuth login or starts a tunnel.
+# Shared MCP catalog. Never performs OAuth login or starts a tunnel.
 set -euo pipefail
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"

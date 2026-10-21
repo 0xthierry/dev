@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# REA's Linux process-ownership checks require procps ps, not procs.
+REA_PACMAN_PACKAGES=(procps-ng)
+
 COMMON_PACMAN_PACKAGES=(
   dust
   duf
@@ -63,6 +66,7 @@ COMMON_PACMAN_PACKAGES=(
 )
 
 COMMON_PACMAN_LINUX_PACKAGES=(
+  "${REA_PACMAN_PACKAGES[@]}"
   at-spi2-core
   ffmpeg
   libei

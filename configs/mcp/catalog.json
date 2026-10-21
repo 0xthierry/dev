@@ -18,6 +18,10 @@
     "url": "http://127.0.0.1:49374/mcp",
     "description": "Shared local project memory."
   },
+  "rea": {
+    "launcher": "rea-mcp",
+    "description": "Analyze and reverse-engineer binaries with REA."
+  },
   "blender": {
     "launcher": "blender-mcp",
     "description": "Inspect and edit scenes in the running local Blender application.",
