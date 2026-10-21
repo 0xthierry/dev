@@ -11,3 +11,4 @@ if [[ -f "${HOME}/.secrets" ]]; then
   source "${HOME}/.secrets"
   set +a
 fi
+. "$HOME/.rokit/env"
