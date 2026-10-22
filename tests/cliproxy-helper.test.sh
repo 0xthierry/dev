@@ -6,6 +6,8 @@ PYTHON_BIN="$(python3 -c 'import sys; print(sys.executable)')"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 export HOME="$tmp/home" CAPTURE="$tmp/args" CAPTURE_ENV="$tmp/env" SERVICE_CAPTURE="$tmp/service"
+# Isolate the caller's tool-search preference; overrides are exercised below.
+unset ENABLE_TOOL_SEARCH
 mkdir -p "$HOME/.config/cliproxyapi" "$HOME/.local/bin" "$tmp/bin"
 printf '%064d\n' 1 > "$HOME/.config/cliproxyapi/api-key"
 touch "$HOME/.config/cliproxyapi/config.yaml"
@@ -13,6 +15,7 @@ cat > "$tmp/bin/mock" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$@" > "$CAPTURE"
 printf '%s' "${CLIPROXY_API_KEY:-}" > "$CAPTURE_ENV"
+[[ ! -v ENABLE_TOOL_SEARCH ]]
 EOF
 cat > "$tmp/bin/uname" <<'EOF'
 #!/bin/sh
@@ -37,6 +40,7 @@ printf '%s\n' "$@" > "$CAPTURE"
 [[ ! -v ANTHROPIC_API_KEY && ! -v CLAUDE_CODE_OAUTH_TOKEN ]]
 [[ ! -v CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR ]]
 [[ ! -v CLAUDE_CODE_USE_BEDROCK && ! -v CLAUDE_CODE_USE_VERTEX && ! -v CLAUDE_CODE_USE_FOUNDRY ]]
+[[ "$ENABLE_TOOL_SEARCH" == "${EXPECTED_TOOL_SEARCH:-true}" ]]
 EOF
 chmod +x "$tmp/bin/claude"
 ln -s "$tmp/bin/mock" "$HOME/.local/bin/cli-proxy-api"
@@ -71,6 +75,12 @@ if grep -Fq "$(< "$HOME/.config/cliproxyapi/api-key")" "$CAPTURE"; then
   echo 'not ok: Claude proxy key exposed in arguments' >&2
   exit 1
 fi
+# Default is child-scoped; explicit user choices remain reversible.
+[[ ! -v ENABLE_TOOL_SEARCH ]]
+ENABLE_TOOL_SEARCH='' "$ROOT/scripts/cliproxy" claude -p 'empty uses default'
+ENABLE_TOOL_SEARCH=false EXPECTED_TOOL_SEARCH=false "$ROOT/scripts/cliproxy" claude -p 'explicit opt-out'
+ENABLE_TOOL_SEARCH=auto:5 EXPECTED_TOOL_SEARCH=auto:5 "$ROOT/scripts/cliproxy" claude -p 'explicit threshold'
+[[ ! -v ENABLE_TOOL_SEARCH ]]
 "$ROOT/scripts/cliproxy" pi
  grep -qx -- 'cliproxyapi' "$CAPTURE"
  grep -qx -- 'gpt-6.1-sol' "$CAPTURE"

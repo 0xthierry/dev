@@ -158,6 +158,46 @@ with `/model claude-opus-5-5[1m]`, or resume with
 `cliproxy claude --model 'claude-opus-5-5[1m]' --resume`. This selects the client's
 context budget; upstream acceptance still depends on the proxy and account.
 
+### On-demand MCP tools through the proxy
+
+`cliproxy claude` defaults `ENABLE_TOOL_SEARCH` to `true` for that child process.
+Claude Code versions before 2.1.304 disable tool search by default behind custom
+`ANTHROPIC_BASE_URL` gateways. Without this setting, every MCP tool schema can
+enter the initial prompt, even when none of those tools is used. REA's large
+catalog makes this especially expensive. This setting keeps every server
+configured and its tools discoverable; it does not disable REA or other MCPs.
+Ordinary `claude`, Pi, and the parent shell are unchanged.
+
+An explicit nonempty environment value wins, so you can opt out or select an
+automatic threshold for one launch:
+
+```bash
+ENABLE_TOOL_SEARCH=false cliproxy claude  # troubleshooting: eager tool loading
+ENABLE_TOOL_SEARCH=auto:5 cliproxy claude # defer above a 5% context threshold
+```
+
+Exit and relaunch an existing session through the wrapper to load this setting:
+
+```bash
+cliproxy claude --resume <session-id>
+```
+
+Do not use bare `claude --resume` if you intend to retain proxy routing. Resuming
+keeps conversation history; it does not promise a completely fresh context.
+Use `/context` to inspect the new request's budget. Verification must cover both
+`ToolSearch` discovery and a subsequent MCP call, because a gateway that rejects
+`tool_reference` blocks could show a smaller prompt while breaking tool access.
+
+Live verification on Claude Code 2.1.296 and the pinned CLIProxyAPI v7.3.12
+successfully discovered `mcp__rea__binary_session` and called it with `{}`; it
+returned `open: false`. A second verification used the deployed launcher's default
+with normal hooks enabled and no `ENABLE_TOOL_SEARCH` override: its first request
+used 44,133 input tokens, versus 565,568 in the diagnosed eager-loading session
+in the same project. This is an illustrative comparison, not a controlled
+benchmark: the prompt and runtime server-connection state differ between runs.
+No server was removed.
+See [Claude Code tool search through a gateway](https://code.claude.com/docs/en/mcp#tool-search-through-a-gateway).
+
 Custom settings such as API-key helpers and model overrides may require separate
 review if the client does not route as expected.
 
