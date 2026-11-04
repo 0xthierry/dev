@@ -1,5 +1,11 @@
-import type { ExtensionAPI, ExtensionContext, SessionBeforeCompactEvent } from "@earendil-works/pi-coding-agent";
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  type SessionBeforeCompactEvent,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
 import { resolveCodexIdentity } from "./binding";
+import { hasCompactableHistory } from "./early-compaction";
 import { codexAutoCompactionThreshold, isCodexResponsesModel } from "./model";
 import { isCodexPayload } from "./payload";
 import { portableCompactOnly } from "./portable-recovery";
@@ -14,6 +20,7 @@ type SessionBeforeCompactResult = {
 };
 
 export type CodexCompactionRuntime = {
+  canCompact: (ctx: ExtensionContext) => boolean;
   remoteCompact: typeof remoteCompact;
   portableCompactOnly: typeof portableCompactOnly;
 };
@@ -25,7 +32,16 @@ const EARLY_COMPACTION_RESUME_MESSAGE = {
 } as const;
 
 export function createCodexCompactionRuntime(): CodexCompactionRuntime {
-  return { remoteCompact, portableCompactOnly };
+  return {
+    remoteCompact,
+    portableCompactOnly,
+    canCompact: (ctx) => {
+      const settings = SettingsManager.create(ctx.cwd, undefined, {
+        projectTrusted: ctx.isProjectTrusted(),
+      }).getCompactionSettings(ctx.model);
+      return hasCompactableHistory(ctx.sessionManager.getBranch(), settings.keepRecentTokens);
+    },
+  };
 }
 
 export function registerCodexCompactionExtension(
@@ -45,6 +61,8 @@ export function registerCodexCompactionExtension(
 
     const currentTokens = ctx.getContextUsage()?.tokens;
     if (currentTokens == null || currentTokens < codexAutoCompactionThreshold(ctx.model)) return;
+    // ctx.compact() aborts first, even when Pi later finds no discardable history.
+    if (!runtime.canCompact(ctx)) return;
 
     const shouldResumeInterruptedToolLoop =
       event.message.role === "assistant" && event.message.stopReason === "toolUse" && event.toolResults.length > 0;

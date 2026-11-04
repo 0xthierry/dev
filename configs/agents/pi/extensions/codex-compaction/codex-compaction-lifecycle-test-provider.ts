@@ -5,16 +5,18 @@ import {
   createAssistantMessageEventStream,
   type Model,
   type SimpleStreamOptions,
+  type ToolCall,
   type Usage,
 } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { registerCodexCompactionExtension } from "./lib/register";
+import { createCodexCompactionRuntime, registerCodexCompactionExtension } from "./lib/register";
 
 export const CODEX_COMPACTION_LIFECYCLE_TEST_PROVIDER = "openai-codex";
 export const CODEX_COMPACTION_LIFECYCLE_TEST_MODEL = "gpt-5.6-sol";
 export const CODEX_COMPACTION_LIFECYCLE_TEST_API_KEY_ENV = "CODEX_COMPACTION_LIFECYCLE_E2E_API_KEY";
 export const CODEX_COMPACTION_LIFECYCLE_TEST_USAGE_ENV = "CODEX_COMPACTION_LIFECYCLE_E2E_USAGE";
 export const CODEX_COMPACTION_LIFECYCLE_FINAL_TEXT = "continued automatically after compaction";
+export const CODEX_COMPACTION_LIFECYCLE_TEST_SCENARIO_ENV = "CODEX_COMPACTION_LIFECYCLE_E2E_SCENARIO";
 
 const api = "openai-codex-responses";
 const zeroUsage: Usage = {
@@ -26,7 +28,9 @@ const zeroUsage: Usage = {
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 };
 export default function (pi: ExtensionAPI) {
-  let sentToolCall = false;
+  let sentToolCalls = 0;
+  const scenario = process.env[CODEX_COMPACTION_LIFECYCLE_TEST_SCENARIO_ENV];
+  const toolTurns = scenario === "post-compaction-small-tail" ? 2 : 1;
   const configuredTokens = Number(process.env[CODEX_COMPACTION_LIFECYCLE_TEST_USAGE_ENV] ?? 246_000);
   const thresholdUsage: Usage = {
     ...zeroUsage,
@@ -35,6 +39,8 @@ export default function (pi: ExtensionAPI) {
   };
 
   registerCodexCompactionExtension(pi, {
+    // Exercise the production eligibility guard; only the paid compaction boundary is replaced.
+    ...createCodexCompactionRuntime(),
     remoteCompact: async ({ preparation }) => ({
       summary: "Deterministic Codex compaction lifecycle summary.",
       firstKeptEntryId: preparation.firstKeptEntryId,
@@ -50,9 +56,11 @@ export default function (pi: ExtensionAPI) {
     apiKey: `$${CODEX_COMPACTION_LIFECYCLE_TEST_API_KEY_ENV}`,
     api,
     streamSimple(model: Model<Api>, _context: Context, options?: SimpleStreamOptions) {
-      if (!sentToolCall) {
-        sentToolCall = true;
-        return streamToolCall(model, options, thresholdUsage);
+      if (sentToolCalls < toolTurns) {
+        sentToolCalls += 1;
+        const largePrefix = scenario === "post-compaction-small-tail" && sentToolCalls === 1;
+        const failingTool = scenario === "small-history" || sentToolCalls === 2;
+        return streamToolCall(model, options, thresholdUsage, sentToolCalls, largePrefix, failingTool);
       }
       if (options?.signal?.aborted) return streamAborted(model);
       return streamText(model, CODEX_COMPACTION_LIFECYCLE_FINAL_TEXT);
@@ -71,25 +79,49 @@ export default function (pi: ExtensionAPI) {
   });
 }
 
-function streamToolCall(model: Model<Api>, options: SimpleStreamOptions | undefined, usage: Usage) {
-  const toolCall = { type: "toolCall" as const, id: "read-probe", name: "read", arguments: { path: "probe.txt" } };
-  const message = assistantMessage(model, [toolCall], "toolUse", usage);
+function streamToolCall(
+  model: Model<Api>,
+  options: SimpleStreamOptions | undefined,
+  usage: Usage,
+  turn: number,
+  largePrefix: boolean,
+  failingTool: boolean,
+) {
+  const toolCall: ToolCall = failingTool
+    ? { type: "toolCall" as const, id: `failing-probe-${turn}`, name: "bash", arguments: { command: "exit 2" } }
+    : { type: "toolCall" as const, id: `read-probe-${turn}`, name: "read", arguments: { path: "probe.txt" } };
+  // More than the default 20k retained tokens makes the first split-turn compaction real.
+  // Once the user prefix is compacted, this retained assistant is the earliest cut point;
+  // the second short tool turn has no older projected messages that can be discarded.
+  const prefix = largePrefix ? "Literal retained evidence. ".repeat(4000) : "";
+  const content: AssistantMessage["content"] = prefix ? [{ type: "text", text: prefix }, toolCall] : [toolCall];
+  const toolIndex = prefix ? 1 : 0;
+  const message = assistantMessage(model, content, "toolUse", usage);
   const stream = createAssistantMessageEventStream();
 
   queueMicrotask(async () => {
     await options?.onPayload?.({ model: model.id, input: [], stream: true }, model);
     await options?.onResponse?.({ status: 200, headers: {} }, model);
 
-    const partial = { ...message, content: [{ ...toolCall, arguments: {} }], stopReason: "pending" as const };
+    const partial = {
+      ...message,
+      content: [...content.slice(0, toolIndex), { ...toolCall, arguments: {} }],
+      stopReason: "pending" as const,
+    };
     stream.push({ type: "start", partial: { ...message, content: [], stopReason: "pending" } });
-    stream.push({ type: "toolcall_start", contentIndex: 0, partial });
+    if (prefix) {
+      stream.push({ type: "text_start", contentIndex: 0, partial });
+      stream.push({ type: "text_delta", contentIndex: 0, delta: prefix, partial });
+      stream.push({ type: "text_end", contentIndex: 0, content: prefix, partial });
+    }
+    stream.push({ type: "toolcall_start", contentIndex: toolIndex, partial });
     stream.push({
       type: "toolcall_delta",
-      contentIndex: 0,
+      contentIndex: toolIndex,
       delta: JSON.stringify(toolCall.arguments),
       partial,
     });
-    stream.push({ type: "toolcall_end", contentIndex: 0, toolCall, partial: message });
+    stream.push({ type: "toolcall_end", contentIndex: toolIndex, toolCall, partial: message });
     stream.push({ type: "done", reason: "toolUse", message });
     stream.end(message);
   });

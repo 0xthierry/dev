@@ -68,6 +68,8 @@ Replacement searches only a small input prefix and is idempotent after the place
 
 A `turn_end` handler uses `ctx.getContextUsage()` and calls `ctx.compact()` after successful `stop` or `toolUse` turns when supported direct/proxy context reaches **90% of the active model context window**, matching Codex Rust's native `context_window * 9 / 10` policy. For a configured 300,000-token window, the threshold is **270,000 tokens**. Error, length, and aborted turns remain owned by Pi's overflow/retry path. An in-flight guard prevents duplicate extension triggers until `onComplete` or `onError` fires. While that extension-triggered compaction is pending, the `session_before_compact` hook cancels overlapping Pi threshold/overflow compaction so both paths cannot compact the same successful turn.
 
+Before calling `ctx.compact()`, the extension checks whether Pi's visible conversation history has a cut point outside the configured `keepRecentTokens` budget. This respects trusted project settings and per-model retention overrides, excludes system prompt state and already-compacted history, and applies context edits. High provider-reported usage alone is not enough: if the retained conversation is too small, the tool loop continues without an abort or a compaction request. Once enough new history exists, the 90% trigger remains eligible.
+
 Pi's extension-triggered `ctx.compact()` uses manual compaction semantics: it aborts the active agent run and does not retry it automatically. When the threshold is reached after a tool batch, the extension therefore queues a hidden continuation after successful compaction so the interrupted tool loop resumes without requiring the user to type `continue`. Completed non-tool responses are compacted without starting another turn.
 
 ## Failure behavior
@@ -95,7 +97,7 @@ bun run test:pi-extensions codex-compaction
 bun run test:pi-extensions:e2e codex-compaction
 ```
 
-`lifecycle.spec.ts` checks real Pi scheduling with a deterministic provider fixture. `proxy.spec.ts` uses the normally configured CLIProxyAPI provider and running service. It compacts a synthetic conversation, restarts Pi, verifies assistant-only information survives artifact replay, and repeats compaction. It isolates its config/session and deletes them afterward. It makes real model calls; missing proxy configuration or authentication is a failure, not a skip. `CODEX_COMPACTION_PROXY_MODEL` optionally selects another configured proxy model (default `gpt-6-astra`).
+`lifecycle.spec.ts` checks real Pi scheduling with a deterministic provider fixture, including high-usage turns with too little compactable history before and after a successful compaction. It verifies that failed tool commands still reach the assistant without an unnecessary abort, and covers per-model retention overrides. `proxy.spec.ts` uses the normally configured CLIProxyAPI provider and running service. It compacts a synthetic conversation, restarts Pi, verifies assistant-only information survives artifact replay, and repeats compaction. It isolates its config/session and deletes them afterward. It makes real model calls; missing proxy configuration or authentication is a failure, not a skip. `CODEX_COMPACTION_PROXY_MODEL` optionally selects another configured proxy model (default `gpt-6-astra`).
 
 ## Scope
 

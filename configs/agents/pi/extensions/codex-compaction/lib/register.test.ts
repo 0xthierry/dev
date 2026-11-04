@@ -28,6 +28,7 @@ describe("registerCodexCompactionExtension", () => {
     const remoteCompact = mock(async () => remoteResult());
     const portableCompactOnly = mock(async () => undefined);
     registerCodexCompactionExtension(fakePi.pi, {
+      canCompact: mock(() => true),
       remoteCompact: remoteCompact as CodexCompactionRuntime["remoteCompact"],
       portableCompactOnly: portableCompactOnly as CodexCompactionRuntime["portableCompactOnly"],
     });
@@ -49,6 +50,7 @@ describe("registerCodexCompactionExtension", () => {
     });
     const portableCompactOnly = mock(async () => remoteResult());
     registerCodexCompactionExtension(fakePi.pi, {
+      canCompact: mock(() => true),
       remoteCompact: remoteCompact as CodexCompactionRuntime["remoteCompact"],
       portableCompactOnly: portableCompactOnly as CodexCompactionRuntime["portableCompactOnly"],
     });
@@ -92,6 +94,7 @@ describe("registerCodexCompactionExtension", () => {
     }));
     const remoteCompact = mock(async () => undefined);
     registerCodexCompactionExtension(fakePi.pi, {
+      canCompact: mock(() => true),
       remoteCompact: remoteCompact as CodexCompactionRuntime["remoteCompact"],
       portableCompactOnly: portableCompactOnly as CodexCompactionRuntime["portableCompactOnly"],
     });
@@ -115,6 +118,7 @@ describe("registerCodexCompactionExtension", () => {
     const fakePi = createFakePi();
     const remoteCompact = mock(async (_options: Parameters<CodexCompactionRuntime["remoteCompact"]>[0]) => undefined);
     const runtime: CodexCompactionRuntime = {
+      canCompact: mock(() => true),
       remoteCompact,
       portableCompactOnly: mock(async () => undefined) as CodexCompactionRuntime["portableCompactOnly"],
     };
@@ -226,6 +230,42 @@ describe("registerCodexCompactionExtension", () => {
     );
   });
 
+  test("does not interrupt an uncompactable turn and remains eligible when history grows", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const canCompact = mock(() => false);
+    const compact = mock((options: { onComplete?: () => void }) => options);
+    const runtime = { ...completeRuntime(), canCompact };
+    registerCodexCompactionExtension(fakePi.pi, runtime);
+    const ctx = {
+      ...proxyCtx(),
+      getContextUsage: () => ({ tokens: 270_211 }),
+      compact,
+    };
+
+    // Act
+    await fakePi.emit("turn_end", turnEndEvent(), ctx);
+    const callsBeforeGrowth = compact.mock.calls.length;
+    canCompact.mockReturnValue(true);
+    await fakePi.emit("turn_end", turnEndEvent(), ctx);
+    compact.mock.calls[0]?.[0].onComplete?.();
+
+    // Assert
+    expect(callsBeforeGrowth).toBe(0);
+    expect(compact).toHaveBeenCalledTimes(1);
+    expect(fakePi.uiNotifications).toEqual([]);
+    expect(fakePi.sentMessages).toEqual([
+      {
+        message: {
+          customType: "codex-compaction-resume",
+          content: "Continue the interrupted task after context compaction.",
+          display: false,
+        },
+        options: { deliverAs: "followUp", triggerTurn: true },
+      },
+    ]);
+  });
+
   test("resumes an interrupted tool loop after successful early compaction", async () => {
     // Arrange
     const fakePi = createFakePi();
@@ -313,6 +353,7 @@ describe("registerCodexCompactionExtension", () => {
     const fakePi = createFakePi();
     const remoteCompact = mock(async () => remoteResult());
     const runtime: CodexCompactionRuntime = {
+      canCompact: mock(() => true),
       remoteCompact: remoteCompact as CodexCompactionRuntime["remoteCompact"],
       portableCompactOnly: mock(async () => undefined) as CodexCompactionRuntime["portableCompactOnly"],
     };
@@ -340,6 +381,7 @@ describe("registerCodexCompactionExtension", () => {
     const remoteCompact = mock(async () => remoteResult());
     const compact = mock(() => undefined);
     registerCodexCompactionExtension(fakePi.pi, {
+      canCompact: mock(() => true),
       remoteCompact: remoteCompact as CodexCompactionRuntime["remoteCompact"],
       portableCompactOnly: mock(async () => undefined) as CodexCompactionRuntime["portableCompactOnly"],
     });
@@ -394,7 +436,7 @@ describe("CLIProxyAPI lifecycle", () => {
     const remoteCompact = mock<CodexCompactionRuntime["remoteCompact"]>(async () => remoteResult());
     const portableCompactOnly = mock<CodexCompactionRuntime["portableCompactOnly"]>(async () => undefined);
     const ctx = proxyCtx();
-    registerCodexCompactionExtension(fakePi.pi, { remoteCompact, portableCompactOnly });
+    registerCodexCompactionExtension(fakePi.pi, { canCompact: mock(() => true), remoteCompact, portableCompactOnly });
 
     // Act
     const results = await fakePi.emit("session_before_compact", compactEvent(), ctx);
@@ -416,7 +458,7 @@ describe("CLIProxyAPI lifecycle", () => {
       throw new Error("proxy compaction rejected");
     });
     const portableCompactOnly = mock<CodexCompactionRuntime["portableCompactOnly"]>(async () => remoteResult());
-    registerCodexCompactionExtension(fakePi.pi, { remoteCompact, portableCompactOnly });
+    registerCodexCompactionExtension(fakePi.pi, { canCompact: mock(() => true), remoteCompact, portableCompactOnly });
 
     // Act
     const results = await fakePi.emit("session_before_compact", compactEvent(), { ...proxyCtx(), hasUI: true });
@@ -544,6 +586,7 @@ function proxyBinding() {
 
 function completeRuntime(): CodexCompactionRuntime {
   return {
+    canCompact: mock(() => true),
     remoteCompact: mock(async () => undefined) as CodexCompactionRuntime["remoteCompact"],
     portableCompactOnly: mock(async () => undefined) as CodexCompactionRuntime["portableCompactOnly"],
   };
