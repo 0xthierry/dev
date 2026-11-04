@@ -3,7 +3,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { hashAccountId } from "./binding";
 import { applyCompactionReplacement, planInjection } from "./replacement";
-import { CODEX_OPAQUE_SUMMARY_PLACEHOLDER, SEAM_STRIKE_THRESHOLD } from "./types";
+import { CODEX_OPAQUE_SUMMARY_PLACEHOLDER, type CodexBinding, SEAM_STRIKE_THRESHOLD } from "./types";
 
 const model = {
   id: "gpt-5.6-sol",
@@ -19,8 +19,57 @@ const model = {
 } as Model<Api>;
 
 const accountHash = hashAccountId("acct_123");
+const binding = {
+  provider: "openai-codex",
+  api: "openai-codex-responses",
+  modelId: "gpt-5.6-sol",
+  endpoint: "https://chatgpt.com/backend-api/codex/responses",
+  accountHash,
+};
 
 describe("planInjection / applyCompactionReplacement", () => {
+  test.each([
+    ["rotated credential", "other-key-hash", "http://127.0.0.1:8317/v1/responses"],
+    ["changed endpoint", "key-hash", "http://127.0.0.1:8318/v1/responses"],
+  ])("replaces proxy state safely with a %s binding", (_name, proxyKeyHash, endpoint) => {
+    // Arrange
+    const proxyModel: Model<Api> = {
+      ...model,
+      provider: "cliproxyapi",
+      api: "openai-responses",
+      baseUrl: "http://127.0.0.1:8317/v1",
+    };
+    const persisted: CodexBinding = {
+      scope: "proxy",
+      provider: "cliproxyapi",
+      api: "openai-responses",
+      modelId: "gpt-5.6-sol",
+      endpoint: "http://127.0.0.1:8317/v1/responses",
+      proxyKeyHash: "key-hash",
+    };
+    const branch = [v2Entry("cmp", CODEX_OPAQUE_SUMMARY_PLACEHOLDER, { binding: persisted })];
+    const payload = {
+      input: [
+        { role: "user", content: CODEX_OPAQUE_SUMMARY_PLACEHOLDER },
+        { role: "user", content: "tail" },
+      ],
+    };
+
+    // Act
+    const result = applyCompactionReplacement({
+      payload,
+      model: proxyModel,
+      branchEntries: branch,
+      binding: { ...persisted, proxyKeyHash, endpoint },
+    });
+
+    // Assert
+    expect(result).toEqual({ mutated: true, mode: "prefix-only" });
+    expect(payload.input).toEqual([
+      { role: "user", content: "prior user" },
+      { role: "user", content: "tail" },
+    ]);
+  });
   test("newer ordinary Pi compaction above older Codex state does not inject artifacts", () => {
     // Arrange
     const branch: SessionEntry[] = [
@@ -30,7 +79,7 @@ describe("planInjection / applyCompactionReplacement", () => {
     const payload = { input: [{ role: "user", content: "portable B" }] };
 
     // Act
-    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, accountHash });
+    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, binding });
 
     // Assert
     expect(result.mutated).toBe(false);
@@ -48,7 +97,7 @@ describe("planInjection / applyCompactionReplacement", () => {
     };
 
     // Act
-    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, accountHash });
+    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, binding });
 
     // Assert
     expect(result).toEqual({ mutated: true, mode: "artifact" });
@@ -74,7 +123,7 @@ describe("planInjection / applyCompactionReplacement", () => {
       payload,
       model,
       branchEntries: branch,
-      accountHash: hashAccountId("other-account"),
+      binding: { ...binding, accountHash: hashAccountId("other-account") },
     });
 
     // Assert
@@ -96,7 +145,7 @@ describe("planInjection / applyCompactionReplacement", () => {
       payload,
       model,
       branchEntries: branch,
-      accountHash: hashAccountId("other-account"),
+      binding: { ...binding, accountHash: hashAccountId("other-account") },
     });
 
     // Assert
@@ -113,8 +162,8 @@ describe("planInjection / applyCompactionReplacement", () => {
     const payload = { input: [{ role: "user", content: CODEX_OPAQUE_SUMMARY_PLACEHOLDER }] };
 
     // Act
-    const plan = planInjection({ model, branchEntries: branch, accountHash });
-    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, accountHash });
+    const plan = planInjection({ model, branchEntries: branch, binding });
+    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, binding });
 
     // Assert
     expect(plan.kind).toBe("prefix-only");
@@ -138,7 +187,7 @@ describe("planInjection / applyCompactionReplacement", () => {
     };
 
     // Act
-    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, accountHash });
+    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, binding });
 
     // Assert
     expect(result).toEqual({ mutated: true, mode: "placeholder-cleared" });
@@ -152,8 +201,8 @@ describe("planInjection / applyCompactionReplacement", () => {
     const payload = { input: [{ role: "user", content: summary }] };
 
     // Act
-    const first = applyCompactionReplacement({ payload, model, branchEntries: branch, accountHash });
-    const second = applyCompactionReplacement({ payload, model, branchEntries: branch, accountHash });
+    const first = applyCompactionReplacement({ payload, model, branchEntries: branch, binding });
+    const second = applyCompactionReplacement({ payload, model, branchEntries: branch, binding });
 
     // Assert
     expect(first).toEqual({ mutated: true, mode: "prefix-only" });
@@ -168,8 +217,8 @@ describe("planInjection / applyCompactionReplacement", () => {
     const payload = { input: [{ role: "user", content: CODEX_OPAQUE_SUMMARY_PLACEHOLDER }] };
 
     // Act
-    const plan = planInjection({ model, branchEntries: branch, accountHash });
-    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, accountHash });
+    const plan = planInjection({ model, branchEntries: branch, binding });
+    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, binding });
 
     // Assert
     expect(plan.kind).toBe("prefix-only");
@@ -183,7 +232,7 @@ describe("planInjection / applyCompactionReplacement", () => {
     const payload = { input: [{ role: "user", content: CODEX_OPAQUE_SUMMARY_PLACEHOLDER }] };
 
     // Act
-    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, accountHash: undefined });
+    const result = applyCompactionReplacement({ payload, model, branchEntries: branch, binding: undefined });
 
     // Assert
     expect(result).toEqual({ mutated: true, mode: "prefix-only" });
@@ -207,7 +256,7 @@ function ordinary(id: string, summary: string): SessionEntry {
 function v2Entry(
   id: string,
   summary: string,
-  overrides: { userPrefix?: unknown[]; artifact?: unknown[] } = {},
+  overrides: { userPrefix?: unknown[]; artifact?: unknown[]; binding?: CodexBinding } = {},
 ): SessionEntry {
   return {
     type: "compaction",
@@ -220,7 +269,7 @@ function v2Entry(
     details: {
       codexCompaction: {
         version: 2,
-        binding: {
+        binding: overrides.binding ?? {
           provider: "openai-codex",
           api: "openai-codex-responses",
           modelId: "gpt-5.6-sol",

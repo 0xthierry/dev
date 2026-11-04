@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import { hashAccountId } from "./binding";
+import { hashAccountId, resolveCodexIdentity } from "./binding";
 import type { CompactionPreparation } from "./recovery";
 import {
   buildNextRemotePrefix,
@@ -35,7 +35,7 @@ describe("buildNextRemotePrefix / buildRemoteCompactionInput", () => {
     const prefix = buildNextRemotePrefix({
       preparation: basePreparation(),
       model,
-      accountId: "acct_123",
+      binding: directIdentity().binding,
       branchEntries: branch,
     });
 
@@ -55,7 +55,7 @@ describe("buildNextRemotePrefix / buildRemoteCompactionInput", () => {
     const prefix = buildNextRemotePrefix({
       preparation,
       model,
-      accountId: "different-account",
+      binding: directIdentity("different-account").binding,
       branchEntries: branch,
     });
 
@@ -73,7 +73,7 @@ describe("buildNextRemotePrefix / buildRemoteCompactionInput", () => {
     const prefix = buildNextRemotePrefix({
       preparation,
       model,
-      accountId: "different-account",
+      binding: directIdentity("different-account").binding,
       branchEntries: branch,
     });
 
@@ -101,7 +101,7 @@ describe("buildNextRemotePrefix / buildRemoteCompactionInput", () => {
       preparation: recovered,
       originalPreparation: original,
       model,
-      accountId: "acct_123",
+      binding: directIdentity().binding,
       branchEntries: [v1Entry()],
       recovery: { attempted: true, truncated: false, recoveredMessages: 1 },
     });
@@ -136,8 +136,7 @@ describe("buildRemoteCompactionResult", () => {
     const result = buildRemoteCompactionResult({
       remoteResult,
       preparation,
-      model,
-      accountId: "acct_123",
+      binding: directIdentity().binding,
       branchEntries: [],
     });
 
@@ -163,6 +162,115 @@ describe("buildRemoteCompactionResult", () => {
 });
 
 describe("remoteCompact", () => {
+  test("persists proxy-scoped opaque state while seeding the first native call from an ordinary Pi summary", async () => {
+    // Arrange
+    const proxyModel: CodexModel = {
+      ...model,
+      provider: "cliproxyapi",
+      api: "openai-responses",
+      baseUrl: "http://127.0.0.1:8317/v1",
+    };
+    const identity = resolveCodexIdentity(proxyModel, { apiKey: "local-key" });
+    if (!identity) throw new Error("Expected proxy identity");
+    const fetchFn = mock<RemoteCompactRuntime["fetchCodexCompaction"]>(async () => ({
+      ok: true,
+      item: { type: "compaction", encrypted_content: "proxy-artifact", id: "cmp_proxy" },
+    }));
+    const branchEntries: SessionEntry[] = [
+      {
+        type: "compaction",
+        id: "old",
+        parentId: null,
+        timestamp: new Date(0).toISOString(),
+        summary: "ordinary summary",
+        firstKeptEntryId: "kept",
+        tokensBefore: 100,
+      },
+    ];
+
+    // Act
+    const result = await remoteCompact({
+      preparation: basePreparation({
+        previousSummary: "ordinary summary",
+        messagesToSummarize: [{ role: "user", content: "next", timestamp: 1 }],
+      }),
+      model: proxyModel,
+      identity,
+      thinkingLevel: "low",
+      systemPrompt: "system",
+      branchEntries,
+      runtime: { fetchCodexCompaction: fetchFn },
+    });
+
+    // Assert
+    expect(fetchFn.mock.calls[0]?.[0].input).toEqual([
+      { role: "user", content: "Previous conversation summary:\nordinary summary" },
+      { role: "user", content: "next" },
+    ]);
+    expect(result).toMatchObject({
+      summary: CODEX_OPAQUE_SUMMARY_PLACEHOLDER,
+      details: {
+        codexCompaction: {
+          version: 2,
+          binding: {
+            scope: "proxy",
+            provider: "cliproxyapi",
+            api: "openai-responses",
+            modelId: "gpt-5.6-sol",
+            endpoint: "http://127.0.0.1:8317/v1/responses",
+            proxyKeyHash: "dba73d3fcb67907054ce8317378a14b30da1b86b75803e9ba66f18efd9bef09e", // gitleaks:allow -- SHA256 of synthetic "local-key" fixture
+          },
+          artifact: [{ type: "compaction", encrypted_content: "proxy-artifact", id: "cmp_proxy" }],
+        },
+      },
+    });
+    expect(JSON.stringify(result?.details)).not.toContain("local-key");
+    expect(JSON.stringify(result?.details)).not.toContain("accountHash");
+  });
+
+  test("chains proxy artifacts only while the persisted proxy binding matches", () => {
+    // Arrange
+    const proxyModel: CodexModel = {
+      ...model,
+      provider: "cliproxyapi",
+      api: "openai-responses",
+      baseUrl: "http://127.0.0.1:8317/v1",
+    };
+    const identity = resolveCodexIdentity(proxyModel, { apiKey: "local-key" });
+    const changedKey = resolveCodexIdentity(proxyModel, { apiKey: "new-key" });
+    const changedEndpoint = resolveCodexIdentity(
+      { ...proxyModel, baseUrl: "http://127.0.0.1:8318/v1" },
+      { apiKey: "local-key" },
+    );
+    if (!identity || !changedKey || !changedEndpoint) throw new Error("Expected proxy identities");
+    const prior = buildRemoteCompactionResult({
+      preparation: basePreparation({ messagesToSummarize: [{ role: "user", content: "prior", timestamp: 1 }] }),
+      binding: identity.binding,
+      branchEntries: [],
+      remoteResult: { ok: true, item: { type: "compaction", encrypted_content: "proxy-artifact" } },
+    });
+    const branchEntries: SessionEntry[] = [
+      { ...prior, type: "compaction", id: "cmp", parentId: null, timestamp: new Date(0).toISOString() },
+    ];
+    const options = {
+      model: proxyModel,
+      preparation: basePreparation({ previousSummary: CODEX_OPAQUE_SUMMARY_PLACEHOLDER }),
+      branchEntries,
+    };
+
+    // Act
+    const matching = buildNextRemotePrefix({ ...options, binding: identity.binding });
+    const rotatedKey = buildNextRemotePrefix({ ...options, binding: changedKey.binding });
+    const otherEndpoint = buildNextRemotePrefix({ ...options, binding: changedEndpoint.binding });
+
+    // Assert
+    expect(matching).toEqual([
+      { role: "user", content: "prior" },
+      { type: "compaction", encrypted_content: "proxy-artifact" },
+    ]);
+    expect(rotatedKey).toEqual([{ role: "user", content: "prior" }]);
+    expect(otherEndpoint).toEqual([{ role: "user", content: "prior" }]);
+  });
   test("uses only the remote endpoint client and returns its opaque result", async () => {
     // Arrange
     const fetchFn = mock(async () => ({
@@ -178,7 +286,7 @@ describe("remoteCompact", () => {
         messagesToSummarize: [{ role: "user", content: "remember alpha", timestamp: 1 }],
       }),
       model,
-      auth: { apiKey: jwtWithAccountId("acct_123") },
+      identity: directIdentity(),
       thinkingLevel: "low",
       systemPrompt: "system",
       branchEntries: [],
@@ -209,7 +317,7 @@ describe("remoteCompact", () => {
         messagesToSummarize: [{ role: "user", content: "remember alpha", timestamp: 1 }],
       }),
       model,
-      auth: { apiKey: jwtWithAccountId("acct_123") },
+      identity: directIdentity(),
       thinkingLevel: "low",
       systemPrompt: "system",
       branchEntries: [],
@@ -248,7 +356,7 @@ describe("remoteCompact", () => {
         messagesToSummarize: [{ role: "user", content: "next", timestamp: 1 }],
       }),
       model,
-      auth: { apiKey: jwtWithAccountId("acct_123") },
+      identity: directIdentity(),
       thinkingLevel: "low",
       systemPrompt: "system",
       branchEntries: branch,
@@ -324,6 +432,12 @@ function v1Entry(): SessionEntry {
       },
     },
   } as SessionEntry;
+}
+
+function directIdentity(accountId = "acct_123") {
+  const identity = resolveCodexIdentity(model, { apiKey: jwtWithAccountId(accountId) });
+  if (!identity) throw new Error("Expected direct test identity");
+  return identity;
 }
 
 function jwtWithAccountId(accountId: string): string {

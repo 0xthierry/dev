@@ -8,9 +8,54 @@ import {
   latestCompaction,
   parseCodexCompactionRecord,
 } from "./state";
-import { CODEX_COMPACTION_CUSTOM_INVALIDATION, SEAM_STRIKE_THRESHOLD } from "./types";
+import { CODEX_COMPACTION_CUSTOM_INVALIDATION, type CodexCompactionV2, SEAM_STRIKE_THRESHOLD } from "./types";
+
+const proxyRecord: CodexCompactionV2 = {
+  version: 2,
+  binding: {
+    scope: "proxy",
+    provider: "cliproxyapi",
+    api: "openai-responses",
+    modelId: "gpt-5.6-sol",
+    endpoint: "http://127.0.0.1:8317/v1/responses",
+    proxyKeyHash: "key-hash",
+  },
+  userPrefix: [{ role: "user", content: "prior" }],
+  artifact: [{ type: "compaction", encrypted_content: "proxy-encrypted", id: "cmp_proxy" }],
+  firstKeptEntryId: "kept",
+  tokensBefore: 42,
+};
 
 describe("latestCompaction", () => {
+  test("round-trips explicitly proxy-scoped v2 state without account fields", () => {
+    // Arrange
+    const persisted: unknown = JSON.parse(JSON.stringify(proxyRecord));
+
+    // Act
+    const parsed = parseCodexCompactionRecord(persisted);
+
+    // Assert
+    expect(parsed).toMatchObject(proxyRecord);
+    expect(JSON.stringify(parsed)).not.toContain("accountHash");
+  });
+
+  test.each([
+    ["missing scope", { ...proxyRecord.binding, scope: undefined }],
+    ["missing key hash", { ...proxyRecord.binding, proxyKeyHash: undefined }],
+    ["invented account", { ...proxyRecord.binding, accountHash: "fake-account" }],
+    ["unrelated provider", { ...proxyRecord.binding, provider: "openai" }],
+    ["unrelated api", { ...proxyRecord.binding, api: "openai-completions" }],
+  ])("rejects malformed proxy binding: %s", (_name, binding) => {
+    // Arrange
+    const persisted = { ...proxyRecord, binding };
+
+    // Act
+    const parsed = parseCodexCompactionRecord(persisted);
+
+    // Assert
+    expect(parsed).toBeUndefined();
+    expect(parseCodexCompactionRecord(proxyRecord)).toMatchObject(proxyRecord);
+  });
   test("only the latest compaction entry supplies remote state", () => {
     // Arrange
     const entries: SessionEntry[] = [v2Entry("old", "opaque-old"), ordinaryEntry("new", "portable summary")];
@@ -84,6 +129,37 @@ describe("legacy detection", () => {
 });
 
 describe("invalidation", () => {
+  test("recognizes proxy artifact rejection but ignores other OpenAI Responses providers", () => {
+    // Arrange
+    const compaction: SessionEntry = {
+      type: "compaction",
+      id: "cmp",
+      parentId: null,
+      timestamp: new Date(0).toISOString(),
+      summary: "opaque",
+      firstKeptEntryId: "kept",
+      tokensBefore: 42,
+      details: { codexCompaction: proxyRecord },
+    };
+    const proxyError = assistantError(
+      "400 invalid_request_error: encrypted_content could not be decrypted",
+      "cliproxyapi",
+      "openai-responses",
+    );
+    const otherError = assistantError(
+      "400 invalid_request_error: encrypted_content could not be decrypted",
+      "openai",
+      "openai-responses",
+    );
+
+    // Act
+    const proxyRejected = isArtifactUnusable([compaction, proxyError]);
+    const unrelated = isArtifactUnusable([compaction, otherError]);
+
+    // Assert
+    expect(proxyRejected).toBe(true);
+    expect(unrelated).toBe(false);
+  });
   test("disables artifact after deterministic compaction rejection", () => {
     // Arrange
     const entries: SessionEntry[] = [
@@ -196,7 +272,7 @@ function v2Entry(id: string, encrypted: string): SessionEntry {
   } as SessionEntry;
 }
 
-function assistantError(errorMessage: string): SessionEntry {
+function assistantError(errorMessage: string, provider = "openai-codex", api = "openai-codex-responses"): SessionEntry {
   return {
     type: "message",
     id: `err-${Math.random()}`,
@@ -204,8 +280,8 @@ function assistantError(errorMessage: string): SessionEntry {
     timestamp: new Date(1).toISOString(),
     message: {
       role: "assistant",
-      api: "openai-codex-responses",
-      provider: "openai-codex",
+      api,
+      provider,
       model: "gpt-5.6-sol",
       content: [],
       usage: {

@@ -89,10 +89,21 @@ direct authentication. Existing Pi sessions, project-level Pi settings, and agen
 with explicitly pinned `openai-codex` providers do **not** automatically move to the
 pool. Select `cliproxyapi` explicitly for those Pi agents when desired.
 
-Pi uses standard `openai-responses` with full conversation history, rather than its
-special ChatGPT transport. Consequently the repo's Codex-native compaction extension
-does not apply to this provider; normal Pi compaction remains available. The
-repo-managed Fast Mode extension explicitly opts eligible proxy-backed Luna payloads
+Pi uses standard `openai-responses`, rather than its special ChatGPT transport.
+The repo's Codex-native compaction extension also supports this explicitly named
+proxy provider: it sends `compaction_trigger` through `/v1/responses`, persists the
+opaque result, and replaces Pi's placeholder with that artifact on later requests.
+Manual and automatic compaction use this native path; failures cancel rather than
+silently generating a Pi text summary. Requests remain routed through the account
+pool, using only the local proxy key. Artifact bindings identify the proxy endpoint
+and hashed local credential, not an upstream account. Normal requests and compaction
+share a session routing key; affinity still allows account failover. A live probe
+replayed an artifact successfully across two pooled credentials, but this is not a
+universal cross-account portability guarantee. See the
+[compaction extension](../agents/pi/extensions/codex-compaction/README.md) for failure
+behavior and the real Pi compact/replay test.
+
+The repo-managed Fast Mode extension explicitly opts eligible proxy-backed Luna payloads
 into `service_tier: "priority"`. Pi uses SSE rather than WebSockets to avoid
 connection-bound response chaining across accounts. Model access still depends on
 account entitlements.

@@ -387,6 +387,161 @@ describe("registerCodexCompactionExtension", () => {
   });
 });
 
+describe("CLIProxyAPI lifecycle", () => {
+  test("overrides compaction with a native result using the local key exactly once", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const remoteCompact = mock<CodexCompactionRuntime["remoteCompact"]>(async () => remoteResult());
+    const portableCompactOnly = mock<CodexCompactionRuntime["portableCompactOnly"]>(async () => undefined);
+    const ctx = proxyCtx();
+    registerCodexCompactionExtension(fakePi.pi, { remoteCompact, portableCompactOnly });
+
+    // Act
+    const results = await fakePi.emit("session_before_compact", compactEvent(), ctx);
+
+    // Assert
+    expect(results[0]).toMatchObject({ compaction: { summary: CODEX_OPAQUE_SUMMARY_PLACEHOLDER } });
+    expect(remoteCompact.mock.calls[0]?.[0]).toMatchObject({
+      identity: { kind: "proxy", apiKey: "local-key", binding: proxyBinding() },
+      sessionId: "d41bcab6-09fe-4e47-8027-7e2266a34e10",
+    });
+    expect(ctx.modelRegistry.getApiKeyAndHeaders).toHaveBeenCalledTimes(1);
+    expect(portableCompactOnly).not.toHaveBeenCalled();
+  });
+
+  test("cancels a proxy native failure with its reason and never invokes portable summarization", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const remoteCompact = mock<CodexCompactionRuntime["remoteCompact"]>(async () => {
+      throw new Error("proxy compaction rejected");
+    });
+    const portableCompactOnly = mock<CodexCompactionRuntime["portableCompactOnly"]>(async () => remoteResult());
+    registerCodexCompactionExtension(fakePi.pi, { remoteCompact, portableCompactOnly });
+
+    // Act
+    const results = await fakePi.emit("session_before_compact", compactEvent(), { ...proxyCtx(), hasUI: true });
+
+    // Assert
+    expect(results[0]).toEqual({ cancel: true });
+    expect(fakePi.uiNotifications[0]?.message).toBe("proxy compaction rejected");
+    expect(portableCompactOnly).not.toHaveBeenCalled();
+  });
+
+  test("sets a stable full session route even before the first proxy compaction", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const payload = { input: [{ role: "user", content: "hello" }], prompt_cache_key: "provider-shortened-key" };
+    registerCodexCompactionExtension(fakePi.pi, completeRuntime());
+
+    // Act
+    const results = await fakePi.emit(
+      "before_provider_request",
+      { type: "before_provider_request", payload },
+      proxyCtx(),
+    );
+
+    // Assert
+    expect(results[0]).toEqual({
+      input: [{ role: "user", content: "hello" }],
+      prompt_cache_key: "d41bcab6-09fe-4e47-8027-7e2266a34e10", // gitleaks:allow -- synthetic session UUID, not a credential
+    });
+    expect(payload.prompt_cache_key).toBe("d41bcab6-09fe-4e47-8027-7e2266a34e10");
+  });
+
+  test("replaces a persisted proxy placeholder and preserves the regular request route", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const old = v2BranchEntry();
+    const branch = [
+      { ...old, details: { codexCompaction: { ...old.details.codexCompaction, binding: proxyBinding() } } },
+    ];
+    const ctx = {
+      ...proxyCtx(),
+      sessionManager: { getBranch: () => branch, getSessionId: () => "d41bcab6-09fe-4e47-8027-7e2266a34e10" },
+    };
+    const payload = { input: [{ role: "user", content: CODEX_OPAQUE_SUMMARY_PLACEHOLDER }] };
+    registerCodexCompactionExtension(fakePi.pi, completeRuntime());
+
+    // Act
+    const results = await fakePi.emit("before_provider_request", { type: "before_provider_request", payload }, ctx);
+
+    // Assert
+    expect(results[0]).toEqual({
+      input: [
+        { role: "user", content: "prior" },
+        { type: "compaction", encrypted_content: "enc", id: "cmp_1" },
+      ],
+      prompt_cache_key: "d41bcab6-09fe-4e47-8027-7e2266a34e10", // gitleaks:allow -- synthetic session UUID, not a credential
+    });
+  });
+
+  test("leaves arbitrary OpenAI Responses providers untouched", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const runtime = completeRuntime();
+    const ctx = proxyCtx();
+    ctx.model.provider = "openai";
+    const payload = { input: [{ role: "user", content: "hello" }], prompt_cache_key: "original" };
+    registerCodexCompactionExtension(fakePi.pi, runtime);
+
+    // Act
+    const compacted = await fakePi.emit("session_before_compact", compactEvent(), ctx);
+    const requested = await fakePi.emit("before_provider_request", { type: "before_provider_request", payload }, ctx);
+
+    // Assert
+    expect(compacted[0]).toBeUndefined();
+    expect(requested[0]).toBeUndefined();
+    expect(payload).toEqual({ input: [{ role: "user", content: "hello" }], prompt_cache_key: "original" });
+    expect(runtime.remoteCompact).not.toHaveBeenCalled();
+  });
+
+  test("triggers at 90 percent and resumes the proxy tool loop only after successful compaction", async () => {
+    // Arrange
+    const fakePi = createFakePi();
+    const compact = mock((options: { onComplete?: () => void; onError?: (error: Error) => void }) => options);
+    registerCodexCompactionExtension(fakePi.pi, completeRuntime());
+    const ctx = { ...proxyCtx(), compact, getContextUsage: () => ({ tokens: CODEX_AUTO_COMPACTION_THRESHOLD_TOKENS }) };
+
+    // Act
+    await fakePi.emit("turn_end", turnEndEvent(), ctx);
+    const beforeCompletion = [...fakePi.sentMessages];
+    compact.mock.calls[0]?.[0].onComplete?.();
+
+    // Assert
+    expect(beforeCompletion).toEqual([]);
+    expect(fakePi.sentMessages).toEqual([
+      {
+        message: {
+          customType: "codex-compaction-resume",
+          content: "Continue the interrupted task after context compaction.",
+          display: false,
+        },
+        options: { deliverAs: "followUp", triggerTurn: true },
+      },
+    ]);
+  });
+});
+
+function proxyCtx() {
+  return {
+    ...codexCtx(),
+    model: { ...codexModel(), provider: "cliproxyapi", api: "openai-responses", baseUrl: "http://127.0.0.1:8317/v1" },
+    modelRegistry: { getApiKeyAndHeaders: mock(async () => ({ ok: true, apiKey: "local-key" })) },
+    sessionManager: { getBranch: () => [], getSessionId: () => "d41bcab6-09fe-4e47-8027-7e2266a34e10" },
+  };
+}
+
+function proxyBinding() {
+  return {
+    scope: "proxy",
+    provider: "cliproxyapi",
+    api: "openai-responses",
+    modelId: "gpt-5.6-sol",
+    endpoint: "http://127.0.0.1:8317/v1/responses",
+    proxyKeyHash: "dba73d3fcb67907054ce8317378a14b30da1b86b75803e9ba66f18efd9bef09e", // gitleaks:allow -- SHA256 of synthetic "local-key" fixture
+  };
+}
+
 function completeRuntime(): CodexCompactionRuntime {
   return {
     remoteCompact: mock(async () => undefined) as CodexCompactionRuntime["remoteCompact"],

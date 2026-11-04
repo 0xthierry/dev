@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import {
   codexAutoCompactionThreshold,
   codexReasoningEffort,
   extractChatGptAccountId,
   isCodexResponsesModel,
   resolveCodexResponsesUrl,
+  resolveCompactionUrl,
 } from "./model";
 import type { CodexModel } from "./types";
 
@@ -31,6 +33,30 @@ describe("codex model helpers", () => {
 
     // Assert
     expect(supported).toEqual([true, true, true, true]);
+  });
+
+  test("accepts only the CLIProxyAPI Responses combination beyond direct Codex", () => {
+    // Arrange
+    const proxy: CodexModel = {
+      ...model,
+      provider: "cliproxyapi",
+      api: "openai-responses",
+      baseUrl: "http://127.0.0.1:8317/v1/",
+    };
+    const arbitraryOpenAI: Model<Api> = { ...proxy, provider: "openai" };
+    const proxyChat: Model<Api> = { ...proxy, api: "openai-completions" };
+
+    // Act
+    const accepted = isCodexResponsesModel(proxy);
+    const rejectedProvider = isCodexResponsesModel(arbitraryOpenAI);
+    const rejectedApi = isCodexResponsesModel(proxyChat);
+    const endpoint = resolveCompactionUrl(proxy);
+
+    // Assert
+    expect(accepted).toBe(true);
+    expect(rejectedProvider).toBe(false);
+    expect(rejectedApi).toBe(false);
+    expect(endpoint).toBe("http://127.0.0.1:8317/v1/responses");
   });
 
   test("derives the native Codex 90% auto-compaction threshold from the model context window", () => {

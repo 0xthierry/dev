@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
+import { resolveCodexIdentity } from "./binding";
 import {
   buildCodexCompactionBody,
   type CodexClientRuntime,
@@ -6,7 +7,22 @@ import {
   parseCompactionStream,
   parseSseEvents,
 } from "./codex-client";
-import type { CodexModel, CodexRequestOptions } from "./types";
+import type { CodexIdentity, CodexModel, CodexRequestOptions } from "./types";
+
+function directIdentity(): CodexIdentity {
+  return {
+    kind: "direct",
+    apiKey: "token",
+    accountId: "acct",
+    binding: {
+      provider: "openai-codex",
+      api: "openai-codex-responses",
+      modelId: "gpt-5.6-sol",
+      endpoint: "https://chatgpt.com/backend-api/codex/responses",
+      accountHash: "hash",
+    },
+  };
+}
 
 const originalFetch = globalThis.fetch;
 
@@ -38,8 +54,7 @@ describe("codex client", () => {
     // Act
     const body = buildCodexCompactionBody({
       model,
-      apiKey: "token",
-      accountId: "acct",
+      identity: directIdentity(),
       systemPrompt: "system",
       input,
       tools: [{ type: "function", name: "read", description: "Read files", parameters: {}, strict: false }],
@@ -51,6 +66,79 @@ describe("codex client", () => {
     expect(body.model).toBe("gpt-5.6-sol");
     expect(body.input).toEqual([...input, { type: "compaction_trigger" }]);
     expect(body.prompt_cache_key).toBe("session-abc-123");
+  });
+
+  test("sends proxy compaction through /v1/responses with local bearer auth and the full session route", async () => {
+    // Arrange
+    const proxyModel: CodexModel = {
+      ...model,
+      provider: "cliproxyapi",
+      api: "openai-responses",
+      baseUrl: "http://127.0.0.1:8317/v1/",
+      headers: { "chatgpt-account-id": "must-not-leak", "session-id": "conflicting-route" },
+    };
+    const identity = resolveCodexIdentity(proxyModel, {
+      apiKey: "local-key",
+      headers: { "x-proxy-header": "configured" },
+    });
+    if (!identity) throw new Error("Expected proxy test identity");
+    const sessionId = "d41bcab6-09fe-4e47-8027-7e2266a34e10";
+    const fetchMock = mock(async (_url: string, _init?: RequestInit) => completedResponse());
+    const options = requestOptions({ model: proxyModel, identity, sessionId });
+
+    // Act
+    const result = await fetchCodexCompaction(options, clientRuntime(fetchMock));
+
+    // Assert
+    expect(result).toMatchObject({ ok: true, item: { type: "compaction", encrypted_content: "enc", id: "cmp_1" } });
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe("http://127.0.0.1:8317/v1/responses");
+    expect(init?.method).toBe("POST");
+    const headers = new Headers(init?.headers);
+    expect(headers.get("authorization")).toBe("Bearer local-key");
+    expect(headers.get("chatgpt-account-id")).toBeNull();
+    expect(headers.get("session_id")).toBe(sessionId);
+    expect(headers.get("session-id")).toBeNull();
+    expect(headers.get("x-proxy-header")).toBe("configured");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      model: "gpt-5.6-sol",
+      store: false,
+      stream: true,
+      instructions: "system",
+      input: [{ role: "user", content: "remember alpha" }, { type: "compaction_trigger" }],
+      text: { verbosity: "low" },
+      include: ["reasoning.encrypted_content"],
+      tool_choice: "auto",
+      parallel_tool_calls: true,
+      prompt_cache_key: sessionId,
+      reasoning: { effort: "low", summary: "auto" },
+    });
+  });
+
+  test("uses the same bounded transport retry path for proxy requests", async () => {
+    // Arrange
+    const proxyModel: CodexModel = {
+      ...model,
+      provider: "cliproxyapi",
+      api: "openai-responses",
+      baseUrl: "http://127.0.0.1:8317/v1",
+    };
+    const identity = resolveCodexIdentity(proxyModel, { apiKey: "local-key" });
+    if (!identity) throw new Error("Expected proxy test identity");
+    const fetchMock = mock(async (_url: string, _init?: RequestInit) => completedResponse());
+    fetchMock.mockImplementationOnce(async () => new Response("upstream unavailable", { status: 503 }));
+
+    // Act
+    const result = await fetchCodexCompaction(
+      requestOptions({ model: proxyModel, identity }),
+      clientRuntime(fetchMock),
+    );
+
+    // Assert
+    expect(result).toMatchObject({ ok: true, item: { type: "compaction", encrypted_content: "enc", id: "cmp_1" } });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://127.0.0.1:8317/v1/responses");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://127.0.0.1:8317/v1/responses");
   });
 
   test("parses LF and CRLF SSE events", () => {
@@ -195,9 +283,7 @@ describe("codex client", () => {
     // Act
     await fetchCodexCompaction({
       model: modelWithHeaders,
-      apiKey: "token",
-      headers: { "x-keep": "resolved-value", "x-remove": null },
-      accountId: "acct",
+      identity: { ...directIdentity(), headers: { "x-keep": "resolved-value", "x-remove": null } },
       systemPrompt: "system",
       input: [{ role: "user", content: "remember alpha" }],
       thinkingLevel: "low",
@@ -227,6 +313,10 @@ describe("codex client", () => {
       responseId: "resp_1",
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe("https://chatgpt.com/backend-api/codex/responses");
+    expect(new Headers(init?.headers).get("chatgpt-account-id")).toBe("acct");
+    expect(new Headers(init?.headers).get("authorization")).toBe("Bearer token");
     expect(sleep).not.toHaveBeenCalled();
   });
 
@@ -372,8 +462,7 @@ describe("codex client", () => {
 function requestOptions(overrides: Partial<CodexRequestOptions> = {}): CodexRequestOptions {
   return {
     model,
-    apiKey: "token",
-    accountId: "acct",
+    identity: directIdentity(),
     systemPrompt: "system",
     input: [{ role: "user", content: "remember alpha" }],
     thinkingLevel: "low",

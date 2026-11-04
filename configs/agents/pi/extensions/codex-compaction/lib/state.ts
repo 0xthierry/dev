@@ -4,6 +4,7 @@ import {
   CODEX_COMPACTION_DETAILS_VERSION,
   CODEX_COMPACTION_DETAILS_VERSION_V1,
   CODEX_COMPACTION_SENTINEL_PREFIX,
+  type CodexBinding,
   type CodexCompactionInvalidation,
   type CodexCompactionItem,
   type CodexCompactionRecord,
@@ -128,13 +129,8 @@ export function isCodexCompactionItem(value: unknown): value is CodexCompactionI
 }
 
 function parseV2(value: JsonObject): CodexCompactionV2 | undefined {
-  const binding = value.binding;
-  if (!isJsonObject(binding)) return undefined;
-  if (typeof binding.provider !== "string") return undefined;
-  if (typeof binding.api !== "string") return undefined;
-  if (typeof binding.modelId !== "string") return undefined;
-  if (typeof binding.endpoint !== "string") return undefined;
-  if (typeof binding.accountHash !== "string") return undefined;
+  const binding = parseBinding(value.binding);
+  if (!binding) return undefined;
   if (!Array.isArray(value.userPrefix)) return undefined;
   if (typeof value.firstKeptEntryId !== "string") return undefined;
   if (typeof value.tokensBefore !== "number") return undefined;
@@ -147,13 +143,7 @@ function parseV2(value: JsonObject): CodexCompactionV2 | undefined {
 
   return {
     version: CODEX_COMPACTION_DETAILS_VERSION,
-    binding: {
-      provider: binding.provider,
-      api: binding.api,
-      modelId: binding.modelId,
-      endpoint: binding.endpoint,
-      accountHash: binding.accountHash,
-    },
+    binding,
     userPrefix,
     artifact,
     firstKeptEntryId: value.firstKeptEntryId,
@@ -171,6 +161,23 @@ function parseV2(value: JsonObject): CodexCompactionV2 | undefined {
         }
       : undefined,
   };
+}
+
+function parseBinding(value: unknown): CodexBinding | undefined {
+  if (!isJsonObject(value)) return undefined;
+  if (typeof value.provider !== "string" || typeof value.api !== "string") return undefined;
+  if (typeof value.modelId !== "string" || typeof value.endpoint !== "string") return undefined;
+  const target = { provider: value.provider, api: value.api, modelId: value.modelId, endpoint: value.endpoint };
+  if (value.scope === "proxy") {
+    if (value.provider !== "cliproxyapi" || value.api !== "openai-responses") return undefined;
+    if (typeof value.proxyKeyHash !== "string" || !value.proxyKeyHash || value.accountHash !== undefined)
+      return undefined;
+    return { ...target, scope: "proxy", proxyKeyHash: value.proxyKeyHash };
+  }
+  if (value.scope !== undefined || value.proxyKeyHash !== undefined || typeof value.accountHash !== "string") {
+    return undefined;
+  }
+  return { ...target, accountHash: value.accountHash };
 }
 
 function parseV1(value: JsonObject): CodexCompactionV1 | undefined {
@@ -227,11 +234,13 @@ function assistantErrorMessage(entry: SessionEntry): string | undefined {
   if (entry.type !== "message") return undefined;
 
   const message = entry.message as
-    | { role?: unknown; api?: unknown; stopReason?: unknown; errorMessage?: unknown }
+    | { role?: unknown; provider?: unknown; api?: unknown; stopReason?: unknown; errorMessage?: unknown }
     | undefined;
-  if (message?.role !== "assistant" || message.api !== "openai-codex-responses" || message.stopReason !== "error") {
-    return undefined;
-  }
+  if (message?.role !== "assistant" || message.stopReason !== "error") return undefined;
+  const supported =
+    message.api === "openai-codex-responses" ||
+    (message.provider === "cliproxyapi" && message.api === "openai-responses");
+  if (!supported) return undefined;
   return typeof message.errorMessage === "string" ? message.errorMessage : undefined;
 }
 
