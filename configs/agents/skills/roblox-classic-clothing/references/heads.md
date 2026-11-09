@@ -4,7 +4,7 @@ A character's head is four layers, each made its own way:
 
 | Layer | How | Tools |
 |---|---|---|
-| **The head** | Roblox's default head without its eye discs, as our own mesh | `scripts/heads/npc_head.py` |
+| **The head** | Roblox's native classic mesh, retaining the rig's head size and attachments | `H.npcHead` in `scripts/heads/lab/HeadLab.luau` |
 | **The face** | A flat image (the features on transparency) projected onto the head's front | `codex-image` with `prompts/face.md` |
 | **Pieces** (hair, hats, masks, bands, beards) | Painted onto a render of our head from a reference, made 3D by Tripo, fitted and checked | `npc_head.py render`, `codex-image`, Tripo, `fit_on_head.py` |
 | **Catalog items** | Marketplace hair, hats and face pieces by ID, through `HumanoidDescription` | `H.search` in the lab |
@@ -18,24 +18,27 @@ All tools run from the game repository's root; outputs go to `build/heads-lab/` 
 
 ## The head
 
-**Why our own mesh:**
-- **Roblox's default R15 head is a Dynamic Head.** A `Decal` on it follows the mesh's UVs and shows tiny. Setting our face as its `TextureContent` works, but its eyes are **separate discs floating about 0.005 studs in front of a closed shell**, and they show through any face as two ovals. No `FaceControls` pose moves them behind the shell, and Studio doesn't expose the head's bones.
-- **Roblox publishes that head** in its dynamic-head reference file `BlockyCharacter.fbx`, as `Head_Geo`. It matches the head in Studio to within 0.01 studs. `npc_head.py` keeps its shell and leaves out the eye discs, teeth and tongue.
-- **The lip line:** the shell's lips close over a mouth inside the head, and smooth shading draws that slit as a line across faces. So the outer surface is resampled: a cube of 18 × 18 quads per side cast onto it from outside, about 3,900 triangles.
-- **The size:** it is scaled to the rig's head as it is in Studio, `Size` (1.159 × 1.182 × 1.161 studs under the default `BodyTypeScale` 0.3), not `OriginalSize`.
+Use **Roblox's native classic head with a static face** by default. This is the owner's chosen workflow. The built-in URI is `rbxasset://avatar/heads/head.mesh` (two slashes). Load it with `AssetService:CreateMeshPartAsync(Content.fromUri(...))`, then apply it to the existing `Head` with `ApplyMesh`. The bundled `H.npcHead` does this, removes old face visuals and `FaceControls`, and sets the flat face through `TextureContent`. Keep the original head's size, neck joint and attachments. Read dimensions from the actual rig; the tested default R15 rig had Size approximately 1.159 × 1.182 × 1.161 studs, but that is not a universal size.
 
-**Get it:**
+**Classic and dynamic are different:** the default R15 head created in our test was dynamic. A dynamic head supports rigged facial movement through `FaceControls`; the classic head uses a static image. Change a classic expression by swapping that image. If the owner requests facial animation, use a compatible dynamic-head workflow explicitly; applying a flat anime texture does not create a facial rig.
+
+For an explicit dynamic-head request, read [dynamic heads](dynamic-heads.md). It covers the Sukuna experiment from automatic-conversion attempts through manual rigging and refinement, including mouth topology, crisp artwork, pose export, Play restoration, and remaining limits. The native classic head with a static face remains the standard path described here.
+
+**Verified evidence (2026-11-09):** native classic heads with Yuji and Sukuna face textures and existing hair rendered in desktop Studio Edit and Play, with the neck and accessory constraints connected. Freezing the tested dynamic head with `StaticFacialAnimation` or removing `FaceControls` left its raised eye geometry visible. An EditableImage-backed Decal stayed blank in this test, while `MeshPart.TextureContent` worked; do not generalize that result to all decals or heads. Mobile, published multiplayer, other character fits and player morphs need their own checks.
+
+Do not silently fall back to the reconstructed head if the native mesh fails to load. Report the failure and investigate it. Roblox's [DevForum report on built-in mesh loading](https://devforum.roblox.com/t/meshcontentprovider-consistently-fails-to-load-core-avatar-meshes-on-some-mobile-devices/4614855) documents the two-slash URI fix. See also [dynamic head components](https://create.roblox.com/docs/avatar/dynamic-heads), [the migration announcement](https://devforum.roblox.com/t/completing-the-dynamic-head-migration/4301387), and [a community classic-head implementation](https://devforum.roblox.com/t/rdh-force-classic-heads-and-faces/4449916). Community examples establish implementation patterns, not the internals of any particular game.
+
+### Blender fitting proxy
+
+`npc_head.py` and `fit_on_head.py` still use a reconstructed shell from Roblox's `BlockyCharacter.fbx`. Keep it only as a provisional reference for painting and fitting hair; it is not the native classic mesh and is not the shipped head. The proxy's intersection check cannot prove a fit on the native head. Check the actual native head from the front, side, back and below in Studio and adjust any clipping or gaps before accepting the piece.
+
+Fetch the reference only when that Blender fitting workflow is needed:
 
 ```bash
 curl --create-dirs -o build/heads-lab/reference/BlockyCharacter.fbx https://prod.docsiteassets.roblox.com/assets/avatar/dynamic-heads/reference-files/BlockyCharacter.fbx
 ```
 
-```bash
-blender -b --factory-startup --python ~/.agents/skills/roblox-classic-clothing/scripts/heads/npc_head.py -- export build/heads-lab/npchead.json
-```
-
-- **On a rig:** `MeshPart:ApplyMesh` swaps the rig's head for it. That keeps the neck joint, the attachments and the size; then the face goes on as `TextureContent`.
-- **The terms:** the reference file's page says only that the files are "available for your use", with no explicit license. Before uploading a mesh made from it, the owner decides.
+Do not run `npc_head.py export` or pack `npchead.json` for the native-head runtime. Existing reconstructed-head assets remain historical references; do not migrate existing approved characters without checking each fit.
 
 ## Faces
 
@@ -51,9 +54,9 @@ bun ~/.agents/skills/codex-image/scripts/codex-image.ts --prompt-file face.md --
 
 ## Pieces from any reference
 
-The method that fits best: have an image model paint the piece **onto a render of our exact head**. Then Tripo makes head and piece into one model, and the fitter cuts the AI's head away and puts the piece on ours. A piece generated without a head never fits: the generator invents a head shape for its hollow.
+The method that fits best: have an image model paint the piece **onto a head reference render**. Then Tripo makes head and piece into one model, and the fitter cuts the AI's head away and fits the piece around the proxy. A piece generated without a head often has a mismatched hollow. The final native-head fit must be checked in Studio.
 
-1. **The reference render**, our head on a short neck with a simple face. The face matters: without it, a band or mask lands off the eyes.
+1. **The reference render**, the fitting proxy on a short neck with a simple face. The face matters: without it, a band or mask lands off the eyes.
 
    ```bash
    blender -b --factory-startup --python ~/.agents/skills/roblox-classic-clothing/scripts/heads/npc_head.py -- render build/heads-lab/ref/npc-head.png
@@ -119,7 +122,7 @@ The Studio MCP's code runner can't reach localhost, so the data travels inside t
 2. Pack the data and build the place:
 
    ```bash
-   uv run --no-project --with pillow --with numpy python -I ~/.agents/skills/roblox-classic-clothing/scripts/heads/pack.py build/heads-lab/npchead.json build/heads-lab/pieces.json build/heads-lab/faces/*.png
+   uv run --no-project --with pillow --with numpy python -I ~/.agents/skills/roblox-classic-clothing/scripts/heads/pack.py build/heads-lab/pieces.json build/heads-lab/faces/*.png
    ```
 
    ```bash
@@ -132,7 +135,7 @@ The Studio MCP's code runner can't reach localhost, so the data travels inside t
    local H = require(game.ReplicatedStorage.HeadLab)
    H.npc("Master", CFrame.new(0, 4, 0) * CFrame.Angles(0, math.pi, 0), {
    	skin = Color3.fromRGB(232, 190, 160),
-   	face = "<face name>",            -- our NPC head with this face
+       face = "<face name>",            -- native classic head with this static face
    	pieces = { "<Name>", "<Name>Outline" }, -- fitted pieces; pieceTexture = false for their own textures
    	hair = "<catalog id>",           -- or catalog items
    	shirt = <template image id>, pants = <template image id>,
@@ -141,7 +144,7 @@ The Studio MCP's code runner can't reach localhost, so the data travels inside t
 
 **What the lab handles:**
 - **Accessory scaling:** the Humanoid scales every accessory by the head's `Size / OriginalSize`. Pieces fitted to the head as it is would come out about 3% small, so `HeadLab` authors them for the unscaled head and lets that scaling bring them back.
-- **Play:** an `EditableMesh` or `EditableImage` lives only in the session that made it, so in Play the heads and pieces arrive as empty parts (grey boxes). They carry attributes, and `HeadLabClient` rebuilds them on every client. It rebuilds a head again whenever the server sets its mesh or texture, which happens when a character's appearance finishes loading.
+- **Play:** the native head mesh uses a built-in URI and does not need EditableMesh reconstruction. Preview faces and generated hair still use session-local EditableImage/EditableMesh objects. `HeadLabClient` restores them from packed data on each client, including attributes that arrive after the instance. A remote object's `SourceType == Object` alone does not prove that its mesh/image is usable locally. Recheck native head, face and hair after appearance loading, respawn and morphing; do not claim those paths work from an NPC screenshot alone.
 - **Turning into an NPC:** `HeadLabMorph` puts a pad in front of each NPC, and a click on the NPC works too. Either one respawns the player in place with the NPC's description (`Player:LoadCharacterWithHumanoidDescription`), then copies its clothes, pieces and face. The "Me" pad gives the player's own avatar back.
 - **The Studio MCP** connects at most about eight places. Close old lab places, and run Play tests in the newest one.
 
@@ -149,5 +152,6 @@ The Studio MCP's code runner can't reach localhost, so the data travels inside t
 
 A lab NPC is built from data inside the place. A game needs real assets:
 - **Faces and textures:** upload them as `Image` assets (the `roblox-open-cloud-api` skill, with the owner's OK) and set them as the head's and pieces' texture IDs.
-- **The head and pieces:** upload them as meshes through Studio's 3D Importer, or as Open Cloud `Model` uploads once that route is calibrated (that skill's rule). Wear them with the standard accessory system: `Accessory` + `Handle` + the attachment the piece was fitted to.
+- **The native head:** use the bundled URI; no reconstructed-head upload is needed.
+- **Custom pieces:** upload them as meshes through Studio's 3D Importer, or as Open Cloud `Model` uploads once that route is calibrated (that skill's rule). Wear them with the standard accessory system: `Accessory` + `Handle` + the attachment the piece was fitted to.
 - **Record every ID** where the game keeps asset IDs, and commit the upload lock.

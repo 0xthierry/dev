@@ -1,11 +1,11 @@
 --!nocheck
--- NPC heads in Studio, without uploading: our face on our NPC head (Roblox's default head without its eyes), our own
+-- NPC heads in Studio, without uploading: our static face on Roblox's native classic head, our own
 -- mesh pieces (beard, bun...) and catalog hair or face accessories. Built in edit mode; in Play, HeadLabClient rebuilds them on each client. In the
 -- HeadsLab place (heads-lab.project.json) it is the ModuleScript ReplicatedStorage.HeadLab:
 -- `local H = require(game.ReplicatedStorage.HeadLab)`; ReplicatedStorage.HeadLabData holds what pack.py wrote.
 -- It also sets _G.HeadLab:
 --   H.face(name, skin?)                    EditableImage from HeadLabData.<name> (a packed face), baked over skin
---   H.npcHead(head, face)                  the head becomes our NPC head (Roblox's head without its eyes), face on it
+--   H.npcHead(head, face)                  native classic head, preserving the rig's size, neck and attachments
 --   H.meshAccessory(model, name, tex?)     an Accessory from HeadLabData.pieces[name], on its attachment; textured with
 --                                          tex (default: H.strands in the piece's colour; false: plain colour for metal
 --                                          or cloth), UVs by a flat front projection
@@ -132,32 +132,25 @@ local function findPiece(name: string)
 	error("no piece " .. name)
 end
 
--- Our NPC head (npc_head.py): Roblox's default head without its eyes, packed as the piece "NpcHead" (per-corner
--- vertices, normals and UVs in head space, the head's size). Its front takes the face image by a flat projection.
-local function npcHeadMesh(): MeshPart
-	local p = findPiece("NpcHead")
-	local v, n, uv = p.v, p.n, p.uv
-	local em = AssetService:CreateEditableMesh()
-	local vid, nid, uid = {}, {}, {}
-	for i = 1, #v, 3 do
-		local k = #vid + 1
-		vid[k] = em:AddVertex(Vector3.new(v[i], v[i + 1], v[i + 2]))
-		nid[k] = em:AddNormal(Vector3.new(n[i], n[i + 1], n[i + 2]))
-		uid[k] = em:AddUV(Vector2.new(uv[2 * k - 1], uv[2 * k]))
-	end
-	for i = 1, #vid, 3 do
-		local f = em:AddTriangle(vid[i], vid[i + 1], vid[i + 2])
-		em:SetFaceNormals(f, { nid[i], nid[i + 1], nid[i + 2] })
-		em:SetFaceUVs(f, { uid[i], uid[i + 1], uid[i + 2] })
-	end
-	return AssetService:CreateMeshPartAsync(Content.fromObject(em))
-end
+-- Native Roblox classic geometry; no reconstructed head data or upload required.
+H.NativeHeadUri = "rbxasset://avatar/heads/head.mesh"
+local restoredFaces = setmetatable({}, { __mode = "k" })
+local restoredPieces = setmetatable({}, { __mode = "k" })
 
 function H.npcHead(head: MeshPart, face: EditableImage)
-	local tmp = npcHeadMesh()
-	head:ApplyMesh(tmp) -- keeps the head's joints, attachments and size
-	tmp:Destroy()
-	head.TextureContent = Content.fromObject(face)
+ if head.MeshId ~= H.NativeHeadUri then
+  local size, cf = head.Size, head.CFrame
+  local tmp = AssetService:CreateMeshPartAsync(Content.fromUri(H.NativeHeadUri))
+  head:ApplyMesh(tmp)
+  tmp:Destroy()
+  head.Size, head.CFrame = size, cf
+ end
+ for _, child in head:GetChildren() do
+  if child:IsA("FaceControls") or child:IsA("SurfaceAppearance") or child:IsA("Decal") then
+   child:Destroy()
+  end
+ end
+ head.TextureContent = Content.fromObject(face)
 end
 
 -- the head's scale: the Humanoid scales accessories by Size / OriginalSize (under 1 with BodyTypeScale), so pieces are
@@ -234,21 +227,28 @@ function H.meshAccessory(model: Model, name: string, tex: (EditableImage | boole
 	return acc
 end
 
--- Heads and pieces built in edit mode come up empty in Play: an EditableMesh or EditableImage lives only in the
--- session that made it, so Play's copy of the place has pieces as plain boxes and heads without our face. This rebuilds one from the attributes
--- H.npc and H.meshAccessory left on it (HeadLabClient calls it on every client).
+-- Restore session-local preview content; the native head geometry itself uses a URI.
 function H.rebuild(part: MeshPart)
-	local face, piece = part:GetAttribute("HeadLabFace"), part:GetAttribute("HeadLabPiece")
-	local ours = Enum.ContentSourceType.Object
-	if face and (part.MeshContent.SourceType ~= ours or part.TextureContent.SourceType ~= ours) then
-		H.npcHead(part, H.face(face, part:GetAttribute("HeadLabSkin")))
-	elseif piece and part.MeshContent.SourceType == Enum.ContentSourceType.None then
-		local p = findPiece(piece)
-		local tmp = pieceMesh(p, headScale(part:FindFirstAncestorOfClass("Model")))
-		part:ApplyMesh(tmp) -- keeps the part's size, which the Humanoid already scaled
-		tmp:Destroy()
-		pieceTexture(part, piece, p, part:GetAttribute("HeadLabTexture"))
-	end
+ local face, piece = part:GetAttribute("HeadLabFace"), part:GetAttribute("HeadLabPiece")
+ if face then
+  local skin = part:GetAttribute("HeadLabSkin")
+  if not skin then return end -- attributes may arrive separately
+  local previous = restoredFaces[part]
+  if part.MeshId ~= H.NativeHeadUri or not previous or previous.face ~= face
+   or previous.skin ~= skin or previous.content ~= part.TextureContent then
+   H.npcHead(part, H.face(face, skin))
+   restoredFaces[part] = { face = face, skin = skin, content = part.TextureContent }
+  end
+ elseif piece and restoredPieces[part] ~= piece then
+  local kind = part:GetAttribute("HeadLabTexture")
+  if not kind then return end
+  local p = findPiece(piece)
+  local tmp = pieceMesh(p, headScale(part:FindFirstAncestorOfClass("Model")))
+  part:ApplyMesh(tmp)
+  tmp:Destroy()
+  pieceTexture(part, piece, p, kind)
+  restoredPieces[part] = piece
+ end
 end
 
 function H.npc(name: string, cframe: CFrame, opts)
@@ -278,8 +278,8 @@ function H.npc(name: string, cframe: CFrame, opts)
 	end
 	if opts.face then
 		H.npcHead(m.Head, H.face(opts.face, c))
-		m.Head:SetAttribute("HeadLabFace", opts.face) -- for H.rebuild in Play
 		m.Head:SetAttribute("HeadLabSkin", c)
+		m.Head:SetAttribute("HeadLabFace", opts.face) -- for H.rebuild in Play
 	end
 	for _, piece in opts.pieces or {} do
 		H.meshAccessory(m, piece, opts.pieceTexture)

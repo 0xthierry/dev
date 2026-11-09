@@ -4,9 +4,9 @@ description: >-
   Make Roblox classic clothing (Shirt and Pants templates, 585x559 PNG) for any game: lay the outfit out in code on the
   R15 template, bake painted depth into it (the "3D effect": light, occlusion, seams, folds, raised pieces), have an
   image model repaint the material on aligned guide sheets, check the alignment, build the templates, preview them on
-  the body in Studio without uploading, and upload them with Open Cloud. Also NPC heads: a head that is Roblox's
-  default head without its eye discs, faces as flat textures, and head pieces (hair, hats, masks, bands) made from any
-  reference supplied or described by the owner: painted onto a render of the head, made 3D by Tripo, fitted and paint-checked, then
+  the body in Studio without uploading, and upload them with Open Cloud. Also NPC heads: Roblox's native classic
+  head with static faces as flat textures by default, custom dynamic heads when facial animation is explicitly requested,
+  and head pieces (hair, hats, masks, bands) from owner references: painted onto a head render, made 3D by Tripo, fitted and paint-checked, then
   previewed and worn (morph pads) in Studio. Use when a task asks for game outfits, uniforms, NPC clothes or heads,
   faces, hair or head pieces for characters, shop clothing, a shirt or pants template, or more content in that style.
   Not for layered clothing or publishing items to the avatar marketplace.
@@ -75,15 +75,15 @@ Several outfits: pass several folders to any stage (`clothing.py check outfits/*
 Encourage recognizable franchise characters, especially anime characters familiar to the game's child audience, when they fit the game's theme. The owner's design goal is to strengthen recognition and the fantasy of playing as familiar characters. Preserve the chosen character's signature hair, face markings, colours and accessories when adapting it to Roblox; follow an explicit request for an original design when given.
 
 Clothes dress the body; the head is its own work. Read [heads](references/heads.md) first. In short:
-1. **The head:** fetch Roblox's reference file once, then `scripts/heads/npc_head.py export`. That is Roblox's default head without the eye discs that show through any face.
+1. **The head:** use Roblox's native classic mesh (`rbxasset://avatar/heads/head.mesh`) with a static face by default. `H.npcHead` applies it to the existing rig head, preserving size, neck and attachments. Do not reconstruct or upload a replacement head for this path. **Only when facial animation is explicitly requested**, read [dynamic heads](references/dynamic-heads.md) for the manual rigging, original-artwork refinement, Studio integration, and verified gotchas. That path preserves or authors a compatible facial rig; it does not call `H.npcHead` on the dynamic head.
 2. **Faces:** one transparent image per expression, from [`prompts/face.md`](scripts/heads/prompts/face.md) (eyes at 42% of the height, mouth at 68%).
 3. **Pieces from the owner's reference** (concept art, a sketch, a photo, a character, a description):
-   1. `npc_head.py render` makes a render of our head with a simple face.
+   1. `npc_head.py render` makes a fitting-proxy render with a simple face. It is not the exact native classic mesh; check the final fit on the native head in Studio.
    2. `codex-image` paints the piece onto it from the reference, with [`prompts/piece-on-head.md`](scripts/heads/prompts/piece-on-head.md).
    3. Tripo makes it 3D (HD model, 20,000 polygons).
    4. `scripts/heads/fit_on_head.py` fits it to our head and runs the paint check. A clean run ends at 0 unpainted faces and 0 specks.
 4. **Preview, Play and morph:** copy [`scripts/heads/lab/`](scripts/heads/lab/) into the game repository, `pack.py`, `rojo build`, then `H.npc(...)` in edit mode. In Play, a pad in front of each NPC turns the player into it.
-5. **Into the game:** upload faces as Images and the head and pieces as meshes, only with the owner's OK.
+5. **Into the game:** upload faces as Images and custom pieces as meshes only with the owner's OK. The native head needs no upload.
 
 ## Rules that hold in every game
 

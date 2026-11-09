@@ -1,8 +1,8 @@
 -- HeadsLab in Play: turn into any NPC. A pad in front of each NPC in workspace.HeadLab (or a click on the NPC) respawns
 -- the player where they stand as that NPC: its body and catalog accessories (Player:LoadCharacterWithHumanoidDescription
 -- with the NPC's applied description), then its clothes, our pieces and our NPC head with its face. The "Me" pad gives
--- the player's own avatar back. Our head and pieces have no mesh on the server in Play (see HeadLab.rebuild): the copies
--- carry their attributes and every client's HeadLabClient rebuilds them.
+-- the player's own avatar back. The native head uses a built-in URI. Session-local face textures and generated pieces
+-- carry attributes so each client can restore them (see HeadLab.rebuild).
 local Players = game:GetService("Players")
 
 local folder = workspace:WaitForChild("HeadLab")
