@@ -34,6 +34,23 @@ Paint them roughly in this order on every face. Depths are fractions of brightne
 - **Arms:** a few long folds down the upper arm; arcs at the inside of the elbow on the front face (row ~58); short creases piled above the cuff.
 - **Legs:** arcs at the knee on the front (row ~60) and behind it on the back (row ~66); short creases above the hem or shoe; whiskers from the crotch on jeans (front face, inner edge, rows 10–25).
 
+## Muscles and see-through skin
+
+Bare skin (a shirtless fighter, bare arms) or a tight top can carry muscle definition. `shading.py` draws it per kind of face, on the labels you pass:
+
+- **`muscles_torso(f, key, strength, labs)`:** the pecs, sternum, six-pack, serratus, obliques and V-line on the front; the shoulder blades, spine, lats and lower back on the back; the ribs on the sides.
+- **`muscles_arm(f, key, strength, labs)`:** the deltoid, biceps, elbow and forearm on the front; the triceps on the back; the groove between them on the outer side.
+- **`muscles_leg(f, key, strength, labs)`:** the quads, kneecap and shin on the front; the hamstrings and calf on the back.
+
+`strength` scales every depth: about 0.4 lean, 0.7 athletic, 1.0 ripped. A tier ladder can step it up.
+
+**On skin, use a `SKIN` label** ([outfit file](outfit-file.md)). Classic clothing blends semi-transparent pixels over the body's own skin colour: tested in Studio with a catalog "Abs" T-shirt on three skin tones.
+- The engine turns a `SKIN` area into black at alpha (1 − brightness ratio) where it is darker than its median, an exact multiply over any skin, and white where it is lighter.
+- One template therefore works for every skin tone. `views.png` shows it on a light and a dark tone.
+- The repaint path works too: the guide shows the area in its reference tone, the model paints anatomy on it, and the build converts the painted skin into the same see-through shading.
+
+**On a tight top** (cloth, not skin), call the muscle functions with the cloth's label: the folds become muscle shapes under the cloth.
+
 ## Judging the shading
 
 - **Look at `guides/views.png` and the guide sheets first.** Every fold, seam and shadow the repaint should keep must already be there, at its place. The model repaints; it doesn't place.

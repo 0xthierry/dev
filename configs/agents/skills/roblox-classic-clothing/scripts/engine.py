@@ -60,6 +60,7 @@ class Style:
         self.code = ()
         self.grey_fill = "edges"
         self.register_legs = ()
+        self.skin = ()          # see-through skin labels: only their light and shade reach the template
 
 
 S = Style()
@@ -82,6 +83,7 @@ def configure(outfit):
     S.normalize = ids(outfit.NORMALIZE) if hasattr(outfit, "NORMALIZE") else None
     S.gain_floor = {ids(n)[0]: v for n, v in getattr(outfit, "GAIN_FLOOR", {}).items()}
     S.code = ids(getattr(outfit, "CODE_LABELS", ())) or ()
+    S.skin = ids(getattr(outfit, "SKIN", ())) or ()
     S.grey_fill = getattr(outfit, "GREY_FILL", "edges")
     reg = getattr(outfit, "REGISTER_LEGS", ())
     S.register_legs = (ids(reg[0])[0], ids(reg[1])[0], float(reg[2])) if reg else ()
@@ -309,6 +311,8 @@ def direct(ai, lab, proc):
     repaint colour shaded like the code."""
     out = ai.copy()
     for l in S.normalize:
+        if l in S.skin:
+            continue
         m = lab == l
         if m.sum() < 64:
             continue
@@ -420,6 +424,28 @@ def ai_crops(ai_dir):
     return crops
 
 
+def lum(c):
+    return c[..., 0] * 0.2126 + c[..., 1] * 0.7152 + c[..., 2] * 0.0722
+
+
+def see_through(rgba, lab):
+    """SKIN labels become translucent light and shade over the wearer's own skin, whatever its tone. Each pixel's
+    brightness against its area's median becomes black at alpha 1 - ratio where darker (an exact multiply over any
+    skin) or white where lighter (a screen, scaled for the label's reference tone)."""
+    out = rgba.copy()
+    for l in S.skin:
+        m = lab == l
+        if not m.any():
+            continue
+        ratio = lum(rgba[..., :3][m]) / max(float(np.median(lum(rgba[..., :3][m]))), 1e-3)
+        ref = float(lum(S.palette[l]))
+        dark = ratio < 1
+        out[..., :3][m] = np.where(dark[:, None], 0.0, 1.0)
+        out[..., 3][m] = np.where(dark, np.clip(1 - ratio, 0, 0.85),
+                                  np.clip((ratio - 1) * ref / max(1 - ref, 1e-3), 0, 0.6))
+    return out
+
+
 # ---- output ----
 def downsample(rgba, factor):
     """Box filter with premultiplied alpha."""
@@ -473,7 +499,7 @@ def mock(out, skin=(234, 184, 146), scale=3):
         p = f"{out}/{g}.png"
         tpl[g] = np.asarray(Image.open(p).convert("RGBA"), np.float32) / 255 if os.path.exists(p) else None
 
-    def face(part, key, layers):
+    def face(part, key, layers, skin):
         x, y, w, h = REGIONS[part][key]
         px = np.zeros((h, w, 3), np.float32) + np.array(skin, np.float32) / 255
         for g in layers:
@@ -483,28 +509,35 @@ def mock(out, skin=(234, 184, 146), scale=3):
         return px
 
     bg = 0.18
+    rows = []
+    for tone in [skin] + ([(120, 78, 54)] if S.skin else []):  # see-through skin: also on a dark skin tone
+        rows.append(_views(face, tone, bg))
+    sheet = np.concatenate(rows, axis=0)
+    im = Image.fromarray((np.clip(sheet, 0, 1) * 255 + 0.5).astype(np.uint8), "RGB")
+    im.resize((im.width * scale, im.height * scale), Image.NEAREST).save(f"{out}/views.png")
+
+
+def _views(face, skin, bg):
     views = []
     for view in ("F", "R", "B", "L"):
         if view in "FB":
             canvas = np.full((64 + 128 + 128 + 8, 64 + 128 + 64, 3), bg, np.float32)
             canvas[4:60, 100:156] = np.array(skin, np.float32) / 255  # the head
             arms = ("right", "left") if view == "F" else ("left", "right")  # the viewer's left first
-            canvas[64:192, 0:64] = face(arms[0], view, ("shirt",))
-            canvas[64:192, 64:192] = face("torso", view, ("pants", "shirt"))
-            canvas[64:192, 192:256] = face(arms[1], view, ("shirt",))
-            canvas[192:320, 64:128] = face(arms[0], view, ("pants",))
-            canvas[192:320, 128:192] = face(arms[1], view, ("pants",))
+            canvas[64:192, 0:64] = face(arms[0], view, ("shirt",), skin)
+            canvas[64:192, 64:192] = face("torso", view, ("pants", "shirt"), skin)
+            canvas[64:192, 192:256] = face(arms[1], view, ("shirt",), skin)
+            canvas[192:320, 64:128] = face(arms[0], view, ("pants",), skin)
+            canvas[192:320, 128:192] = face(arms[1], view, ("pants",), skin)
         else:  # a side: the arm's outer face in front of the torso, the leg's outer face below
             side = "right" if view == "R" else "left"
             canvas = np.full((64 + 128 + 128 + 8, 64 + 48, 3), bg, np.float32)
             canvas[4:60, 28:84] = np.array(skin, np.float32) / 255
-            canvas[64:192, 24:88] = face(side, view, ("shirt",))
-            canvas[192:320, 24:88] = face(side, view, ("pants",))
+            canvas[64:192, 24:88] = face(side, view, ("shirt",), skin)
+            canvas[192:320, 24:88] = face(side, view, ("pants",), skin)
         views.append(canvas)
     gap = np.full((views[0].shape[0], 24, 3), bg, np.float32)
-    sheet = np.concatenate([v for pair in zip(views, [gap] * 4) for v in pair][:-1], axis=1)
-    im = Image.fromarray((np.clip(sheet, 0, 1) * 255 + 0.5).astype(np.uint8), "RGB")
-    im.resize((im.width * scale, im.height * scale), Image.NEAREST).save(f"{out}/views.png")
+    return np.concatenate([v for pair in zip(views, [gap] * 4) for v in pair][:-1], axis=1)
 
 
 def build(outfit, out, ai_dir=None, mode="direct", extra_scale=None, sheets=False):
@@ -540,10 +573,12 @@ def build(outfit, out, ai_dir=None, mode="direct", extra_scale=None, sheets=Fals
         src = crops.get(("shirt", "right", "U"))
         if src is not None:
             rendered[("shirt", "left", "U")] = shirt["left"]["U"].render(src[::-1], mode)
+    # the templates take SKIN areas as see-through light and shade; the guide sheets keep them in their reference tone
+    final = {k: see_through(v, labels[k]) for k, v in rendered.items()} if S.skin else rendered
     for n, _ in garments:
-        save(template(n, 1, rendered), f"{out}/{n}.png")
+        save(template(n, 1, final), f"{out}/{n}.png")
         if extra_scale:  # a bigger copy for other uses (a layered carrier's texture); Roblox renders 1x only
-            save(template(n, extra_scale, rendered), f"{out}/{n}@{extra_scale}x.png")
+            save(template(n, extra_scale, final), f"{out}/{n}@{extra_scale}x.png")
     if sheets:
         write_sheets(out, rendered, labels)
     mock(out)

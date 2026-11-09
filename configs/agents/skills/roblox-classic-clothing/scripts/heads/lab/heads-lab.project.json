@@ -1,0 +1,76 @@
+{
+  "name": "HeadsLab",
+  "tree": {
+    "$className": "DataModel",
+    "Workspace": {
+      "$className": "Workspace",
+      "Baseplate": {
+        "$className": "Part",
+        "$properties": {
+          "Anchored": true,
+          "Size": [
+            300,
+            2,
+            300
+          ],
+          "Position": [
+            0,
+            -1,
+            0
+          ],
+          "Color": [
+            0.62,
+            0.64,
+            0.66
+          ],
+          "Material": "SmoothPlastic",
+          "TopSurface": "Smooth"
+        }
+      },
+      "$properties": {
+        "StreamingEnabled": false
+      }
+    },
+    "Lighting": {
+      "$className": "Lighting",
+      "$properties": {
+        "ClockTime": 14.5,
+        "Brightness": 2,
+        "Ambient": [
+          0.45,
+          0.45,
+          0.5
+        ],
+        "OutdoorAmbient": [
+          0.5,
+          0.5,
+          0.55
+        ]
+      }
+    },
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "HeadLabData": {
+        "$path": "../../build/heads-lab/data"
+      },
+      "HeadLab": {
+        "$path": "HeadLab.luau"
+      }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "HeadLabClient": {
+          "$path": "HeadLabClient.client.luau"
+        }
+      }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "HeadLabMorph": {
+        "$path": "HeadLabMorph.server.luau"
+      }
+    }
+  }
+}

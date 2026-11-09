@@ -138,3 +138,101 @@ def wrap_band(f, top, bottom, lab, wave=0.6):
     wavy in the ring coordinate so they meet at every corner; then its bevel."""
     f.band(lambda s: top + wave * np.sin(TAU * 7 * s / f.ring), lambda s: bottom + wave * np.sin(TAU * 5 * s / f.ring + 1.0), lab)
     bevel(f, 0, top + wave, f.w, bottom - wave, labs=lab)
+
+
+# ---- muscles: light and shade for bare skin (a SKIN label) or for a tight top ----
+# strength scales every depth: about 0.4 lean, 0.7 athletic, 1.0 ripped. Coordinates follow the R15 rows: chest rows
+# 12-44, abdomen 46-104 on the torso; deltoid 0-22, upper arm 22-62, forearm 64-108 on the arm (forearm rows 64-85
+# hide under the upper arm at rest); thigh 12-58, knee 58-70, shin and calf 70-104 on the leg.
+def _soft(f, pts, width, blur, dark=0.0, light=0.0, labs=None):
+    """A soft stroke along pts, or a soft round spot `width` across when pts is one point."""
+    if len(pts) > 1:
+        f.stroke(pts, width, blur, dark=dark, light=light, labs=labs)
+        return
+    (x, y), r = pts[0], width / 2
+
+    def draw(d, P):
+        d.ellipse([P([(x - r, y - r)])[0], P([(x + r, y + r)])[0]], fill=255)
+    m = f.only(f.mask(draw, blur), labs)
+    f.shade *= 1 - dark * m
+    f.add += light * m
+
+
+def muscles_torso(f, key, strength=1.0, labs=None):
+    k = strength
+    if key == "F":
+        for side in (-1, 1):  # side -1: the image's left half (the wearer's right)
+            x = lambda d: 64 + side * d
+            # pecs: light on the upper chest, a shadow under each lower edge, the gap at the sternum
+            _soft(f, [(x(10), 24), (x(34), 20), (x(50), 26)], 12, 5, light=0.05 * k, labs=labs)
+            _soft(f, [(x(4), 40), (x(20), 44), (x(40), 42), (x(52), 34)], 2.6, 1.6, dark=0.16 * k, labs=labs)
+            _soft(f, [(x(52), 34), (x(56), 22)], 2.0, 1.4, dark=0.08 * k, labs=labs)  # into the armpit
+            # the six-pack: three blocks a side, a highlight on each, an outer edge curving in at the waist
+            for top in (48, 64, 80):
+                _soft(f, [(x(10), top + 6), (x(12), top + 8)], 6, 3, light=0.05 * k, labs=labs)
+            for row in (63, 79, 95):
+                _soft(f, [(x(2), row), (x(10), row + 1.2), (x(19), row - 0.4)], 1.6, 0.9, dark=0.14 * k, labs=labs)
+            _soft(f, [(x(21), 48), (x(22), 70), (x(20), 92), (x(16), 104)], 1.8, 1.0, dark=0.12 * k, labs=labs)
+            # serratus fingers below the armpit, the oblique, the V at the hips
+            for i in range(3):
+                _soft(f, [(x(40 - i * 2), 46 + i * 7), (x(30 - i * 2), 50 + i * 7)], 1.4, 0.9, dark=0.08 * k, labs=labs)
+            _soft(f, [(x(34), 64), (x(30), 84), (x(26), 100)], 2.0, 1.4, dark=0.06 * k, labs=labs)
+            _soft(f, [(x(24), 98), (x(12), 116), (x(6), 128)], 1.8, 1.1, dark=0.12 * k, labs=labs)
+        _soft(f, [(64, 16), (64, 42)], 1.6, 1.0, dark=0.12 * k, labs=labs)    # sternum
+        _soft(f, [(64, 46), (64, 104)], 1.4, 0.8, dark=0.12 * k, labs=labs)   # the line down the abdomen
+        f.stroke([(64, 99), (64, 101)], 1.6, 0.5, dark=0.25 * k, labs=labs)  # navel
+    elif key == "B":
+        _soft(f, [(64, 4), (64, 122)], 1.8, 1.2, dark=0.12 * k, labs=labs)   # spine groove
+        for side in (-1, 1):
+            x = lambda d: 64 + side * d
+            _soft(f, [(x(8), 10), (x(30), 6)], 10, 5, light=0.04 * k, labs=labs)                    # trapezius
+            _soft(f, [(x(30), 30)], 20, 8, light=0.04 * k, labs=labs)                               # shoulder blade
+            _soft(f, [(x(16), 24), (x(22), 42), (x(36), 48), (x(46), 42)], 3.0, 2.4, dark=0.08 * k, labs=labs)
+            _soft(f, [(x(52), 40), (x(42), 74), (x(26), 96)], 3.0, 2.4, dark=0.07 * k, labs=labs)  # the lat's edge
+            _soft(f, [(x(7), 74), (x(7), 112)], 8, 5, light=0.025 * k, labs=labs)                   # lower back columns
+    elif key in "LR":
+        for i in range(3):  # ribs under the arm
+            _soft(f, [(18, 44 + i * 9), (46, 40 + i * 9)], 1.4, 1.0, dark=0.06 * k, labs=labs)
+
+
+def muscles_arm(f, key, strength=1.0, labs=None):
+    """The right arm's faces (the left arm is its mirror)."""
+    k = strength
+    if key in "FBR":  # the deltoid's cap and the shadow under it
+        _soft(f, [(10, 9), (32, 7), (54, 9)], 9, 4, light=0.05 * k, labs=labs)
+        _soft(f, [(4, 18), (32, 25), (60, 18)], 2.2, 1.4, dark=0.12 * k, labs=labs)
+    if key == "F":  # biceps, elbow, forearm
+        _soft(f, [(32, 32), (32, 46)], 14, 6, light=0.06 * k, labs=labs)
+        _soft(f, [(14, 30), (12, 46), (18, 58)], 1.8, 1.4, dark=0.10 * k, labs=labs)
+        _soft(f, [(50, 30), (52, 46), (46, 58)], 1.8, 1.4, dark=0.10 * k, labs=labs)
+        _soft(f, [(20, 61), (32, 63), (44, 61)], 1.6, 1.0, dark=0.12 * k, labs=labs)
+        _soft(f, [(42, 88), (28, 104)], 7, 3, light=0.04 * k, labs=labs)
+    elif key == "B":  # the triceps' horseshoe
+        _soft(f, [(18, 26), (22, 46), (32, 52), (42, 46), (46, 26)], 1.8, 1.3, dark=0.11 * k, labs=labs)
+        _soft(f, [(32, 34)], 10, 5, light=0.04 * k, labs=labs)
+        _soft(f, [(32, 60), (32, 64)], 3, 1.4, dark=0.08 * k, labs=labs)  # the elbow's point
+    elif key == "R":  # the outer side: the groove between biceps and triceps
+        _soft(f, [(30, 24), (34, 44), (32, 60)], 1.6, 1.2, dark=0.10 * k, labs=labs)
+        _soft(f, [(36, 88), (30, 104)], 6, 3, light=0.04 * k, labs=labs)
+
+
+def muscles_leg(f, key, strength=1.0, labs=None):
+    """The right leg's faces (the left leg is its mirror). Rows 0-12 hide under the torso."""
+    k = strength
+    if key == "F":  # quads with the teardrop above the inner knee, the kneecap, the shin
+        _soft(f, [(30, 20), (32, 44)], 16, 7, light=0.05 * k, labs=labs)
+        _soft(f, [(10, 16), (12, 40), (20, 56)], 1.8, 1.4, dark=0.09 * k, labs=labs)
+        _soft(f, [(44, 40), (50, 50), (44, 58)], 2.0, 1.4, dark=0.10 * k, labs=labs)
+        _soft(f, [(24, 60), (32, 66), (40, 60)], 1.8, 1.1, dark=0.10 * k, labs=labs)
+        _soft(f, [(32, 64)], 6, 2.5, light=0.05 * k, labs=labs)
+        _soft(f, [(24, 72), (32, 76), (40, 72)], 1.6, 1.0, dark=0.09 * k, labs=labs)
+        _soft(f, [(30, 78), (32, 104)], 3, 1.6, light=0.04 * k, labs=labs)
+    elif key == "B":  # hamstrings, the back of the knee, the calf's two heads
+        _soft(f, [(32, 14), (32, 54)], 1.6, 1.2, dark=0.08 * k, labs=labs)
+        _soft(f, [(18, 62), (46, 62)], 2.0, 1.2, dark=0.10 * k, labs=labs)
+        for x in (22, 42):
+            _soft(f, [(x, 72), (x, 82)], 10, 4, light=0.05 * k, labs=labs)
+        _soft(f, [(12, 90), (32, 96), (52, 90)], 2.2, 1.6, dark=0.10 * k, labs=labs)
+    elif key in "LR":
+        _soft(f, [(32, 16), (34, 56)], 1.6, 1.4, dark=0.06 * k, labs=labs)
+        _soft(f, [(30, 74), (34, 92)], 7, 3, light=0.04 * k, labs=labs)
