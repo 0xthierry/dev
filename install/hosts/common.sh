@@ -118,6 +118,9 @@ apply_host_configs() {
       ai-desktop)
         apply_ai_desktop_linux
         ;;
+      claude-desktop-pinned)
+        apply_claude_desktop_pinned
+        ;;
       ghostty)
         apply_ghostty
         ;;

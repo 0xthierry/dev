@@ -342,8 +342,13 @@ install_amq_from_source() {
 install_ai_clis() {
   log_section "AI Coding CLIs"
 
-  # Claude Code (Anthropic) — standalone binary, not npm
-  install_claude_code_binary "2.1.296"
+  # macOS uses the exact checksum-pinned bundle selected by Desktop, including
+  # its managed path. The CLI symlink and Desktop therefore share one engine.
+  if [[ "${SETUP_HOST:-}" == "macbook" || "$(uname -s)" == Darwin ]]; then
+    run_cmd python3 "$AI_CLI_REPO_ROOT/scripts/claude_desktop_code_install.py"
+  else
+    install_claude_code_binary "2.1.296"
+  fi
 
   # Codex (OpenAI)
   install_npm_global_cli "Codex CLI" "@openai/codex" "0.162.1"

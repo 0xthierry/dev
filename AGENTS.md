@@ -34,6 +34,7 @@ The two layers don't validate each other. **Most recurring bug:** config deploye
 | Cua Driver | `~/.local/bin/cua-driver`, `~/.cua-driver/`, repo-owned Linux skill links; `~/.local/bin/cua-omarchy-{display,window}` and `~/.config/systemd/user/cua-driver{,-x11}.service` on Omarchy | `install/cua-driver.sh`; pinned Linux runtime and concise repo-owned `configs/cua-driver/skill/` on `dev`/`omarchy`, never macOS; Omarchy adds `grim`, allowlisted display/window helpers, native Wayland capture, and a separate private X11 endpoint for verified Alacritty foreground input; no Hyprland plugin |
 | `configs/creative-mcp/` | Blender add-on/runtime, `~/.local/bin/{blender-mcp,roblox-studio-mcp,chatgpt-creative-mcp}`, Claude/Codex MCP entries | `install/creative-mcp.sh`; macbook/omarchy only; native Studio on Mac, Vinegar on Linux; ChatGPT tunnel is explicit-start and requires account authorization |
 | `configs/rea/` | `~/.local/bin/{rea,rea-mcp}`, `~/.local/share/rea/`, shared MCP entries | `install/rea.sh` plus `install/rea-prereqs.sh`; pinned REA and isolated Node/npm, Linux procps-ng, all hosts; optional native engines are separate |
+| `configs/claude-desktop-patch/` | pinned vendor `/Applications/Claude.app` and shared `~/.local/bin/claude` engine | macbook only; `install/claude-desktop-patch.sh` and `scripts/claude_desktop_*`; Desktop 4.23118.1 / Code 2.1.321, checksum-pinned; snapshot patch is staging-only because macOS rejects ad-hoc signing with restricted vendor entitlements |
 | Moshi host integration | `~/.local/bin/herdr`, refreshed agent hooks, `moshi-hook` user service, mosh firewall rule | `install/moshi.sh` |
 | `configs/shell/` | sourced via `~/.zshrc` / `~/.zshenv` | written by `install/shell.sh` |
 | `configs/agents/` | `~/.agents/`, `~/.claude/`, `~/.codex/`, `~/.pi/agent/` | special installer |
@@ -89,6 +90,8 @@ Default to shared. Only touch `install/hosts/{host}.sh` when the user names a ho
 bash -n setup.sh install/*.sh install/hosts/*.sh
 shellcheck setup.sh install/*.sh install/hosts/*.sh
 python3 tests/lua-lsp.test.py
+python3 tests/claude-desktop-snapshot-patch.test.py
+python3 tests/claude-desktop-install.test.py
 # Requires installed Neovim plugins, LuaLS, Luau LSP, and Luacheck:
 nvim --headless -u NONE -l tests/neovim-lua-lsp.lua
 nvim --headless -u NONE -l tests/neovim-lua-lint.lua

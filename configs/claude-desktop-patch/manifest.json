@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "desktop_version": "4.23118.1",
+  "sdk_version": "0.3.321",
+  "engine_version": "2.1.321",
+  "bundle_identifier": "com.anthropic.claudefordesktop",
+  "patch": {
+    "member": ".vite/build/index.chunk-Cy6fdnz-.js",
+    "old": "snapshot:W},mt.t($),n.tt($);let Or=",
+    "new": "snapshot:W},mt.t($),n.tt($);c.kind===\"local\"&&!T&&($.systemPrompt.snapshot=!1);let Or="
+  },
+  "original": {
+    "asar_sha256": "8fed22604221c40dec8b2886b3bd96d3f383104072dd3a6f3890bef65e2aece1",
+    "asar_size": 88796331,
+    "header_sha256": "09e856e8546abf13e3dda2c000961863e152efa0c276faad96ba0de7e60b79b6",
+    "member_sha256": "1908b99b85e960b381aaf1d828ad29bc7ab12a195dcfbd62faab0a838fb1019f",
+    "member_size": 2374642,
+    "plist_sha256": "06fd6a21c84200650a8eaed93a7b74aaff5f22fc6f7e9e2e8e53c3fc8f2e23a4",
+    "plist_size": 12940
+  },
+  "patched": {
+    "asar_sha256": "31fc717aad1ed1e1111d4d4c60d56f2c9864e31764704896cb2c7ab96ee37838",
+    "asar_size": 88796382,
+    "header_sha256": "16786ec80d3c34c1b147d67e96c059b429f33ea7cf3cdd91a676ff70eba43e44",
+    "member_sha256": "794765810825ecb750e0feb51453c64b283b92339a564ab331e1ccd0067ebf27",
+    "member_size": 2374693,
+    "plist_sha256": "e27e0095bc22f7110d33ae7964d74329f27e207b2f3be4800bf88baed9130591",
+    "plist_size": 12940
+  },
+  "scope": "Local Code outgoing SDK systemPrompt.snapshot Boolean only, after unchanged host prompt normalizers. Bundled engine manifest version is checked; the runtime-selected engine is not launched or inspected."
+}

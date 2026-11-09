@@ -17,6 +17,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/bs-manager.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/creative-mcp.sh"
 # shellcheck source=install/mcp.sh
 source "$(dirname "${BASH_SOURCE[0]}")/mcp.sh"
+# shellcheck source=install/claude-desktop-patch.sh
+source "$(dirname "${BASH_SOURCE[0]}")/claude-desktop-patch.sh"
 
 apply_nvim() {
   ensure_dir "$HOME/.config"

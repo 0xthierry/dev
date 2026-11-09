@@ -1,0 +1,29 @@
+{
+  "desktop_version": "4.23118.1",
+  "patch_deployment_blocked_reason": "macOS AMFI rejects the ad-hoc-signed app with its preserved restricted vendor entitlements. Do not install this staged app, strip entitlements, or disable OS protections. A different deployment mechanism must be implemented and runtime-verified first.",
+  "code_version": "2.1.321",
+  "desktop_url": "https://downloads.claude.ai/releases/darwin/universal/4.23118.1/Claude-e071e72f72fe1f56124e3c8a0096f4d75510060a.zip",
+  "desktop_zip_sha256": "a1b69ab28237a34b9894c7fe370492107e3e3b6a6cccb98a258bde27ce98a575",
+  "vendor_team_id": "Q6L2SF6YDW",
+  "signing": {
+    "identifier": "com.anthropic.claudefordesktop",
+    "entitlements_sha256": "1beda53b266dee7562a249410193987d232995dadce20b9f3df842aa075bb87b",
+    "runtime_version": "26.5.0",
+    "flags_without_adhoc": 65536
+  },
+  "code_base_url": "https://downloads.claude.ai/claude-code-releases/rc/08fd8c1cd064feda0fe1217f382b1ac0ce0dec2e",
+  "code_bundles": {
+    "arm64": {
+      "platform": "darwin-arm64",
+      "sha256": "e6736b2d954d679f07ba51c76a9099ad5413d27dad753eff64c75f7391a0a076",
+      "size": 111937882,
+      "executable_sha256": "3951931458c81fd08404e7f9dcc31cdf94e182e4326dda3ad0dabd3fd917661a"
+    },
+    "x86_64": {
+      "platform": "darwin-x64",
+      "sha256": "883042df4a82d0733c4cfb6f8cd94f61d55275d03093942ff459bc0ebc8d6a66",
+      "size": 119118905,
+      "executable_sha256": "c61ee41af1be5afbe4dcb04a58b51972be6876cd17e1ef2cfa66d99fc45a194c"
+    }
+  }
+}

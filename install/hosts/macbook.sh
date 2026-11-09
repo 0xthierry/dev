@@ -23,6 +23,7 @@ HOST_CONFIG_TARGETS=(
   ghostty
   herdr
   agents
+  claude-desktop-pinned
   moshi
   brave
   browser-diagnostics
@@ -30,6 +31,7 @@ HOST_CONFIG_TARGETS=(
 )
 
 HOST_BREW_FORMULAE=(
+  zstd # Pinned Claude Code .app.tar.zst bundle extraction.
   openai/tools/tunnel-client
 )
 
@@ -40,7 +42,7 @@ HOST_BREW_CASKS=(
   blender
   brave-browser
   chatgpt
-  claude
+  # Claude is installed from a checksum-pinned release by claude-desktop-pinned.
   conductor
   cursor
   dbeaver-community
@@ -97,7 +99,7 @@ setup_host_packages() {
   log_item "Installing shared CLI package set for macbook"
   setup_shared_cli_packages
   install_brew_formulae "${HOST_BREW_FORMULAE[@]}"
-  upgrade_brew_casks_to_latest chatgpt claude grok-bot
+  upgrade_brew_casks_to_latest chatgpt grok-bot
 }
 
 setup_shared_machine_state() {
