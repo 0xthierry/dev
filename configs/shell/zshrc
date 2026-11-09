@@ -105,7 +105,7 @@ alias wrkm='cd ~/Work/Meistrari'
 alias wrkp='cd ~/Work/Pagarme'
 alias wrka='cd ~/Work/Arado'
 claude() {
-  command claude --append-system-prompt-file ~/.agents/developer-instructions.txt "$@"
+  command claude --system-prompt-snapshot off --append-system-prompt-file ~/.agents/developer-instructions.txt "$@"
 }
 
 luna() {
