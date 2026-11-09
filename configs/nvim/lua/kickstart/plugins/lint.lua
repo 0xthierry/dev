@@ -6,6 +6,7 @@ return {
       local lint = require 'lint'
 
       lint.linters_by_ft = {
+        lua = { 'luacheck' },
         markdown = { 'markdownlint' },
         typescript = { 'eslint_d' },
         javascript = { 'eslint_d' },
@@ -13,6 +14,17 @@ return {
         typescriptreact = { 'eslint_d' },
         javascriptreact = { 'eslint_d' },
       }
+
+      -- Luacheck discovers .luacheckrc from cwd, even when receiving stdin.
+      -- Start at the buffer directory so project-local globals stay project-local.
+      local luacheck = lint.linters.luacheck
+      lint.linters.luacheck = function()
+        local config = vim.deepcopy(luacheck)
+        local filename = vim.api.nvim_buf_get_name(0)
+        config.cwd = filename ~= '' and vim.fs.dirname(filename) or nil
+        vim.list_extend(config.args, { '--filename', filename ~= '' and filename or 'stdin.lua' })
+        return config
+      end
 
       -- force eslint/eslint_d to emit pure json
       for _, name in ipairs { 'eslint_d' } do

@@ -1,0 +1,18 @@
+{
+  "name": "luau-lsp",
+  "version": "1.0.0",
+  "description": "Luau language server for .luau files; Lua remains with the official lua-lsp plugin",
+  "author": { "name": "Thierry" },
+  "lspServers": {
+    "luau": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/luau-lsp",
+      "args": ["lsp"],
+      "extensionToLanguage": { ".luau": "luau" },
+      "settings": {
+        "luau-lsp": {
+          "platform": { "type": "standard" }
+        }
+      }
+    }
+  }
+}

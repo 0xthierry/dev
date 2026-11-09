@@ -58,6 +58,7 @@ Names differ between Homebrew and pacman (`tree-sitter-cli` vs `tree-sitter`, `m
 | Shared Neon/Datadog US5/Figma/ai-memory/REA/Playwriter/Chrome DevTools/Blender/Roblox MCP | `configs/mcp/`, `install/mcp.sh`; merge after agent/hook installers; OAuth, Playwriter extension authorization, and ChatGPT tunnel/account authorization remain explicit |
 | Add/update REA MCP | `configs/rea/`, `install/rea.sh`, `install/rea-prereqs.sh`, shared MCP catalog; locked npm dependencies, no launch-time downloads; current Ghidra 12.0.4/Java 17 stack is incompatible with REA's Ghidra provider |
 | Add shared CLI tool | `install/packages/common.sh` |
+| Lua/Luau servers and Lua linting | `install/packages/common.sh` (LuaLS + Luacheck), `install/lua-lsp.sh` (checksum-pinned standalone Luau + Claude plugin registration), `configs/agents/claude/plugins/` (local Luau plugin), `configs/nvim/` (system servers + Luacheck); `.lua` is Lua, `.luau` is standard Luau; Roblox definitions/sourcemaps remain project-specific |
 | Multi-account Codex proxy for Pi | `install/cliproxyapi.sh`, `configs/cliproxyapi/`, `scripts/cliproxy` (default Pi provider; Codex CLI stays direct; OAuth state stays local) |
 | Shared Claude/Codex/Pi project memory | `install/ai-memory.sh`, `install/mcp.sh` and `configs/mcp/` for Pi native MCP tools, plus `configs/agents/pi/extensions/ai-memory-pi.ts` for capture/handoff hooks only (do not run `install-hooks --agent pi --apply`) |
 | Add tool config | `configs/cli/` plus `install/tools.sh` if needed |
@@ -87,6 +88,10 @@ Default to shared. Only touch `install/hosts/{host}.sh` when the user names a ho
 ```bash
 bash -n setup.sh install/*.sh install/hosts/*.sh
 shellcheck setup.sh install/*.sh install/hosts/*.sh
+python3 tests/lua-lsp.test.py
+# Requires installed Neovim plugins, LuaLS, Luau LSP, and Luacheck:
+nvim --headless -u NONE -l tests/neovim-lua-lsp.lua
+nvim --headless -u NONE -l tests/neovim-lua-lint.lua
 bash tests/ai-memory.test.sh
 python3 tests/ai-memory-skills.test.py
 ~/.local/share/mcp-services/venv/bin/python tests/mcp-clients.test.py

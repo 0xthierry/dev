@@ -267,6 +267,9 @@ local treesitter_parsers = {
   'dockerfile', 'helm', 'gitcommit', 'gitignore', 'regex',
 }
 
+-- Resolve the system Lua server before Mason prepends its bin directory to PATH.
+local lua_language_server = vim.fn.exepath 'lua-language-server'
+
 require('lazy').setup({
   -- NOTE: Plugins can be added with a link (or for a github repo: 'owner/repo' link).
   'NMAC427/guess-indent.nvim', -- Detect tabstop and shiftwidth automatically
@@ -706,7 +709,7 @@ require('lazy').setup({
       local capabilities = require('blink.cmp').get_lsp_capabilities()
 
       -- Enable the following language servers
-      --  Feel free to add/remove any LSPs that you want here. They will automatically be installed.
+      --  Mason installs these, except the system-managed Lua and Luau servers below.
       --
       --  Configure VUE LSP
 
@@ -744,7 +747,7 @@ require('lazy').setup({
         --
 
         lua_ls = {
-          -- cmd = { ... },
+          cmd = { lua_language_server ~= '' and lua_language_server or 'lua-language-server' },
           -- filetypes = { ... },
           -- capabilities = {},
           settings = {
@@ -755,6 +758,13 @@ require('lazy').setup({
               -- You can toggle below to ignore Lua_LS's noisy `missing-fields` warnings
               -- diagnostics = { disable = { 'missing-fields' } },
             },
+          },
+        },
+        luau_lsp = {
+          -- Bypass project-manager shims (e.g. Rokit); setup installs this standalone binary.
+          cmd = { vim.fn.expand '~/.local/bin/luau-lsp', 'lsp' },
+          settings = {
+            ['luau-lsp'] = { platform = { type = 'standard' } },
           },
         },
         vue_ls = {},
@@ -803,7 +813,10 @@ require('lazy').setup({
       --
       -- You can add other tools here that you want Mason to install
       -- for you, so that they are available from within Neovim.
-      local ensure_installed = vim.tbl_keys(servers or {})
+      local system_servers = { 'lua_ls', 'luau_lsp' }
+      local ensure_installed = vim.tbl_filter(function(server)
+        return not vim.tbl_contains(system_servers, server)
+      end, vim.tbl_keys(servers))
       vim.list_extend(ensure_installed, {
         'stylua', -- Used to format Lua code
         'markdownlint', -- Used to lint markdown files
@@ -817,11 +830,12 @@ require('lazy').setup({
         end
       end
 
-      -- right now, we have to enable them
       require('mason-lspconfig').setup {
         ensure_installed = {}, -- explicitly set to an empty table (Kickstart populates installs via mason-tool-installer)
-        automatic_enable = true, -- automatically enable servers
+        automatic_enable = { exclude = system_servers },
       }
+      -- Mason only auto-enables its installed servers; setup owns these executables.
+      vim.lsp.enable(system_servers)
     end,
   },
 

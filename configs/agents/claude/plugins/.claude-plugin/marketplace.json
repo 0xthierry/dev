@@ -1,0 +1,12 @@
+{
+  "name": "thierry-local",
+  "owner": { "name": "Thierry" },
+  "metadata": { "description": "Repo-managed Claude Code language tooling" },
+  "plugins": [
+    {
+      "name": "luau-lsp",
+      "source": "./luau-lsp",
+      "description": "Luau code intelligence using the repo-installed standalone server"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Do not resolve through PATH: Rokit shims require a project manifest.
+set -euo pipefail
+exec "$HOME/.local/bin/luau-lsp" "$@"

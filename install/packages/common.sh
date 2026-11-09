@@ -3,7 +3,11 @@
 # REA's Linux process-ownership checks require procps ps, not procs.
 REA_PACMAN_PACKAGES=(procps-ng)
 
+LUA_TOOL_PACMAN_PACKAGES=(lua-language-server luacheck)
+LUA_TOOL_BREW_FORMULAE=(lua-language-server luacheck)
+
 COMMON_PACMAN_PACKAGES=(
+  "${LUA_TOOL_PACMAN_PACKAGES[@]}"
   dust
   duf
   tree
@@ -86,6 +90,7 @@ COMMON_AUR_PACKAGES=(
 NEOVIM_VERSION="0.12.1"
 
 COMMON_BREW_FORMULAE=(
+  "${LUA_TOOL_BREW_FORMULAE[@]}"
   dust
   duf
   tree

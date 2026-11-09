@@ -16,6 +16,7 @@ source "$REPO_ROOT/install/docker.sh"
 source "$REPO_ROOT/install/ghidra-tools.sh"
 source "$REPO_ROOT/install/rea.sh"
 source "$REPO_ROOT/install/neovim.sh"
+source "$REPO_ROOT/install/lua-lsp.sh"
 source "$REPO_ROOT/install/github-cli.sh"
 source "$REPO_ROOT/install/tools.sh"
 source "$REPO_ROOT/install/moshi.sh"
@@ -75,6 +76,7 @@ setup_shared_cli_packages() {
 apply_shared_machine_state() {
   install_github_cli
   install_runtimes
+  install_luau_lsp
   apply_tool_configs
   write_env_file
   apply_shell_setup
@@ -174,6 +176,7 @@ run_post_setup_tasks() {
   install_agent_review_tools "$REPO_ROOT"
   install_ghidra_cli_tools
   install_rea "$SETUP_HOST"
+  configure_claude_lua_plugins
   # After Claude/Codex/Pi configs and Herdr/Moshi hooks, so ai-memory merges
   # into the rendered files instead of being overwritten.
   configure_ai_memory_agents

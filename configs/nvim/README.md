@@ -1,5 +1,41 @@
 # kickstart.nvim
 
+## Repository Lua / Luau setup
+
+Run this repository's `./setup.sh <host>` to provision the shared language servers
+and Luacheck:
+
+- `.lua` uses `lua_ls` with `lua-language-server` from Homebrew/pacman on PATH.
+  The executable is resolved before Mason changes PATH, preserving the existing
+  Lua completion settings and lazydev support for Neovim configuration.
+- `.luau` uses `luau_lsp` with `~/.local/bin/luau-lsp lsp`, the pinned standalone
+  binary installed by setup. This deliberately bypasses project-manager shims.
+- Both are explicitly enabled and excluded from Mason's installation and
+  auto-enable lists. Existing Mason copies are not deleted.
+- Luau uses the `standard` platform. Roblox definitions, sourcemaps, Studio
+  integration, and reclassifying Roblox `.lua` files are project-specific setup,
+  not global defaults.
+- `.lua` also runs the OS-installed `luacheck` through nvim-lint on buffer entry,
+  after saving, after leaving insert mode, and with `<leader>ll`. `.luau` is not
+  sent to Luacheck, which does not understand Luau syntax.
+- Luacheck discovers configuration from the buffer's directory. This directory's
+  `.luacheckrc` allows Neovim's `vim` and the Snacks plugin's `Snacks` globals;
+  undefined-global checks remain enabled in other projects.
+
+With the configured plugins already installed, run the focused real-tool checks
+from the repository root:
+
+```sh
+nvim --headless -u NONE -l tests/neovim-lua-lsp.lua
+nvim --headless -u NONE -l tests/neovim-lua-lint.lua
+```
+
+It checks filetype detection, exclusive server attachment, executable selection,
+and hover responses using temporary files. It loads the real LSP configuration
+without starting unrelated plugins or installing/updating packages; it is not a
+full-editor startup test. The lint check verifies real undefined-global
+diagnostics, scoped Neovim globals, and the absence of Luacheck on `.luau`.
+
 ## Introduction
 
 A starting point for Neovim that is:
