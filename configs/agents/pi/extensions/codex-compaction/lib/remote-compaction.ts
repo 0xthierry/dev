@@ -1,19 +1,19 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { CompactionResult, SessionEntry } from "@earendil-works/pi-coding-agent";
-import { createBinding, hashAccountId, isCompatibleV2Binding } from "./binding";
+import { bindingsEqual } from "./binding";
 import { fetchCodexCompaction } from "./codex-client";
 import { compactionFileDetails, mergeLatestCompactionFileOps } from "./file-ops";
-import { extractChatGptAccountId } from "./model";
 import type { CompactionPreparation } from "./recovery";
 import { messagesToCodexResponseItems } from "./response-items";
 import { isArtifactUnusable, isExactLegacyPlaceholderSummary, isValidArtifact, latestCompaction } from "./state";
 import {
   CODEX_COMPACTION_DETAILS_VERSION,
   CODEX_OPAQUE_SUMMARY_PLACEHOLDER,
+  type CodexBinding,
   type CodexCompactionV2,
+  type CodexIdentity,
   type CodexModel,
   type CodexRecoveryInfo,
-  type CompactionAuth,
   type CompactionEntryDetails,
   type JsonObject,
 } from "./types";
@@ -39,7 +39,7 @@ export type RemoteCompactOptions = {
   /** Original preparation before legacy recovery prepend, avoiding duplicate remote input. */
   originalPreparation?: CompactionPreparation;
   model: CodexModel;
-  auth: CompactionAuth;
+  identity: CodexIdentity;
   signal?: AbortSignal;
   thinkingLevel: string;
   systemPrompt: string;
@@ -53,15 +53,14 @@ export type RemoteCompactOptions = {
 /** Uses only the bounded-retry Codex endpoint client and never calls Pi's portable compact(). */
 export async function remoteCompact(options: RemoteCompactOptions): Promise<CompactionResult | undefined> {
   const runtime = options.runtime ?? createRemoteCompactRuntime();
-  const accountId = options.auth.apiKey ? extractChatGptAccountId(options.auth.apiKey) : undefined;
-  if (!accountId || !options.auth.apiKey || options.signal?.aborted) return undefined;
+  if (options.signal?.aborted) return undefined;
 
   const preparation = mergeLatestCompactionFileOps(options.preparation, options.branchEntries);
   const input = buildRemoteCompactionInput({
     preparation,
     originalPreparation: options.originalPreparation ?? preparation,
     model: options.model,
-    accountId,
+    binding: options.identity.binding,
     branchEntries: options.branchEntries,
     recovery: options.recovery,
   });
@@ -69,9 +68,7 @@ export async function remoteCompact(options: RemoteCompactOptions): Promise<Comp
 
   const result = await runtime.fetchCodexCompaction({
     model: options.model,
-    apiKey: options.auth.apiKey,
-    headers: options.auth.headers,
-    accountId,
+    identity: options.identity,
     systemPrompt: options.systemPrompt,
     input,
     tools: options.tools,
@@ -86,8 +83,7 @@ export async function remoteCompact(options: RemoteCompactOptions): Promise<Comp
   return buildRemoteCompactionResult({
     remoteResult: result,
     preparation,
-    model: options.model,
-    accountId,
+    binding: options.identity.binding,
     branchEntries: options.branchEntries,
     recovery: options.recovery,
   });
@@ -96,8 +92,7 @@ export async function remoteCompact(options: RemoteCompactOptions): Promise<Comp
 export function buildRemoteCompactionResult(options: {
   remoteResult: Extract<Awaited<ReturnType<typeof fetchCodexCompaction>>, { ok: true }>;
   preparation: CompactionPreparation;
-  model: CodexModel;
-  accountId: string;
+  binding: CodexBinding;
   branchEntries: SessionEntry[];
   recovery?: CodexRecoveryInfo;
 }): CompactionResult {
@@ -110,7 +105,7 @@ export function buildRemoteCompactionResult(options: {
 
   const codexCompaction: CodexCompactionV2 = {
     version: CODEX_COMPACTION_DETAILS_VERSION,
-    binding: createBinding(options.model, options.accountId),
+    binding: options.binding,
     userPrefix,
     artifact: [options.remoteResult.item],
     firstKeptEntryId: options.preparation.firstKeptEntryId,
@@ -138,7 +133,7 @@ export function buildRemoteCompactionInput(options: {
   preparation: CompactionPreparation;
   originalPreparation: CompactionPreparation;
   model: CodexModel;
-  accountId: string;
+  binding: CodexBinding;
   branchEntries: SessionEntry[];
   recovery?: CodexRecoveryInfo;
 }): JsonObject[] | undefined {
@@ -158,7 +153,7 @@ export function buildRemoteCompactionInput(options: {
 export function buildNextRemotePrefix(options: {
   preparation: CompactionPreparation;
   model: CodexModel;
-  accountId: string;
+  binding: CodexBinding;
   branchEntries: SessionEntry[];
 }): JsonObject[] {
   const latest = latestCompaction(options.branchEntries);
@@ -176,7 +171,7 @@ export function buildNextRemotePrefix(options: {
   if (latest.kind === "v2") {
     const compatible =
       !isArtifactUnusable(options.branchEntries) &&
-      isCompatibleV2Binding(latest.record, options.model, hashAccountId(options.accountId)) &&
+      bindingsEqual(latest.record.binding, options.binding) &&
       isValidArtifact(latest.record.artifact);
 
     if (compatible) return [...latest.record.userPrefix, ...latest.record.artifact];

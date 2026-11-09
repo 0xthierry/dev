@@ -1,6 +1,7 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import { isCompatibleV2Binding } from "./binding";
+import { bindingsEqual } from "./binding";
+import { isCodexResponsesModel } from "./model";
 import { isCodexPayload, itemContainsText, repairOrphanCodexToolOutputs } from "./payload";
 import {
   extractV1Sentinel,
@@ -9,7 +10,13 @@ import {
   isValidArtifact,
   latestCompaction,
 } from "./state";
-import { CODEX_OPAQUE_SUMMARY_PLACEHOLDER, type InjectionMode, type JsonObject, SUMMARY_SEARCH_WINDOW } from "./types";
+import {
+  CODEX_OPAQUE_SUMMARY_PLACEHOLDER,
+  type CodexBinding,
+  type InjectionMode,
+  type JsonObject,
+  SUMMARY_SEARCH_WINDOW,
+} from "./types";
 import { prefixesEqual } from "./user-prefix";
 
 export type ReplacementResult =
@@ -19,9 +26,9 @@ export type ReplacementResult =
 export function planInjection(options: {
   model: Model<Api>;
   branchEntries: SessionEntry[];
-  accountHash: string | undefined;
+  binding: CodexBinding | undefined;
 }): InjectionMode {
-  if (options.model.api !== "openai-codex-responses") {
+  if (!isCodexResponsesModel(options.model)) {
     return { kind: "none", reason: "not-codex-payload" };
   }
 
@@ -44,7 +51,7 @@ export function planInjection(options: {
     return { kind: "none", reason: artifactUnusable ? "invalidated" : "binding-mismatch" };
   }
 
-  const bindingMatch = isCompatibleV2Binding(latest.record, options.model, options.accountHash);
+  const bindingMatch = bindingsEqual(latest.record.binding, options.binding);
   const artifactOk = isValidArtifact(latest.record.artifact);
 
   if (!artifactUnusable && bindingMatch && artifactOk) {
@@ -70,9 +77,9 @@ export function applyCompactionReplacement(options: {
   payload: unknown;
   model: Model<Api>;
   branchEntries: SessionEntry[];
-  accountHash: string | undefined;
+  binding: CodexBinding | undefined;
 }): ReplacementResult {
-  if (options.model.api !== "openai-codex-responses" || !isCodexPayload(options.payload)) {
+  if (!isCodexResponsesModel(options.model) || !isCodexPayload(options.payload)) {
     return { mutated: false, reason: "not-codex-payload" };
   }
 

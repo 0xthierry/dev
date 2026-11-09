@@ -4,7 +4,9 @@ import type { CodexModel } from "./types";
 const JWT_CLAIM_PATH = "https://api.openai.com/auth";
 
 export function isCodexResponsesModel(model: Model<Api> | undefined): model is CodexModel {
-  return model?.api === "openai-codex-responses";
+  return (
+    model?.api === "openai-codex-responses" || (model?.provider === "cliproxyapi" && model.api === "openai-responses")
+  );
 }
 
 export function codexAutoCompactionThreshold(model: CodexModel): number {
@@ -28,6 +30,11 @@ export function resolveCodexResponsesUrl(baseUrl: string | undefined): string {
   if (normalized.endsWith("/codex/responses")) return normalized;
   if (normalized.endsWith("/codex")) return `${normalized}/responses`;
   return `${normalized}/codex/responses`;
+}
+
+export function resolveCompactionUrl(model: CodexModel): string {
+  if (model.api === "openai-codex-responses") return resolveCodexResponsesUrl(model.baseUrl);
+  return `${model.baseUrl.replace(/\/+$/, "")}/responses`;
 }
 
 export function extractChatGptAccountId(token: string): string | undefined {

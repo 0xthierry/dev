@@ -18,13 +18,22 @@ export type CodexCompactionItem = {
   id?: string;
 };
 
-export type CodexBinding = {
+type BindingTarget = {
   provider: string;
   api: string;
   modelId: string;
   endpoint: string;
-  accountHash: string;
 };
+
+// Absence of scope preserves the persisted direct v2 format.
+export type DirectCodexBinding = BindingTarget & { scope?: never; accountHash: string };
+export type ProxyCodexBinding = BindingTarget & { scope: "proxy"; proxyKeyHash: string };
+export type CodexBinding = DirectCodexBinding | ProxyCodexBinding;
+
+// A proxy credential identifies the local proxy boundary, never an upstream account.
+export type CodexIdentity =
+  | { kind: "direct"; apiKey: string; headers?: ProviderHeaders; accountId: string; binding: DirectCodexBinding }
+  | { kind: "proxy"; apiKey: string; headers?: ProviderHeaders; binding: ProxyCodexBinding };
 
 export type CodexRecoveryInfo = {
   attempted: boolean;
@@ -65,9 +74,8 @@ export type CompactionEntryDetails = CompactionFileDetails & {
   recovery?: CodexRecoveryInfo;
 };
 
-export type CodexModel = Model<Api> & {
-  api: "openai-codex-responses";
-};
+export type CodexModel = Model<Api> &
+  ({ api: "openai-codex-responses" } | { provider: "cliproxyapi"; api: "openai-responses" });
 
 export type CompactionAuth = {
   apiKey?: string;
@@ -77,9 +85,7 @@ export type CompactionAuth = {
 
 export type CodexRequestOptions = {
   model: CodexModel;
-  apiKey: string;
-  headers?: ProviderHeaders;
-  accountId: string;
+  identity: CodexIdentity;
   systemPrompt: string;
   input: JsonObject[];
   tools?: JsonObject[];

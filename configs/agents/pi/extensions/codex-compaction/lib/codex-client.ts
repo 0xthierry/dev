@@ -1,5 +1,5 @@
 import { calculateCost, type ProviderHeaders, type Usage } from "@earendil-works/pi-ai";
-import { codexReasoningEffort, resolveCodexResponsesUrl } from "./model";
+import { codexReasoningEffort } from "./model";
 import {
   CODEX_HTTP_MAX_RETRIES,
   CODEX_STREAM_IDLE_TIMEOUT_MS,
@@ -89,7 +89,7 @@ async function fetchCodexCompactionAttempt(
 
   let response: Response;
   try {
-    response = await runtime.fetch(resolveCodexResponsesUrl(options.model.baseUrl), {
+    response = await runtime.fetch(options.identity.binding.endpoint, {
       method: "POST",
       headers,
       body,
@@ -140,7 +140,7 @@ export function buildCodexCompactionBody(options: CodexRequestOptions): JsonObje
     parallel_tool_calls: true,
   };
 
-  const sessionKey = stableSessionKey(options.sessionId);
+  const sessionKey = requestSessionKey(options);
   if (sessionKey) body.prompt_cache_key = sessionKey;
   if (options.tools && options.tools.length > 0) body.tools = options.tools;
   if (reasoningEffort) body.reasoning = { effort: reasoningEffort, summary: "auto" };
@@ -319,18 +319,20 @@ function extractTerminalMeta(
 function buildCodexHeaders(options: CodexRequestOptions): Headers {
   const headers = new Headers();
   applyProviderHeaders(headers, options.model.headers);
-  applyProviderHeaders(headers, options.headers);
-  headers.set("Authorization", `Bearer ${options.apiKey}`);
-  headers.set("chatgpt-account-id", options.accountId);
+  applyProviderHeaders(headers, options.identity.headers);
+  headers.set("Authorization", `Bearer ${options.identity.apiKey}`);
+  if (options.identity.kind === "direct") headers.set("chatgpt-account-id", options.identity.accountId);
+  else headers.delete("chatgpt-account-id");
   headers.set("originator", "pi");
   headers.set("User-Agent", "pi-codex-compaction-extension");
   headers.set("OpenAI-Beta", "responses=experimental");
   headers.set("accept", "text/event-stream");
   headers.set("content-type", "application/json");
 
-  const sessionKey = stableSessionKey(options.sessionId);
+  const sessionKey = requestSessionKey(options);
   if (sessionKey) {
-    headers.set("session-id", sessionKey);
+    if (options.identity.kind === "proxy") headers.delete("session-id");
+    headers.set(options.identity.kind === "proxy" ? "Session_id" : "session-id", sessionKey);
     headers.set("x-client-request-id", sessionKey);
   }
   return headers;
@@ -343,9 +345,10 @@ function applyProviderHeaders(headers: Headers, values: ProviderHeaders | undefi
   }
 }
 
-function stableSessionKey(sessionId: string | undefined): string | undefined {
+function requestSessionKey(options: Pick<CodexRequestOptions, "identity" | "sessionId">): string | undefined {
+  const sessionId = options.sessionId;
   if (!sessionId || sessionId.trim().length === 0) return undefined;
-  return sessionId.length <= 64 ? sessionId : sessionId.slice(0, 64);
+  return options.identity.kind === "proxy" ? sessionId : sessionId.slice(0, 64);
 }
 
 function httpRetryClass(status: number, headers: Headers): CodexCompactionRetryClass {

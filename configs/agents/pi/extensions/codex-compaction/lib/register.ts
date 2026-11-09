@@ -1,11 +1,18 @@
-import type { ExtensionAPI, ExtensionContext, SessionBeforeCompactEvent } from "@earendil-works/pi-coding-agent";
-import { hashAccountId } from "./binding";
-import { codexAutoCompactionThreshold, extractChatGptAccountId, isCodexResponsesModel } from "./model";
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  type SessionBeforeCompactEvent,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
+import { resolveCodexIdentity } from "./binding";
+import { hasCompactableHistory } from "./early-compaction";
+import { codexAutoCompactionThreshold, isCodexResponsesModel } from "./model";
+import { isCodexPayload } from "./payload";
 import { portableCompactOnly } from "./portable-recovery";
 import { type CompactionPreparation, recoverFromV1Placeholder } from "./recovery";
 import { remoteCompact } from "./remote-compaction";
 import { applyCompactionReplacement } from "./replacement";
-import type { CodexModel, CodexRecoveryInfo, JsonObject } from "./types";
+import type { CodexBinding, CodexModel, CodexRecoveryInfo, JsonObject } from "./types";
 
 type SessionBeforeCompactResult = {
   cancel?: boolean;
@@ -13,6 +20,7 @@ type SessionBeforeCompactResult = {
 };
 
 export type CodexCompactionRuntime = {
+  canCompact: (ctx: ExtensionContext) => boolean;
   remoteCompact: typeof remoteCompact;
   portableCompactOnly: typeof portableCompactOnly;
 };
@@ -24,7 +32,16 @@ const EARLY_COMPACTION_RESUME_MESSAGE = {
 } as const;
 
 export function createCodexCompactionRuntime(): CodexCompactionRuntime {
-  return { remoteCompact, portableCompactOnly };
+  return {
+    remoteCompact,
+    portableCompactOnly,
+    canCompact: (ctx) => {
+      const settings = SettingsManager.create(ctx.cwd, undefined, {
+        projectTrusted: ctx.isProjectTrusted(),
+      }).getCompactionSettings(ctx.model);
+      return hasCompactableHistory(ctx.sessionManager.getBranch(), settings.keepRecentTokens);
+    },
+  };
 }
 
 export function registerCodexCompactionExtension(
@@ -44,6 +61,8 @@ export function registerCodexCompactionExtension(
 
     const currentTokens = ctx.getContextUsage()?.tokens;
     if (currentTokens == null || currentTokens < codexAutoCompactionThreshold(ctx.model)) return;
+    // ctx.compact() aborts first, even when Pi later finds no discardable history.
+    if (!runtime.canCompact(ctx)) return;
 
     const shouldResumeInterruptedToolLoop =
       event.message.role === "assistant" && event.message.stopReason === "toolUse" && event.toolResults.length > 0;
@@ -112,25 +131,29 @@ export function registerCodexCompactionExtension(
   pi.on("before_provider_request", async (event, ctx) => {
     if (!isCodexResponsesModel(ctx.model)) return undefined;
 
-    let accountHash: string | undefined;
+    let routingChanged = false;
+    const sessionId = safeSessionId(ctx);
+    if (ctx.model.api === "openai-responses" && sessionId && isCodexPayload(event.payload)) {
+      Object.assign(event.payload, { prompt_cache_key: sessionId });
+      routingChanged = true;
+    }
+
+    let binding: CodexBinding | undefined;
     try {
       const auth = await ctx.modelRegistry.getApiKeyAndHeaders(ctx.model);
-      if (auth.ok && auth.apiKey) {
-        const accountId = extractChatGptAccountId(auth.apiKey);
-        if (accountId) accountHash = hashAccountId(accountId);
-      }
+      if (auth.ok) binding = resolveCodexIdentity(ctx.model, auth)?.binding;
     } catch {
-      accountHash = undefined;
+      binding = undefined;
     }
 
     const result = applyCompactionReplacement({
       payload: event.payload,
       model: ctx.model,
       branchEntries: ctx.sessionManager.getBranch(),
-      accountHash,
+      binding,
     });
 
-    return result.mutated ? event.payload : undefined;
+    return result.mutated || routingChanged ? event.payload : undefined;
   });
 }
 
@@ -153,8 +176,8 @@ async function handleCodexRemoteCompact(options: {
       return compactCancel(ctx, event.signal, auth.ok ? `${failureLabel} requires API credentials` : auth.error);
     }
 
-    const accountId = extractChatGptAccountId(auth.apiKey);
-    if (!accountId) {
+    const identity = resolveCodexIdentity(model, auth);
+    if (!identity) {
       return compactCancel(ctx, event.signal, `${failureLabel} requires a ChatGPT account id`);
     }
 
@@ -162,7 +185,7 @@ async function handleCodexRemoteCompact(options: {
       preparation,
       originalPreparation,
       model,
-      auth: { apiKey: auth.apiKey, headers: auth.headers, env: auth.env },
+      identity,
       signal: event.signal,
       thinkingLevel: pi.getThinkingLevel(),
       systemPrompt: ctx.getSystemPrompt(),
