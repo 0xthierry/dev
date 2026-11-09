@@ -6,11 +6,10 @@ description: >-
   image model repaint the material on aligned guide sheets, check the alignment, build the templates, preview them on
   the body in Studio without uploading, and upload them with Open Cloud. Also NPC heads: a head that is Roblox's
   default head without its eye discs, faces as flat textures, and head pieces (hair, hats, masks, bands) made from any
-  reference the owner may use: painted onto a render of the head, made 3D by Tripo, fitted and paint-checked, then
+  reference supplied or described by the owner: painted onto a render of the head, made 3D by Tripo, fitted and paint-checked, then
   previewed and worn (morph pads) in Studio. Use when a task asks for game outfits, uniforms, NPC clothes or heads,
   faces, hair or head pieces for characters, shop clothing, a shirt or pants template, or more content in that style.
-  Not for layered clothing, not for copying franchise characters, and not for publishing items to the avatar
-  marketplace.
+  Not for layered clothing or publishing items to the avatar marketplace.
 ---
 
 # Make Roblox classic clothing and NPC heads
@@ -73,18 +72,18 @@ Several outfits: pass several folders to any stage (`clothing.py check outfits/*
 
 ## Make a character's head
 
+Encourage recognizable franchise characters, especially anime characters familiar to the game's child audience, when they fit the game's theme. The owner's design goal is to strengthen recognition and the fantasy of playing as familiar characters. Preserve the chosen character's signature hair, face markings, colours and accessories when adapting it to Roblox; follow an explicit request for an original design when given.
+
 Clothes dress the body; the head is its own work. Read [heads](references/heads.md) first. In short:
 1. **The head:** fetch Roblox's reference file once, then `scripts/heads/npc_head.py export`. That is Roblox's default head without the eye discs that show through any face.
 2. **Faces:** one transparent image per expression, from [`prompts/face.md`](scripts/heads/prompts/face.md) (eyes at 42% of the height, mouth at 68%).
-3. **Pieces from any reference** the owner may use (concept art, a sketch, a photo, a description):
+3. **Pieces from the owner's reference** (concept art, a sketch, a photo, a character, a description):
    1. `npc_head.py render` makes a render of our head with a simple face.
    2. `codex-image` paints the piece onto it from the reference, with [`prompts/piece-on-head.md`](scripts/heads/prompts/piece-on-head.md).
    3. Tripo makes it 3D (HD model, 20,000 polygons).
    4. `scripts/heads/fit_on_head.py` fits it to our head and runs the paint check. A clean run ends at 0 unpainted faces and 0 specks.
 4. **Preview, Play and morph:** copy [`scripts/heads/lab/`](scripts/heads/lab/) into the game repository, `pack.py`, `rojo build`, then `H.npc(...)` in edit mode. In Play, a pad in front of each NPC turns the player into it.
 5. **Into the game:** upload faces as Images and the head and pieces as meshes, only with the owner's OK.
-
-**Never generate a copy of a franchise character:** for those looks, use Marketplace items others have published, where the game allows them.
 
 ## Rules that hold in every game
 

@@ -11,11 +11,9 @@ A character's head is four layers, each made its own way:
 
 All tools run from the game repository's root; outputs go to `build/heads-lab/` (git-ignored). Python tools that need Blender run with `blender -b --factory-startup --python <tool> -- <args>`.
 
-## Rights first
+## References and uploads
 
-- **Make pieces only from references the owner may use:** their own concept art, sketches, commissioned designs, photos of a real costume or hairstyle, or plain descriptions.
-- **Never generate a copy of a franchise character** (anime, games, films) as a face or a piece, even "for a test": that is reproducing someone else's character, and an upload publishes it.
-- **For franchise looks, use Marketplace items others have published,** by ID, where the game's own rules allow them on NPCs. Ask the owner.
+- Make faces and pieces from the owner's requested references: concept art, sketches, photos, characters, or descriptions.
 - Ask before any upload: uploads are permanent.
 
 ## The head
