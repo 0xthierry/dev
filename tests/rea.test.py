@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Offline REA installer/launcher integration tests in isolated homes/repos.
 
-Package managers and mise are fake. A fake pinned Node delegates only the
-installer's local JavaScript validation to real Node; it records application
-arguments instead of running REA. No packages, network, or MCP servers start.
+Package managers, mise, and Frida prebuild downloads are fake. A fake pinned
+Node delegates installer validation and the stub prebuild CLI to real Node;
+it records application arguments instead of running REA. Frida import checks
+load a stub module, not a native binding. No network or MCP servers start.
 """
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
@@ -42,7 +44,8 @@ class ReaTests(unittest.TestCase):
         self.calls = self.fixture / "calls.jsonl"
         self.env = {key: value for key, value in os.environ.items()
                     if key not in ("BASH_ENV", "ENV", "NODE_OPTIONS", "NODE_PATH",
-                                   "HOST_PACMAN_ARCHIVE_FALLBACK")}
+                                   "HOST_PACMAN_ARCHIVE_FALLBACK", "GHIDRA_INSTALL_DIR",
+                                   "JAVA_HOME", "REA_TEST_PRINT_ENV")}
         self.env.update(HOME=str(self.home), PATH=f"{self.tools}:/usr/bin:/bin",
                         REA_TEST_CALLS=str(self.calls), REA_TEST_NODE=str(self.node),
                         REA_TEST_REAL_NODE=NODE or "", REA_TEST_OS="Linux")
@@ -68,12 +71,36 @@ if sys.argv[1:] != ["pacman", "-S", "--needed", "--noconfirm", "procps-ng"]:
 ''')
         self.executable(self.node, '''import json, os, sys
 if sys.argv[1:] == ["--version"]:
+    with open(os.environ["REA_TEST_CALLS"], "a") as log:
+        log.write("node-version\\n")
     print(os.environ.get("REA_TEST_NODE_VERSION", "v26.12.0"))
-elif sys.argv[1] == "--input-type=module":
+elif sys.argv[1] == "--input-type=module" or sys.argv[1].endswith("/prebuild-install/bin.js"):
+    with open(os.environ["REA_TEST_CALLS"], "a") as log:
+        log.write("node " + json.dumps(sys.argv[1:]) + "\\n")
     os.execv(os.environ["REA_TEST_REAL_NODE"], [os.environ["REA_TEST_REAL_NODE"], *sys.argv[1:]])
+elif os.environ.get("REA_TEST_PRINT_ENV") == "1":
+    with open(os.environ["REA_TEST_CALLS"], "a") as log:
+        log.write("node-env\\n")
+    print(json.dumps({"args": sys.argv[1:], "GHIDRA_INSTALL_DIR": os.environ.get("GHIDRA_INSTALL_DIR"),
+                      "JAVA_HOME": os.environ.get("JAVA_HOME"), "PATH": os.environ.get("PATH")}))
 else:
     print(json.dumps(sys.argv[1:]))
 ''')
+        prebuild = r'''const fs = require('node:fs');
+fs.appendFileSync(process.env.REA_TEST_CALLS, 'prebuild ' + JSON.stringify({
+  cwd: process.cwd(), args: process.argv.slice(1)
+}) + '\n');
+if (process.env.REA_TEST_FRIDA_PREBUILD_FAIL === '1') {
+  console.error('fixture Frida prebuild unavailable');
+  process.exit(17);
+}
+fs.mkdirSync('build/src', {recursive: true});
+fs.writeFileSync('build/src/frida.js', process.env.REA_TEST_FRIDA_LOAD_FAIL === '1'
+  ? "throw new Error('fixture Frida binding cannot load');\n"
+  : "import fs from 'node:fs';\n" +
+    "fs.appendFileSync(process.env.REA_TEST_CALLS, 'frida loaded\\n');\n" +
+    "export const version = 'fixture';\n");
+'''
         self.executable(self.node.parent / "npm", '''import json, os, pathlib, sys
 with open(os.environ["REA_TEST_CALLS"], "a") as log:
     log.write("npm " + " ".join(sys.argv[1:]) + "\\n")
@@ -88,6 +115,15 @@ if os.environ.get("REA_TEST_INTERRUPT") == "1":
     sys.exit(9)
 if os.environ.get("REA_TEST_INCOMPLETE") != "1":
     (package / "scripts/rea.mjs").write_text("// fixture entrypoint\\n")
+frida = assets / "node_modules/frida"
+frida.mkdir(parents=True, exist_ok=True)
+(frida / "package.json").write_text(json.dumps({"type": "module"}))
+module = frida / "build/src/frida.js"
+if module.exists():
+    module.unlink()
+prebuild = assets / "node_modules/prebuild-install/bin.js"
+prebuild.parent.mkdir(parents=True, exist_ok=True)
+prebuild.write_text(''' + repr(prebuild) + ''')
 ''')
 
     def put(self, path, content):
@@ -127,6 +163,15 @@ if os.environ.get("REA_TEST_INCOMPLETE") != "1":
         self.assertIn("npm ci --prefix", dev.stdout)
         self.assertIn("npm ci --prefix", mac.stdout)
         self.assertIn("npm ci --prefix", desktop.stdout)
+        command = ["node", str(self.assets / "node_modules/prebuild-install/bin.js"),
+                   "--runtime", "napi", "--target", "8"]
+        self.assertIn(command, [shlex.split(line.removeprefix("[dry-run] "))
+                                for line in dev.stdout.splitlines() if line.startswith("[dry-run] ")])
+        self.assertIn(command, [shlex.split(line.removeprefix("[dry-run] "))
+                                for line in mac.stdout.splitlines() if line.startswith("[dry-run] ")])
+        self.assertIn(command, [shlex.split(line.removeprefix("[dry-run] "))
+                                for line in desktop.stdout.splitlines() if line.startswith("[dry-run] ")])
+        self.assertIn(str(self.assets / "node_modules/frida"), dev.stdout)
         self.assertEqual(list(self.home.iterdir()), [])
         self.assertFalse(self.calls.exists())
         self.assertFalse((self.assets / "node_modules").exists())
@@ -247,7 +292,7 @@ if os.environ.get("REA_TEST_INCOMPLETE") != "1":
     def test_launch_uses_recorded_node_with_exact_mcp_arguments_without_package_tools(self):
         self.launcher_runtime()
         guard = 'import os, sys\nwith open(os.environ["REA_TEST_CALLS"], "a") as log:\n    log.write("forbidden launch-time tool\\n")\nsys.exit(1)\n'
-        for name in ("node", "npm", "npx", "curl", "wget", "mise"):
+        for name in ("node", "npm", "npx", "curl", "wget", "mise", "brew", "pacman", "sudo"):
             self.executable(self.tools / name, guard)
         self.env["PATH"] = str(self.tools) + ":/usr/bin:/bin"
         result = self.launch("--example", "argument with spaces")
@@ -255,6 +300,118 @@ if os.environ.get("REA_TEST_INCOMPLETE") != "1":
         self.assertEqual(json.loads(result.stdout), [str(self.runtime / "source/node_modules/rea-agents/scripts/rea.mjs"),
                                                    "mcp", "--example", "argument with spaces"])
         self.assertFalse(self.calls.exists())
+
+    def test_absent_native_records_preserve_caller_java_and_supply_gui_tool_paths(self):
+        self.launcher_runtime()
+        self.env.update(REA_TEST_PRINT_ENV="1", JAVA_HOME="/caller/jdk17")
+        guard = 'import os, sys\nwith open(os.environ["REA_TEST_CALLS"], "a") as log:\n    log.write("forbidden launch-time tool\\n")\nsys.exit(1)\n'
+        for name in ("npm", "npx", "mise", "brew", "pacman", "sudo"):
+            self.executable(self.tools / name, guard)
+
+        result = self.launch("--example", "argument with spaces")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {
+            "args": [str(self.runtime / "source/node_modules/rea-agents/scripts/rea.mjs"),
+                     "mcp", "--example", "argument with spaces"],
+            "GHIDRA_INSTALL_DIR": None,
+            "JAVA_HOME": "/caller/jdk17",
+            "PATH": f"{self.node.parent}:{self.env['PATH']}:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin",
+        })
+        self.assertEqual(self.calls.read_text(), "node-env\n")
+
+    def test_native_records_set_ghidra_and_override_java_only_for_child(self):
+        self.launcher_runtime()
+        ghidra = self.fixture / "ghidra with spaces"
+        java = self.fixture / "isolated jdk with spaces"
+        self.executable(ghidra / "support/analyzeHeadless", "raise SystemExit('must not run')\n")
+        self.executable(java / "bin/java", "raise SystemExit('must not run')\n")
+        self.executable(java / "bin/javac", "raise SystemExit('must not run')\n")
+        self.put(self.runtime / "ghidra-path", str(ghidra) + "\n")
+        self.put(self.runtime / "java-home", str(java) + "\n")
+        self.env.update(REA_TEST_PRINT_ENV="1", JAVA_HOME="/caller/jdk17")
+        caller_env = self.env.copy()
+
+        result = self.launch()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        child = json.loads(result.stdout)
+        self.assertEqual(child["GHIDRA_INSTALL_DIR"], str(ghidra))
+        self.assertEqual(child["JAVA_HOME"], str(java))
+        self.assertEqual(self.env, caller_env)
+        self.assertEqual((self.runtime / "java-home").read_text(), str(java) + "\n")
+        self.assertEqual(self.calls.read_text(), "node-env\n")
+
+    def test_explicit_ghidra_override_wins_over_invalid_record(self):
+        self.launcher_runtime()
+        self.put(self.runtime / "ghidra-path", "invalid relative record\n")
+        self.env.update(REA_TEST_PRINT_ENV="1", GHIDRA_INSTALL_DIR="/caller/ghidra")
+
+        result = self.launch()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["GHIDRA_INSTALL_DIR"], "/caller/ghidra")
+        self.assertEqual(self.calls.read_text(), "node-env\n")
+
+    def test_relative_ghidra_record_fails_before_node(self):
+        self.launcher_runtime()
+        self.env["REA_TEST_PRINT_ENV"] = "1"
+        self.executable(self.home / "relative-ghidra/support/analyzeHeadless", "pass\n")
+        self.put(self.runtime / "ghidra-path", "relative-ghidra\n")
+
+        result = self.launch()
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("REA Ghidra runtime is incomplete; run repository install/rea-ghidra.sh", result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertFalse(self.calls.exists())
+
+    def test_missing_ghidra_record_target_fails_before_node(self):
+        self.launcher_runtime()
+        self.env["REA_TEST_PRINT_ENV"] = "1"
+        self.put(self.runtime / "ghidra-path", str(self.fixture / "missing ghidra") + "\n")
+
+        result = self.launch()
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("REA Ghidra runtime is incomplete; run repository install/rea-ghidra.sh", result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertFalse(self.calls.exists())
+
+    def test_java_record_without_javac_fails_before_node(self):
+        self.launcher_runtime()
+        self.env["REA_TEST_PRINT_ENV"] = "1"
+        java = self.fixture / "jre without compiler"
+        self.executable(java / "bin/java", "pass\n")
+        self.put(self.runtime / "java-home", str(java) + "\n")
+
+        result = self.launch()
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("REA Java runtime is incomplete; run repository install/rea-ghidra.sh", result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertFalse(self.calls.exists())
+
+    def test_native_records_treat_shell_expressions_as_literal_path_data(self):
+        self.launcher_runtime()
+        self.env["REA_TEST_PRINT_ENV"] = "1"
+        ghidra = self.fixture / "ghidra $(touch ghidra-evaluated)"
+        java = self.fixture / "jdk `touch java-evaluated`"
+        self.executable(ghidra / "support/analyzeHeadless", "pass\n")
+        self.executable(java / "bin/java", "pass\n")
+        self.executable(java / "bin/javac", "pass\n")
+        self.put(self.runtime / "ghidra-path", str(ghidra) + "\n")
+        self.put(self.runtime / "java-home", str(java) + "\n")
+
+        result = self.launch()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        child = json.loads(result.stdout)
+        self.assertEqual(child["GHIDRA_INSTALL_DIR"], str(ghidra))
+        self.assertEqual(child["JAVA_HOME"], str(java))
+        self.assertFalse((self.home / "ghidra-evaluated").exists())
+        self.assertFalse((self.home / "java-evaluated").exists())
+        self.assertEqual(self.calls.read_text(), "node-env\n")
 
     @unittest.skipUnless(NODE, "Node required for real installer JavaScript validation")
     def test_install_rerun_converges_and_preserves_unrelated_files(self):
@@ -282,6 +439,64 @@ if os.environ.get("REA_TEST_INCOMPLETE") != "1":
         self.assertEqual(json.loads(launched.stdout), [str(self.runtime / "source/node_modules/rea-agents/scripts/rea.mjs"), "mcp"])
 
     @unittest.skipUnless(NODE, "Node required for real installer JavaScript validation")
+    def test_install_provisions_frida_prebuild_with_pinned_node_then_loads_stub(self):
+        result = self.installer("dev")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.calls.read_text().splitlines()
+        prebuild = str(self.assets / "node_modules/prebuild-install/bin.js")
+        self.assertEqual([json.loads(line.removeprefix("prebuild "))
+                          for line in calls if line.startswith("prebuild ")],
+                         [{"cwd": str(self.assets / "node_modules/frida"),
+                           "args": [prebuild, "--runtime", "napi", "--target", "8"]}])
+        self.assertEqual([json.loads(line.removeprefix("node "))
+                          for line in calls if line.startswith("node ")],
+                         [["--input-type=module", "-", str(self.assets)],
+                          [prebuild, "--runtime", "napi", "--target", "8"],
+                          ["--input-type=module", "-", str(self.assets)]])
+        self.assertEqual(calls[-1], "frida loaded")
+        self.assertEqual(self.launcher.readlink(), self.assets / "rea-mcp")
+        self.assertEqual((self.runtime / "node-path").read_text(), str(self.node) + "\n")
+
+    @unittest.skipUnless(NODE, "Node required for real installer JavaScript validation")
+    def test_frida_prebuild_failure_publishes_no_runtime_and_rerun_recovers(self):
+        self.env["REA_TEST_FRIDA_PREBUILD_FAIL"] = "1"
+        failed = self.installer("dev")
+
+        self.assertEqual(failed.returncode, 17, failed.stderr)
+        self.assertIn("fixture Frida prebuild unavailable", failed.stderr)
+        self.assertFalse(self.launcher.exists())
+        self.assertFalse(self.launcher.with_name("rea").exists())
+        self.assertFalse((self.runtime / "node-path").exists())
+        self.assertFalse((self.runtime / "source").exists())
+        self.assertFalse((self.assets / "node_modules/frida/build/src/frida.js").exists())
+        self.assertNotIn("frida loaded", self.calls.read_text())
+
+        del self.env["REA_TEST_FRIDA_PREBUILD_FAIL"]
+        repaired = self.installer("dev")
+
+        self.assertEqual(repaired.returncode, 0, repaired.stderr)
+        self.assertEqual(self.launcher.readlink(), self.assets / "rea-mcp")
+        self.assertEqual(self.launcher.with_name("rea").readlink(), self.assets / "rea")
+        self.assertEqual((self.runtime / "node-path").read_text(), str(self.node) + "\n")
+        self.assertEqual((self.runtime / "source").readlink(), self.assets)
+        self.assertIn("frida loaded", self.calls.read_text().splitlines())
+
+    @unittest.skipUnless(NODE, "Node required for real installer JavaScript validation")
+    def test_frida_import_failure_prevents_runtime_publication(self):
+        self.env["REA_TEST_FRIDA_LOAD_FAIL"] = "1"
+        result = self.installer("dev")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("fixture Frida binding cannot load", result.stderr)
+        self.assertTrue((self.assets / "node_modules/frida/build/src/frida.js").is_file())
+        self.assertFalse(self.launcher.exists())
+        self.assertFalse(self.launcher.with_name("rea").exists())
+        self.assertFalse((self.runtime / "node-path").exists())
+        self.assertFalse((self.runtime / "source").exists())
+        self.assertNotIn("frida loaded", self.calls.read_text())
+
+    @unittest.skipUnless(NODE, "Node required for real installer JavaScript validation")
     def test_interrupted_dependency_install_is_repaired_by_rerun(self):
         self.env["REA_TEST_INTERRUPT"] = "1"
         interrupted = self.installer("dev")
@@ -304,6 +519,7 @@ if os.environ.get("REA_TEST_INCOMPLETE") != "1":
         incomplete = self.installer("dev")
         self.assertNotEqual(incomplete.returncode, 0)
         self.assertIn("Incomplete or unpinned REA installation", incomplete.stderr)
+        self.assertNotIn("prebuild ", self.calls.read_text())
         self.assertFalse(self.launcher.exists())
         self.assertFalse((self.runtime / "node-path").exists())
         del self.env["REA_TEST_INCOMPLETE"]

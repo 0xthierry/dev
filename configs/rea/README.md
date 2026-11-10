@@ -8,7 +8,7 @@ shared/global Node selection.
 
 ## Install
 
-Full host setup installs prerequisites, REA, and its MCP registrations:
+Full host setup installs prerequisites, REA, Ghidra, native CLI tools, and MCP registrations:
 
 ```bash
 ./setup.sh omarchy # or dev / macbook
@@ -42,10 +42,17 @@ Prerequisites:
 
 The runtime installer runs `npm ci --ignore-scripts --no-audit --no-fund` in this
 directory. It never runs upstream `rea setup`/`rea update` or a floating `npx`
-command. npm lifecycle scripts are disabled, so optional packages that require
-native install hooks (notably Frida) are not provisioned by this installer.
-No native engine, browser, capture session, tunnel, or target program is started
-by setup.
+command. All npm lifecycle scripts stay disabled. After dependency installation,
+it explicitly runs the locked `prebuild-install` tool in the locked Frida package
+to install its platform-specific Node-API 8 binding, then verifies that Frida
+imports with the pinned Node runtime. If no compatible prebuild is available,
+setup fails rather than falling back to a source build. The prebuild comes from
+the Frida version's upstream GitHub release; npm lockfile integrity covers the
+npm packages, not this separately downloaded binary.
+
+Frida is provisioned on all three hosts so rerunning setup does not remove its
+binding. Setup does not attach to a process, start a capture session, launch a
+target program, or change OS security settings.
 
 ## Runtime and clients
 
@@ -54,6 +61,8 @@ by setup.
 | `configs/rea/node_modules/` | Ignored, lockfile-installed runtime dependencies |
 | `~/.local/share/rea/source` | Link to this repo directory |
 | `~/.local/share/rea/node-path` | Absolute pinned Node executable for GUI clients |
+| `~/.local/share/rea/ghidra-path` | Isolated REA-compatible Ghidra installation path |
+| `~/.local/share/rea/java-home` | Isolated full JDK used only by REA |
 | `~/.local/bin/rea` | Repo launcher for CLI diagnostics and analysis |
 | `~/.local/bin/rea-mcp` | Repo launcher for `rea mcp` over stdio |
 
@@ -68,27 +77,70 @@ The `rea` server is registered in Pi, Claude Code, and Codex on all three hosts,
 and Claude Desktop on macbook/omarchy. Pi uses deferred tool exposure. Restart
 your client to load the new registration. ChatGPT is not configured.
 
-## Supported baseline and optional engines
+## Supported capabilities
 
 The installed baseline supports MCP discovery, session diagnostics, and static
 JavaScript/Electron analysis without a native decompiler. It does **not** make
 every advertised tool ready. Check the specific workflow, not the tool count.
 
-Native binary analysis needs a compatible provider such as Ghidra, Hopper, or
-IDA. **The existing repo-managed Ghidra 12.0.4 / Java 17 stack is not compatible
-with REA 6.7.0's Ghidra provider.** Upstream accepts Ghidra 12.1.x with a full
-JDK 21+ and the correct native decompiler. This integration leaves the existing
-stack unchanged. A separate, explicit native-engine installation is needed
-before those tools can work. Android, runtime instrumentation, and capture tools
-also have task-specific dependencies and permissions; they are not silently
-installed or enabled here.
+Live process inspection uses the installed Frida binding. Check the read-only
+process-discovery path with:
 
-If a compatible engine is installed separately, REA supports `GHIDRA_INSTALL_DIR`
-and `JAVA_HOME`. For GUI clients, set absolute paths in the `rea` entry's `env`
-map through the repo-managed configuration workflow; shared MCP refreshes retain
-user environment options. Check it with `rea doctor --provider ghidra --json`.
-Do not run unscoped `rea doctor` as the acceptance check for core MCP readiness:
-it also audits optional tools and can report unhealthy while core workflows work.
+```bash
+rea list-frida-processes --device-id local --format json
+```
+
+This verifies process discovery, not permission to attach to any particular
+process. macOS security policy and target protections still apply. Installing
+Frida does not expose a game's scene graph or automatically recover geometry.
+An already-running MCP server may need a restart after repairing a previously
+failed Frida import.
+
+### Ghidra and native CLI tools
+
+`install/rea-ghidra.sh` installs checksum-pinned **Ghidra 12.1.4** with an
+isolated **Temurin JDK 21**. Full setup calls it after the baseline REA installer;
+it can also run separately:
+
+```bash
+bash install/rea-ghidra.sh macbook --dry-run
+bash install/rea-ghidra.sh macbook
+rea doctor --provider ghidra --format json
+```
+
+The existing ghidra-cli 12.0.4 runtime and global Java 17 selection stay unchanged.
+The REA launcher reads the installer records as plain data, supplies
+`GHIDRA_INSTALL_DIR` unless the caller explicitly sets it, and sets `JAVA_HOME`
+to the recorded JDK for its child process only. GUI clients use the same launcher;
+no per-client environment edit is needed. Restart existing MCP servers to load it.
+Reruns reuse a validated installation and finish interrupted record publication.
+If an owned Ghidra installation is corrupted, setup fails and preserves it;
+rerunning alone does not repair it. Deliberate diagnosis and recovery are needed
+before replacement. User-repointed records and foreign paths are also preserved.
+
+Ghidra's release includes Linux x86_64 binaries. On macOS arm64, the installer
+builds its decompiler and Sleigh compiler from the checksum-verified release
+sources using Xcode Command Line Tools. No Gradle downloads are needed. Allow
+about 1.5–2 GB of temporary disk space for the release, JDK, and build.
+
+The shared package lists include **Rizin** and **GDB** on both platforms and
+**LLDB** on Linux. macOS uses LLDB from Xcode Command Line Tools. Installation
+does not grant debugger permissions, change signing policy, or attach to apps.
+The tested Apple Silicon GDB build can read DWARF 4 symbols but reports
+`Don't know how to run` when launching a native fixture; use LLDB for native
+macOS debugging. GDB's installation alone does not establish native-debug support.
+
+### Commercial and other optional engines
+
+Hopper and IDA are not installed automatically. Hopper's public download is a
+limited demo; IDA Free lacks the Python integration and ARM analysis needed for
+this use case. A suitable licensed edition and its REA adapter configuration
+remain separate. Android and capture tools also have task-specific dependencies
+and permissions; they are not silently installed or enabled here.
+
+Use provider-scoped checks. Do not run unscoped `rea doctor` as the acceptance
+check for core MCP readiness: it also audits optional tools and can report
+unhealthy while the configured workflows work.
 
 Upstream references:
 
@@ -100,8 +152,9 @@ Upstream references:
 ```bash
 rea --version
 python3 tests/rea.test.py
+python3 tests/rea-ghidra.test.py
 ~/.local/share/mcp-services/venv/bin/python tests/mcp-clients.test.py
-python3 scripts/check-rea-mcp.py
+python3 scripts/check-rea-mcp.py --frida
 ```
 
 `tests/rea.test.py` is offline integration coverage: real installer/launcher
@@ -113,7 +166,8 @@ server, verifies the pinned server version, lists tools, checks session status,
 and analyzes a temporary JavaScript fixture. It does not inspect user projects,
 connect to browsers, or require optional engines. It closes its server and
 removes its fixture. A successful report proves that path, not macOS execution
-or optional native providers.
+or optional native providers. With `--frida`, it also verifies local process
+discovery finds its own PID. It never attaches to any process.
 
 ## Upgrade deliberately
 

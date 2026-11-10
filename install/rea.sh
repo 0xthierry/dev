@@ -39,7 +39,9 @@ install_rea() (
   install_rea_prereqs "$host" || return
   if (( ${DRY_RUN:-0} )); then
     dry_run_cmd npm ci --prefix "$assets" --ignore-scripts --no-audit --no-fund
-    log_item "Would record the absolute Node $REA_NODE_VERSION executable for GUI clients"
+    log_item "Would install the lockfile-pinned Frida prebuild from $assets/node_modules/frida"
+    dry_run_cmd node "$assets/node_modules/prebuild-install/bin.js" --runtime napi --target 8
+    log_item "Would verify Frida loads and record the absolute Node $REA_NODE_VERSION executable for GUI clients"
   else
     node_dir="$("$(resolve_mise_bin)" where "node@$REA_NODE_VERSION")" || return
     node_bin="$node_dir/bin/node"
@@ -61,6 +63,17 @@ if (installed.version !== expected || !fs.existsSync(path.join(assets, 'node_mod
   throw new Error('Incomplete or unpinned REA installation');
 }
 JS
+    # Provision only Frida's prebuilt Node-API binding. Keep every package lifecycle
+    # script disabled and fail if no prebuild exists; never fall back to a source build.
+    (
+      cd "$assets/node_modules/frida" || exit
+      "$node_bin" "$assets/node_modules/prebuild-install/bin.js" --runtime napi --target 8
+    ) || return
+    "$node_bin" --input-type=module - "$assets" <<'JS' || return
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+await import(pathToFileURL(path.join(process.argv[2], 'node_modules/frida/build/src/frida.js')).href);
+JS
     ensure_dir "$runtime" || return
     tmp="$(mktemp "$runtime/.node-path.XXXXXX")" || return
     trap '[[ -z "$tmp" ]] || rm -f -- "$tmp"' EXIT
@@ -73,7 +86,8 @@ JS
   safe_link_path "$assets/rea" "$HOME/.local/bin/rea" "REA CLI" || return
   safe_link_path "$assets/rea-mcp" "$HOME/.local/bin/rea-mcp" "REA MCP" || return
   log_item "REA runtime installed; install/mcp.sh merges the shared MCP registrations"
-  log_item "Optional native engines are separate; the existing Ghidra 12.0/Java 17 stack is not compatible with REA"
+  log_item "Frida binding installed; process attachment still requires OS and target permissions"
+  log_item "Other native engines are separate; the existing Ghidra 12.0/Java 17 stack is not compatible with REA"
 )
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

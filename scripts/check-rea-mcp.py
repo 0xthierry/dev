@@ -17,10 +17,10 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def check(launcher):
+def check(launcher, frida=False):
     expected_version = json.loads((ROOT / "configs/rea/package.json").read_text())["dependencies"]["rea-agents"]
     with tempfile.TemporaryDirectory(prefix="rea-mcp-check-") as directory, tempfile.TemporaryFile() as errors:
-        fixture = Path(directory)
+        fixture = Path(directory).resolve()
         (fixture / "package.json").write_text(json.dumps({"name": "rea-check-fixture", "version": "1.0.0", "main": "index.js"}))
         (fixture / "index.js").write_text("module.exports = function greet(name) { return 'Hello, ' + name; };\n")
         process = subprocess.Popen([str(launcher)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -94,8 +94,19 @@ def check(launcher):
             observed = [{key: module[key] for key in ("path", "module_format", "export_names")} for module in modules]
             if observed != [{"path": "index.js", "module_format": "commonjs", "export_names": ["default"]}]:
                 raise RuntimeError(f"REA did not recover the fixture's CommonJS export: {observed}")
-            return {"status": "passed", "server_version": actual_version, "tools": len(tools),
-                    "session_check": "passed", "javascript_analysis": "index.js CommonJS default export recovered"}
+            report = {"status": "passed", "server_version": actual_version, "tools": len(tools),
+                      "session_check": "passed", "javascript_analysis": "index.js CommonJS default export recovered"}
+            if frida:
+                discovery = request("tools/call", {"name": "list_frida_processes", "arguments": {"device_id": "local"}})
+                if discovery.get("isError"):
+                    raise RuntimeError(f"REA Frida discovery failed: {discovery}")
+                result = discovery.get("structuredContent")
+                if result is None:
+                    result = json.loads(next(part["text"] for part in discovery["content"] if part["type"] == "text"))
+                if not any(item["pid"] == os.getpid() for item in result.get("processes", [])):
+                    raise RuntimeError("REA Frida discovery did not find this verification process")
+                report["frida_discovery"] = "local verification process found; no process attachment attempted"
+            return report
         finally:
             stdin.close()
             try:
@@ -113,5 +124,6 @@ def check(launcher):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--launcher", type=Path, default=Path.home() / ".local/bin/rea-mcp")
+    parser.add_argument("--frida", action="store_true", help="Also verify local Frida process discovery (no attachment)")
     args = parser.parse_args()
-    print(json.dumps(check(args.launcher), indent=2))
+    print(json.dumps(check(args.launcher, args.frida), indent=2))

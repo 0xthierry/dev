@@ -33,7 +33,7 @@ The two layers don't validate each other. **Most recurring bug:** config deploye
 | `configs/browser-automation/` | `~/.local/bin/{playwriter,playwriter-mcp,chrome-devtools-mcp}`, native client MCP entries | `install/browser-automation.sh` via `install/mcp.sh`; pinned runtimes on all hosts; Playwriter primary controller, Chrome DevTools diagnostics/capability fallback; ChatGPT uses explicit `chatgpt-browser-mcp` tunnels and account authorization |
 | Cua Driver | `~/.local/bin/cua-driver`, `~/.cua-driver/`, repo-owned Linux skill links; `~/.local/bin/cua-omarchy-{display,window}` and `~/.config/systemd/user/cua-driver{,-x11}.service` on Omarchy | `install/cua-driver.sh`; pinned Linux runtime and concise repo-owned `configs/cua-driver/skill/` on `dev`/`omarchy`, never macOS; Omarchy adds `grim`, allowlisted display/window helpers, native Wayland capture, and a separate private X11 endpoint for verified Alacritty foreground input; no Hyprland plugin |
 | `configs/creative-mcp/` | Blender add-on/runtime, `~/.local/bin/{blender-mcp,roblox-studio-mcp,chatgpt-creative-mcp}`, Claude/Codex MCP entries | `install/creative-mcp.sh`; macbook/omarchy only; native Studio on Mac, Vinegar on Linux; ChatGPT tunnel is explicit-start and requires account authorization |
-| `configs/rea/` | `~/.local/bin/{rea,rea-mcp}`, `~/.local/share/rea/`, shared MCP entries | `install/rea.sh` plus `install/rea-prereqs.sh`; pinned REA and isolated Node/npm, Linux procps-ng, all hosts; optional native engines are separate |
+| `configs/rea/` | `~/.local/bin/{rea,rea-mcp}`, `~/.local/share/rea/`, shared MCP entries | `install/rea.sh`, `install/rea-prereqs.sh`, and `install/rea-ghidra.sh`; pinned REA/Frida, isolated Node/npm and Ghidra 12.1.4/JDK 21, shared Rizin/GDB and Linux LLDB; macOS uses Xcode LLDB; commercial engines remain separate |
 | `configs/claude-desktop-patch/` | pinned vendor `/Applications/Claude.app` and shared `~/.local/bin/claude` engine | macbook only; `install/claude-desktop-patch.sh` and `scripts/claude_desktop_*`; Desktop 4.23118.1 / Code 2.1.321, checksum-pinned; snapshot patch is staging-only because macOS rejects ad-hoc signing with restricted vendor entitlements |
 | Moshi host integration | `~/.local/bin/herdr`, refreshed agent hooks, `moshi-hook` user service, mosh firewall rule | `install/moshi.sh` |
 | `configs/shell/` | sourced via `~/.zshrc` / `~/.zshenv` | written by `install/shell.sh` |
@@ -57,7 +57,7 @@ Names differ between Homebrew and pacman (`tree-sitter-cli` vs `tree-sitter`, `m
 | Task | Location |
 |---|---|
 | Shared Neon/Datadog US5/Figma/ai-memory/REA/Playwriter/Chrome DevTools/Blender/Roblox MCP | `configs/mcp/`, `install/mcp.sh`; merge after agent/hook installers; OAuth, Playwriter extension authorization, and ChatGPT tunnel/account authorization remain explicit |
-| Add/update REA MCP | `configs/rea/`, `install/rea.sh`, `install/rea-prereqs.sh`, shared MCP catalog; locked npm dependencies, no launch-time downloads; current Ghidra 12.0.4/Java 17 stack is incompatible with REA's Ghidra provider |
+| Add/update REA MCP | `configs/rea/`, `install/rea.sh`, `install/rea-prereqs.sh`, `install/rea-ghidra.sh`, shared MCP catalog; locked npm dependencies plus explicit Frida prebuild, no launch-time downloads; isolated Ghidra 12.1.4/JDK 21 leaves the old ghidra-cli runtime and global Java unchanged |
 | Add shared CLI tool | `install/packages/common.sh` |
 | Lua/Luau servers and Lua linting | `install/packages/common.sh` (LuaLS + Luacheck), `install/lua-lsp.sh` (checksum-pinned standalone Luau + Claude plugin registration), `configs/agents/claude/plugins/` (local Luau plugin), `configs/nvim/` (system servers + Luacheck); `.lua` is Lua, `.luau` is standard Luau; Roblox definitions/sourcemaps remain project-specific |
 | Multi-account Codex proxy for Pi | `install/cliproxyapi.sh`, `configs/cliproxyapi/`, `scripts/cliproxy` (default Pi provider; Codex CLI stays direct; OAuth state stays local) |
@@ -101,8 +101,9 @@ python3 tests/ai-memory-skills.test.py
 python3 tests/mcp-runtime.test.py
 python3 tests/browser-automation.test.py
 python3 tests/rea.test.py
-# Requires installed REA; real stdio MCP against an isolated JS fixture:
-python3 scripts/check-rea-mcp.py
+python3 tests/rea-ghidra.test.py
+# Requires installed REA; real stdio MCP against an isolated JS fixture and Frida discovery:
+python3 scripts/check-rea-mcp.py --frida
 bash tests/blender-mcp.test.sh
 python3 tests/creative-mcp.test.py
 python3 tests/creative-mcp-tunnel.test.py

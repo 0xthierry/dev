@@ -9,7 +9,25 @@ if [[ "$node" != /* || ! -x "$node" || ! -f "$entry" ]]; then
   printf 'error: REA runtime is incomplete; run repository install/rea.sh for this host\n' >&2
   exit 1
 fi
-# GUI clients need the real Node executable and the platform's process utilities.
-PATH="$(dirname "$node"):${PATH:-/usr/bin:/bin}:/usr/bin:/bin:/usr/sbin:/sbin"
+# Read installer records as data, never shell code. Explicit caller overrides win.
+if [[ -z "${GHIDRA_INSTALL_DIR:-}" && -f "$runtime/ghidra-path" ]]; then
+  IFS= read -r GHIDRA_INSTALL_DIR < "$runtime/ghidra-path"
+  if [[ "$GHIDRA_INSTALL_DIR" != /* || ! -x "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" ]]; then
+    printf 'error: REA Ghidra runtime is incomplete; run repository install/rea-ghidra.sh for this host\n' >&2
+    exit 1
+  fi
+  export GHIDRA_INSTALL_DIR
+fi
+# The repo's global Java can remain at 17; only REA uses this isolated full JDK.
+if [[ -f "$runtime/java-home" ]]; then
+  IFS= read -r rea_java_home < "$runtime/java-home"
+  if [[ "$rea_java_home" != /* || ! -x "$rea_java_home/bin/java" || ! -x "$rea_java_home/bin/javac" ]]; then
+    printf 'error: REA Java runtime is incomplete; run repository install/rea-ghidra.sh for this host\n' >&2
+    exit 1
+  fi
+  export JAVA_HOME="$rea_java_home"
+fi
+# GUI clients need the pinned Node, process utilities, and package-managed tools.
+PATH="$(dirname "$node"):${PATH:-/usr/bin:/bin}:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin"
 export PATH
 exec "$node" "$entry" "$@"
