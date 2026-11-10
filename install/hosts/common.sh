@@ -18,6 +18,7 @@ source "$REPO_ROOT/install/rea.sh"
 source "$REPO_ROOT/install/rea-ghidra.sh"
 source "$REPO_ROOT/install/neovim.sh"
 source "$REPO_ROOT/install/lua-lsp.sh"
+source "$REPO_ROOT/install/rokit.sh"
 source "$REPO_ROOT/install/github-cli.sh"
 source "$REPO_ROOT/install/tools.sh"
 source "$REPO_ROOT/install/moshi.sh"
@@ -78,6 +79,7 @@ apply_shared_machine_state() {
   install_github_cli
   install_runtimes
   install_luau_lsp
+  install_rokit
   apply_tool_configs
   write_env_file
   apply_shell_setup

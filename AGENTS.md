@@ -60,6 +60,7 @@ Names differ between Homebrew and pacman (`tree-sitter-cli` vs `tree-sitter`, `m
 | Add/update REA MCP | `configs/rea/`, `install/rea.sh`, `install/rea-prereqs.sh`, `install/rea-ghidra.sh`, shared MCP catalog; locked npm dependencies plus explicit Frida prebuild, no launch-time downloads; isolated Ghidra 12.1.4/JDK 21 leaves the old ghidra-cli runtime and global Java unchanged |
 | Add shared CLI tool | `install/packages/common.sh` |
 | Lua/Luau servers and Lua linting | `install/packages/common.sh` (LuaLS + Luacheck), `install/lua-lsp.sh` (checksum-pinned standalone Luau + Claude plugin registration), `configs/agents/claude/plugins/` (local Luau plugin), `configs/nvim/` (system `lua_ls` + Luacheck; `luau-lsp.nvim` in `lua/custom/plugins/luau.lua` runs the standalone Luau binary and must not be paired with nvim-lspconfig's `luau_lsp`); `.lua` is Lua, `.luau` is standard Luau outside a Rojo project and Roblox Luau (types, sourcemap, Studio companion, StyLua, Selene) inside one; Rojo, StyLua and Selene come from each project's `rokit.toml` |
+| Roblox toolchain manager | `install/rokit.sh` (checksum-pinned Rokit, self-installed into `~/.rokit` on every host); `configs/shell/zshenv` sources `~/.rokit/env`; Rojo, Wally, Selene, StyLua and Lune are pinned per project in `rokit.toml`, never installed globally |
 | Multi-account Codex proxy for Pi | `install/cliproxyapi.sh`, `configs/cliproxyapi/`, `scripts/cliproxy` (default Pi provider; Codex CLI stays direct; OAuth state stays local) |
 | Shared Claude/Codex/Pi project memory | `install/ai-memory.sh`, `install/mcp.sh` and `configs/mcp/` for Pi native MCP tools, plus `configs/agents/pi/extensions/ai-memory-pi.ts` for capture/handoff hooks only (do not run `install-hooks --agent pi --apply`) |
 | Add tool config | `configs/cli/` plus `install/tools.sh` if needed |
@@ -90,6 +91,7 @@ Default to shared. Only touch `install/hosts/{host}.sh` when the user names a ho
 bash -n setup.sh install/*.sh install/hosts/*.sh
 shellcheck setup.sh install/*.sh install/hosts/*.sh
 python3 tests/lua-lsp.test.py
+python3 tests/rokit.test.py
 python3 tests/claude-desktop-snapshot-patch.test.py
 python3 tests/claude-desktop-install.test.py
 # Requires installed Neovim plugins, LuaLS, Luau LSP, and Luacheck:

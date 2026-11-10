@@ -11,4 +11,6 @@ if [[ -f "${HOME}/.secrets" ]]; then
   source "${HOME}/.secrets"
   set +a
 fi
-. "$HOME/.rokit/env"
+# Rokit (Roblox toolchain manager), installed by install/rokit.sh. Keep this exact
+# path: Rokit's self-install looks for it and appends a line if it is missing.
+[ -f "$HOME/.rokit/env" ] && . "$HOME/.rokit/env"
