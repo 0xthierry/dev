@@ -8,15 +8,26 @@ and Luacheck:
 - `.lua` uses `lua_ls` with `lua-language-server` from Homebrew/pacman on PATH.
   The executable is resolved before Mason changes PATH, preserving the existing
   Lua completion settings and lazydev support for Neovim configuration.
-- `.luau` uses `luau_lsp` with `~/.local/bin/luau-lsp lsp`, the pinned standalone
-  binary installed by setup. This deliberately bypasses project-manager shims.
-- Both are explicitly enabled and excluded from Mason's installation and
-  auto-enable lists. Existing Mason copies are not deleted.
-- Luau uses the `standard` platform. Roblox definitions, sourcemaps, Studio
-  integration, and reclassifying Roblox `.lua` files are project-specific setup,
-  not global defaults.
+- `.luau` uses `luau-lsp.nvim` (`lua/custom/plugins/luau.lua`), which registers
+  and enables its own `luau-lsp` config and runs `~/.local/bin/luau-lsp lsp`, the
+  pinned standalone binary installed by setup. This deliberately bypasses
+  project-manager shims. nvim-lspconfig's `luau_lsp` must stay disabled: enabling
+  it as well starts a second server.
+- `lua_ls` and `luau_lsp` are excluded from Mason's installation and auto-enable
+  lists. Existing Mason copies are not deleted.
+- Luau uses the `standard` platform by default. Inside a Rojo project (a
+  `*.project.json` above the file) the plugin switches to the `roblox` platform:
+  Roblox type definitions and API docs, a watched `rojo sourcemap` (from
+  `test.project.json` when the project has one, else `default.project.json`), and
+  the Studio companion plugin on port 3667. The mode is chosen when the first
+  Luau buffer of a session opens and lasts for that session. Reclassifying Roblox
+  `.lua` files stays project-specific (`.nvim.lua`).
+- `.luau` is formatted with StyLua: the Rokit-pinned binary when a `rokit.toml` is
+  above the file, else the Mason copy. It is linted with Selene only when a
+  `selene.toml` is above the file, using the `selene` on PATH (the Rokit shim).
+- `*.project.json` files get the Rojo JSON schema through `jsonls`.
 - `.lua` also runs the OS-installed `luacheck` through nvim-lint on buffer entry,
-  after saving, after leaving insert mode, and with `<leader>ll`. `.luau` is not
+  after saving, after leaving insert mode, and with `<leader>ll`. `.luau` is never
   sent to Luacheck, which does not understand Luau syntax.
 - Luacheck discovers configuration from the buffer's directory. This directory's
   `.luacheckrc` allows Neovim's `vim` and the Snacks plugin's `Snacks` globals;

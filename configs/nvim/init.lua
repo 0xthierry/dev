@@ -254,7 +254,7 @@ rtp:prepend(lazypath)
 local treesitter_install_dir = vim.fn.stdpath 'data' .. '/site'
 local treesitter_parsers = {
   -- core
-  'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc',
+  'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'luau', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc',
   -- web / TS stack (vtsls, vue_ls, tailwindcss)
   'typescript', 'tsx', 'javascript', 'jsdoc', 'vue', 'css', 'scss',
   -- data formats (jsonls, yamlls) — jsonc has no dedicated parser, registered as json below
@@ -709,7 +709,8 @@ require('lazy').setup({
       local capabilities = require('blink.cmp').get_lsp_capabilities()
 
       -- Enable the following language servers
-      --  Mason installs these, except the system-managed Lua and Luau servers below.
+      --  Mason installs these, except the system-managed Lua server below.
+      --  Luau is handled by luau-lsp.nvim (lua/custom/plugins/luau.lua), not this table.
       --
       --  Configure VUE LSP
 
@@ -760,18 +761,25 @@ require('lazy').setup({
             },
           },
         },
-        luau_lsp = {
-          -- Bypass project-manager shims (e.g. Rokit); setup installs this standalone binary.
-          cmd = { vim.fn.expand '~/.local/bin/luau-lsp', 'lsp' },
-          settings = {
-            ['luau-lsp'] = { platform = { type = 'standard' } },
-          },
-        },
         vue_ls = {},
         tailwindcss = {},
         bashls = {},
         helm_ls = {},
-        jsonls = {},
+        jsonls = {
+          settings = {
+            json = {
+              schemas = {
+                {
+                  description = 'Rojo project file',
+                  fileMatch = { '*.project.json' },
+                  -- stylua: ignore
+                  url = 'https://raw.githubusercontent.com/rojo-rbx/vscode-rojo/master/schemas/project.template.schema.json', -- luacheck: ignore 631
+                },
+              },
+              validate = { enable = true },
+            },
+          },
+        },
         yamlls = {},
         vtsls = {
           settings = {
@@ -813,7 +821,7 @@ require('lazy').setup({
       --
       -- You can add other tools here that you want Mason to install
       -- for you, so that they are available from within Neovim.
-      local system_servers = { 'lua_ls', 'luau_lsp' }
+      local system_servers = { 'lua_ls' }
       local ensure_installed = vim.tbl_filter(function(server)
         return not vim.tbl_contains(system_servers, server)
       end, vim.tbl_keys(servers))
@@ -832,7 +840,8 @@ require('lazy').setup({
 
       require('mason-lspconfig').setup {
         ensure_installed = {}, -- explicitly set to an empty table (Kickstart populates installs via mason-tool-installer)
-        automatic_enable = { exclude = system_servers },
+        -- luau_lsp stays excluded: luau-lsp.nvim enables its own `luau-lsp` config.
+        automatic_enable = { exclude = { 'lua_ls', 'luau_lsp' } },
       }
       -- Mason only auto-enables its installed servers; setup owns these executables.
       vim.lsp.enable(system_servers)
@@ -871,6 +880,7 @@ require('lazy').setup({
       end,
       formatters_by_ft = {
         lua = { 'stylua' },
+        luau = { 'stylua' },
         javascript = { 'eslint_d', 'eslint', 'prettier_d', 'prettier', '', stop_after_first = true },
         typescript = { 'eslint_d', 'eslint', 'prettier_d', 'prettier', stop_after_first = true },
         vue = { 'eslint_d', 'eslint', 'prettier_d', 'prettier', stop_after_first = true },
@@ -881,6 +891,19 @@ require('lazy').setup({
         --
         -- You can use 'stop_after_first' to run the first available formatter from the list
         -- javascript = { "prettierd", "prettier", stop_after_first = true },
+      },
+      formatters = {
+        stylua = {
+          -- In a project that pins tools with Rokit, format with its pinned StyLua
+          -- so the editor and CI agree; elsewhere use the Mason copy.
+          command = function(_, ctx)
+            local shim = vim.fn.expand '~/.rokit/bin/stylua'
+            if vim.fs.root(ctx.dirname, 'rokit.toml') and vim.fn.executable(shim) == 1 then
+              return shim
+            end
+            return 'stylua'
+          end,
+        },
       },
     },
   },

@@ -33,21 +33,30 @@ return {
         end
       end
 
+      -- Luau is linted with Selene, and only inside a project that has a
+      -- selene.toml: Selene comes from that project's toolchain (Rokit), and its
+      -- config is read from the working directory.
+      local function run_lint()
+        if not vim.bo.modifiable then
+          return
+        end
+        if vim.bo.filetype == 'luau' then
+          local root = vim.fs.root(0, 'selene.toml')
+          if root and vim.fn.executable 'selene' == 1 then
+            lint.try_lint('selene', { cwd = root })
+          end
+          return
+        end
+        lint.try_lint()
+      end
+
       local lint_augroup = vim.api.nvim_create_augroup('lint', { clear = true })
       vim.api.nvim_create_autocmd({ 'BufEnter', 'BufWritePost', 'InsertLeave' }, {
         group = lint_augroup,
-        callback = function()
-          if vim.bo.modifiable then
-            lint.try_lint()
-          end
-        end,
+        callback = run_lint,
       })
 
-      vim.keymap.set('n', '<leader>ll', function()
-        if vim.bo.modifiable then
-          lint.try_lint()
-        end
-      end, { desc = 'Trigger linting for current file' })
+      vim.keymap.set('n', '<leader>ll', run_lint, { desc = 'Trigger linting for current file' })
     end,
   },
 }
