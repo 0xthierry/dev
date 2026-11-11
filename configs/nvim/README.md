@@ -19,7 +19,10 @@ and Luacheck:
   `*.project.json` above the file) the plugin switches to the `roblox` platform:
   Roblox type definitions and API docs, a watched `rojo sourcemap` (from
   `test.project.json` when the project has one, else `default.project.json`), and
-  the Studio companion plugin on port 3667. The mode is chosen when the first
+  the Studio companion plugin on port 3667, and auto-imports (completing a
+  service or a project module also writes its `game:GetService` or `require`
+  line). Only one Neovim session can hold port 3667: a later session skips the
+  companion and keeps the language server. The mode is chosen when the first
   Luau buffer of a session opens and lasts for that session. Reclassifying Roblox
   `.lua` files stays project-specific (`.nvim.lua`).
 - `.luau` is formatted with StyLua: the Rokit-pinned binary when a `rokit.toml` is

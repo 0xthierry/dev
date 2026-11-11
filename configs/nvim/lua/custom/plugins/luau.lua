@@ -16,6 +16,20 @@ local function rojo_root(bufnr)
   end)
 end
 
+local COMPANION_PORT = 3667
+
+-- The Studio companion server listens on one fixed port, so only one Neovim
+-- can own it. A second session in a Roblox project must skip it: when the
+-- port is taken, luau-lsp.nvim fails during setup and no language server
+-- starts at all.
+local function port_is_free(port)
+  local tcp = vim.uv.new_tcp()
+  -- bind alone succeeds on a port another process listens on; listen fails.
+  local ok = tcp:bind('127.0.0.1', port) == 0 and tcp:listen(1, function() end) == 0
+  tcp:close()
+  return ok
+end
+
 return {
   {
     'lopi-py/luau-lsp.nvim',
@@ -31,10 +45,23 @@ return {
         project_file = 'test.project.json'
       end
 
-      -- Lets the server notice sourcemap.json changing on disk.
       vim.lsp.config('luau-lsp', {
+        -- Lets the server notice sourcemap.json changing on disk.
         capabilities = {
           workspace = { didChangeWatchedFiles = { dynamicRegistration = true } },
+        },
+        settings = {
+          ['luau-lsp'] = {
+            completion = {
+              -- Auto-imports: completing a service or a module from the
+              -- sourcemap also writes its `game:GetService` or `require` line.
+              imports = {
+                enabled = roblox,
+                suggestServices = true,
+                suggestRequires = true,
+              },
+            },
+          },
         },
       })
 
@@ -46,8 +73,9 @@ return {
           rojo_project_file = project_file,
         },
         -- Live DataModel completion from Studio; needs the "Luau Language
-        -- Server Companion" plugin installed in Studio.
-        plugin = { enabled = roblox },
+        -- Server Companion" plugin installed in Studio. Only the first Neovim
+        -- session gets it (see port_is_free).
+        plugin = { enabled = roblox and port_is_free(COMPANION_PORT), port = COMPANION_PORT },
         -- The standalone binary pinned by install/lua-lsp.sh, not a
         -- project-manager shim that only resolves inside some projects.
         server = { path = vim.fn.expand '~/.local/bin/luau-lsp' },
