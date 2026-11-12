@@ -61,6 +61,10 @@ return {
                 suggestRequires = true,
               },
             },
+            -- Type `game`, `script` and `workspace` from the sourcemap and the
+            -- Roblox API. Off by default in luau-lsp, which leaves them `any`
+            -- so no call on a Roblox service is checked.
+            diagnostics = { strictDatamodelTypes = roblox },
           },
         },
       })
