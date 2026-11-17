@@ -7,6 +7,24 @@
       "authHeader": true,
       "models": [
         {
+          "id": "gpt-6.2-sol",
+          "name": "GPT-6.2 Sol (local Codex account pool)",
+          "reasoning": true,
+          "thinkingLevelMap": { "off": null, "minimal": null, "xhigh": "xhigh", "max": "max" },
+          "input": ["text", "image"],
+          "contextWindow": 500000,
+          "maxTokens": 32768
+        },
+        {
+          "id": "gpt-6.2-astra",
+          "name": "GPT-6.2 Astra (local Codex account pool)",
+          "reasoning": true,
+          "thinkingLevelMap": { "off": null, "minimal": null, "xhigh": "xhigh", "max": "max" },
+          "input": ["text", "image"],
+          "contextWindow": 272000,
+          "maxTokens": 32768
+        },
+        {
           "id": "gpt-5.3-codex-spark",
           "name": "GPT-5.3 Codex Spark (local Codex account pool)",
           "reasoning": true,

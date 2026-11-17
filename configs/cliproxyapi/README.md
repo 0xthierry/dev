@@ -107,8 +107,10 @@ The repo-managed Fast Mode extension explicitly opts eligible proxy-backed Luna 
 into `service_tier: "priority"`. Pi uses SSE rather than WebSockets to avoid
 connection-bound response chaining across accounts. Model access still depends on
 account entitlements.
-The repo-managed Pi catalog maps these nine Codex chat models:
+The repo-managed Pi catalog maps these eleven Codex chat models:
 
+- `cliproxyapi/gpt-6.2-sol`
+- `cliproxyapi/gpt-6.2-astra`
 - `cliproxyapi/gpt-5.3-codex-spark`
 - `cliproxyapi/gpt-5.5`
 - `cliproxyapi/gpt-5.6-luna`
@@ -121,20 +123,31 @@ The repo-managed Pi catalog maps these nine Codex chat models:
 
 This is a pinned mapping in `configs/agents/pi/cliproxyapi-models.json`, not automatic
 model discovery. Recheck the full Codex catalog when updating Pi. Spark is text-only
-with 128K context; the others accept images and use 272K context. All retain the
-proxy's conservative 32K output cap. Proxy limits and actual model limits may differ.
+with 128K context. GPT-6.2 Sol uses 500K context and GPT-6.2 Astra uses 272K,
+matching their live Codex catalog defaults; both accept text and images. The older
+Pi mappings retain their existing 272K/300K budgets. All retain the proxy's
+conservative 32K output cap. Proxy limits and actual model limits may differ.
+The new entries do not change the default model or existing session selections.
 Reasoning mappings retain the proxy's disabled off/minimal settings and expose the
 extended levels Pi supports. Subscription usage has no per-token cost estimate in
 these custom entries.
 
 A Pi mapping does not grant upstream access. CLIProxyAPI's upstream static catalogs
-currently omit the three newest IDs. The repo-owned `codex-current-models` plugin
-checks each account's live Codex model catalog, registers the union of supported IDs,
+can omit newer IDs. The repo-owned `codex-current-models` plugin checks each
+account's live Codex model catalog, registers the union of supported tracked IDs,
 and keeps partially rolled-out models on eligible accounts. It uses the real model
-IDs without aliases or substitution. Live verification returned successful responses
-from all three models; repeated Daybreak requests stayed on the one account that
-currently advertises it. Image-generation and internal review IDs advertised by the
-proxy are not general Codex chat models and are not included.
+IDs without aliases or substitution. Discovery uses Codex client version `0.169.0`,
+aligned with the repository's Codex CLI pin: GPT-6.2 requires at least `0.166.0`
+and is hidden from the older `0.162.1` discovery request. The plugin tracks both
+GPT-6.2 models plus GPT-6.1 Sol, GPT-6 Luna, and Daybreak. Models absent from every
+account's live catalog are not registered by the plugin.
+
+Live verification of both GPT-6.2 models returned `completed` responses with the
+exact requested model ID through `/v1/responses`. Each also completed a real Pi
+`read` tool round trip at `high` reasoning through the deployed proxy. This verifies
+basic inference, streaming, and tool results, not every reasoning level or failover.
+Image-generation and internal review IDs advertised by the proxy are not general
+Codex chat models and are not included.
 
 ## Claude Code subscription pool (opt-in)
 

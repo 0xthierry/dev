@@ -71,6 +71,124 @@ func TestDiscoverRegisteredModelsUsesUnionOfLiveAccountCatalogs(t *testing.T) {
 	}
 }
 
+func TestDiscoverRegisteredGPT62ModelsUsesLiveCatalogAndTargetMetadata(t *testing.T) {
+	for _, tc := range []struct {
+		id            string
+		displayName   string
+		contextLength int
+	}{
+		{"gpt-6.2-sol", "GPT-6.2 Sol", 500000},
+		{"gpt-6.2-astra", "GPT-6.2 Astra", 272000},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			// Arrange: only one account advertises this model; other targets must not leak in.
+			installDiscoveryFakes(t,
+				[]hostAuthFile{{ID: "auth-a", AuthIndex: "index-a"}, {ID: "auth-b", AuthIndex: "index-b"}},
+				map[string]map[string]bool{
+					"auth-a": {"gpt-6.1-sol": true},
+					"auth-b": {tc.id: true, "untracked-model": true},
+				}, nil,
+			)
+
+			// Act
+			models, err := discoverRegisteredModels()
+
+			// Assert
+			if err != nil {
+				t.Fatalf("discoverRegisteredModels() error = %v", err)
+			}
+			if len(models) != 2 || models[0].ID != "gpt-6.1-sol" {
+				t.Fatalf("registered models = %#v, want only gpt-6.1-sol and %s", models, tc.id)
+			}
+			want := modelInfo{
+				ID: tc.id, Object: "model", OwnedBy: "openai", DisplayName: tc.displayName,
+				SupportedGenerationMethods: []string{"chat"}, ContextLength: tc.contextLength,
+				MaxCompletionTokens: 32768, SupportedInputModalities: []string{"text", "image"},
+				Thinking:    &thinkingInfo{Levels: []string{"low", "medium", "high", "xhigh", "max", "ultra"}},
+				UserDefined: true,
+			}
+			if !reflect.DeepEqual(models[1], want) {
+				t.Fatalf("registered model = %#v, want %#v", models[1], want)
+			}
+		})
+	}
+}
+
+func TestSchedulerGPT62ModelEligibility(t *testing.T) {
+	for _, model := range []string{"gpt-6.2-sol", "gpt-6.2-astra"} {
+		t.Run(model, func(t *testing.T) {
+			for _, tc := range []struct {
+				name     string
+				models   map[string]map[string]bool
+				failures map[string]error
+				want     schedulerPickResponse
+				wantErr  string
+			}{
+				{
+					name: "partial rollout selects only eligible account",
+					models: map[string]map[string]bool{
+						"auth-a": {model: true}, "auth-b": {},
+					},
+					want: schedulerPickResponse{Handled: true, AuthID: "auth-a"},
+				},
+				{
+					name: "no account advertises model",
+					models: map[string]map[string]bool{
+						"auth-a": {}, "auth-b": {},
+					},
+					wantErr: "no pooled Codex credential advertises " + model,
+				},
+				{
+					name: "no account catalog can be verified",
+					failures: map[string]error{
+						"auth-a": errors.New("catalog unavailable"), "auth-b": errors.New("catalog unavailable"),
+					},
+					wantErr: "could not verify any Codex credential for " + model,
+				},
+				{
+					name: "fully eligible delegates to built-in scheduler",
+					models: map[string]map[string]bool{
+						"auth-a": {model: true}, "auth-b": {model: true},
+					},
+					want: schedulerPickResponse{Handled: false},
+				},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					// Arrange: the unsupported account has higher priority during partial rollout.
+					installDiscoveryFakes(t,
+						[]hostAuthFile{{ID: "auth-a", AuthIndex: "index-a"}, {ID: "auth-b", AuthIndex: "index-b"}},
+						tc.models, tc.failures,
+					)
+					req := schedulerPickRequest{
+						Provider: "codex", Model: model,
+						Candidates: []schedulerCandidate{
+							{ID: "auth-a", Provider: "codex", Priority: 0},
+							{ID: "auth-b", Provider: "codex", Priority: 100},
+						},
+					}
+
+					// Act
+					raw, err := handleSchedulerPick(req)
+
+					// Assert
+					if tc.wantErr != "" {
+						if err == nil || err.Error() != tc.wantErr {
+							t.Fatalf("handleSchedulerPick() error = %v, want %q", err, tc.wantErr)
+						}
+						return
+					}
+					if err != nil {
+						t.Fatalf("handleSchedulerPick() error = %v", err)
+					}
+					if response := decodeSchedulerResponse(t, raw); response != tc.want {
+						t.Fatalf("scheduler response = %#v, want %#v", response, tc.want)
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestSchedulerPinsPartiallyAvailableModelToEligibleAccount(t *testing.T) {
 	// Arrange
 	installDiscoveryFakes(t,
