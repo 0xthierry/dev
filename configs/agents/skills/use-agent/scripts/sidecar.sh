@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Herdr 0.9.0 / AMQ 0.77.1 sidecar lifecycle. Bash 3.2 compatible.
+# Herdr 0.9.5 / AMQ 0.77.1 sidecar lifecycle. Bash 3.2 compatible.
 set -euo pipefail
 
 usage() {
