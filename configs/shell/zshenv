@@ -1,3 +1,9 @@
+# Claude's image mod needs Kitty graphics. Herdr hides the outer terminal identity;
+# its repo config enables Kitty rendering. Preserve an explicit user override.
+if [[ "${TERM_PROGRAM:-}" == ghostty || "${TERM_PROGRAM:-}" == herdr || "${HERDR_ENV:-}" == 1 ]]; then
+  export CLAUDE_CODE_FORCE_TERMINAL_IMAGES="${CLAUDE_CODE_FORCE_TERMINAL_IMAGES:-1}"
+fi
+
 export ZDOTDIR="${HOME}/.config/zsh"
 
 [[ -f "${ZDOTDIR}/path.sh" ]] && source "${ZDOTDIR}/path.sh"

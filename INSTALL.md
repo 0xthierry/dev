@@ -179,6 +179,19 @@ workspace = "meistrari"
 project = "background-coding-agent"
 ```
 
+### Claude Code inline images (Ghostty and Herdr)
+
+Setup installs the pinned `inline-images@thierry-local` plugin from the repo-local marketplace. It previews image reads, MCP image results, pasted images, and local image references in Claude's terminal transcript. New Ghostty and Herdr shells opt into terminal images; other terminals are not forced. No Ghostty graphics setting needs changing.
+
+For an already-open shell, run `export CLAUDE_CODE_FORCE_TERMINAL_IMAGES=1` before starting Claude again. Use `claude --continue` to resume your last conversation. See [the plugin README](configs/agents/claude/plugins/inline-images/README.md) for provenance, tests, and the two-path visual check. Plugin tests verify rendering elements, not the pixels in your terminal.
+
+```bash
+claude plugin list
+python3 tests/claude-inline-images.test.py
+python3 tests/terminal-images.test.py
+claude plugin test configs/agents/claude/plugins/inline-images
+```
+
 For Moshi + Herdr setup, verify:
 
 ```bash

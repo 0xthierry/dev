@@ -1,8 +1,13 @@
 {
   "name": "thierry-local",
   "owner": { "name": "Thierry" },
-  "metadata": { "description": "Repo-managed Claude Code language tooling" },
+  "metadata": { "description": "Repo-managed Claude Code plugins" },
   "plugins": [
+    {
+      "name": "inline-images",
+      "source": "./inline-images",
+      "description": "Inline image previews in Ghostty and Herdr"
+    },
     {
       "name": "luau-lsp",
       "source": "./luau-lsp",

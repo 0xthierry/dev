@@ -18,6 +18,7 @@ source "$REPO_ROOT/install/rea.sh"
 source "$REPO_ROOT/install/rea-ghidra.sh"
 source "$REPO_ROOT/install/neovim.sh"
 source "$REPO_ROOT/install/lua-lsp.sh"
+source "$REPO_ROOT/install/claude-inline-images.sh"
 source "$REPO_ROOT/install/rokit.sh"
 source "$REPO_ROOT/install/github-cli.sh"
 source "$REPO_ROOT/install/tools.sh"
@@ -184,6 +185,7 @@ run_post_setup_tasks() {
   install_rea "$SETUP_HOST"
   install_rea_ghidra "$SETUP_HOST"
   configure_claude_lua_plugins
+  configure_claude_inline_images
   # After Claude/Codex/Pi configs and Herdr/Moshi hooks, so ai-memory merges
   # into the rendered files instead of being overwritten.
   configure_ai_memory_agents
