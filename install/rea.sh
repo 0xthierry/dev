@@ -9,8 +9,8 @@ install_rea() (
   local runtime="$HOME/.local/share/rea" node_dir="" node_bin="" tmp=""
   local name="" target="" source_path=""
   case "$host" in
-    dev|omarchy|macbook) ;;
-    *) printf 'error: REA setup requires dev, omarchy, or macbook\n' >&2; return 1 ;;
+    omarchy|macbook) ;;
+    *) printf 'error: REA setup requires omarchy or macbook\n' >&2; return 1 ;;
   esac
   log_section "REA MCP"
   for name in package.json package-lock.json rea rea-mcp; do
@@ -95,7 +95,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   DRY_RUN=0
   if [[ $# -eq 2 && "$2" == --dry-run ]]; then DRY_RUN=1
   elif [[ $# -ne 1 ]]; then
-    printf 'Usage: bash install/rea.sh <dev|macbook|omarchy> [--dry-run]\n' >&2
+    printf 'Usage: bash install/rea.sh <macbook|omarchy> [--dry-run]\n' >&2
     exit 1
   fi
   install_rea "$1"

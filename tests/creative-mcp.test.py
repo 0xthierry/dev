@@ -142,15 +142,6 @@ class CreativeMcpTests(unittest.TestCase):
         self.assertFalse((self.home / ".local/share/creative-mcp").exists())
         self.assertFalse(self.desktop.exists())
 
-    def test_dev_setup_does_not_deploy_desktop_creative_integrations(self):
-        result = subprocess.run([str(ROOT / "setup.sh"), "dev", "--dry-run"], cwd=ROOT,
-                                env=self.env, capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Preparing dev host prerequisites", result.stdout)
-        self.assertNotIn("Blender and Roblox MCP", result.stdout)
-        self.assertNotIn("tunnel-client", result.stdout)
-        self.assertFalse((self.home / ".local/share/creative-mcp").exists())
-
     def arrange_vinegar(self):
         binaries = self.home / "bin"
         binaries.mkdir()

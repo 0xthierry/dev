@@ -9,8 +9,8 @@ apply_browser_automation() (
   local runtime="$HOME/.local/share/browser-automation" node_bin="" npm_bin="" tmp=""
   local name="" target="" source_path=""
   case "$host" in
-    dev|omarchy|macbook) ;;
-    *) printf 'error: browser automation requires dev, omarchy, or macbook\n' >&2; return 1 ;;
+    omarchy|macbook) ;;
+    *) printf 'error: browser automation requires omarchy or macbook\n' >&2; return 1 ;;
   esac
   log_section "Browser Automation"
   for name in package.json package-lock.json runtime.sh playwriter playwriter-mcp chrome-devtools-mcp; do
@@ -104,7 +104,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   DRY_RUN=0
   if [[ $# -eq 2 && "$2" == --dry-run ]]; then DRY_RUN=1
   elif [[ $# -ne 1 ]]; then
-    printf 'Usage: bash install/browser-automation.sh <dev|macbook|omarchy> [--dry-run]\n' >&2
+    printf 'Usage: bash install/browser-automation.sh <macbook|omarchy> [--dry-run]\n' >&2
     exit 1
   fi
   apply_browser_automation "$1"

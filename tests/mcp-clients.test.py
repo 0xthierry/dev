@@ -7,7 +7,6 @@ import json
 import os
 from pathlib import Path
 import shutil
-import shlex
 import subprocess
 import sys
 import tempfile
@@ -17,6 +16,12 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 RENDERER = ROOT / "configs/mcp/configure-clients.py"
 CODEX = shutil.which("codex")
+# Resolve mise's dispatch shim before changing HOME; resolving its symlink
+# would invoke mise itself, not the Codex config reader.
+if CODEX and Path(CODEX).parent.name == "shims" and shutil.which("mise"):
+    CODEX = subprocess.check_output(["mise", "which", "codex"], text=True).strip()
+CODEX_BIN = str(Path(CODEX).parent) if CODEX else ""
+CODEX = str(Path(CODEX).resolve()) if CODEX else None
 
 
 class McpClientTests(unittest.TestCase):
@@ -28,17 +33,13 @@ class McpClientTests(unittest.TestCase):
         self.env = {key: value for key, value in os.environ.items()
                     if key not in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "XDG_CONFIG_HOME",
                                    "PI_CODING_AGENT_DIR")}
-        self.env.update(HOME=str(self.home), PI_OFFLINE="1", PI_SKIP_VERSION_CHECK="1")
+        self.env.update(HOME=str(self.home), PI_OFFLINE="1", PI_SKIP_VERSION_CHECK="1",
+                        PATH=f"{CODEX_BIN}:{os.environ['PATH']}")
         self.code = self.home / ".claude.json"
         self.pi = self.home / ".pi/agent/mcp.json"
         self.codex = self.home / ".codex/config.toml"
         self.desktop = self.home / ".config/Claude/claude_desktop_config.json"
         self.preferences = self.home / ".config/mcp-services/preferences.json"
-        self.memory_key = "aim_" + "fixtureuserkey" * 4
-        self.memory_url = "https://ai-memory-cloud.tail4e339.ts.net"
-        self.put(self.home / ".config/ai-memory/client.json", json.dumps({"server_url": self.memory_url}))
-        self.put(self.home / ".config/ai-memory/api-key", self.memory_key + "\n")
-        (self.home / ".config/ai-memory/api-key").chmod(0o600)
 
     def run_config(self, host="omarchy"):
         return subprocess.run([sys.executable, str(RENDERER), host], env=self.env,
@@ -66,25 +67,21 @@ class McpClientTests(unittest.TestCase):
         result = self.run_config()
         self.assertEqual(result.returncode, 0, result.stderr)
         code = json.loads(self.code.read_text())["mcpServers"]
-        self.assertEqual(set(code), {"neon", "datadog", "figma", "ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
+        self.assertEqual(set(code), {"neon", "datadog", "figma", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(code["rea"], {"command": f"{self.home}/.local/bin/rea-mcp", "args": []})
         self.assertEqual(code["neon"], {"type": "http", "url": "https://mcp.neon.tech/mcp"})
         self.assertEqual(code["datadog"], {"type": "http", "url": "https://mcp.us5.datadoghq.com/v1/mcp"})
         self.assertEqual(code["blender"], {"command": f"{self.home}/.local/bin/blender-mcp", "args": []})
         pi = json.loads(self.pi.read_text())["mcpServers"]
-        self.assertEqual(pi["ai-memory"]["url"], self.memory_url + "/mcp")
-        self.assertEqual(pi["ai-memory"]["exposure"], "deferred")
-        self.assertTrue(pi["ai-memory"]["headers"]["Authorization"].startswith("!"))
-        self.assertNotIn(self.memory_key, self.pi.read_text())
-        self.assertEqual(code["ai-memory"]["headers"], {"Authorization": "Bearer " + self.memory_key})
+        self.assertNotIn("ai-memory", pi)
+        self.assertNotIn("ai-memory", code)
         self.assertEqual(set(pi), set(code))
         self.assertEqual(pi["rea"], {
             "command": f"{self.home}/.local/bin/rea-mcp", "args": [],
             "description": "Analyze and reverse-engineer binaries with REA.", "exposure": "deferred"})
         desktop = json.loads(self.desktop.read_text())["mcpServers"]
-        self.assertEqual(set(desktop), {"ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
+        self.assertEqual(set(desktop), {"rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(desktop["rea"], {"command": f"{self.home}/.local/bin/rea-mcp", "args": []})
-        self.assertEqual(desktop["ai-memory"], {"command": f"{self.home}/.local/bin/ai-memory", "args": ["mcp-bridge", "--no-session-id"]})
         self.assertEqual(desktop["Roblox_Studio"], {"command": f"{self.home}/.local/bin/roblox-studio-mcp", "args": []})
         codex = tomllib.loads(self.codex.read_text())["mcp_servers"]
         self.assertEqual(codex["figma"], {"url": "https://mcp.figma.com/mcp"})
@@ -132,31 +129,93 @@ class McpClientTests(unittest.TestCase):
             "exposure": "deferred", "timeout": 90})
         self.assertIn("# browser preferences", self.codex.read_text())
 
-    def test_remote_memory_replaces_old_root_auth_and_pi_reads_canonical_key(self):
-        self.put(self.code, '{"mcpServers":{"ai-memory":{"url":"http://127.0.0.1:49374/mcp","headers":{"Authorization":"Bearer old-root"},"timeout":90}}}')
-        self.put(self.codex, '[mcp_servers.ai-memory]\nurl="http://127.0.0.1:49374/mcp"\nbearer_token_env_var="OLD_ROOT"\n')
+    def test_upstream_memory_transport_auth_and_approval_options_are_preserved(self):
+        code = {"command": "/upstream/ai-memory", "args": ["mcp-bridge"],
+                "env": {"AI_MEMORY_SERVER_URL": "http://127.0.0.1:49374"}, "timeout": 90}
+        desktop = {"command": "/upstream/ai-memory", "args": ["mcp-bridge", "--no-session-id"],
+                   "env": {"CUSTOM": "keep"}}
+        codex = ('# upstream memory options\n[mcp_servers.ai-memory]\n'
+                 'command="/upstream/ai-memory"\nargs=["mcp-bridge","--no-session-id"]\n'
+                 'default_tools_approval_mode="approve"\nstartup_timeout_sec=30\n'
+                 '[mcp_servers.ai-memory.tools.memory_write_page]\napproval_mode="prompt"\n'
+                 '[mcp_servers.ai-memory.env]\nAI_MEMORY_SERVER_URL="http://127.0.0.1:49374"\n')
+        self.put(self.code, json.dumps({"mcpServers": {"ai-memory": code}}))
+        self.put(self.desktop, json.dumps({"mcpServers": {"ai-memory": desktop}}))
+        self.put(self.codex, codex)
         result = self.run_config()
         self.assertEqual(result.returncode, 0, result.stderr)
-        code = json.loads(self.code.read_text())["mcpServers"]["ai-memory"]
-        self.assertEqual(code, {"type": "http", "url": self.memory_url + "/mcp", "timeout": 90,
-                                "headers": {"Authorization": "Bearer " + self.memory_key}})
-        codex = tomllib.loads(self.codex.read_text())["mcp_servers"]["ai-memory"]
-        self.assertEqual(codex, {"url": self.memory_url + "/mcp",
-                                "http_headers": {"Authorization": "Bearer " + self.memory_key}})
-        header = json.loads(self.pi.read_text())["mcpServers"]["ai-memory"]["headers"]["Authorization"]
-        resolved = subprocess.run(shlex.split(header[1:]), env=self.env, capture_output=True, text=True, timeout=10)
-        self.assertEqual(resolved.returncode, 0, resolved.stderr)
-        self.assertEqual(resolved.stdout, "Bearer " + self.memory_key + "\n")
-        self.assertNotIn(self.memory_key, self.pi.read_text())
+        self.assertEqual(json.loads(self.code.read_text())["mcpServers"]["ai-memory"], code)
+        self.assertEqual(json.loads(self.desktop.read_text())["mcpServers"]["ai-memory"], desktop)
+        self.assertEqual(tomllib.loads(self.codex.read_text())["mcp_servers"]["ai-memory"],
+                         tomllib.loads(codex)["mcp_servers"]["ai-memory"])
+        self.assertIn("# upstream memory options", self.codex.read_text())
+        self.assertEqual(json.loads(self.pi.read_text())["mcpServers"]["rea"]["args"], [])
+        self.assertNotIn("ai-memory", json.loads(self.pi.read_text())["mcpServers"])
 
-    def test_missing_remote_key_fails_before_any_client_write(self):
-        (self.home / ".config/ai-memory/api-key").unlink()
+    def test_existing_memory_http_auth_is_not_rewritten(self):
+        entry = {"url": "https://custom.invalid/mcp", "headers": {"Authorization": "fixture"},
+                 "oauth": {"clientId": "keep"}, "timeout": 90}
+        self.put(self.code, json.dumps({"mcpServers": {"ai-memory": entry}}))
+        self.put(self.desktop, json.dumps({"mcpServers": {"ai-memory": entry}}))
+        codex = '[mcp_servers.ai-memory]\nurl="https://custom.invalid/mcp"\nbearer_token_env_var="KEEP_TOKEN"\n'
+        self.put(self.codex, codex)
         result = self.run_config()
-        self.assertEqual(result.returncode, 1)
-        self.assertFalse(self.code.exists())
-        self.assertFalse(self.pi.exists())
-        self.assertFalse(self.codex.exists())
-        self.assertFalse(self.desktop.exists())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.code.read_text())["mcpServers"]["ai-memory"], entry)
+        self.assertEqual(json.loads(self.desktop.read_text())["mcpServers"]["ai-memory"], entry)
+        self.assertEqual(tomllib.loads(self.codex.read_text())["mcp_servers"]["ai-memory"],
+                         {"url": "https://custom.invalid/mcp", "bearer_token_env_var": "KEEP_TOKEN"})
+
+    def test_old_managed_pi_memory_transports_are_removed_idempotently(self):
+        entries = [
+            {"command": f"{self.home}/.local/bin/ai-memory", "args": ["mcp-bridge", "--server-url",
+             "http://127.0.0.1:49374", "--no-session-id"], "exposure": "deferred"},
+            {"url": "http://127.0.0.1:49374/mcp", "headers": {"Authorization": "old-fixture"}},
+            {"url": "https://ai-memory-cloud.tail4e339.ts.net/mcp", "exposure": "deferred"}]
+        for entry in entries:
+            with self.subTest(entry=entry):
+                self.put(self.pi, json.dumps({"mcpServers": {
+                    "ai-memory": entry, "ai_memory": {"command": "unrelated"}}}))
+                result = self.run_config()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                servers = json.loads(self.pi.read_text())["mcpServers"]
+                self.assertNotIn("ai-memory", servers)
+                self.assertEqual(servers["ai_memory"], {"command": "unrelated"})
+                original = self.pi.read_bytes(), self.pi.stat().st_mtime_ns
+                repeated = self.run_config()
+                self.assertEqual(repeated.returncode, 0, repeated.stderr)
+                self.assertEqual((self.pi.read_bytes(), self.pi.stat().st_mtime_ns), original)
+
+    def test_custom_pi_memory_fails_before_any_writes(self):
+        entries = [{"url": "https://custom.invalid/mcp"},
+                   {"command": f"{self.home}/.local/bin/ai-memory", "args": ["mcp-bridge"]},
+                   {"command": "/custom/ai-memory", "args": ["mcp-bridge", "--server-url",
+                    "http://127.0.0.1:49374", "--no-session-id"]}]
+        for entry in entries:
+            with self.subTest(entry=entry):
+                original = json.dumps({"mcpServers": {"ai-memory": entry}})
+                self.put(self.pi, original)
+                result = self.run_config()
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("remove that native mcpServers entry explicitly", result.stderr)
+                self.assertIn(str(self.pi), result.stderr)
+                self.assertEqual(self.pi.read_text(), original)
+                self.assertFalse(self.code.exists())
+                self.assertFalse(self.codex.exists())
+                self.assertFalse(self.desktop.exists())
+                self.assertEqual(list(self.home.rglob("*.bak*")), [])
+
+    def test_old_remote_files_are_not_read_or_modified(self):
+        marker = self.home / ".config/ai-memory/client.json"
+        key = self.home / ".config/ai-memory/api-key"
+        self.put(marker, "retired and deliberately invalid")
+        self.put(key, "preserve-unused-key")
+        result = self.run_config()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(marker.read_text(), "retired and deliberately invalid")
+        self.assertEqual(key.read_text(), "preserve-unused-key")
+        self.assertEqual(json.loads(self.code.read_text())["mcpServers"]["rea"]["command"],
+                         f"{self.home}/.local/bin/rea-mcp")
 
     def test_persistent_opt_in_enables_all_three_desktop_remote_services(self):
         self.put(self.preferences, '{"claude_desktop_remote_services":["neon","datadog","figma"]}')
@@ -168,7 +227,6 @@ class McpClientTests(unittest.TestCase):
             "neon": {"command": f"{self.home}/.local/bin/mcp-service", "args": ["neon"]},
             "datadog": {"command": f"{self.home}/.local/bin/mcp-service", "args": ["datadog"]},
             "figma": {"command": f"{self.home}/.local/bin/mcp-service", "args": ["figma"]},
-            "ai-memory": {"command": f"{self.home}/.local/bin/ai-memory", "args": ["mcp-bridge", "--no-session-id"]},
             "rea": {"command": f"{self.home}/.local/bin/rea-mcp", "args": []},
             "playwriter": {"command": f"{self.home}/.local/bin/playwriter-mcp", "args": []},
             "chrome-devtools": {"command": f"{self.home}/.local/bin/chrome-devtools-mcp", "args": []},
@@ -187,7 +245,7 @@ class McpClientTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         desktop = self.home / "Library/Application Support/Claude/claude_desktop_config.json"
         servers = json.loads(desktop.read_text())["mcpServers"]
-        self.assertEqual(set(servers), {"figma", "ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
+        self.assertEqual(set(servers), {"figma", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(servers["figma"], {
             "command": f"{self.home}/.local/bin/mcp-service", "args": ["figma"]})
 
@@ -208,7 +266,7 @@ class McpClientTests(unittest.TestCase):
         result = self.run_config()
         self.assertEqual(result.returncode, 0, result.stderr)
         migrated = json.loads(self.desktop.read_text())
-        self.assertEqual(set(migrated["mcpServers"]), {"ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio", "other"})
+        self.assertEqual(set(migrated["mcpServers"]), {"rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio", "other"})
         self.assertEqual(migrated["mcpServers"]["other"], {"command": "user-owned", "args": ["app"]})
         self.assertEqual(migrated["preferences"], {"keep": True})
         self.assertEqual(self.code.read_bytes(), code_original)
@@ -247,30 +305,24 @@ class McpClientTests(unittest.TestCase):
                          {"command": "custom", "args": ["neon"]})
         self.assertIn("preserving custom Claude Desktop neon entry", result.stderr)
 
-    def test_dev_receives_shared_stdio_and_http_services_without_touching_desktop(self):
-        self.put(self.desktop, "do not read desktop on dev")
-        self.put(self.preferences, "do not read Desktop preferences on dev")
+    def test_removed_dev_host_is_rejected_without_writes(self):
         result = self.run_config("dev")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(set(json.loads(self.code.read_text())["mcpServers"]), {"neon", "datadog", "figma", "ai-memory", "rea", "playwriter", "chrome-devtools"})
-        self.assertEqual(set(json.loads(self.pi.read_text())["mcpServers"]), {"neon", "datadog", "figma", "ai-memory", "rea", "playwriter", "chrome-devtools"})
-        self.assertEqual(set(tomllib.loads(self.codex.read_text())["mcp_servers"]), {"neon", "datadog", "figma", "ai-memory", "rea", "playwriter", "chrome-devtools"})
-        self.assertEqual(json.loads(self.code.read_text())["mcpServers"]["rea"],
-                         {"command": f"{self.home}/.local/bin/rea-mcp", "args": []})
-        self.assertEqual(self.desktop.read_text(), "do not read desktop on dev")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("invalid choice", result.stderr)
+        self.assertEqual(list(self.home.iterdir()), [])
 
     def test_macbook_uses_native_desktop_location(self):
         result = self.run_config("macbook")
         self.assertEqual(result.returncode, 0, result.stderr)
         desktop = self.home / "Library/Application Support/Claude/claude_desktop_config.json"
         self.assertEqual(set(json.loads(desktop.read_text())["mcpServers"]),
-                         {"ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
+                         {"rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(set(json.loads(self.code.read_text())["mcpServers"]),
-                         {"neon", "datadog", "figma", "ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
+                         {"neon", "datadog", "figma", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(set(json.loads(self.pi.read_text())["mcpServers"]),
-                         {"neon", "datadog", "figma", "ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
+                         {"neon", "datadog", "figma", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(set(tomllib.loads(self.codex.read_text())["mcp_servers"]),
-                         {"neon", "datadog", "figma", "ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
+                         {"neon", "datadog", "figma", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(json.loads(desktop.read_text())["mcpServers"]["rea"],
                          {"command": f"{self.home}/.local/bin/rea-mcp", "args": []})
         self.assertFalse(self.desktop.exists())
@@ -287,8 +339,8 @@ class McpClientTests(unittest.TestCase):
         self.assertEqual(json.loads((self.home / "claude override/.claude.json").read_text())["mcpServers"]["figma"],
                          {"type": "http", "url": "https://mcp.figma.com/mcp"})
         self.assertEqual(json.loads((self.home / "pi override/mcp.json").read_text())["mcpServers"]["neon"]["exposure"], "deferred")
-        self.assertEqual(tomllib.loads((self.home / "codex override/config.toml").read_text())["mcp_servers"]["ai-memory"],
-                         {"url": self.memory_url + "/mcp", "http_headers": {"Authorization": "Bearer " + self.memory_key}})
+        self.assertEqual(tomllib.loads((self.home / "codex override/config.toml").read_text())["mcp_servers"]["rea"],
+                         {"command": f"{self.home}/.local/bin/rea-mcp", "args": []})
         self.assertEqual(json.loads((self.home / "xdg override/Claude/claude_desktop_config.json").read_text())["mcpServers"]["figma"]["args"], ["figma"])
         self.assertFalse(self.code.exists())
         self.assertFalse(self.pi.exists())
@@ -314,7 +366,7 @@ class McpClientTests(unittest.TestCase):
         self.assertEqual(json.loads(self.desktop.read_text())["mcpServers"]["other"], {"command": "keep"})
 
     def test_pi_normalized_name_collision_fails_before_any_client_write(self):
-        for name in ("ai_memory", "Roblox-Studio"):
+        for name in ("chrome_devtools", "Roblox-Studio"):
             with self.subTest(name=name):
                 original = json.dumps({"mcpServers": {name: {"command": "user-owned"}}})
                 self.put(self.pi, original)
@@ -330,7 +382,7 @@ class McpClientTests(unittest.TestCase):
     def test_managed_url_update_preserves_auth_options_and_comments(self):
         self.put(self.code, '{"mcpServers":{"neon":{"url":"https://old.invalid","headers":{"X-Custom":"keep"},"timeout":90}}}')
         self.put(self.codex, '# comment\n[mcp_servers.neon]\nurl = "https://old.invalid" # keep endpoint comment\ntool_timeout_sec = 90\n[mcp_servers.neon.http_headers]\nX-Custom = "keep"\n')
-        result = self.run_config("dev")
+        result = self.run_config("omarchy")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(self.code.read_text())["mcpServers"]["neon"], {
             "type": "http", "url": "https://mcp.neon.tech/mcp", "headers": {"X-Custom": "keep"}, "timeout": 90})
@@ -388,14 +440,14 @@ class McpClientTests(unittest.TestCase):
         result = self.run_config()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(set(json.loads(self.desktop.read_text())["mcpServers"]),
-                         {"ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
+                         {"rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
 
     def test_preferences_without_opt_in_key_keep_desktop_remotes_disabled(self):
         self.put(self.preferences, '{}')
         result = self.run_config()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(set(json.loads(self.desktop.read_text())["mcpServers"]),
-                         {"ai-memory", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
+                         {"rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
 
     def test_malformed_preferences_preflight_before_any_write(self):
         self.put(self.preferences, '{broken')
@@ -617,7 +669,7 @@ def audit(event, args):
             raise RuntimeError("renderer attempted credential access")
 
 sys.addaudithook(audit)
-sys.argv = [sys.argv[1], "dev"]
+sys.argv = [sys.argv[1], "omarchy"]
 runpy.run_path(sys.argv[0], run_name="__main__")
 '''
         result = subprocess.run([sys.executable, "-c", guard, str(RENDERER)], env=self.env,
@@ -625,8 +677,8 @@ runpy.run_path(sys.argv[0], run_name="__main__")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(tomllib.loads(self.codex.read_text())["mcp_servers"]["figma"],
                          {"url": "https://mcp.figma.com/mcp"})
-        self.assertEqual(json.loads(self.pi.read_text())["mcpServers"]["ai-memory"]["url"],
-                         "http://127.0.0.1:49374/mcp")
+        self.assertEqual(json.loads(self.pi.read_text())["mcpServers"]["rea"]["command"],
+                         f"{self.home}/.local/bin/rea-mcp")
 
     @unittest.skipUnless(CODEX, "Codex CLI required to verify native config reader")
     def test_real_codex_reads_generated_http_and_stdio_without_connecting(self):
@@ -644,8 +696,28 @@ runpy.run_path(sys.argv[0], run_name="__main__")
         self.assertEqual(json.loads(local.stdout)["transport"]["args"], [])
 
     @unittest.skipUnless(CODEX, "Codex CLI required to verify native config reader")
+    def test_real_codex_reads_preserved_upstream_memory_bridge_and_approvals(self):
+        self.put(self.codex, '[mcp_servers.ai-memory]\ncommand="/upstream/ai-memory"\n'
+                 'args=["mcp-bridge","--server-url","http://127.0.0.1:49374","--no-session-id"]\n'
+                 'default_tools_approval_mode="approve"\n'
+                 '[mcp_servers.ai-memory.tools.memory_write_page]\napproval_mode="prompt"\n')
+        result = self.run_config()
+        local = subprocess.run([CODEX, "mcp", "get", "ai-memory", "--json"], env=self.env,
+                               cwd=self.home, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(local.returncode, 0, local.stderr)
+        memory = json.loads(local.stdout)
+        self.assertEqual(memory["transport"]["type"], "stdio")
+        self.assertEqual(memory["transport"]["command"], "/upstream/ai-memory")
+        self.assertEqual(memory["transport"]["args"],
+                         ["mcp-bridge", "--server-url", "http://127.0.0.1:49374", "--no-session-id"])
+        preserved = tomllib.loads(self.codex.read_text())["mcp_servers"]["ai-memory"]
+        self.assertEqual(preserved["default_tools_approval_mode"], "approve")
+        self.assertEqual(preserved["tools"], {"memory_write_page": {"approval_mode": "prompt"}})
+
+    @unittest.skipUnless(CODEX, "Codex CLI required to verify native config reader")
     def test_real_codex_reads_rea_stdio_without_connecting(self):
-        result = self.run_config("dev")
+        result = self.run_config("omarchy")
         local = subprocess.run([CODEX, "mcp", "get", "rea", "--json"], env=self.env,
                                cwd=self.home, capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)

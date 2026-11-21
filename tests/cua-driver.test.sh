@@ -324,13 +324,11 @@ chmod +x "$case_root/bin/curl"
 )
 
 printf 'test: host selection and Omarchy service boundary\n'
-for host in dev omarchy; do
-  (
-    # shellcheck disable=SC1090
-    source "$REPO_ROOT/install/hosts/$host.sh"
-    [[ " ${HOST_CONFIG_TARGETS[*]} " == *" cua-driver "* ]]
-  ) || fail "$host does not select Cua Driver"
-done
+(
+  # shellcheck source=install/hosts/omarchy.sh
+  source "$REPO_ROOT/install/hosts/omarchy.sh"
+  [[ " ${HOST_CONFIG_TARGETS[*]} " == *" cua-driver "* ]]
+) || fail 'omarchy does not select Cua Driver'
 (
   # shellcheck source=install/hosts/macbook.sh
   source "$REPO_ROOT/install/hosts/macbook.sh"

@@ -90,9 +90,9 @@ if os.environ.get("BAD_PACKAGE"):
     def test_rerun_is_stable_and_regular_launcher_is_backed_up(self):
         target = self.home / ".local/bin/playwriter"
         self.put(target, "old user command")
-        first = self.install("dev")
+        first = self.install("omarchy")
         before = (self.runtime / "node-path").stat().st_mtime_ns
-        repeated = self.install("dev")
+        repeated = self.install("omarchy")
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertEqual(repeated.returncode, 0, repeated.stderr)
         self.assertEqual(Path(str(target) + ".bak").read_text(), "old user command")
@@ -115,7 +115,7 @@ if os.environ.get("BAD_PACKAGE"):
         conflict = self.home / ".local/bin/chrome-devtools-mcp"
         conflict.mkdir(parents=True)
         (conflict / "keep").write_text("user directory")
-        result = self.install("dev")
+        result = self.install("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("refusing browser automation command directory", result.stderr)
         self.assertEqual((conflict / "keep").read_text(), "user directory")
@@ -126,7 +126,7 @@ if os.environ.get("BAD_PACKAGE"):
     def test_foreign_node_path_symlink_is_rejected_before_package_install(self):
         self.runtime.mkdir(parents=True)
         (self.runtime / "node-path").symlink_to("/foreign/node-path")
-        result = self.install("dev")
+        result = self.install("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("refusing unrelated browser automation runtime path", result.stderr)
         self.assertEqual(os.readlink(self.runtime / "node-path"), "/foreign/node-path")
@@ -143,25 +143,25 @@ if os.environ.get("BAD_PACKAGE"):
 
     def test_install_failure_does_not_publish_launchers_and_retry_converges(self):
         self.env["FAIL_NPM"] = "1"
-        failed = self.install("dev")
+        failed = self.install("omarchy")
         self.assertFalse((self.home / ".local/bin").exists())
         self.assertFalse(self.runtime.exists())
         self.env.pop("FAIL_NPM")
-        retry = self.install("dev")
+        retry = self.install("omarchy")
         self.assertEqual(failed.returncode, 19)
         self.assertEqual(retry.returncode, 0, retry.stderr)
         self.assertEqual(json.loads(self.launch("playwriter-mcp").stdout), {"node": NODE, "args": []})
 
     def test_invalid_installed_package_is_rejected_without_publishing(self):
         self.env["BAD_PACKAGE"] = "1"
-        result = self.install("dev")
+        result = self.install("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("Incomplete or unpinned browser runtime", result.stderr)
         self.assertFalse((self.home / ".local/bin").exists())
         self.assertFalse(self.runtime.exists())
 
     def test_missing_node_record_reports_recovery(self):
-        installed = self.install("dev")
+        installed = self.install("omarchy")
         (self.runtime / "node-path").unlink()
         result = self.launch("playwriter")
         self.assertEqual(installed.returncode, 0, installed.stderr)
@@ -169,7 +169,7 @@ if os.environ.get("BAD_PACKAGE"):
         self.assertIn("runtime is missing; rerun host setup", result.stderr)
 
     def test_mcp_launchers_reject_browser_launch_and_endpoint_overrides(self):
-        installed = self.install("dev")
+        installed = self.install("omarchy")
         diagnostics = self.launch("chrome-devtools-mcp", "--browserUrl=http://remote:9222")
         browser = self.launch("playwriter-mcp", "browser", "start", "--headless")
         self.assertEqual(installed.returncode, 0, installed.stderr)
@@ -179,7 +179,7 @@ if os.environ.get("BAD_PACKAGE"):
         self.assertIn("takes no arguments", browser.stderr)
 
     def test_mcp_rejects_inherited_direct_selector_without_restricting_cli(self):
-        installed = self.install("dev")
+        installed = self.install("omarchy")
         self.env["PLAYWRITER_DIRECT"] = "wss://cloud.example/browser"
         mcp = self.launch("playwriter-mcp")
         cli = self.launch("playwriter", "--help")
@@ -190,7 +190,7 @@ if os.environ.get("BAD_PACKAGE"):
         self.assertEqual(json.loads(cli.stdout), {"node": NODE, "args": ["--help"]})
 
     def test_mcp_rejects_inherited_remote_host_before_runtime_is_loaded(self):
-        installed = self.install("dev")
+        installed = self.install("omarchy")
         self.env["PLAYWRITER_HOST"] = "https://remote.example"
         (self.runtime / "node-path").unlink()
         result = self.launch("playwriter-mcp")
@@ -200,7 +200,7 @@ if os.environ.get("BAD_PACKAGE"):
         self.assertEqual(result.stdout, "")
 
     def test_mcp_preserves_nontransport_environment_without_generating_mode_arguments(self):
-        installed = self.install("dev")
+        installed = self.install("omarchy")
         self.env.update(PLAYWRITER_SESSION="cloud-session", PLAYWRITER_REMOTE="remote-session",
                         PLAYWRITER_HEADLESS="1", PLAYWRITER_CLOUD_URL="https://cloud.example",
                         PLAYWRITER_TOKEN="local-auth", PLAYWRITER_EXEC_TIMEOUT="25000",
@@ -222,7 +222,7 @@ timeout:process.env.PLAYWRITER_EXEC_TIMEOUT, app:process.env.USER_APP_SETTING}))
     def test_unknown_host_is_rejected_without_side_effects(self):
         result = self.install("unknown")
         self.assertEqual(result.returncode, 1)
-        self.assertIn("requires dev, omarchy, or macbook", result.stderr)
+        self.assertIn("requires omarchy or macbook", result.stderr)
         self.assertEqual(list(self.home.iterdir()), [])
         self.assertFalse(Path(self.env["NPM_LOG"]).exists())
 
@@ -230,7 +230,7 @@ timeout:process.env.PLAYWRITER_EXEC_TIMEOUT, app:process.env.USER_APP_SETTING}))
         # Registry/network boundary is real here; npm runs only in this disposable repo.
         (self.bin / "npm").unlink()
         self.put(self.bin / "npm", f'#!/bin/sh\nexec {shlex.quote(NPM)} "$@"\n', executable=True)
-        result = self.install("dev")
+        result = self.install("omarchy")
         self.assertEqual(result.returncode, 0, result.stderr)
         cli = self.launch("playwriter", "--help")
         mcp = self.launch("playwriter-mcp", "--help")

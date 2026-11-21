@@ -13,13 +13,6 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("service", choices=names)
     args = parser.parse_args()
-    if args.service == "ai-memory":
-        # The dedicated client supplies the HTTPS endpoint and file-backed user
-        # key. No token arguments, mcp-remote OAuth, or localhost fallback.
-        launcher = Path.home() / ".local/bin/ai-memory"
-        if not launcher.is_file() or not os.access(launcher, os.X_OK):
-            raise ValueError("ai-memory remote client is missing; rerun host setup")
-        os.execv(launcher, [str(launcher), "mcp-bridge", "--no-session-id"])
     runtime = Path.home() / ".local/share/mcp-services"
     config = json.loads((runtime / "runtime.json").read_text())
     node = config["node"]

@@ -68,8 +68,8 @@ PY
 configure_shared_mcp() {
   local mcp_host="${1:-${SETUP_HOST:-}}"
   case "$mcp_host" in
-    dev|macbook|omarchy) ;;
-    *) printf 'error: shared MCP setup requires dev, macbook, or omarchy\n' >&2; return 1 ;;
+    macbook|omarchy) ;;
+    *) printf 'error: shared MCP setup requires macbook or omarchy\n' >&2; return 1 ;;
   esac
   log_section "Shared MCP Services (Datadog US5)"
   install_shared_mcp_runtime || return
@@ -87,7 +87,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   DRY_RUN=0
   if [[ $# -eq 2 && "$2" == --dry-run ]]; then DRY_RUN=1
   elif [[ $# -ne 1 ]]; then
-    printf 'Usage: bash install/mcp.sh <dev|macbook|omarchy> [--dry-run]\n' >&2
+    printf 'Usage: bash install/mcp.sh <macbook|omarchy> [--dry-run]\n' >&2
     exit 1
   fi
   configure_shared_mcp "$1"

@@ -1,5 +1,6 @@
 import { appendFileSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { memoryResponse } from "./mcp-response";
 
 const vendorPath = "../../ai-memory-pi.ts";
 const { default: register } = await import(vendorPath);
@@ -12,12 +13,15 @@ export default function hookServer(pi: ExtensionAPI) {
   globalThis.fetch = Object.assign(
     async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
       const url = new URL(String(input));
-      if (url.origin !== "https://ai-memory-cloud.tail4e339.ts.net")
-        throw new Error(`Unexpected spec network request: ${url.origin}`);
+      if (url.origin !== "http://127.0.0.1:49374") throw new Error(`Unexpected spec network request: ${url.origin}`);
+      if (new Headers(init?.headers).get("Authorization") !== "Bearer fixture-rpc-local-token")
+        return new Response("Unauthorized", { status: 401 });
+      const body = JSON.parse(String(init?.body ?? "{}"));
       appendFileSync(
         log,
-        `${JSON.stringify({ url: url.toString(), body: JSON.parse(String(init?.body ?? "{}")), authorization: new Headers(init?.headers).get("Authorization") })}\n`,
+        `${JSON.stringify({ url: url.toString(), body, headers: Object.fromEntries(new Headers(init?.headers)), authorization: new Headers(init?.headers).get("Authorization") })}\n`,
       );
+      if (url.pathname === "/mcp") return memoryResponse(body);
       return new Response(url.pathname === "/handoff" ? "Isolated prior-session handoff" : "ok");
     },
     { preconnect: originalFetch.preconnect },

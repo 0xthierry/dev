@@ -186,11 +186,12 @@ run_post_setup_tasks() {
   install_rea_ghidra "$SETUP_HOST"
   configure_claude_lua_plugins
   configure_claude_inline_images
-  # After Claude/Codex/Pi configs and Herdr/Moshi hooks, so ai-memory merges
-  # into the rendered files instead of being overwritten.
-  configure_ai_memory_agents
-  # Last writer: merge the shared service catalog after all client installers.
+  # Provision the shared renderer runtime and remove the retired native Pi
+  # memory entry before upstream installs its stock extension/tool bridge.
   configure_shared_mcp "$SETUP_HOST"
+  # Upstream owns ai-memory registration, hooks, skills and service. Run after
+  # client configs and other hooks so normal setup cannot overwrite them.
+  configure_ai_memory_agents
 }
 
 setup_host_prereqs() { :; }

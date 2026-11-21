@@ -106,7 +106,7 @@ fi
 [[ "$(readlink "$HOME/.local/bin/chrome-devtools-cli")" == "$TEMP/foreign" ]] || fail "unrelated symlink was modified"
 printf 'ok: unrelated command symlink fails closed\n'
 
-# Act / Assert: normal host configuration opts desktops in, not the remote server.
+# Act / Assert: both supported hosts select browser diagnostics.
 for host in omarchy macbook; do
   (
     # shellcheck disable=SC1090
@@ -114,9 +114,4 @@ for host in omarchy macbook; do
     [[ " ${HOST_CONFIG_TARGETS[*]} " == *" browser-diagnostics "* ]]
   ) || fail "$host is missing browser diagnostics"
 done
-(
-  # shellcheck source=install/hosts/dev.sh
-  source "$ROOT/install/hosts/dev.sh"
-  [[ " ${HOST_CONFIG_TARGETS[*]} " != *" browser-diagnostics "* ]]
-) || fail "remote dev host unexpectedly installs desktop diagnostics"
-printf 'ok: diagnostics runtime is selected only by desktop hosts\n'
+printf 'ok: diagnostics runtime is selected by both supported hosts\n'

@@ -117,24 +117,16 @@ sys.exit("unexpected package/runtime command")
         self.assertEqual(json.loads(result.stdout), [str(self.proxy), "https://mcp.figma.com/mcp",
                          "--transport", "http-only", "--host", "127.0.0.1"])
 
-    def test_ai_memory_uses_native_bridge_without_node_or_oauth_runtime(self):
-        self.executable(self.home / ".local/bin/ai-memory", "import json,sys\nprint(json.dumps(sys.argv[1:]))\n")
+    def test_upstream_owned_ai_memory_is_not_a_shared_bridge_service(self):
+        self.bridge_runtime()
         result = self.bridge("ai-memory")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout), ["mcp-bridge", "--no-session-id"])
-
-    def test_ai_memory_does_not_take_its_endpoint_from_legacy_catalog(self):
-        self.change_url("ai-memory", "http://example.invalid:49374/mcp")
-        self.executable(self.home / ".local/bin/ai-memory", "import json,sys\nprint(json.dumps(sys.argv[1:]))\n")
-        result = self.bridge("ai-memory")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout), ["mcp-bridge", "--no-session-id"])
-
-    def test_ai_memory_missing_client_fails_instead_of_falling_back_to_localhost(self):
-        result = self.bridge("ai-memory")
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("ai-memory", result.stderr)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("invalid choice: 'ai-memory'", result.stderr)
         self.assertEqual(result.stdout, "")
+        remote = self.bridge("neon")
+        self.assertEqual(remote.returncode, 0, remote.stderr)
+        self.assertEqual(json.loads(remote.stdout), [str(self.proxy), "https://mcp.neon.tech/mcp",
+                         "--transport", "http-only", "--host", "127.0.0.1"])
 
     def test_remote_services_reject_plaintext_even_on_loopback(self):
         self.bridge_runtime()
@@ -212,14 +204,14 @@ sys.exit("unexpected package/runtime command")
 
     def test_installer_dry_run_has_no_writes_or_package_runtime_execution(self):
         self.guard_package_tools()
-        result = self.installer("dev", "--dry-run")
+        result = self.installer("omarchy", "--dry-run")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("uv venv --no-config --no-project --allow-existing --python 3.12", result.stdout)
         self.assertIn("uv pip sync --no-config --python", result.stdout)
         self.assertIn("--require-hashes --only-binary :all:", result.stdout)
         self.assertIn("npm ci --prefix", result.stdout)
         self.assertIn("--ignore-scripts --no-audit --no-fund", result.stdout)
-        self.assertIn("configure-clients.py dev", result.stdout)
+        self.assertIn("configure-clients.py omarchy", result.stdout)
         self.assertEqual(list(self.home.iterdir()), [])
         self.assertFalse(self.calls.exists())
         self.assertFalse((self.assets / "node_modules").exists())
@@ -258,7 +250,7 @@ sys.exit("unexpected package/runtime command")
         self.runtime.mkdir(parents=True)
         source = self.runtime / "source"
         source.symlink_to(self.fixture / "missing foreign source")
-        result = self.installer("dev", "--dry-run")
+        result = self.installer("omarchy", "--dry-run")
         self.assertEqual(result.returncode, 1)
         self.assertIn("shared MCP runtime source is a foreign symlink", result.stderr)
         self.assertTrue(source.is_symlink())
@@ -268,7 +260,7 @@ sys.exit("unexpected package/runtime command")
         self.guard_package_tools()
         result = self.installer("unknown")
         self.assertEqual(result.returncode, 1)
-        self.assertIn("shared MCP setup requires dev, macbook, or omarchy", result.stderr)
+        self.assertIn("shared MCP setup requires macbook or omarchy", result.stderr)
         self.assertEqual(list(self.home.iterdir()), [])
         self.assertFalse(self.calls.exists())
 

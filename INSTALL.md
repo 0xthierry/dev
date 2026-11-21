@@ -5,13 +5,12 @@
 The supported machine setup entrypoint is:
 
 ```bash
-./setup.sh <dev|omarchy|macbook>
+./setup.sh <omarchy|macbook>
 ```
 
 Use `--dry-run` first when changing the setup flow or validating a host:
 
 ```bash
-./setup.sh dev --dry-run
 ./setup.sh omarchy --dry-run
 ./setup.sh macbook --dry-run
 ```
@@ -28,13 +27,6 @@ Use `--dry-run` first when changing the setup flow or validating a host:
 
 ## Host Notes
 
-### `dev`
-
-- Linux VM-oriented setup
-- Creates `~/Work/Sideprojects` and `~/Work/Meistrari`
-- Writes the `github.com` SSH override used by the VM
-- Applies Moshi host integration for mobile SSH/Mosh + Herdr/Pi sessions
-
 ### `omarchy`
 
 - Linux desktop setup
@@ -50,7 +42,7 @@ Use `--dry-run` first when changing the setup flow or validating a host:
 
 ## Roblox: play and develop
 
-Run the normal setup on each desktop (the `dev` server is unchanged):
+Run the normal setup on each desktop:
 
 ```bash
 ./setup.sh macbook   # On macOS: native Roblox and Roblox Studio via Homebrew
@@ -117,15 +109,15 @@ installation alone does not verify gameplay or the Studio graphics/runtime path.
 
 1. Shared CLI packages for the selected host
 2. Shared CLI tool config under `configs/cli/`
-3. Shared env, shell, git, SSH, `mise`, and AI CLI setup, including the pinned `ai-memory` binary and user service
+3. Shared env, shell, git, SSH, `mise`, and AI CLI setup, including the pinned `ai-memory` v3.5.1 binary and local user service on each host
 4. Linux hosts also install and enable Docker
 5. Repo-owned config directories for the selected host
 6. Moshi host integration on hosts that include the `moshi` config target: installs the pinned `moshi-hook`, allows inbound Tailscale connections, exposes Herdr at `~/.local/bin/herdr` for SSH probes, opens the Tailscale mosh UDP range with UFW, refreshes hooks for installed/configured agents, and starts the `moshi-hook` user service after pairing
 7. Herdr integrations for installed/configured agents, with the Pi integration loaded from the pinned repository-generated extension
 8. Agent hook dependencies from `configs/agents/hooks`
 9. Agent code review tools from `configs/agents/bin/install-cr-tools.sh`
-10. Claude Code / Codex ai-memory MCP and lifecycle hooks merged into the rendered agent configs. Pi uses native ai-memory MCP registered by `install/mcp.sh`, plus the repository-managed hook-only extension for automatic capture and handoff injection; do not run `ai-memory install-hooks --agent pi --apply`
-11. The [shared six-service MCP catalog](configs/mcp/README.md) merges Neon, Datadog US5, Figma, ai-memory, and desktop-only Blender/Roblox registrations. Five official ai-memory skills are deployed with the shared agent skills. OAuth and ChatGPT account authorization remain explicit; setup starts no tunnels.
+10. The [shared MCP catalog](configs/mcp/README.md) merges Neon, Datadog US5, Figma, REA, Playwriter, Chrome DevTools, Blender, and Roblox registrations. It does not own ai-memory and removes the retired native Pi memory entry.
+11. Upstream `ai-memory setup --yes --agent claude-code --agent codex --agent pi` owns the local service, native hooks, MCP registration, and six official skills. Pi uses its unmodified generated extension for tools and capture. Claude Code's bridge is session-aware; Claude Desktop Chat uses the upstream session-less bridge and has no automatic capture. Codex CLI/app uses upstream's plugin-style stdio bridge for file-backed auth, preserving upstream tool approval rules; review and trust hooks in `/hooks` or app hook settings. See [ai-memory setup](configs/ai-memory/README.md). OAuth and account authorization remain explicit; setup starts no tunnels.
 
 The setup is intended to be idempotent and non-destructive. Existing unrelated paths are warned about and left in place instead of being overwritten.
 
@@ -140,7 +132,7 @@ bash tests/moshi.test.sh
 bash tests/flatpak.test.sh
 bash tests/flatpak-launchers.test.sh
 bash tests/pacman-archive.test.sh
-./setup.sh dev --dry-run
+python3 tests/setup-hosts.test.py
 ./setup.sh omarchy --dry-run
 ./setup.sh macbook --dry-run
 ```

@@ -172,6 +172,6 @@ static-type check.
 
 The broader `tests/agents-install.test.sh` suite stopped when its isolated HOME
 made mise reject the existing global config as untrusted; no trust settings were
-changed. The `dev` and `omarchy` setup dry-runs stop at the existing Linux-only
+changed. The `omarchy` setup dry-run stops at the existing Linux-only
 Cua Driver check on this Mac. The affected Claude tests, AI CLI/shell tests,
 ShellCheck, shell syntax, Python compilation and macbook dry-run passed.

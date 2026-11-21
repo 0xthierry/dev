@@ -11,7 +11,7 @@ shared/global Node selection.
 Full host setup installs prerequisites, REA, Ghidra, native CLI tools, and MCP registrations:
 
 ```bash
-./setup.sh omarchy # or dev / macbook
+./setup.sh omarchy # or macbook
 ```
 
 To install only REA on an already bootstrapped host:
@@ -50,7 +50,7 @@ setup fails rather than falling back to a source build. The prebuild comes from
 the Frida version's upstream GitHub release; npm lockfile integrity covers the
 npm packages, not this separately downloaded binary.
 
-Frida is provisioned on all three hosts so rerunning setup does not remove its
+Frida is provisioned on both hosts so rerunning setup does not remove its
 binding. Setup does not attach to a process, start a capture session, launch a
 target program, or change OS security settings.
 
@@ -73,8 +73,8 @@ existing launcher files receive numbered backups. Client configuration is
 handled by the existing [shared MCP renderer](../mcp/README.md), preserving
 unrelated servers and user options.
 
-The `rea` server is registered in Pi, Claude Code, and Codex on all three hosts,
-and Claude Desktop on macbook/omarchy. Pi uses deferred tool exposure. Restart
+The `rea` server is registered in Pi, Claude Code, Codex, and Claude Desktop
+on both hosts. Pi uses deferred tool exposure. Restart
 your client to load the new registration. ChatGPT is not configured.
 
 ## Supported capabilities

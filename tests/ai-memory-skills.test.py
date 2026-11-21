@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 NAMES = (
     "ai-memory-retrieval",
     "ai-memory-handoff",
+    "ai-memory-messaging",
     "ai-memory-durable-pages",
     "ai-memory-learning-maintenance",
     "ai-memory-routing-install",

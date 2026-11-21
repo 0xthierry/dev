@@ -81,9 +81,9 @@ install_rea_ghidra() (
   local host="${1:-}" runtime="$HOME/.local/share/rea" platform="" os="" arch=""
   local target="" path="" mise_bin="" java_home="" stage="" extracted="" cpp="" marker=""
   case "$host" in
-    dev|omarchy) platform="linux_x86_64" ;;
+    omarchy) platform="linux_x86_64" ;;
     macbook) platform="mac_arm_64" ;;
-    *) printf 'error: REA Ghidra requires dev, omarchy, or macbook\n' >&2; return 1 ;;
+    *) printf 'error: REA Ghidra requires omarchy or macbook\n' >&2; return 1 ;;
   esac
   target="$runtime/ghidra/$REA_GHIDRA_VERSION"
   marker="rea-ghidra-v1 $REA_GHIDRA_VERSION $REA_GHIDRA_SHA256 $platform"
@@ -101,8 +101,8 @@ install_rea_ghidra() (
   fi
   os="$(uname -s)"; arch="$(uname -m)"
   case "$host/$os/$arch" in
-    macbook/Darwin/arm64|dev/Linux/x86_64|omarchy/Linux/x86_64) ;;
-    *) printf 'error: unsupported REA Ghidra host: %s/%s/%s (requires macbook Darwin arm64 or dev/omarchy Linux x86_64)\n' "$host" "$os" "$arch" >&2; return 1 ;;
+    macbook/Darwin/arm64|omarchy/Linux/x86_64) ;;
+    *) printf 'error: unsupported REA Ghidra host: %s/%s/%s (requires macbook Darwin arm64 or omarchy Linux x86_64)\n' "$host" "$os" "$arch" >&2; return 1 ;;
   esac
   for path in "$runtime" "$runtime/ghidra" "$target"; do
     if [[ -L "$path" || ( -e "$path" && ! -d "$path" ) ]]; then
@@ -207,7 +207,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   DRY_RUN=0
   if [[ $# -eq 2 && "$2" == --dry-run ]]; then DRY_RUN=1
   elif [[ $# -ne 1 ]]; then
-    printf 'Usage: bash install/rea-ghidra.sh <dev|macbook|omarchy> [--dry-run]\n' >&2
+    printf 'Usage: bash install/rea-ghidra.sh <macbook|omarchy> [--dry-run]\n' >&2
     exit 1
   fi
   install_rea_ghidra "$1"

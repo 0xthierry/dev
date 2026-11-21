@@ -10,8 +10,8 @@ REA_NODE_VERSION="26.12.0"
 install_rea_prereqs() {
   local host="${1:-}" mise_bin="mise"
   case "$host" in
-    dev|omarchy|macbook) ;;
-    *) printf 'error: REA prerequisites require dev, omarchy, or macbook\n' >&2; return 1 ;;
+    omarchy|macbook) ;;
+    *) printf 'error: REA prerequisites require omarchy or macbook\n' >&2; return 1 ;;
   esac
   log_section "REA Prerequisites"
   if (( ! ${DRY_RUN:-0} )); then
@@ -42,7 +42,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   DRY_RUN=0
   if [[ $# -eq 2 && "$2" == --dry-run ]]; then DRY_RUN=1
   elif [[ $# -ne 1 ]]; then
-    printf 'Usage: bash install/rea-prereqs.sh <dev|macbook|omarchy> [--dry-run]\n' >&2
+    printf 'Usage: bash install/rea-prereqs.sh <macbook|omarchy> [--dry-run]\n' >&2
     exit 1
   fi
   install_rea_prereqs "$1"

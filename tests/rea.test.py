@@ -156,32 +156,26 @@ prebuild.write_text(''' + repr(prebuild) + ''')
         return foreign
 
     def test_all_host_dry_runs_leave_home_and_dependencies_untouched(self):
-        dev = self.installer("dev", "--dry-run")
         mac = self.installer("macbook", "--dry-run")
         desktop = self.installer("omarchy", "--dry-run")
-        self.assertEqual([dev.returncode, mac.returncode, desktop.returncode], [0, 0, 0])
-        self.assertIn("npm ci --prefix", dev.stdout)
+        self.assertEqual([mac.returncode, desktop.returncode], [0, 0])
         self.assertIn("npm ci --prefix", mac.stdout)
         self.assertIn("npm ci --prefix", desktop.stdout)
         command = ["node", str(self.assets / "node_modules/prebuild-install/bin.js"),
                    "--runtime", "napi", "--target", "8"]
         self.assertIn(command, [shlex.split(line.removeprefix("[dry-run] "))
-                                for line in dev.stdout.splitlines() if line.startswith("[dry-run] ")])
-        self.assertIn(command, [shlex.split(line.removeprefix("[dry-run] "))
                                 for line in mac.stdout.splitlines() if line.startswith("[dry-run] ")])
         self.assertIn(command, [shlex.split(line.removeprefix("[dry-run] "))
                                 for line in desktop.stdout.splitlines() if line.startswith("[dry-run] ")])
-        self.assertIn(str(self.assets / "node_modules/frida"), dev.stdout)
+        self.assertIn(str(self.assets / "node_modules/frida"), desktop.stdout)
         self.assertEqual(list(self.home.iterdir()), [])
         self.assertFalse(self.calls.exists())
         self.assertFalse((self.assets / "node_modules").exists())
 
     def test_prerequisite_only_dry_runs_leave_no_runtime(self):
-        dev = self.installer("dev", "--dry-run", prereqs=True)
         mac = self.installer("macbook", "--dry-run", prereqs=True)
         desktop = self.installer("omarchy", "--dry-run", prereqs=True)
-        self.assertEqual([dev.returncode, mac.returncode, desktop.returncode], [0, 0, 0])
-        self.assertIn("sudo pacman -S --needed --noconfirm procps-ng", dev.stdout)
+        self.assertEqual([mac.returncode, desktop.returncode], [0, 0])
         self.assertIn("mise install node@", mac.stdout)
         self.assertIn("sudo pacman -S --needed --noconfirm procps-ng", desktop.stdout)
         self.assertEqual(list(self.home.iterdir()), [])
@@ -192,14 +186,14 @@ prebuild.write_text(''' + repr(prebuild) + ''')
         runtime = self.installer("unknown")
         prereqs = self.installer("unknown", prereqs=True)
         self.assertEqual([runtime.returncode, prereqs.returncode], [1, 1])
-        self.assertIn("requires dev, omarchy, or macbook", runtime.stderr)
-        self.assertIn("require dev, omarchy, or macbook", prereqs.stderr)
+        self.assertIn("requires omarchy or macbook", runtime.stderr)
+        self.assertIn("require omarchy or macbook", prereqs.stderr)
         self.assertFalse(self.calls.exists())
         self.assertEqual(list(self.home.iterdir()), [])
 
     def test_extra_flags_fail_before_tools(self):
-        runtime = self.installer("dev", "--force")
-        prereqs = self.installer("dev", "--dry-run", "extra", prereqs=True)
+        runtime = self.installer("omarchy", "--force")
+        prereqs = self.installer("omarchy", "--dry-run", "extra", prereqs=True)
         self.assertEqual([runtime.returncode, prereqs.returncode], [1, 1])
         self.assertIn("Usage:", runtime.stderr)
         self.assertIn("Usage:", prereqs.stderr)
@@ -208,7 +202,7 @@ prebuild.write_text(''' + repr(prebuild) + ''')
 
     def test_foreign_runtime_symlink_is_rejected_before_tools(self):
         foreign = self.foreign_link(self.runtime)
-        result = self.installer("dev")
+        result = self.installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("refusing unrelated REA runtime path", result.stderr)
         self.assertEqual(self.runtime.readlink(), foreign)
@@ -218,7 +212,7 @@ prebuild.write_text(''' + repr(prebuild) + ''')
     def test_foreign_source_symlink_is_rejected_before_tools(self):
         target = self.runtime / "source"
         foreign = self.foreign_link(target)
-        result = self.installer("dev")
+        result = self.installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("refusing unrelated REA symlink", result.stderr)
         self.assertEqual(target.readlink(), foreign)
@@ -227,7 +221,7 @@ prebuild.write_text(''' + repr(prebuild) + ''')
 
     def test_foreign_mcp_launcher_symlink_is_rejected_before_tools(self):
         foreign = self.foreign_link(self.launcher)
-        result = self.installer("dev")
+        result = self.installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("refusing unrelated REA symlink", result.stderr)
         self.assertEqual(self.launcher.readlink(), foreign)
@@ -237,7 +231,7 @@ prebuild.write_text(''' + repr(prebuild) + ''')
     def test_foreign_cli_launcher_symlink_is_rejected_before_tools(self):
         target = self.launcher.with_name("rea")
         foreign = self.foreign_link(target)
-        result = self.installer("dev")
+        result = self.installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("refusing unrelated REA symlink", result.stderr)
         self.assertEqual(target.readlink(), foreign)
@@ -247,7 +241,7 @@ prebuild.write_text(''' + repr(prebuild) + ''')
     def test_foreign_node_path_symlink_is_rejected_before_tools(self):
         target = self.runtime / "node-path"
         foreign = self.foreign_link(target)
-        result = self.installer("dev")
+        result = self.installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("refusing unrelated REA runtime path", result.stderr)
         self.assertEqual(target.readlink(), foreign)
@@ -258,7 +252,7 @@ prebuild.write_text(''' + repr(prebuild) + ''')
         target = self.runtime / "node-path"
         target.mkdir(parents=True)
         self.put(target / "user-note", "keep")
-        result = self.installer("dev")
+        result = self.installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("refusing unrelated REA runtime path", result.stderr)
         self.assertEqual((target / "user-note").read_text(), "keep")
@@ -421,10 +415,10 @@ prebuild.write_text(''' + repr(prebuild) + ''')
         self.put(self.home / ".config/Claude/claude_desktop_config.json", '{"preferences":{"keep":true}}\n')
         self.put(self.runtime / "user-note", "keep")
         before = {path: path.read_bytes() for path in self.home.rglob("*") if path.is_file()}
-        first = self.installer("dev")
+        first = self.installer("omarchy")
         self.assertEqual(first.returncode, 0, first.stderr)
         node_before = (self.runtime / "node-path").stat().st_mtime_ns
-        second = self.installer("dev")
+        second = self.installer("omarchy")
         self.assertEqual(second.returncode, 0, second.stderr)
         self.assertEqual({path: path.read_bytes() for path in before}, before)
         self.assertEqual((self.runtime / "node-path").read_text(), str(self.node) + "\n")
@@ -440,7 +434,7 @@ prebuild.write_text(''' + repr(prebuild) + ''')
 
     @unittest.skipUnless(NODE, "Node required for real installer JavaScript validation")
     def test_install_provisions_frida_prebuild_with_pinned_node_then_loads_stub(self):
-        result = self.installer("dev")
+        result = self.installer("omarchy")
 
         self.assertEqual(result.returncode, 0, result.stderr)
         calls = self.calls.read_text().splitlines()
@@ -461,7 +455,7 @@ prebuild.write_text(''' + repr(prebuild) + ''')
     @unittest.skipUnless(NODE, "Node required for real installer JavaScript validation")
     def test_frida_prebuild_failure_publishes_no_runtime_and_rerun_recovers(self):
         self.env["REA_TEST_FRIDA_PREBUILD_FAIL"] = "1"
-        failed = self.installer("dev")
+        failed = self.installer("omarchy")
 
         self.assertEqual(failed.returncode, 17, failed.stderr)
         self.assertIn("fixture Frida prebuild unavailable", failed.stderr)
@@ -473,7 +467,7 @@ prebuild.write_text(''' + repr(prebuild) + ''')
         self.assertNotIn("frida loaded", self.calls.read_text())
 
         del self.env["REA_TEST_FRIDA_PREBUILD_FAIL"]
-        repaired = self.installer("dev")
+        repaired = self.installer("omarchy")
 
         self.assertEqual(repaired.returncode, 0, repaired.stderr)
         self.assertEqual(self.launcher.readlink(), self.assets / "rea-mcp")
@@ -485,7 +479,7 @@ prebuild.write_text(''' + repr(prebuild) + ''')
     @unittest.skipUnless(NODE, "Node required for real installer JavaScript validation")
     def test_frida_import_failure_prevents_runtime_publication(self):
         self.env["REA_TEST_FRIDA_LOAD_FAIL"] = "1"
-        result = self.installer("dev")
+        result = self.installer("omarchy")
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("fixture Frida binding cannot load", result.stderr)
@@ -499,13 +493,13 @@ prebuild.write_text(''' + repr(prebuild) + ''')
     @unittest.skipUnless(NODE, "Node required for real installer JavaScript validation")
     def test_interrupted_dependency_install_is_repaired_by_rerun(self):
         self.env["REA_TEST_INTERRUPT"] = "1"
-        interrupted = self.installer("dev")
+        interrupted = self.installer("omarchy")
         self.assertEqual(interrupted.returncode, 9)
         self.assertFalse(self.launcher.exists())
         self.assertFalse((self.runtime / "node-path").exists())
         self.assertFalse(self.entry.exists())
         del self.env["REA_TEST_INTERRUPT"]
-        repaired = self.installer("dev")
+        repaired = self.installer("omarchy")
         self.assertEqual(repaired.returncode, 0, repaired.stderr)
         self.assertTrue(self.entry.is_file())
         self.assertEqual(self.launcher.readlink(), self.assets / "rea-mcp")
@@ -516,34 +510,34 @@ prebuild.write_text(''' + repr(prebuild) + ''')
     @unittest.skipUnless(NODE, "Node required for real installer JavaScript validation")
     def test_incomplete_npm_success_fails_validation_then_rerun_repairs(self):
         self.env["REA_TEST_INCOMPLETE"] = "1"
-        incomplete = self.installer("dev")
+        incomplete = self.installer("omarchy")
         self.assertNotEqual(incomplete.returncode, 0)
         self.assertIn("Incomplete or unpinned REA installation", incomplete.stderr)
         self.assertNotIn("prebuild ", self.calls.read_text())
         self.assertFalse(self.launcher.exists())
         self.assertFalse((self.runtime / "node-path").exists())
         del self.env["REA_TEST_INCOMPLETE"]
-        repaired = self.installer("dev")
+        repaired = self.installer("omarchy")
         self.assertEqual(repaired.returncode, 0, repaired.stderr)
         self.assertTrue(self.entry.is_file())
         self.assertEqual((self.runtime / "node-path").read_text(), str(self.node) + "\n")
 
     @unittest.skipUnless(NODE, "Node required for real installer JavaScript validation")
     def test_removed_dependency_is_repaired_in_existing_runtime(self):
-        first = self.installer("dev")
+        first = self.installer("omarchy")
         self.assertEqual(first.returncode, 0, first.stderr)
         self.entry.unlink()
         broken = self.launch()
         self.assertEqual(broken.returncode, 1)
         self.assertIn("REA runtime is incomplete", broken.stderr)
-        repaired = self.installer("dev")
+        repaired = self.installer("omarchy")
         self.assertEqual(repaired.returncode, 0, repaired.stderr)
         launched = self.launch()
         self.assertEqual(launched.returncode, 0, launched.stderr)
         self.assertEqual(json.loads(launched.stdout), [str(self.runtime / "source/node_modules/rea-agents/scripts/rea.mjs"), "mcp"])
 
     def test_prerequisites_install_without_creating_runtime_or_client_files(self):
-        result = self.installer("dev", prereqs=True)
+        result = self.installer("omarchy", prereqs=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("sudo pacman -S --needed --noconfirm procps-ng", self.calls.read_text())
         self.assertIn("mise install node@", self.calls.read_text())
@@ -580,7 +574,7 @@ prebuild.write_text(''' + repr(prebuild) + ''')
 
     def test_unsupported_os_fails_prerequisite_preflight(self):
         self.env["REA_TEST_OS"] = "FreeBSD"
-        result = self.installer("dev", prereqs=True)
+        result = self.installer("omarchy", prereqs=True)
         self.assertEqual(result.returncode, 1)
         self.assertIn("host does not match this operating system", result.stderr)
         self.assertFalse(self.calls.exists())
@@ -588,7 +582,7 @@ prebuild.write_text(''' + repr(prebuild) + ''')
 
     def test_wrong_pinned_node_version_fails_before_npm_and_runtime_writes(self):
         self.env["REA_TEST_NODE_VERSION"] = "v20.0.0"
-        result = self.installer("dev")
+        result = self.installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("pinned REA Node/npm runtime is missing or has the wrong version", result.stderr)
         self.assertIn("mise install node@", self.calls.read_text())

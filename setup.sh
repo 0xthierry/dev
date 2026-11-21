@@ -19,12 +19,12 @@ while [[ $# -gt 0 ]]; do
     --skip-git-repo-sync)
       SKIP_GIT_REPO_SYNC=1
       ;;
-    dev|omarchy|macbook)
+    omarchy|macbook)
       HOST="$1"
       ;;
     *)
       printf 'Unknown argument: %s\n' "$1" >&2
-      printf 'Usage: ./setup.sh [--dry-run] [--skip-git-repo-sync] <dev|omarchy|macbook>\n' >&2
+      printf 'Usage: ./setup.sh [--dry-run] [--skip-git-repo-sync] <omarchy|macbook>\n' >&2
       exit 1
       ;;
   esac
@@ -32,7 +32,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$HOST" ]]; then
-  printf 'Usage: ./setup.sh [--dry-run] [--skip-git-repo-sync] <dev|omarchy|macbook>\n' >&2
+  printf 'Usage: ./setup.sh [--dry-run] [--skip-git-repo-sync] <omarchy|macbook>\n' >&2
   exit 1
 fi
 

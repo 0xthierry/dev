@@ -135,11 +135,10 @@ print("    os.arch = " + ("aarch64" if os.environ["TEST_OS"] == "Darwin" else "a
         return [json.loads(line) for line in self.calls.read_text().splitlines()]
 
     def test_all_host_dry_runs_have_no_side_effects(self):
-        dev = self.run_installer("dev", "--dry-run")
         mac = self.run_installer("macbook", "--dry-run")
         omarchy = self.run_installer("omarchy", "--dry-run")
-        self.assertEqual([dev.returncode, mac.returncode, omarchy.returncode], [0, 0, 0])
-        self.assertIn("mise install java@", dev.stdout)
+        self.assertEqual([mac.returncode, omarchy.returncode], [0, 0])
+        self.assertIn("mise install java@", omarchy.stdout)
         self.assertIn("Xcode clang++/make", mac.stdout)
         self.assertIn("linux_x86_64", omarchy.stdout)
         self.assertEqual(list(self.home.iterdir()), [])
@@ -149,7 +148,7 @@ print("    os.arch = " + ("aarch64" if os.environ["TEST_OS"] == "Darwin" else "a
         global_config = self.home / ".config/mise/config.toml"
         global_config.parent.mkdir(parents=True)
         global_config.write_text('[tools]\njava = "17"\n')
-        result = self.run_installer("dev")
+        result = self.run_installer("omarchy")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.runtime / "ghidra-path").read_text(), str(self.target) + "\n")
         self.assertEqual((self.runtime / "java-home").read_text(), str(self.java) + "\n")
@@ -170,9 +169,9 @@ print("    os.arch = " + ("aarch64" if os.environ["TEST_OS"] == "Darwin" else "a
         self.assertEqual((self.runtime / "java-home").read_text(), str(self.java) + "\n")
 
     def test_idempotent_rerun_does_not_download_or_rebuild(self):
-        first = self.run_installer("dev")
+        first = self.run_installer("omarchy")
         stamp = (self.runtime / "ghidra-path").stat().st_mtime_ns
-        second = self.run_installer("dev")
+        second = self.run_installer("omarchy")
         self.assertEqual([first.returncode, second.returncode], [0, 0], second.stderr)
         self.assertIn("installed and validated", second.stdout)
         self.assertEqual((self.runtime / "ghidra-path").stat().st_mtime_ns, stamp)
@@ -180,10 +179,10 @@ print("    os.arch = " + ("aarch64" if os.environ["TEST_OS"] == "Darwin" else "a
         self.assertEqual((self.runtime / "ghidra-path").read_text(), str(self.target) + "\n")
 
     def test_interruption_after_publish_is_reconciled_without_download(self):
-        first = self.run_installer("dev")
+        first = self.run_installer("omarchy")
         (self.runtime / "java-home").unlink()
         (self.runtime / "ghidra-path").unlink()
-        second = self.run_installer("dev")
+        second = self.run_installer("omarchy")
         self.assertEqual([first.returncode, second.returncode], [0, 0], second.stderr)
         self.assertEqual((self.runtime / "java-home").read_text(), str(self.java) + "\n")
         self.assertEqual((self.runtime / "ghidra-path").read_text(), str(self.target) + "\n")
@@ -191,19 +190,19 @@ print("    os.arch = " + ("aarch64" if os.environ["TEST_OS"] == "Darwin" else "a
 
     def test_checksum_mismatch_never_publishes_and_retry_succeeds(self):
         self.env["TEST_BAD_CHECKSUM"] = "1"
-        failure = self.run_installer("dev")
+        failure = self.run_installer("omarchy")
         self.assertEqual(failure.returncode, 1)
         self.assertIn("SHA-256 mismatch", failure.stderr)
         self.assertEqual(list((self.runtime / "ghidra").iterdir()), [])
         self.assertFalse((self.runtime / "ghidra-path").exists())
         self.env.pop("TEST_BAD_CHECKSUM")
-        retry = self.run_installer("dev")
+        retry = self.run_installer("omarchy")
         self.assertEqual(retry.returncode, 0, retry.stderr)
         self.assertEqual((self.runtime / "ghidra-path").read_text(), str(self.target) + "\n")
 
     def test_download_failure_leaves_no_records_or_partial_install(self):
         self.env["TEST_DOWNLOAD_FAIL"] = "1"
-        result = self.run_installer("dev")
+        result = self.run_installer("omarchy")
         self.assertEqual(result.returncode, 22)
         self.assertEqual(list((self.runtime / "ghidra").iterdir()), [])
         self.assertFalse((self.runtime / "java-home").exists())
@@ -218,7 +217,7 @@ print("    os.arch = " + ("aarch64" if os.environ["TEST_OS"] == "Darwin" else "a
 
     def test_wrong_native_architecture_fails_validation_before_publish(self):
         self.create_archive(wrong_arch=True)
-        result = self.run_installer("dev")
+        result = self.run_installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("wrong native executable architecture", result.stderr)
         self.assertFalse(self.target.exists())
@@ -226,7 +225,7 @@ print("    os.arch = " + ("aarch64" if os.environ["TEST_OS"] == "Darwin" else "a
 
     def test_wrong_java_fails_validation_before_publish(self):
         self.env["TEST_JAVA_VERSION"] = "17.0.19"
-        result = self.run_installer("dev")
+        result = self.run_installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("matching native 64-bit JDK 21.0.13", result.stderr)
         self.assertFalse(self.target.exists())
@@ -234,7 +233,7 @@ print("    os.arch = " + ("aarch64" if os.environ["TEST_OS"] == "Darwin" else "a
 
     def test_incomplete_archive_fails_validation_before_publish(self):
         self.create_archive(missing_headless=True)
-        result = self.run_installer("dev")
+        result = self.run_installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("missing executable", result.stderr)
         self.assertFalse(self.target.exists())
@@ -242,14 +241,14 @@ print("    os.arch = " + ("aarch64" if os.environ["TEST_OS"] == "Darwin" else "a
 
     def test_wrong_ghidra_version_fails_validation_before_publish(self):
         self.create_archive(version="12.0.4")
-        result = self.run_installer("dev")
+        result = self.run_installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("unexpected Ghidra version", result.stderr)
         self.assertFalse(self.target.exists())
 
     def test_missing_javac_rejects_jre(self):
         (self.java / "bin/javac").unlink()
-        result = self.run_installer("dev")
+        result = self.run_installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("absolute full JDK home", result.stderr)
         self.assertFalse(self.runtime.exists())
@@ -260,7 +259,7 @@ print("    os.arch = " + ("aarch64" if os.environ["TEST_OS"] == "Darwin" else "a
         (foreign / "user-data").write_text("preserve me")
         self.runtime.parent.mkdir(parents=True)
         self.runtime.symlink_to(foreign)
-        result = self.run_installer("dev")
+        result = self.run_installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("refusing unrelated", result.stderr)
         self.assertEqual(self.runtime.readlink(), foreign)
@@ -270,7 +269,7 @@ print("    os.arch = " + ("aarch64" if os.environ["TEST_OS"] == "Darwin" else "a
     def test_foreign_version_directory_is_preserved(self):
         self.target.mkdir(parents=True)
         (self.target / "user-data").write_text("preserve me")
-        result = self.run_installer("dev")
+        result = self.run_installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("refusing unowned", result.stderr)
         self.assertEqual((self.target / "user-data").read_text(), "preserve me")
@@ -281,7 +280,7 @@ print("    os.arch = " + ("aarch64" if os.environ["TEST_OS"] == "Darwin" else "a
         foreign = self.base / "foreign"
         foreign.write_text("preserve me")
         (self.runtime / "java-home").symlink_to(foreign)
-        result = self.run_installer("dev")
+        result = self.run_installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("refusing unrelated", result.stderr)
         self.assertEqual(foreign.read_text(), "preserve me")
@@ -291,16 +290,16 @@ print("    os.arch = " + ("aarch64" if os.environ["TEST_OS"] == "Darwin" else "a
     def test_foreign_plain_records_are_preserved(self):
         self.runtime.mkdir(parents=True)
         (self.runtime / "ghidra-path").write_text("/foreign/ghidra\n")
-        result = self.run_installer("dev")
+        result = self.run_installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("without an owned installation", result.stderr)
         self.assertEqual((self.runtime / "ghidra-path").read_text(), "/foreign/ghidra\n")
         self.assertFalse(self.calls.exists())
 
     def test_user_repointed_record_beside_owned_install_is_preserved(self):
-        first = self.run_installer("dev")
+        first = self.run_installer("omarchy")
         (self.runtime / "java-home").write_text("/foreign/java\n")
-        result = self.run_installer("dev")
+        result = self.run_installer("omarchy")
         self.assertEqual([first.returncode, result.returncode], [0, 1])
         self.assertIn("refusing unrelated REA Ghidra record contents", result.stderr)
         self.assertEqual((self.runtime / "java-home").read_text(), "/foreign/java\n")
@@ -308,16 +307,16 @@ print("    os.arch = " + ("aarch64" if os.environ["TEST_OS"] == "Darwin" else "a
 
     def test_mise_failure_prevents_download_and_records(self):
         self.env["TEST_MISE_FAIL"] = "1"
-        result = self.run_installer("dev")
+        result = self.run_installer("omarchy")
         self.assertEqual(result.returncode, 12)
         self.assertEqual([call[:2] for call in self.read_calls()], [["mise", "install"]])
         self.assertFalse(self.runtime.exists())
 
     def test_corrupt_owned_install_is_not_deleted_or_silently_replaced(self):
-        first = self.run_installer("dev")
+        first = self.run_installer("omarchy")
         headless = self.target / "support/analyzeHeadless"
         headless.unlink()
-        result = self.run_installer("dev")
+        result = self.run_installer("omarchy")
         self.assertEqual([first.returncode, result.returncode], [0, 1])
         self.assertIn("missing executable", result.stderr)
         self.assertTrue((self.target / ".rea-owned").exists())
@@ -325,7 +324,7 @@ print("    os.arch = " + ("aarch64" if os.environ["TEST_OS"] == "Darwin" else "a
 
     def test_unsupported_architecture_fails_before_tools(self):
         self.env["TEST_ARCH"] = "aarch64"
-        result = self.run_installer("dev")
+        result = self.run_installer("omarchy")
         self.assertEqual(result.returncode, 1)
         self.assertIn("unsupported REA Ghidra host", result.stderr)
         self.assertFalse(self.calls.exists())
@@ -346,9 +345,9 @@ print("    os.arch = " + ("aarch64" if os.environ["TEST_OS"] == "Darwin" else "a
 
     def test_invalid_host_and_flags_fail_before_tools(self):
         host = self.run_installer("unknown")
-        flag = self.run_installer("dev", "--force")
+        flag = self.run_installer("omarchy", "--force")
         self.assertEqual([host.returncode, flag.returncode], [1, 1])
-        self.assertIn("requires dev, omarchy, or macbook", host.stderr)
+        self.assertIn("requires omarchy or macbook", host.stderr)
         self.assertIn("Usage:", flag.stderr)
         self.assertFalse(self.calls.exists())
 

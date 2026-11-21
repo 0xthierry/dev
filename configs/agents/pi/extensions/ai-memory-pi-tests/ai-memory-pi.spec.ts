@@ -7,6 +7,7 @@ import {
   FAUX_MODEL_ID,
   FAUX_PROVIDER_NAME,
   FAUX_RESPONSE_TEXT_ENV,
+  FAUX_TOOL_CALLS_ENV,
 } from "../_shared/testing/faux-provider-extension";
 import { type PiRpcHarness, startPiRpcHarness } from "../_shared/testing/pi-rpc-harness";
 
@@ -20,17 +21,17 @@ afterEach(async () => {
   root = undefined;
 });
 
-test("real Pi injects a handoff and captures a prompt using hook-only extension", async () => {
+test("real Pi executes a stock memory tool with session headers, injects handoff and captures the turn", async () => {
   // Arrange
   root = await realpath(await mkdtemp(join(tmpdir(), "pi-memory-hooks-e2e-")));
   const log = join(root, "hooks.jsonl");
   await writeFile(join(root, ".ai-memory.toml"), 'workspace = "fixture"\nproject = "native"\n');
-  await mkdir(join(root, ".config/ai-memory"), { recursive: true });
-  await writeFile(
-    join(root, ".config/ai-memory/client.json"),
-    '{"server_url":"https://ai-memory-cloud.tail4e339.ts.net"}',
+  const dataDir = join(
+    root,
+    process.platform === "darwin" ? "Library/Application Support/ai-memory" : ".local/share/ai-memory",
   );
-  await writeFile(join(root, ".config/ai-memory/api-key"), "aim_fixture_rpc_machine_key_0123456789", { mode: 0o600 });
+  await mkdir(dataDir, { recursive: true });
+  await writeFile(join(dataDir, "auth-token"), "fixture-rpc-local-token", { mode: 0o600 });
   harness = await startPiRpcHarness({
     cwd: root,
     extensionPath: resolve("configs/agents/pi/extensions/ai-memory-pi-tests/fixtures/hook-server.ts"),
@@ -49,17 +50,22 @@ test("real Pi injects a handoff and captures a prompt using hook-only extension"
     env: {
       HOME: root,
       PI_CODING_AGENT_DIR: join(root, "agent"),
-      AI_MEMORY_DATA_DIR: join(root, "data"),
+      AI_MEMORY_DATA_DIR: "",
+      AI_MEMORY_AUTH_TOKEN: "",
+      XDG_DATA_HOME: "",
       AI_MEMORY_RUN_ID: "",
       AI_MEMORY_HOOK_SPEC_LOG: log,
       [FAUX_API_KEY_ENV]: "fixture-key",
-      [FAUX_RESPONSE_TEXT_ENV]: "Hook-only run complete.",
+      [FAUX_RESPONSE_TEXT_ENV]: "Stock memory run complete.",
+      [FAUX_TOOL_CALLS_ENV]: JSON.stringify([
+        { name: "memory_status", arguments: { workspace: "fixture", project: "native" } },
+      ]),
     },
   });
 
   // Act
   await harness.request({ type: "prompt", message: "Remember the isolated fixture." });
-  await harness.waitForEvent((event) => event.type === "agent_end");
+  await harness.waitForEvent((event) => event.type === "agent_settled");
   const messages = await harness.request({ type: "get_messages" });
   // The vendor queue intentionally drains at 50 ms intervals after an immediate stop.
   await Bun.sleep(250);
@@ -70,26 +76,29 @@ test("real Pi injects a handoff and captures a prompt using hook-only extension"
 
   // Assert
   expect(JSON.stringify(messages)).toContain("Isolated prior-session handoff");
-  expect(JSON.stringify(messages)).toContain("Hook-only run complete.");
-  expect(captured.map(({ url }) => new URL(url).pathname)).not.toContain("/mcp");
-  expect(captured.map(({ url, authorization }) => ({ origin: new URL(url).origin, authorization }))).toEqual([
-    {
-      origin: "https://ai-memory-cloud.tail4e339.ts.net",
-      authorization: "Bearer aim_fixture_rpc_machine_key_0123456789",
-    },
-    {
-      origin: "https://ai-memory-cloud.tail4e339.ts.net",
-      authorization: "Bearer aim_fixture_rpc_machine_key_0123456789",
-    },
-    {
-      origin: "https://ai-memory-cloud.tail4e339.ts.net",
-      authorization: "Bearer aim_fixture_rpc_machine_key_0123456789",
-    },
-    {
-      origin: "https://ai-memory-cloud.tail4e339.ts.net",
-      authorization: "Bearer aim_fixture_rpc_machine_key_0123456789",
-    },
+  expect(JSON.stringify(messages)).toContain("Stock memory run complete.");
+  expect(JSON.stringify(messages)).toContain("Fixture memory status: ready");
+  expect(harness.events.find((event) => event.type === "tool_execution_end")).toMatchObject({
+    toolName: "memory_status",
+    isError: false,
+    result: { content: [{ type: "text", text: "Fixture memory status: ready" }] },
+  });
+  expect(captured.filter(({ url }) => new URL(url).pathname === "/mcp").map(({ body }) => body.method)).toEqual([
+    "initialize",
+    "notifications/initialized",
+    "tools/list",
+    "tools/call",
   ]);
+  const call = captured.find(({ body }) => body.method === "tools/call");
+  const sessionId = captured.find(({ url }) => new URL(url).searchParams.get("event") === "user-prompt")?.body
+    .sessionID;
+  expect(call.body.params).toEqual({ name: "memory_status", arguments: { workspace: "fixture", project: "native" } });
+  expect(call.headers["x-memory-actor-session-id"]).toBe(sessionId);
+  expect(call.headers["mcp-session-id"]).toBe(sessionId);
+  expect(sessionId).toEqual(expect.any(String));
+  expect(captured.map(({ url, authorization }) => ({ origin: new URL(url).origin, authorization }))).toEqual(
+    Array(10).fill({ origin: "http://127.0.0.1:49374", authorization: "Bearer fixture-rpc-local-token" }),
+  );
   expect(captured.find(({ url }) => new URL(url).searchParams.get("event") === "user-prompt")?.body).toMatchObject({
     cwd: root,
     prompt: "Remember the isolated fixture.",
@@ -99,5 +108,5 @@ test("real Pi injects a handoff and captures a prompt using hook-only extension"
     captured
       .filter(({ url }) => new URL(url).pathname === "/hook")
       .map(({ url }) => new URL(url).searchParams.get("event")),
-  ).toEqual(["session-start", "user-prompt", "stop"]);
+  ).toEqual(["session-start", "user-prompt", "pre-tool-use", "post-tool-use", "stop"]);
 }, 30_000);

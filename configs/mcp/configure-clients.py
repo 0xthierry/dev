@@ -7,9 +7,7 @@ performs OAuth discovery/login, so its native writer is unsafe during setup.
 import argparse
 import copy
 import json
-import importlib.util
 import os
-import shlex
 from pathlib import Path
 import re
 import sys
@@ -17,7 +15,7 @@ import tempfile
 import tomllib
 
 
-HOSTS = ("dev", "macbook", "omarchy")
+HOSTS = ("macbook", "omarchy")
 CATALOG = Path(__file__).with_name("catalog.json")
 
 
@@ -67,6 +65,8 @@ def load_catalog():
         if "launcher" in service and (not isinstance(service["launcher"], str)
                                        or not re.fullmatch(r"[A-Za-z0-9_-]+", service["launcher"])):
             raise ValueError(f"invalid catalog launcher for {name}")
+        if not isinstance(service.get("args", []), list) or any(not isinstance(arg, str) for arg in service.get("args", [])):
+            raise ValueError(f"invalid catalog args for {name}")
         if not isinstance(service.get("description"), str):
             raise ValueError(f"missing catalog description for {name}")
         if not isinstance(service.get("desktop_opt_in", False), bool):
@@ -96,6 +96,17 @@ def managed_desktop_entry(entry, home, name):
     """Identify repo ownership by the bridge executable and exact service args."""
     return (entry.get("command") == str(home / ".local/bin/mcp-service")
             and entry.get("args") == [name])
+
+
+def managed_pi_memory_entry(entry, home):
+    """Recognize only transports previously installed by this repository."""
+    if "command" in entry:
+        return (entry["command"] == str(home / ".local/bin/ai-memory")
+                and entry.get("args") == ["mcp-bridge", "--server-url",
+                                           "http://127.0.0.1:49374", "--no-session-id"]
+                and "url" not in entry)
+    return entry.get("url") in ("http://127.0.0.1:49374/mcp",
+                                "https://ai-memory-cloud.tail4e339.ts.net/mcp")
 
 
 def figma_plugin_active(claude_dir, url):
@@ -148,7 +159,7 @@ def render_entry(service, home, client, name):
         if client == "claude":
             entry["type"] = "http"
     else:
-        entry = {"command": str(home / ".local/bin" / service["launcher"]), "args": []}
+        entry = {"command": str(home / ".local/bin" / service["launcher"]), "args": service.get("args", [])}
     if client == "pi":
         entry.update(description=service["description"], exposure="deferred")
     return entry
@@ -214,23 +225,12 @@ def configure(host):
     pi_path = Path(os.environ.get("PI_CODING_AGENT_DIR", home / ".pi/agent")) / "mcp.json"
     codex_path = Path(os.environ.get("CODEX_HOME", home / ".codex")) / "config.toml"
     paths = {"claude": code_path, "pi": pi_path, "codex": codex_path}
-    if host != "dev":
-        desktop = (home / "Library/Application Support/Claude" if host == "macbook"
-                   else Path(os.environ.get("XDG_CONFIG_HOME", home / ".config")) / "Claude")
-        paths["desktop"] = desktop / "claude_desktop_config.json"
+    desktop = (home / "Library/Application Support/Claude" if host == "macbook"
+               else Path(os.environ.get("XDG_CONFIG_HOME", home / ".config")) / "Claude")
+    paths["desktop"] = desktop / "claude_desktop_config.json"
     if len({path.absolute() for path in paths.values()}) != len(paths):
         raise ValueError("client configuration paths must be distinct")
     catalog = load_catalog()
-    remote_memory = None
-    if host in ("macbook", "omarchy"):
-        module_path = Path(__file__).resolve().parents[1] / "ai-memory/client.py"
-        spec = importlib.util.spec_from_file_location("ai_memory_client", module_path)
-        memory = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(memory)
-        url, token, _ = memory.load_client()
-        remote_memory = (token, module_path)
-        catalog["ai-memory"] = {**catalog["ai-memory"], "url": url + "/mcp",
-                                "description": "Shared private cloud project memory."}
     selected = {name: service for name, service in catalog.items()
                 if host in service.get("hosts", HOSTS)}
     preferences_path = (Path(os.environ.get("XDG_CONFIG_HOME", home / ".config"))
@@ -250,15 +250,24 @@ def configure(host):
             configs[client] = tomlkit.parse(raw.decode() if raw is not None else "")
         else:
             configs[client] = parse_json(raw, path, servers=True)
+    # Stock Pi extension owns memory tools. Preflight custom entries before
+    # planning any writes; other clients' upstream memory entries are untouched.
+    pi_memory = configs["pi"].get("mcpServers", {}).get("ai-memory")
+    if pi_memory is not None and not managed_pi_memory_entry(pi_memory, home):
+        raise ValueError(f"custom Pi ai-memory entry in {pi_path}; remove that native "
+                         "mcpServers entry explicitly before setup to avoid duplicate "
+                         "tools with the stock ai-memory Pi extension")
     # Pi maps '-' to '_' in native server identifiers. Do not publish a
     # catalog entry that collides with an existing differently named server.
     pi_names = {}
-    for name in dict.fromkeys([*configs["pi"].get("mcpServers", {}), *selected]):
+    for name in [*selected, *configs["pi"].get("mcpServers", {})]:
         normalized = name.replace("-", "_")
-        if normalized in pi_names:
-            raise ValueError(f"Pi server names {pi_names[normalized]!r} and {name!r} collide; "
+        managed_name = pi_names.get(normalized)
+        if managed_name is not None and managed_name != name:
+            raise ValueError(f"Pi server names {managed_name!r} and {name!r} collide; "
                              f"resolve the existing entry in {pi_path} before setup")
-        pi_names[normalized] = name
+        if name in selected:
+            pi_names[normalized] = name
     plugin_active = "figma" in selected and figma_plugin_active(claude_dir, selected["figma"]["url"])
     plans = []
     for client, path in paths.items():
@@ -268,6 +277,8 @@ def configure(host):
         if key not in config:
             config[key] = tomlkit.table() if client == "codex" else {}
         servers = config[key]
+        if client == "pi" and pi_memory is not None:
+            del servers["ai-memory"]
         for name, service in selected.items():
             if client == "desktop" and service.get("desktop_opt_in", False):
                 existing = servers.get(name)
@@ -280,23 +291,6 @@ def configure(host):
                         del servers[name]
                     continue
             desired = render_entry(service, home, client, name)
-            if name == "ai-memory" and remote_memory and client == "desktop":
-                desired = {"command": str(home / ".local/bin/ai-memory"),
-                           "args": ["mcp-bridge", "--no-session-id"]}
-            if name == "ai-memory" and remote_memory and client != "desktop":
-                token, module_path = remote_memory
-                if client == "pi":
-                    desired["headers"] = {"Authorization": "!" + shlex.join(
-                        [sys.executable, str(module_path), "auth-header"])}
-                else:
-                    desired["http_headers" if client == "codex" else "headers"] = {
-                        "Authorization": "Bearer " + token}
-                # Authentication is repo-managed for this service, not preserved
-                # from the old local server or a previous root credential.
-                existing = servers.get(name, {})
-                for auth in ("headers", "http_headers", "env_http_headers", "bearer_token_env_var", "oauth"):
-                    if auth in existing:
-                        del existing[auth]
             if client == "claude" and name == "figma" and plugin_active:
                 if name in servers:
                     if servers[name] == desired:

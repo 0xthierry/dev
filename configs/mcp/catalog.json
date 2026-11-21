@@ -14,10 +14,6 @@
     "description": "Read Figma design context and use Figma tools.",
     "desktop_opt_in": true
   },
-  "ai-memory": {
-    "url": "http://127.0.0.1:49374/mcp",
-    "description": "Shared local project memory."
-  },
   "rea": {
     "launcher": "rea-mcp",
     "description": "Analyze and reverse-engineer binaries with REA."

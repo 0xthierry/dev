@@ -10,7 +10,7 @@ use only accounts you are authorized to use and comply with provider terms.
 
 ## Install and start
 
-Included in `./setup.sh <host>` for all three hosts. To deploy just this integration:
+Included in `./setup.sh <host>` for both hosts. To deploy just this integration:
 
 ```bash
 bash install/cliproxyapi.sh
@@ -47,7 +47,7 @@ On Linux, start in a separate terminal with `cliproxy serve`, or activate the in
 service. The macOS commands below are only needed for manual activation:
 
 ```bash
-# Linux (dev / omarchy)
+# Linux (omarchy)
 systemctl --user daemon-reload
 systemctl --user enable --now cliproxyapi.service
 

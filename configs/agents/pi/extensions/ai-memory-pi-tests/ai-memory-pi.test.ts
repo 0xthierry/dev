@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, mock, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createFakePi } from "../_shared/testing/fake-pi";
+import { memoryResponse } from "./fixtures/mcp-response";
 
 // The intentionally single-file vendor module remains outside the repository TS project.
 const extensionPath = "../ai-memory-pi.ts";
@@ -22,7 +23,8 @@ beforeEach(() => {
   process.env.HOME = root;
   process.env.AI_MEMORY_DATA_DIR = join(root, "data");
   delete process.env.AI_MEMORY_RUN_ID;
-  mkdirSync(join(root, "data"));
+  delete process.env.AI_MEMORY_AUTH_TOKEN;
+  mkdirSync(join(root, "data"), { recursive: true });
   requests = [];
   sessionEnded = new Promise((resolve) => {
     endSession = resolve;
@@ -32,6 +34,7 @@ beforeEach(() => {
       const url = new URL(String(input));
       const body = JSON.parse(String(init?.body ?? "{}"));
       requests.push({ url, body, authorization: new Headers(init?.headers).get("Authorization") });
+      if (url.pathname === "/mcp") return memoryResponse(body);
       if (url.searchParams.get("event") === "session-end") endSession();
       return new Response(url.pathname === "/handoff" ? "Prior session context" : "ok");
     }),
@@ -56,7 +59,7 @@ function fixture() {
   });
 }
 
-test("hooks preserve capture, handoff and explicit-scope guidance without registering tools", async () => {
+test("stock extension discovers memory tools and preserves capture and handoff", async () => {
   // Arrange
   writeFileSync(join(root, ".ai-memory.toml"), 'workspace = "fixture"\nproject = "native"\n');
   const fake = fixture();
@@ -87,12 +90,13 @@ test("hooks preserve capture, handoff and explicit-scope guidance without regist
   await sessionEnded;
 
   // Assert
-  expect([...fake.tools.keys()]).toEqual([]);
-  expect(requests.filter(({ url }) => url.pathname === "/mcp")).toEqual([]);
+  expect([...fake.tools.keys()]).toEqual(["memory_status"]);
+  expect(requests.filter(({ url }) => url.pathname === "/mcp").map(({ body }) => body.method)).toEqual([
+    "initialize",
+    "notifications/initialized",
+    "tools/list",
+  ]);
   expect(context[0]).toEqual({
-    systemPrompt: expect.stringMatching(/^Base prompt\n\n.*pass both workspace and project explicitly/),
-  });
-  expect(context[1]).toEqual({
     message: {
       customType: "ai-memory-handoff",
       content: "Prior session context",
@@ -173,7 +177,7 @@ test("managed runs still inject handoff once and do not double-post session star
   await sessionEnded;
 
   // Assert
-  expect(first[1]).toEqual({
+  expect(first[0]).toEqual({
     message: {
       customType: "ai-memory-handoff",
       content: "Prior session context",
@@ -181,14 +185,15 @@ test("managed runs still inject handoff once and do not double-post session star
       attribution: "agent",
     },
   });
-  expect(second[1]).toBeUndefined();
-  expect(requests.map(({ url }) => (url.pathname === "/handoff" ? "handoff" : url.searchParams.get("event")))).toEqual([
+  expect(second[0]).toBeUndefined();
+  const hooks = requests.filter(({ url }) => url.pathname !== "/mcp");
+  expect(hooks.map(({ url }) => (url.pathname === "/handoff" ? "handoff" : url.searchParams.get("event")))).toEqual([
     "handoff",
     "user-prompt",
     "user-prompt",
     "session-end",
   ]);
-  expect(requests.map(({ url }) => url.searchParams.get("managed_run"))).toEqual([
+  expect(hooks.map(({ url }) => url.searchParams.get("managed_run"))).toEqual([
     "fixture-run",
     "fixture-run",
     "fixture-run",
@@ -196,53 +201,31 @@ test("managed runs still inject handoff once and do not double-post session star
   ]);
 });
 
-test("remote capture and handoff use the canonical machine key and never ambient root credentials", async () => {
+test("stock hooks reload the upstream token file between requests", async () => {
   // Arrange
   const config = join(root, ".config", "ai-memory");
   mkdirSync(config, { recursive: true });
-  writeFileSync(
-    join(config, "client.json"),
-    JSON.stringify({ server_url: "https://ai-memory-cloud.tail4e339.ts.net" }),
-  );
-  writeFileSync(join(config, "api-key"), "aim_fixture_machine_key_0123456789", { mode: 0o600 });
-  process.env.AI_MEMORY_AUTH_TOKEN = "old-root-bearer-never-use";
-  writeFileSync(join(root, ".ai-memory.toml"), 'workspace = "fixture"\nproject = "remote"\n');
+  writeFileSync(join(config, "client.json"), "invalid obsolete marker");
+  writeFileSync(join(config, "api-key"), "unused-old-machine-key");
+  const tokenPath = join(root, "data/auth-token");
+  writeFileSync(tokenPath, "fixture-local-token\n", { mode: 0o600 });
   const fake = fixture();
   register(fake.pi);
 
   // Act
   await fake.emit("session_start");
-  const context = await fake.emit("before_agent_start", { systemPrompt: "Base", prompt: "Remote fixture" });
+  const context = await fake.emit("before_agent_start", { systemPrompt: "Base", prompt: "Local fixture" });
+  writeFileSync(tokenPath, "rotated-local-token\n");
   await fake.emit("session_shutdown");
   await sessionEnded;
 
   // Assert
-  expect([...fake.tools.keys()]).toEqual([]);
-  expect(requests.map(({ url, authorization }) => ({ origin: url.origin, path: url.pathname, authorization }))).toEqual(
-    [
-      {
-        origin: "https://ai-memory-cloud.tail4e339.ts.net",
-        path: "/hook",
-        authorization: "Bearer aim_fixture_machine_key_0123456789",
-      },
-      {
-        origin: "https://ai-memory-cloud.tail4e339.ts.net",
-        path: "/handoff",
-        authorization: "Bearer aim_fixture_machine_key_0123456789",
-      },
-      {
-        origin: "https://ai-memory-cloud.tail4e339.ts.net",
-        path: "/hook",
-        authorization: "Bearer aim_fixture_machine_key_0123456789",
-      },
-      {
-        origin: "https://ai-memory-cloud.tail4e339.ts.net",
-        path: "/hook",
-        authorization: "Bearer aim_fixture_machine_key_0123456789",
-      },
-    ],
+  expect(requests.map(({ url }) => url.origin)).toEqual(Array(7).fill("http://127.0.0.1:49374"));
+  expect(requests.find(({ url }) => url.pathname === "/handoff")?.authorization).toBe("Bearer fixture-local-token");
+  expect(requests.find(({ url }) => url.searchParams.get("event") === "session-end")?.authorization).toBe(
+    "Bearer rotated-local-token",
   );
-  expect(context[1]).toEqual({
+  expect(context[0]).toEqual({
     message: {
       customType: "ai-memory-handoff",
       content: "Prior session context",
@@ -251,37 +234,49 @@ test("remote capture and handoff use the canonical machine key and never ambient
     },
   });
   expect(requests.find(({ url }) => url.searchParams.get("event") === "user-prompt")?.body).toMatchObject({
-    prompt: "Remote fixture",
+    prompt: "Local fixture",
     cwd: root,
     sessionID: root,
   });
 });
 
-test("a malformed remote marker fails closed instead of silently using local memory", () => {
+test("offline hooks spool locally and replay with their original idempotency keys", async () => {
   // Arrange
-  const config = join(root, ".config", "ai-memory");
-  mkdirSync(config, { recursive: true });
-  writeFileSync(join(config, "client.json"), '{"server_url":"http://127.0.0.1:49374"}');
+  const onlineFetch = globalThis.fetch;
+  globalThis.fetch = Object.assign(
+    mock(async () => new Response("offline", { status: 503 })),
+    {
+      preconnect: originalFetch.preconnect,
+    },
+  );
   const fake = fixture();
+  register(fake.pi);
 
-  // Act / Assert
-  expect(() => register(fake.pi)).toThrow("HTTPS Tailscale origin");
-  expect(requests).toEqual([]);
-  endSession();
-});
+  // Act
+  await fake.emit("session_start");
+  await fake.emit("session_shutdown");
+  const spool = join(root, "data/hook-spool");
+  const entries = readdirSync(spool)
+    .sort()
+    .map((name) => JSON.parse(readFileSync(join(spool, name), "utf8")));
+  globalThis.fetch = onlineFetch;
+  const resumed = fixture();
+  register(resumed.pi);
+  await resumed.emit("session_start");
+  await resumed.emit("session_shutdown");
+  await sessionEnded;
+  // Upstream spool replay runs independently of the lifecycle queue, spaced by 50 ms.
+  await Bun.sleep(150);
 
-test("a different tailnet origin is refused before key lookup or any request", () => {
-  // Arrange
-  const config = join(root, ".config", "ai-memory");
-  mkdirSync(config, { recursive: true });
-  writeFileSync(join(config, "client.json"), '{"server_url":"https://unrelated.tail4e339.ts.net"}');
-  const fake = fixture();
-
-  // Act / Assert
-  try {
-    expect(() => register(fake.pi)).toThrow("configured deployment origin");
-    expect(requests).toEqual([]);
-  } finally {
-    endSession();
-  }
+  // Assert
+  expect(entries.map(({ url }) => new URL(url).searchParams.get("event"))).toEqual(["session-start", "session-end"]);
+  expect(entries.map(({ url }) => new URL(url).origin)).toEqual(["http://127.0.0.1:49374", "http://127.0.0.1:49374"]);
+  expect(entries.map(({ url }) => new URL(url).searchParams.get("ingest_key"))).toEqual([
+    expect.stringMatching(/^ts/),
+    expect.stringMatching(/^ts/),
+  ]);
+  expect(requests.filter(({ url }) => url.searchParams.has("ingest_key")).map(({ url }) => url.toString())).toEqual(
+    entries.map(({ url }) => url),
+  );
+  expect(readdirSync(spool)).toEqual([]);
 });

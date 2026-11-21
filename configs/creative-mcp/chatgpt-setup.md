@@ -5,7 +5,9 @@ not configure a ChatGPT connector, create an OpenAI tunnel/key, launch a tunnel,
 or enable a public application listener. Blender/Roblox's local integration must
 already work through `~/.local/bin/blender-mcp` or
 `~/.local/bin/roblox-studio-mcp`. For ai-memory, the shared setup provides
-`~/.local/bin/mcp-service ai-memory`; the local memory service must be running.
+`~/.local/bin/ai-memory mcp-bridge --server-url http://127.0.0.1:49374 --no-session-id`;
+the local memory service must be running. This tunnel is explicit opt-in, never
+started by local ai-memory setup.
 See the [shared MCP guide](../mcp/README.md) for remote services.
 
 ## Browser MCP connections

@@ -1,169 +1,115 @@
 #!/usr/bin/env bash
+# Real installer/filesystem, fake release binary and service-manager boundaries.
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=install/ai-memory.sh
 source "$REPO_ROOT/install/ai-memory.sh"
 TEST_TMP="$(mktemp -d)"
+TEST_TMP="$(cd "$TEST_TMP" && pwd -P)"
 trap 'rm -rf "$TEST_TMP"' EXIT
+PYTHON_BIN="$(python3 -c 'import sys; print(sys.executable)')"
+mkdir -p "$TEST_TMP/tools"
+ln -s "$PYTHON_BIN" "$TEST_TMP/tools/python3"
+export PATH="$TEST_TMP/tools:$PATH" TEST_TMP
 export HOME="$TEST_TMP/home with spaces"
-
-# No real network, binary execution, or service actions are permitted during
-# the download/install path unless a fixture binary is used.
 curl() {
-  printf 'download\n' >> "$TEST_TMP/downloads"
   local output=""
   while (( $# )); do
     if [[ "$1" == --output ]]; then output="$2"; shift; fi
     shift
   done
+  printf 'download\n' >> "$TEST_TMP/downloads"
   cp "$TEST_TMP/release.tar.gz" "$output"
 }
-systemctl() {
-  printf '%s\n' "$*" >> "$TEST_TMP/systemctl.log"
-  return 0
-}
 launchctl() {
-  printf '%s\n' "$*" >> "$TEST_TMP/launchctl.log"
+  printf '%s\n' "$*" >> "$TEST_TMP/services"
   case "$1" in
-    enable) return "${ENABLE_RESULT:-0}" ;;
     print) [[ -f "$TEST_TMP/loaded" ]] ;;
-    bootstrap)
-      [[ "$2" == "gui/$(id -u)" ]]
-      [[ "$3" == "$HOME/Library/LaunchAgents/dev.ai-memory.plist" ]]
-      if [[ "${BOOTSTRAP_RESULT:-0}" != 0 ]]; then return "$BOOTSTRAP_RESULT"; fi
-      touch "$TEST_TMP/loaded"
-      ;;
+    bootout) rm "$TEST_TMP/loaded" ;;
+    disable) return 0 ;;
     *) return 99 ;;
   esac
 }
+systemctl() { printf '%s\n' "$*" >> "$TEST_TMP/services"; }
 uname() {
   case "$1" in
     -s) echo "${TEST_OS:-Linux}" ;;
     -m) echo "${TEST_ARCH:-x86_64}" ;;
   esac
 }
-
-[[ "$(ai_memory_embedding_base_url)" == "http://127.0.0.1:11434/v1" ]]
-[[ "$(OLLAMA_HOST=0.0.0.0:11434 ai_memory_embedding_base_url)" == "http://127.0.0.1:11434/v1" ]]
-[[ "$(OLLAMA_HOST=http://172.16.0.1:11434 ai_memory_embedding_base_url)" == "http://172.16.0.1:11434/v1" ]]
-echo 'ok: embedding base URL treats bind-all Ollama hosts as loopback'
-
 for TEST_OS in Linux Darwin; do
   for TEST_ARCH in x86_64 aarch64; do
     DRY_RUN=1 install_ai_memory >> "$TEST_TMP/dry-run.log"
+    DRY_RUN=1 configure_ai_memory_agents >> "$TEST_TMP/dry-run.log"
   done
 done
 [[ ! -e "$HOME" && ! -e "$TEST_TMP/downloads" ]]
-echo 'ok: all four dry-run targets cause no writes or downloads'
-
+echo 'ok: platform dry runs neither download nor write nor execute upstream setup'
 python3 - "$TEST_TMP" <<'PY'
 import hashlib, io, pathlib, sys, tarfile
 root = pathlib.Path(sys.argv[1])
+binary = b'''#!/usr/bin/env python3
+import json, os, pathlib, sys
+with (pathlib.Path(os.environ["TEST_TMP"]) / "calls.jsonl").open("a") as f:
+    f.write(json.dumps({"args": sys.argv[1:], "cwd": os.getcwd(), "overrides": [k for k in os.environ if k.startswith("AI_MEMORY_")]}) + "\\n")
+'''
 with tarfile.open(root / "release.tar.gz", "w:gz") as archive:
-    data = b"#!/bin/sh\nexit 0\n"
-    member = tarfile.TarInfo("ai-memory")
-    member.size = len(data)
-    archive.addfile(member, io.BytesIO(data))
-    directory = tarfile.TarInfo("hooks/claude-code")
-    directory.type = tarfile.DIRTYPE
-    directory.mode = 0o755
-    archive.addfile(directory)
-    hook = b"#!/bin/sh\nexit 0\n"
-    hook_member = tarfile.TarInfo("hooks/claude-code/session-start.sh")
-    hook_member.size = len(hook)
-    hook_member.mode = 0o755
-    archive.addfile(hook_member, io.BytesIO(hook))
+    entry = tarfile.TarInfo("ai-memory")
+    entry.size = len(binary)
+    archive.addfile(entry, io.BytesIO(binary))
+    for agent in ("claude-code", "codex"):
+        directory = tarfile.TarInfo("hooks/" + agent)
+        directory.type = tarfile.DIRTYPE
+        archive.addfile(directory)
 (root / "sha256").write_text(hashlib.sha256((root / "release.tar.gz").read_bytes()).hexdigest())
 PY
-for platform in linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64; do
-  [[ "$(ai_memory_checksum "$platform")" =~ ^[0-9a-f]{64}$ ]]
-done
 ai_memory_checksum() { printf '%s\n' "$(< "$TEST_TMP/sha256")"; }
-
-TEST_OS=Linux TEST_ARCH=x86_64 DRY_RUN=0 install_ai_memory > "$TEST_TMP/install.log" 2>&1
-TEST_OS=Linux TEST_ARCH=x86_64 DRY_RUN=0 install_ai_memory >> "$TEST_TMP/install.log" 2>&1
+mkdir -p "$HOME/.local/bin" "$HOME/Library/LaunchAgents" "$HOME/.config/ai-memory"
+ln -s "$REPO_ROOT/configs/ai-memory/ai-memory" "$HOME/.local/bin/ai-memory"
+printf 'old repo plist\n' > "$HOME/Library/LaunchAgents/dev.ai-memory.plist"
+touch "$TEST_TMP/loaded"
+printf 'AI_MEMORY_EMBEDDING_PROVIDER=openai-compat\nAI_MEMORY_EMBEDDING_MODEL=qwen3-embedding:0.6b\nAI_MEMORY_EMBEDDING_DIM=1024\nAI_MEMORY_EMBEDDING_BASE_URL=http://old-ollama:11434/v1\nCUSTOM=keep\n' > "$HOME/.config/ai-memory/env"
+TEST_OS=Darwin TEST_ARCH=aarch64 DRY_RUN=0 install_ai_memory > "$TEST_TMP/install.log" 2>&1
+TEST_OS=Darwin TEST_ARCH=aarch64 DRY_RUN=0 install_ai_memory >> "$TEST_TMP/install.log" 2>&1
 [[ "$(wc -l < "$TEST_TMP/downloads")" -eq 1 ]]
-python3 - "$HOME" "$TEST_TMP" <<'PY'
-import pathlib, sys
-home, tmp = map(pathlib.Path, sys.argv[1:])
-unit = (home / ".config/systemd/user/ai-memory.service").read_text()
-assert f'"{home}/.local/bin/ai-memory"' in unit
-assert f'"{home}/.local/share/ai-memory"' in unit
-assert f'"{home}/.config/ai-memory/config.toml"' in unit
-assert "serve --transport http --bind 127.0.0.1:49374 --enable-web" in unit
-assert [line for line in unit.splitlines() if line.startswith("WorkingDirectory=")] == ["WorkingDirectory=%h/.local/share/ai-memory"]
-assert (home / ".local/share/ai-memory/version").read_text().strip() == "2.1.0 linux-x86_64"
-assert (home / ".local/share/ai-memory/hooks/claude-code/session-start.sh").is_file()
-env_text = (home / ".config/ai-memory/env").read_text()
-assert "AI_MEMORY_EMBEDDING_PROVIDER=openai-compat" in env_text
-assert "AI_MEMORY_EMBEDDING_MODEL=qwen3-embedding:0.6b" in env_text
-assert "AI_MEMORY_EMBEDDING_DIM=1024" in env_text
-assert "AI_MEMORY_EMBEDDING_BASE_URL=http://127.0.0.1:11434/v1" in env_text
-PY
-if command -v systemd-analyze >/dev/null 2>&1; then
-  systemd-analyze --user verify "$HOME/.config/systemd/user/ai-memory.service"
-  echo 'ok: generated Linux service passes systemd-analyze --user verify'
-else
-  echo 'skip: systemd-analyze unavailable; Linux service verified structurally only'
-fi
-grep -q 'daemon-reload' "$TEST_TMP/systemctl.log"
-grep -q 'enable --now ai-memory.service' "$TEST_TMP/systemctl.log"
-printf 'AI_MEMORY_LLM_PROVIDER=openai-compat\n' > "$HOME/.config/ai-memory/env"
-configure_ai_memory_embeddings >/dev/null
-grep -qx 'AI_MEMORY_LLM_PROVIDER=openai-compat' "$HOME/.config/ai-memory/env"
-grep -qx 'AI_MEMORY_EMBEDDING_MODEL=qwen3-embedding:0.6b' "$HOME/.config/ai-memory/env"
-echo 'ok: install is idempotent and enables the Linux user service'
-echo 'ok: embedding env preserves unrelated ai-memory keys'
-
-cp "$HOME/.local/bin/ai-memory" "$TEST_TMP/original-binary"
-if install_ai_memory_binary linux-aarch64 invalid > "$TEST_TMP/mismatch.log" 2>&1; then
-  echo 'not ok: checksum mismatch accepted' >&2; exit 1
-fi
-cmp "$TEST_TMP/original-binary" "$HOME/.local/bin/ai-memory"
-grep -q 'SHA256 mismatch' "$TEST_TMP/mismatch.log"
-[[ "$(< "$HOME/.local/share/ai-memory/version")" == '2.1.0 linux-x86_64' ]]
-echo 'ok: checksum rejection preserves existing binary and marker'
-
-TEST_OS=Darwin TEST_ARCH=aarch64 DRY_RUN=0 install_ai_memory >> "$TEST_TMP/install.log" 2>&1
-TEST_OS=Darwin TEST_ARCH=aarch64 DRY_RUN=0 install_ai_memory >> "$TEST_TMP/install.log" 2>&1
+[[ "$(grep -c '^bootout ' "$TEST_TMP/services")" -eq 1 ]]
+[[ ! -e "$TEST_TMP/loaded" ]]
 python3 - "$HOME" <<'PY'
-import pathlib, plistlib, sys
-home = pathlib.Path(sys.argv[1])
-with (home / "Library/LaunchAgents/dev.ai-memory.plist").open("rb") as stream:
-    service = plistlib.load(stream)
-assert service["Label"] == "dev.ai-memory"
-assert service["Disabled"] is False
-assert service["RunAtLoad"] is True
-assert service["ProgramArguments"][0] == str(home / ".local/bin/ai-memory")
-assert "--enable-web" in service["ProgramArguments"]
-assert service["EnvironmentVariables"]["HOME"] == str(home)
+from pathlib import Path
+import sys
+home = Path(sys.argv[1])
+assert (home / ".local/bin/ai-memory").readlink() == home / ".local/lib/ai-memory/ai-memory"
+assert (home / ".local/lib/ai-memory/version").read_text() == "3.5.1 macos-aarch64\n"
+assert (home / "Library/LaunchAgents/dev.ai-memory.plist.bak").read_text() == "old repo plist\n"
+assert (home / ".config/ai-memory/env").read_text() == "CUSTOM=keep\n"
 PY
-[[ "$(grep -c '^enable ' "$TEST_TMP/launchctl.log")" -eq 2 ]]
-[[ "$(grep -c '^bootstrap ' "$TEST_TMP/launchctl.log")" -eq 1 ]]
-echo 'ok: macOS setup enables and bootstraps once'
-
-mkdir -p "$HOME/.claude" "$HOME/.codex"
-cat > "$HOME/.local/bin/ai-memory" <<EOF
-#!/bin/sh
-printf '%s\n' "\$*" >> "$TEST_TMP/ai-memory-args"
-exit 0
-EOF
-chmod +x "$HOME/.local/bin/ai-memory"
-DRY_RUN=0 configure_ai_memory_agents > "$TEST_TMP/configure.log"
-grep -Fq 'install-mcp --client claude-code --apply --server-url http://127.0.0.1:49374' "$TEST_TMP/ai-memory-args"
-grep -Fq 'install-hooks --agent claude-code --apply --server-url http://127.0.0.1:49374 --hooks-dir' "$TEST_TMP/ai-memory-args"
-grep -Fq 'install-mcp --client codex --apply --server-url http://127.0.0.1:49374' "$TEST_TMP/ai-memory-args"
-grep -Fq 'install-hooks --agent codex --apply --server-url http://127.0.0.1:49374 --hooks-dir' "$TEST_TMP/ai-memory-args"
-if grep -Fq 'install-hooks --agent pi' "$TEST_TMP/ai-memory-args"; then
-  echo 'not ok: Pi hooks were overwritten instead of using the repository-managed hook-only extension' >&2
-  exit 1
-fi
-[[ -f "$REPO_ROOT/configs/agents/pi/extensions/ai-memory-pi.ts" ]]
-if grep -q 'registerTool\|bootstrapMcpBridge' "$REPO_ROOT/configs/agents/pi/extensions/ai-memory-pi.ts"; then
-  echo 'not ok: Pi capture extension must not register memory tools' >&2
-  exit 1
-fi
-echo 'ok: agent wiring targets Claude and Codex; Pi retains capture hooks with native MCP tools'
-
-DRY_RUN=1 configure_ai_memory_agents >> "$TEST_TMP/configure.log"
-echo 'ok: agent wiring dry-run does not invoke ai-memory'
+echo 'ok: repeat install links actual upstream binary, retires old service, removes only managed embedding overrides'
+# Fake only the downstream Codex adjustment's Python runtime; its real behavior
+# is covered by ai-memory-clients.test.py with the actual TOML writer.
+mkdir -p "$HOME/.local/share/mcp-services/venv/bin"
+printf '#!/bin/sh\nprintf "codex-bridge\\n" >> "$TEST_TMP/adjustments"\n' > "$HOME/.local/share/mcp-services/venv/bin/python"
+chmod +x "$HOME/.local/share/mcp-services/venv/bin/python"
+export AI_MEMORY_SERVER_URL=https://retired.invalid AI_MEMORY_AUTH_TOKEN=obsolete AI_MEMORY_DATA_DIR=/wrong
+DRY_RUN=0 configure_ai_memory_agents >> "$TEST_TMP/install.log" 2>&1
+python3 - "$HOME" "$TEST_TMP" <<'PY'
+import json
+from pathlib import Path
+import sys
+home, root = map(Path, sys.argv[1:])
+calls = [json.loads(line) for line in (root / "calls.jsonl").read_text().splitlines()]
+assert calls == [
+    {"args": ["setup", "--yes", "--agent", "claude-code", "--agent", "codex", "--agent", "pi"], "cwd": str(home), "overrides": []},
+    {"args": ["install-mcp", "--client", "claude-desktop", "--apply"], "cwd": str(home), "overrides": []},
+]
+assert (root / "adjustments").read_text() == "codex-bridge\n"
+PY
+echo 'ok: delegates service/hooks/skills/MCP to upstream setup, with no stale cloud overrides or hook-trust bypass'
+cp "$TEST_TMP/services" "$TEST_TMP/services-before"
+cp "$HOME/.local/lib/ai-memory/ai-memory" "$TEST_TMP/original-binary"
+ai_memory_checksum() { echo invalid; }
+if TEST_OS=Linux TEST_ARCH=x86_64 DRY_RUN=0 install_ai_memory > "$TEST_TMP/mismatch.log" 2>&1; then exit 1; fi
+cmp "$TEST_TMP/services-before" "$TEST_TMP/services"
+cmp "$TEST_TMP/original-binary" "$HOME/.local/lib/ai-memory/ai-memory"
+grep -q 'SHA256 mismatch' "$TEST_TMP/mismatch.log"
+echo 'ok: rejected archive leaves the binary and services untouched'
+if bash "$REPO_ROOT/install/ai-memory.sh" dev --dry-run >/dev/null 2>&1; then exit 1; fi
+echo 'ok: retired dev host rejected'

@@ -1,6 +1,6 @@
 # Blender and Roblox MCP
 
-Repository-owned desktop setup for **MacBook and Omarchy**, not the `dev` server.
+Repository-owned desktop setup for **MacBook and Omarchy**.
 
 | Client | Connection |
 |---|---|
@@ -191,7 +191,6 @@ bash tests/blender-mcp.test.sh
 python3 tests/creative-mcp-tunnel.test.py
 bash -n setup.sh install/*.sh install/hosts/*.sh
 shellcheck setup.sh install/*.sh install/hosts/*.sh configs/creative-mcp/blender-mcp configs/creative-mcp/roblox-studio-mcp configs/creative-mcp/chatgpt-creative-mcp
-./setup.sh dev --dry-run
 ./setup.sh macbook --dry-run
 ./setup.sh omarchy --dry-run
 ```

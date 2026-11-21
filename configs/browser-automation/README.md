@@ -1,11 +1,11 @@
 # Pinned browser automation runtime
 
-`apply_browser_automation <dev|omarchy|macbook>` in
+`apply_browser_automation <omarchy|macbook>` in
 `install/browser-automation.sh` installs the package-local checked npm lock with
 `npm ci --ignore-scripts --no-audit --no-fund`. Standalone:
 
 ```sh
-bash install/browser-automation.sh dev --dry-run
+bash install/browser-automation.sh omarchy --dry-run
 ```
 
 Setup only installs dependencies, records the resolved absolute Node executable
