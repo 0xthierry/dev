@@ -32,6 +32,7 @@ Use `--dry-run` first when changing the setup flow or validating a host:
 - Linux desktop setup
 - Installs the shared CLI layer through `pacman`
 - Applies `nvim`, `hypr`, `agents`, and Moshi host integration
+- **Quattro (4.x):** keep `~/.config/hypr` a real directory. After a successful stock login, setup adds the [personal Lua overlay](configs/hypr-quattro/README.md) to the existing entry file. Do not run setup as a substitute for the upstream upgrade. Before switching from 3.x, follow the [cutover checklist](docs/omarchy-quattro-cutover.md) and [link safety review](docs/omarchy-quattro-links.md).
 
 ### `macbook`
 
@@ -61,7 +62,8 @@ from Flathub for the current user, including their required runtimes. It preserv
 existing app data and permissions and skips already-installed user apps on reruns.
 It does not install a separate system Wine or change sandbox permissions.
 
-Omarchy's frozen package database can reference older Flatpak/OSTree files that
+Quattro uses the configured stable repositories without an archive fallback.
+On the legacy 3.x Git-based installation, the frozen database can reference older Flatpak/OSTree files that
 its mirror no longer serves (HTTP 404). For official `core`, `extra`, and
 `multilib` packages, setup adds the official Arch Linux Archive as the last
 server in a temporary pacman configuration. It requests the exact versions in
@@ -73,8 +75,10 @@ updates remain a separate maintenance task. If both sources fail, setup stops
 rather than changing versions or bypassing verification.
 
 Setup adds Flatpak's app directories to the running user-service environment
-and restarts active Elephant/Walker services so the apps appear without logging
-out. It preserves custom data directories and leaves inactive services stopped.
+and preserves custom data directories. On 3.x it restarts only active
+Elephant/Walker services. Quattro watches application entries; it does not need
+a shell restart. If Flatpak was first installed after your session started,
+you may need to log out and back in for the Quattro launcher to see its exports.
 If setup runs without a user service manager, log out and back in to refresh the
 desktop environment. Launch **Sober** to play or **Vinegar** to develop:
 
@@ -132,6 +136,9 @@ bash tests/moshi.test.sh
 bash tests/flatpak.test.sh
 bash tests/flatpak-launchers.test.sh
 bash tests/pacman-archive.test.sh
+bash tests/quattro-config-deploy.test.sh
+python3 tests/omarchy-quattro-preflight.test.py
+python3 tests/hypr-quattro.test.py --upstream /path/to/omarchy-v4.5.0
 python3 tests/setup-hosts.test.py
 ./setup.sh omarchy --dry-run
 ./setup.sh macbook --dry-run

@@ -85,8 +85,8 @@ if command -v mise >/dev/null 2>&1; then
   }
 fi
 
-if [[ -f "$HOME/.local/share/omarchy/default/bash/aliases" ]]; then
-  source "$HOME/.local/share/omarchy/default/bash/aliases"
+if [[ -n "${OMARCHY_PATH:-}" && -r "$OMARCHY_PATH/default/bash/aliases" ]]; then
+  source "$OMARCHY_PATH/default/bash/aliases"
 fi
 
 alias ..='cd ..'

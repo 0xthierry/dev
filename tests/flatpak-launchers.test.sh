@@ -6,6 +6,8 @@ source "$ROOT/install/flatpak.sh"
 TEMP="$(mktemp -d)"
 trap 'rm -rf "$TEMP"' EXIT
 fail() { printf 'not ok: %s\n' "$1" >&2; exit 1; }
+export HOME="$TEMP/home"
+export XDG_CONFIG_HOME="$HOME/.config"
 export LAUNCHER_STATE="$TEMP/state"
 mkdir -p "$TEMP/bin" "$LAUNCHER_STATE" "$TEMP/no-tools"
 cat > "$TEMP/bin/systemctl" <<'EOF'
@@ -76,4 +78,25 @@ printf 'ok: environment and restart failures propagate\n'
 DRY_RUN=0 NO_MANAGER=1 refresh_flatpak_launchers > "$TEMP/no-manager.log"
 grep -Fq 'log out and back in' "$TEMP/no-manager.log" || fail 'headless setup omitted recovery instruction'
 [[ "$(< "$LAUNCHER_STATE/dirs")" == "$expected" ]] || fail 'headless setup changed environment'
-printf 'ok: headless setup provides logout guidance without changing state\n'
+printf 'ok: headless setup provides logout guidance without changing manager state\n'
+[[ ! -e "$XDG_CONFIG_HOME/environment.d" ]] || fail 'refresh created persistent environment state'
+
+# The presence of Quattro never authorizes a whole-shell restart.
+printf '#!/bin/sh\nexit 99\n' > "$TEMP/bin/omarchy-shell"
+chmod +x "$TEMP/bin/omarchy-shell"
+rm -f "$LAUNCHER_STATE/app-walker@autostart.service.environment"
+printf '/usr/local/share:/usr/share:/custom/share\n' > "$LAUNCHER_STATE/dirs"
+DRY_RUN=0 refresh_flatpak_launchers > "$TEMP/quattro-first.log"
+grep -Fq 'log out and back in if apps are missing' "$TEMP/quattro-first.log" || fail 'first install lacks conditional login guidance'
+[[ ! -e "$LAUNCHER_STATE/app-walker@autostart.service.environment" ]] || fail 'Quattro restarted Walker'
+[[ "$(< "$LAUNCHER_STATE/dirs")" == "$expected" ]] || fail 'Quattro manager export paths missing'
+DRY_RUN=0 refresh_flatpak_launchers > "$TEMP/quattro-existing.log"
+grep -Fq 'watches desktop entries' "$TEMP/quattro-existing.log" || fail 'normal discovery not reported'
+[[ ! -e "$XDG_CONFIG_HOME/environment.d" ]] || fail 'Quattro froze manager paths on disk'
+printf 'ok: Quattro refreshes live exports without persistent overrides or launcher restarts\n'
+
+mkdir -p "$XDG_CONFIG_HOME/environment.d"
+printf 'XDG_DATA_DIRS=/user-owned\n' > "$XDG_CONFIG_HOME/environment.d/60-dev-setup-flatpak.conf"
+DRY_RUN=0 refresh_flatpak_launchers > "$TEMP/unmanaged.log"
+[[ "$(< "$XDG_CONFIG_HOME/environment.d/60-dev-setup-flatpak.conf")" == 'XDG_DATA_DIRS=/user-owned' ]] || fail 'unmanaged config changed'
+printf 'ok: unrelated existing environment config is neither overwritten nor rejected\n'

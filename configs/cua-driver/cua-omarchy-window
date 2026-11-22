@@ -27,6 +27,50 @@ require_runtime() {
   require_command jq
 }
 
+# Probe the active config manager without dispatching anything. Never retry a
+# failed mutation using another protocol: it may already have taken effect.
+hyprland_ipc_mode() {
+  local reply=""
+  reply="$(hyprctl eval 'return' 2>/dev/null)" || fail "unable to determine Hyprland IPC mode"
+  case "$reply" in
+    ok) printf 'lua\n' ;;
+    'unknown request'|'eval is only supported with the lua config manager') printf 'legacy\n' ;;
+    *) fail "unrecognized Hyprland IPC mode response" ;;
+  esac
+}
+
+# Encode data as a Lua string, never as an expression. JSON's Unicode escapes
+# are not Lua escapes; fixed-width decimal escapes cover control characters.
+lua_string() {
+  jq -nr --arg value "$1" '
+    $value | explode | map(
+      if . == 34 then "\\\""
+      elif . == 92 then "\\\\"
+      elif . < 32 or . == 127 then "\\" + (("00" + tostring)[-3:])
+      else [.] | implode end
+    ) | "\"" + join("") + "\""
+  '
+}
+
+dispatch_window() {
+  local action="$1" address="$2" workspace="${3:-}" mode="" selector=""
+  mode="$(hyprland_ipc_mode)" || return 1
+  if [[ "$mode" == lua ]]; then
+    selector="$(lua_string "address:$address")" || return 1
+    case "$action" in
+      move) hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_string "$workspace"), follow = false, window = $selector })" ;;
+      focus) hyprctl dispatch "hl.dsp.focus({ window = $selector })" ;;
+      close) hyprctl dispatch "hl.dsp.window.close({ window = $selector })" ;;
+    esac
+  else
+    case "$action" in
+      move) hyprctl dispatch movetoworkspacesilent "$workspace,address:$address" ;;
+      focus) hyprctl dispatch focuswindow "address:$address" ;;
+      close) hyprctl dispatch closewindow "address:$address" ;;
+    esac
+  fi
+}
+
 validate_address() {
   [[ "$1" =~ ^0x[0-9A-Fa-f]+$ ]] || fail "invalid Hyprland window address: $1"
 }
@@ -137,8 +181,7 @@ resolve_output() {
       jq -er '
         .[0]
         | select((.activeWorkspace.name // "") != "")
-        | [.id, .activeWorkspace.name]
-        | @tsv
+        | {id: .id, workspace: .activeWorkspace.name}
       ' <<< "$matches" || fail "Hyprland output has no active workspace: $requested"
       ;;
     *) fail "ambiguous Hyprland output: $requested" ;;
@@ -231,8 +274,9 @@ main() {
       output="$3"
       address="$(resolve_client_address "$requested_address")"
       output_state="$(resolve_output "$output")"
-      IFS=$'\t' read -r monitor_id workspace <<< "$output_state"
-      hyprctl dispatch movetoworkspacesilent "$workspace,address:$address" >/dev/null \
+      monitor_id="$(jq -r '.id' <<< "$output_state")"
+      workspace="$(jq -r '.workspace' <<< "$output_state")"
+      dispatch_window move "$address" "$workspace" >/dev/null \
         || fail "Hyprland refused to move window $address"
       verify_move "$address" "$monitor_id" "$workspace"
       printf 'moved window %s to output %s workspace %s\n' "$address" "$output" "$workspace"
@@ -242,7 +286,7 @@ main() {
         || fail "focus requires ADDRESS --authorize-foreground"
       require_runtime
       address="$(resolve_client_address "$2")"
-      hyprctl dispatch focuswindow "address:$address" >/dev/null \
+      dispatch_window focus "$address" >/dev/null \
         || fail "Hyprland refused to focus window $address"
       verify_focus "$address"
       printf 'focused window %s\n' "$address"
@@ -252,7 +296,7 @@ main() {
         || fail "close requires ADDRESS --authorize-close"
       require_runtime
       address="$(resolve_client_address "$2")"
-      hyprctl dispatch closewindow "address:$address" >/dev/null \
+      dispatch_window close "$address" >/dev/null \
         || fail "Hyprland refused to close window $address"
       verify_closed "$address"
       printf 'closed window %s\n' "$address"

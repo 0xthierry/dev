@@ -25,7 +25,65 @@ apply_nvim() {
   safe_link_path "$REPO_ROOT/configs/nvim" "$HOME/.config/nvim" "nvim config"
 }
 
+# Layer the personal baseline after package defaults, but before local config
+# and stock toggles. Never replace the directory or follow an entrypoint link.
+apply_hypr_quattro() (
+  local dir="$HOME/.config/hypr" src="$REPO_ROOT/configs/hypr-quattro"
+  local entry="$dir/hyprland.lua" overlay="$dir/dev-setup" tmp=''
+  local hook='if package.searchpath("hypr.dev-setup.dev-setup", package.path) then require("hypr.dev-setup.dev-setup") end'
+  if [[ -L $HOME/.config || -L $dir || -L $entry || ! -f $entry || ! -f $src/dev-setup.lua ]]; then
+    printf 'error: Quattro requires a real, initialized ~/.config/hypr/hyprland.lua and a complete overlay; refusing to deploy.\n' >&2
+    return 1
+  fi
+  # A first stock login assigns per-monitor blocks. The shell bar reads those
+  # from disk even after Lua's global-workspace overlay is loaded. Never erase
+  # the mapping during setup; move it aside from a logged-out TTY as documented.
+  local state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy" mapping
+  for mapping in "$state_dir/monitor-workspaces" "$state_dir/monitor-workspaces-merged"; do
+    if [[ -L $mapping || -s $mapping ]]; then
+      printf 'error: stock workspace state found at %s; see configs/hypr-quattro/README.md before applying the global workspace layout.\n' "$mapping" >&2
+      return 1
+    fi
+  done
+  local anchor='require("default.hypr.omarchy")' matches
+  if [[ $(grep -Fxc -- "$anchor" "$entry" || :) != 1 ]]; then
+    printf 'error: cannot identify a unique stock defaults import in %s; review manually.\n' "$entry" >&2
+    return 1
+  fi
+  matches=$(grep -Fxc -- "$hook" "$entry" || :)
+  if [[ $matches != 0 ]] && { [[ $matches != 1 ]] || ! awk -v a="$anchor" -v h="$hook" 'previous == a && $0 == h {found=1} {previous=$0} END {exit !found}' "$entry"; }; then
+    printf 'error: existing dev-setup import is duplicated or out of order in %s; review manually.\n' "$entry" >&2
+    return 1
+  fi
+  if [[ -e $overlay || -L $overlay ]]; then
+    if [[ ! -L $overlay || ! $overlay -ef $src ]]; then
+      printf 'error: refusing to replace unrelated Quattro overlay: %s\n' "$overlay" >&2
+      return 1
+    fi
+  else
+    run_cmd ln -s -- "$src" "$overlay" || return 1
+  fi
+  if [[ $matches == 0 ]]; then
+    if (( ${DRY_RUN:-0} )); then
+      log_item "Would back up $entry and load the optional dev-setup module just after stock defaults"
+      return 0
+    fi
+    # Same-filesystem rename: Hyprland must not observe a partial write.
+    tmp=$(mktemp "$dir/.dev-setup.XXXXXXXX") || return 1
+    trap 'rm -f -- "$tmp"' EXIT
+    cp -p -- "$entry" "$tmp" && awk -v a="$anchor" -v h="$hook" '{print; if ($0 == a) print h}' "$entry" > "$tmp" &&
+      cp -p -- "$entry" "$(next_backup_path "$entry")" && mv -T -- "$tmp" "$entry" || return 1
+  fi
+)
+
 apply_hypr() {
+  if [[ -f /usr/share/omarchy/default/hypr/bootstrap.lua ]]; then
+    apply_hypr_quattro
+    return $?
+  elif [[ -e /usr/share/omarchy || -e $HOME/.config/hypr/hyprland.lua ]]; then
+    printf 'error: mixed/unknown Omarchy layout; refusing to replace Hyprland config.\n' >&2
+    return 1
+  fi
   ensure_dir "$HOME/.config"
   safe_link_path "$REPO_ROOT/configs/hypr" "$HOME/.config/hypr" "hypr config"
 }
