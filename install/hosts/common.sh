@@ -131,9 +131,6 @@ apply_host_configs() {
       herdr)
         apply_herdr
         ;;
-      voxtype)
-        apply_voxtype
-        ;;
       bs-manager)
         apply_bs_manager
         ;;

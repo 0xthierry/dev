@@ -35,8 +35,7 @@ hooks, skills, and its health/status/doctor checks. Setup uses native defaults:
 
 Default embeddings run locally in-process. Upstream downloads its pinned
 `all-MiniLM-L6-v2` model in the background; full-text recall works while it is
-unavailable. No Ollama or API key is required for embeddings. This does not
-change Omarchy's separate Voxtype/Ollama configuration.
+unavailable. No Ollama or API key is required for embeddings.
 
 ## Client integrations
 

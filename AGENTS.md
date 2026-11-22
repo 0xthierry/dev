@@ -26,7 +26,6 @@ The two layers don't validate each other. **Most recurring bug:** config deploye
 |---|---|---|
 | `configs/nvim/` | `~/.config/nvim` | symlink |
 | `configs/hypr/` | `~/.config/hypr` | symlink (omarchy only) |
-| `configs/voxtype/` | `~/.config/voxtype/config.toml`, `~/.local/bin/voxtype-post-process` | symlink (omarchy only) |
 | `configs/herdr/config.toml` | `~/.config/herdr/config.toml` | symlink |
 | `configs/browser-diagnostics/` | `~/.local/bin/chrome-devtools-cli`, `~/.local/bin/browser-diagnostics` | `install/browser-diagnostics.sh`; diagnostic-only CLI, frozen package-local Bun dependencies and launcher links (omarchy/macbook only) |
 | `configs/browser-automation/` | `~/.local/bin/{playwriter,playwriter-mcp,chrome-devtools-mcp}`, native client MCP entries | `install/browser-automation.sh` via `install/mcp.sh`; pinned runtimes on all hosts; Playwriter primary controller, Chrome DevTools diagnostics/capability fallback; ChatGPT uses explicit `chatgpt-browser-mcp` tunnels and account authorization |
@@ -43,7 +42,7 @@ The two layers don't validate each other. **Most recurring bug:** config deploye
 ## Principles
 
 - **Everything goes through the repo.** Never install packages or edit deployed configs directly (`~/.config/nvim`, `~/.claude/settings.json`, etc.). If a change can't be reproduced by `./setup.sh <host>` on a fresh machine, it doesn't exist.
-- **Idempotent and non-destructive.** Setup never deletes user data or removes packages, except Omarchy uninstalls Handy when switching dictation to Voxtype.
+- **Idempotent and non-destructive.** Setup never deletes user data or removes packages.
 - **Shared by default, host-specific by exception.**
 - **Declarative package lists.** Add to `install/packages/common.sh` or a host array — never `brew install X` / `pacman -S X` directly.
 
@@ -68,7 +67,6 @@ Names differ between Homebrew and pacman (`tree-sitter-cli` vs `tree-sitter`, `m
 | Add/update Blender or Roblox MCP | `install/creative-mcp.sh`, `install/blender-mcp.sh`, `install/creative-mcp-tunnel.sh`, `configs/creative-mcp/`; preserve unrelated client entries, pin Blender dependencies and Linux tunnel releases; never start a ChatGPT tunnel during setup |
 | Add Herdr/Moshi integration | `install/herdr.sh`, `install/moshi.sh`, generated hooks under `configs/agents/{hooks,pi/extensions}/`, and the host's `HOST_CONFIG_TARGETS` |
 | Add/update Omarchy PSVR2 | `install/psvr2.sh`, `configs/psvr2/`, `install/psvr2-permissions.sh`, `configs/omarchy/psvr2/`, Omarchy `psvr2` target and `steamvr-linux-fixes-layer-bin` AUR package; pinned Ignition/Toolkit/UnitySetup, Steam owns Sony driver files; never auto-flash or jailbreak |
-| Add Omarchy dictation (Voxtype + local LLM cleanup) | `configs/voxtype/`, `install/hosts/omarchy.sh` (`configure_voxtype`), Hyprland F9 / Super+Ctrl+X |
 | Add shell behavior | `configs/shell/` plus `install/shell.sh` |
 | Add shared env var | `install/env.sh` |
 | Add host-specific env, SSH, or configs | `install/hosts/{host}.sh` |
