@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Explicit cutover only. Keep every other stock binding, including universal copy/paste.
+set -euo pipefail
+umask 077
+command -v obsidian >/dev/null 2>&1 && { echo 'Obsidian is still installed.' >&2; exit 1; }
+stock=/usr/share/omarchy/config/hypr/bindings.lua
+file="${XDG_CONFIG_HOME:-$HOME/.config}/hypr/bindings.lua"
+[[ -f $stock && -O $file && $(realpath -e "$file") == "$file" && $(stat -c %h "$file") == 1 ]]
+obsidian='hl.unbind("SUPER + SHIFT + O")'
+grok='hl.unbind("SUPER + SHIFT + ALT + A")'
+if grep -Fxq "$obsidian" "$file" && grep -Fxq "$grok" "$file"; then exit 0; fi
+# Accept stock, or stock plus our exact earlier one-app cutover. Never rewrite custom bindings.
+if ! cmp -s "$file" "$stock" && ! cmp -s "$file" <(awk '1' "$stock"; printf '\n-- Obsidian was explicitly uninstalled.\n%s\n' "$obsidian"); then
+  echo 'Custom bindings: integrate the two unbinds manually.' >&2; exit 1
+fi
+vendor=/usr/share/omarchy/default/hypr/bindings/applications.lua
+rg -Fq 'o.bind("SUPER + SHIFT + O", "Obsidian"' "$vendor"
+rg -Fq 'o.bind("SUPER + SHIFT + ALT + A", "Grok"' "$vendor"
+backup=$(mktemp -- "${file}.pre-app-retirement.XXXXXXXX"); cp -p -- "$file" "$backup"
+tmp=$(mktemp -- "${file}.retire.XXXXXXXX"); trap 'rm -f -- "$tmp"' EXIT
+cp -p -- "$stock" "$tmp"; chmod --reference="$file" "$tmp"
+printf '\n-- The Obsidian app and Grok launcher were explicitly retired.\n%s\n%s\n' "$obsidian" "$grok" >> "$tmp"
+cmp -s "$backup" "$file" || exit 1
+mv -T -- "$tmp" "$file"
+printf 'Previous bindings: %s\n' "$backup"

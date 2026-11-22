@@ -1,0 +1,278 @@
+#!/usr/bin/env python3
+"""Bounded Linux stall evidence. Reads kernel counters only; never runs probes."""
+import argparse
+from collections import deque
+from datetime import datetime, timezone
+import fcntl
+import itertools
+import json
+import os
+from pathlib import Path
+import stat
+import time
+
+READ_LIMIT = 65536
+VM_KEYS = {"pswpin", "pswpout", "pgmajfault", "oom_kill", "pgscan_kswapd",
+           "pgscan_direct", "pgsteal_kswapd", "pgsteal_direct", "allocstall_normal",
+           "allocstall_movable", "compact_stall"}
+
+
+def read(path):
+    try:
+        with path.open() as stream:
+            return stream.read(READ_LIMIT)
+    except (OSError, UnicodeError):
+        return ""
+
+
+def counters(text):
+    result = {}
+    for line in text.splitlines():
+        fields = line.replace(":", "").split()
+        if len(fields) >= 2:
+            try:
+                result[fields[0]] = int(fields[1])
+            except ValueError:
+                pass
+    return result
+
+
+def delta(current, previous):
+    return {key: value - previous[key] for key, value in current.items()
+            if key in previous and value >= previous[key]}
+
+
+def psi(text):
+    result = {}
+    for line in text.splitlines():
+        fields = line.split()
+        if not fields:
+            continue
+        try:
+            result[fields[0]] = {key: float(value) for key, value in
+                                (field.split("=", 1) for field in fields[1:])}
+        except ValueError:
+            continue
+    return result
+
+
+def stamp():
+    return {"utc": datetime.now(timezone.utc).isoformat(),
+            "monotonic_s": time.monotonic(),
+            "boottime_s": time.clock_gettime(time.CLOCK_BOOTTIME)}
+
+
+class Ring:
+    def __init__(self, path, size, count):
+        path.mkdir(mode=0o700, parents=True, exist_ok=True)
+        info = path.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
+            raise ValueError("output must be an owned, non-symlink directory with mode 0700")
+        self.path, self.size, self.count = path, size, count
+        self.lock = self.open_file("write.lock")
+
+    def open_file(self, name):
+        fd = os.open(self.path / name, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1:
+            os.close(fd)
+            raise ValueError("ring files must be owned regular 0600 files with one link")
+        return fd
+
+    def append(self, record):
+        data = (json.dumps(record, separators=(",", ":")) + "\n").encode()
+        if len(data) > self.size:
+            raise ValueError("sample exceeds ring segment size")
+        fcntl.flock(self.lock, fcntl.LOCK_EX)
+        try:
+            fd = self.open_file("samples.jsonl")
+            try:
+                if os.fstat(fd).st_size + len(data) > self.size:
+                    os.close(fd)
+                    fd = -1
+                    for index in range(self.count - 1, 0, -1):
+                        source = self.path / ("samples.jsonl" if index == 1 else f"samples.{index - 1}.jsonl")
+                        target = self.path / f"samples.{index}.jsonl"
+                        if source.exists():
+                            source.replace(target)
+                    if self.count == 1:
+                        (self.path / "samples.jsonl").unlink()
+                    fd = self.open_file("samples.jsonl")
+                os.lseek(fd, 0, os.SEEK_END)
+                with os.fdopen(os.dup(fd), "ab", buffering=0) as stream:
+                    stream.write(data)
+            finally:
+                if fd >= 0:
+                    os.close(fd)
+        finally:
+            fcntl.flock(self.lock, fcntl.LOCK_UN)
+
+
+class Sampler:
+    def __init__(self, proc, sys):
+        self.proc, self.sys = proc, sys
+        self.previous_vm = {}
+        self.previous_disks = {}
+        self.previous_tasks = {}
+        self.previous_groups = {}
+        self.previous_time = None
+        self.attribution_time = None
+        self.boot = read(proc / "sys/kernel/random/boot_id").strip()
+
+    def tasks(self, elapsed):
+        current, rows = {}, []
+        visited = 0
+        try:
+            with os.scandir(self.proc) as entries:
+                # Bound enumeration too, not just readable processes.
+                names = [entry.name for entry in itertools.islice(entries, 2048) if entry.name.isdigit()][:512]
+        except OSError:
+            names = []
+        for name in names:
+            visited += 1
+            path = self.proc / name
+            text = read(path / "stat")
+            try:
+                end = text.rindex(")")
+                fields = text[end + 2:].split()
+                identity = (name, fields[19])  # PID + starttime prevents PID reuse deltas.
+                cpu = int(fields[11]) + int(fields[12])
+            except (ValueError, IndexError):
+                continue
+            values = {"cpu_ticks": cpu, **{k: v for k, v in counters(read(path / "io")).items()
+                                          if k in {"read_bytes", "write_bytes"}}}
+            current[identity] = values
+            change = delta(values, self.previous_tasks.get(identity, {}))
+            if change:
+                rows.append({"pid": int(name), "comm": text[text.index("(") + 1:end][:64],
+                             "delta": change})
+        self.previous_tasks = current
+        return {"window_s": elapsed, "visited": visited, "limit": 512,
+                "top_cpu": sorted(rows, key=lambda r: r["delta"].get("cpu_ticks", 0), reverse=True)[:10],
+                "top_io": sorted(rows, key=lambda r: sum(r["delta"].get(k, 0) for k in ("read_bytes", "write_bytes")), reverse=True)[:10]}
+
+    def groups(self):
+        root = self.sys / "fs/cgroup"
+        user = root / f"user.slice/user-{os.getuid()}.slice/user@{os.getuid()}.service"
+        pending = deque([root, user / "app.slice", user, root / "system.slice"])
+        rows, current, seen = [], {}, set()
+        examined = 0
+        while pending and len(rows) < 64 and len(seen) < 128:
+            path = pending.popleft()
+            if path in seen:
+                continue
+            seen.add(path)
+            cpu = counters(read(path / "cpu.stat"))
+            if cpu:
+                name = str(path.relative_to(root))[:256]
+                values = {"cpu_usage_usec": cpu.get("usage_usec", 0)}
+                for line in read(path / "io.stat").splitlines():
+                    for field in line.split()[1:]:
+                        key, _, value = field.partition("=")
+                        if key in {"rbytes", "wbytes", "rios", "wios"} and value.isdigit():
+                            values[key] = values.get(key, 0) + int(value)
+                current[name] = values
+                rows.append({"path": name, "counters": values,
+                             "delta": delta(values, self.previous_groups.get(name, {})),
+                             "memory_current": read(path / "memory.current").strip()[:32],
+                             "memory_events": counters(read(path / "memory.events")),
+                             "memory_events_local": counters(read(path / "memory.events.local")),
+                             "memory_stat": {k: v for k, v in counters(read(path / "memory.stat")).items() if k in {"anon", "file", "shmem", "workingset_refault_file", "workingset_refault_anon"} or k.startswith(("pgscan", "pgsteal"))},
+                             "swap_current": read(path / "memory.swap.current").strip()[:32],
+                             "swap_events": counters(read(path / "memory.swap.events")),
+                             "psi": {kind: psi(read(path / f"{kind}.pressure")) for kind in ("cpu", "io", "memory")}})
+            try:
+                with os.scandir(path) as entries:
+                    # Total enqueued directories and entries visited remain bounded.
+                    for entry in itertools.islice(entries, min(128, 1024 - examined)):
+                        examined += 1
+                        if entry.is_dir(follow_symlinks=False) and len(pending) < 128:
+                            if entry.name.startswith(("run-", "docker-")):
+                                pending.appendleft(Path(entry.path))
+                            else:
+                                pending.append(Path(entry.path))
+            except OSError:
+                pass
+        self.previous_groups = current
+        return {"groups": rows, "directory_entries_examined": examined,
+                "directories_visited": len(seen), "limit": 64}
+
+    def sample(self, interval, attribution_interval):
+        now = stamp()
+        elapsed = None if self.previous_time is None else now["monotonic_s"] - self.previous_time
+        self.previous_time = now["monotonic_s"]
+        pressure = {kind: psi(read(self.proc / "pressure" / kind)) for kind in ("cpu", "io", "memory")}
+        vm = {k: v for k, v in counters(read(self.proc / "vmstat")).items() if k in VM_KEYS}
+        disks = {}
+        for line in read(self.proc / "diskstats").splitlines():
+            fields = line.split()
+            if len(fields) >= 14 and (self.sys / "block" / fields[2]).exists():
+                # Whole block devices incl. physical disks and dm; exclude partitions.
+                try:
+                    disks[fields[2]] = dict(zip(("reads", "reads_merged", "sectors_read", "read_ms", "writes", "writes_merged", "sectors_written", "write_ms", "in_flight", "io_ms", "weighted_io_ms"), map(int, fields[3:14])))
+                except ValueError:
+                    pass
+        flags = [f"{kind}_{scope}_avg10>=10" for kind, scopes in pressure.items()
+                 for scope, values in scopes.items() if values.get("avg10", 0) >= 10]
+        if elapsed is not None and elapsed > interval * 2:
+            flags.append("sampling_gap")
+        record = {"type": "sample", **now, "boot_id": self.boot, "elapsed_s": elapsed,
+                  "flags": flags, "psi": pressure,
+                  "memory_kib": {k: v for k, v in counters(read(self.proc / "meminfo")).items() if k in {"MemTotal", "MemAvailable", "SwapTotal", "SwapFree", "Dirty", "Writeback"}},
+                  "scheduler": {k: v for k, v in counters(read(self.proc / "stat")).items() if k in {"procs_running", "procs_blocked"}},
+                  "vmstat": vm,
+                  "vmstat_delta": delta(vm, self.previous_vm),
+                  "diskstats": disks,
+                  "diskstats_delta": {name: delta({k: v for k, v in values.items() if k != "in_flight"}, self.previous_disks.get(name, {})) for name, values in disks.items()}}
+        self.previous_vm, self.previous_disks = vm, disks
+        if self.attribution_time is None or now["monotonic_s"] - self.attribution_time >= attribution_interval:
+            window = None if self.attribution_time is None else now["monotonic_s"] - self.attribution_time
+            record["processes"] = self.tasks(window)
+            record["cgroups"] = self.groups()
+            self.attribution_time = now["monotonic_s"]
+        return record
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, default=Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "stall-capture")
+    parser.add_argument("--interval", type=float, default=5)
+    parser.add_argument("--duration", type=float, default=900, help="seconds, 1..900 (default 15 minutes)")
+    parser.add_argument("--attribution-interval", type=float, default=30)
+    parser.add_argument("--segment-bytes", type=int, default=4 * 1024 * 1024)
+    parser.add_argument("--segments", type=int, default=4)
+    parser.add_argument("--mark", action="store_true", help="append incident timestamp only; no free text/secrets")
+    parser.add_argument("--proc-root", type=Path, default=Path("/proc"), help=argparse.SUPPRESS)
+    parser.add_argument("--sys-root", type=Path, default=Path("/sys"), help=argparse.SUPPRESS)
+    args = parser.parse_args()
+    if not (1 <= args.interval <= 5 and 1 <= args.duration <= 900 and 30 <= args.attribution_interval <= 300 and 65536 <= args.segment_bytes <= 4 * 1024 * 1024 and 1 <= args.segments <= 4):
+        parser.error("bounds: interval 1..5s, duration 1..900s, attribution 30..300s, segment 64KiB..4MiB, segments 1..4")
+    os.umask(0o077)
+    try:
+        ring = Ring(args.output, args.segment_bytes, args.segments)
+        if args.mark:
+            ring.append({"type": "incident", **stamp(), "boot_id": read(args.proc_root / "sys/kernel/random/boot_id").strip()})
+            return
+        capture_lock = ring.open_file("capture.lock")
+        fcntl.flock(capture_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        sampler = Sampler(args.proc_root, args.sys_root)
+        ring.append({"type": "start", **stamp(), "boot_id": sampler.boot,
+                     "interval_s": args.interval, "duration_s": args.duration,
+                     "attribution_interval_s": args.attribution_interval,
+                     "clock_ticks_per_second": os.sysconf("SC_CLK_TCK")})
+        deadline = time.monotonic() + args.duration
+        while True:
+            started = time.monotonic()
+            ring.append(sampler.sample(args.interval, args.attribution_interval))
+            delay = min(started + args.interval, deadline) - time.monotonic()
+            if delay > 0:
+                time.sleep(delay)
+            if time.monotonic() >= deadline:
+                break
+        ring.append({"type": "stop", **stamp(), "boot_id": sampler.boot})
+    except (OSError, ValueError) as error:
+        parser.exit(1, f"stall-capture: {error}\n")
+
+
+if __name__ == "__main__":
+    main()

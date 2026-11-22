@@ -12,7 +12,8 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-UPSTREAM = ROOT.parent / "upstream"
+UPSTREAM = Path(os.environ.get(
+    "OMARCHY_TEST_UPSTREAM", Path.home() / ".cache/dev-setup/omarchy-test-upstream")).expanduser().resolve()
 spec = importlib.util.spec_from_file_location("workspace_state", ROOT / "configs/hypr-quattro/workspace-state.py")
 state_helper = importlib.util.module_from_spec(spec)
 sys.dont_write_bytecode = True

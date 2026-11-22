@@ -42,9 +42,6 @@ configure_herdr_agent_integrations() {
   local -a target_commands=(
     claude:claude
     codex:codex
-    opencode:opencode
-    cursor:cursor-agent
-    grok:grok
     antigravity-cli:antigravity
     kimi:kimi
     qwen:qwen
@@ -69,14 +66,15 @@ configure_herdr_agent_integrations() {
     log_item "Herdr Pi integration is not current; refresh configs/agents/pi/extensions/herdr-agent-state.ts from the pinned Herdr release"
   fi
 
-  # Refresh every existing non-Pi integration, including temporarily absent
-  # agent binaries. Pi is a repository-owned generated extension.
+  # Refresh supported existing integrations, including temporarily absent
+  # binaries. Pi is repo-owned; retired agents must not be re-enabled.
   configured_targets="$(
     awk -F: '$0 !~ /: not installed / && $1 != "pi" { print $1 }' <<< "$status_output" \
       | paste -sd' ' -
   )"
   IFS=' ' read -r -a existing_targets <<< "$configured_targets"
   for target in "${existing_targets[@]}"; do
+    case "$target" in amp|cursor|cursor-agent|grok|opencode) continue ;; esac
     run_cmd "$herdr_bin" integration install "$target"
   done
 

@@ -19,7 +19,7 @@ Use `--dry-run` first when changing the setup flow or validating a host:
 
 ## Prerequisites
 
-- A cloned checkout of this repo, typically at `~/dev`
+- A cloned checkout of this repo at the canonical `~/dev` path; run setup from that checkout
 - `git`
 - `zsh`
 - `sudo` access on Linux hosts
@@ -29,10 +29,15 @@ Use `--dry-run` first when changing the setup flow or validating a host:
 
 ### `omarchy`
 
-- Linux desktop setup
+- Brave is the default for web links and local HTML/XHTML files. Verify with `omarchy default browser` (expected: `brave`) and `xdg-mime query default text/html` (expected: `brave-browser.desktop`). Hyprland may report `omarchy-browser.desktop` for HTTP(S): that is the stock dispatcher, not Chromium.
 - Installs the shared CLI layer through `pacman`
 - Applies `nvim`, `hypr`, `agents`, and Moshi host integration
-- **Quattro (4.x):** keep `~/.config/hypr` a real directory. After a successful stock login, setup adds the [personal Lua overlay](configs/hypr-quattro/README.md) to the existing entry file. Do not run setup as a substitute for the upstream upgrade. Before switching from 3.x, follow the [cutover checklist](docs/omarchy-quattro-cutover.md) and [link safety review](docs/omarchy-quattro-links.md).
+- **Quattro (4.x) is the supported desktop.** Start with a working packaged Quattro installation and run `cd ~/dev && ./setup.sh omarchy --dry-run` before applying setup. Setup is not an OS upgrade and needs no migration checkout, sibling `upstream` directory, preflight, or cutover rehearsal.
+- **Preserve the stock live desktop by default.** Keep `~/.config/hypr` a real directory with its stock Lua entrypoint. Ordinary setup does not activate a personal desktop overlay or replace current monitors, scale, workspaces, shortcuts, or dictation defaults. [Personal settings](configs/hypr-quattro/README.md) are optional, review-only material; review individual choices separately instead of importing an old desktop layout wholesale.
+- **Docker is strict standby, not socket-activated.** Setup disables automatic startup of both `docker.service` and `docker.socket`. When the engine is inactive or failed it stops the listening socket; when the engine is running or transitioning it preserves the engine, socket, and workloads. Setup never starts or restarts Docker to apply policy and does not mask the socket required by the packaged service. Start deliberately with `sudo systemctl start docker.service`; to return to standby after saving/stopping workloads, explicitly stop both `docker.service` and `docker.socket`. Do not use Docker client probes to check standby: they can activate a listening socket.
+- The Docker slice budget is `MemoryHigh=24G`, `MemoryMax=32G`, and `MemorySwapMax=8G`. These limits are independent of desktop layout and do not authorize workload shutdown or daemon restarts.
+
+The obsolete 3.x cutover bundle and ARM Parallels guide are retained only as [historical Git references](docs/history/README.md), not current installation instructions.
 
 ### `macbook`
 
@@ -99,7 +104,7 @@ installation alone does not verify gameplay or the Studio graphics/runtime path.
 1. Shared CLI packages for the selected host
 2. Shared CLI tool config under `configs/cli/`
 3. Shared env, shell, git, SSH, `mise`, and AI CLI setup, including the pinned `ai-memory` v3.5.1 binary and local user service on each host
-4. Linux hosts also install and enable Docker
+4. Linux hosts install Docker; Omarchy applies the strict standby policy and 24G/32G/8G slice budget described above without starting or restarting the engine
 5. Repo-owned config directories for the selected host
 6. Moshi host integration on hosts that include the `moshi` config target: installs the pinned `moshi-hook`, allows inbound Tailscale connections, exposes Herdr at `~/.local/bin/herdr` for SSH probes, opens the Tailscale mosh UDP range with UFW, refreshes hooks for installed/configured agents, and starts the `moshi-hook` user service after pairing
 7. Herdr integrations for installed/configured agents, with the Pi integration loaded from the pinned repository-generated extension
@@ -122,14 +127,26 @@ bash tests/flatpak.test.sh
 bash tests/flatpak-launchers.test.sh
 bash tests/pacman.test.sh
 bash tests/quattro-config-deploy.test.sh
-python3 tests/omarchy-quattro-preflight.test.py
-python3 tests/hypr-quattro.test.py --upstream /path/to/omarchy-v4.5.0
+python3 tests/hypr-quattro.test.py
 python3 tests/setup-hosts.test.py
 ./setup.sh omarchy --dry-run
 ./setup.sh macbook --dry-run
 ```
 
-For repo-owned config deployment, verify the symlink targets after a real setup:
+The offline Quattro tests use `OMARCHY_TEST_UPSTREAM`, falling back to
+`~/.cache/dev-setup/omarchy-test-upstream`. Prepare a separate pristine Omarchy
+source fixture at that location (or point the environment variable at one).
+The tested source is v4.5.0, pinned to commit
+`ac2690cd7be4f47e4a255f5e2e78d904d436b068`; the tests reject another revision.
+This is a test-only prerequisite, not a setup dependency or a migration checkout.
+For example, with an existing fixture:
+
+```bash
+OMARCHY_TEST_UPSTREAM=/path/to/pristine/omarchy python3 tests/hypr-quattro.test.py
+```
+
+For repo-owned config deployment, verify the symlink targets after a real setup.
+The Hyprland directory must remain a real directory, not a repo symlink:
 
 ```bash
 ls -la ~/.config/nvim

@@ -11,18 +11,13 @@ end, { release = true })
 
 -- Same-behavior stock application bindings remain stock (terminal/cwd, browser,
 -- file manager, editor, music, btop and web apps). These are personal differences.
+-- Stock defines these launchers even when the corresponding apps are retired.
+hl.unbind("SUPER + SHIFT + O")
+hl.unbind("SUPER + SHIFT + ALT + A")
 o.rebind("SUPER + SHIFT + SLASH", "Passwords", { launch = "bitwarden.desktop" })
-local function ai_app(command)
-  local callback = function()
-    hl.dispatch(hl.dsp.focus({ workspace = "5" }))
-    hl.exec_cmd(command)
-  end
-  -- The keybindings menu needs a shell equivalent for function-backed binds.
-  o.bind_commands[callback] = [[hyprctl dispatch 'hl.dsp.focus({ workspace = "5" })'; ]] .. command
-  return callback
-end
-o.rebind("SUPER + SHIFT + A", "ChatGPT", ai_app([[omarchy-launch-or-focus ChatGPT "uwsm-app -- chatgpt"]]))
-o.rebind("SUPER + SHIFT + C", "Claude", ai_app([[omarchy-launch-or-focus anthropic "uwsm-app -- claude-desktop"]]))
+-- Launch/focus naturally; stock per-monitor workspaces must remain authoritative.
+o.rebind("SUPER + SHIFT + A", "ChatGPT", [[omarchy-launch-or-focus ChatGPT "uwsm-app -- chatgpt"]])
+o.rebind("SUPER + SHIFT + C", "Claude", [[omarchy-launch-or-focus anthropic "uwsm-app -- claude-desktop"]])
 o.rebind("SUPER + SHIFT + G", "Github", { webapp = "https://github.com" })
 o.rebind("SUPER + SHIFT + E", "Email", { webapp = "https://mail.google.com/mail/u/0/#inbox" })
 o.rebind("SUPER + SHIFT + S", "Steam Gaming Mode", "$HOME/.local/share/steam-launcher/enter-gamesmode")

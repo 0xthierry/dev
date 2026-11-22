@@ -8,7 +8,6 @@ SHARED_ENV_VARS=(
   "EDITOR=nvim"
   "VISUAL=nvim"
   "PAGER=less -R"
-  "OPENCODE_ENABLE_EXA=true"
   "NODE_OPTIONS=--max-old-space-size=16384 --localstorage-file=\$HOME/.node-localstorage"
   "PNPM_CONFIG_FROZEN_LOCKFILE=true"
   "PNPM_CONFIG_MINIMUM_RELEASE_AGE=1440"

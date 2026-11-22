@@ -7,7 +7,8 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-UPSTREAM = Path(os.environ.get("OMARCHY_TEST_UPSTREAM", ROOT.parent / "upstream"))
+UPSTREAM = Path(os.environ.get(
+    "OMARCHY_TEST_UPSTREAM", Path.home() / ".cache/dev-setup/omarchy-test-upstream")).expanduser().resolve()
 
 
 class Integrations(unittest.TestCase):
@@ -75,7 +76,7 @@ class Integrations(unittest.TestCase):
         self.assertIn("keybind = alt+shift+enter=csi:13;4u", result)
         self.assertIn("keybind = ctrl+alt+shift+h=goto_split:left", result)
 
-    def test_ghostty_materialized_config_is_backed_up_and_second_install_is_noop(self):
+    def test_ghostty_independent_config_stays_active_across_repeated_setup(self):
         config = self.home / ".config/ghostty/config"
         config.parent.mkdir(parents=True)
         config.write_text("font-size = 17\n")
@@ -84,12 +85,24 @@ class Integrations(unittest.TestCase):
         (overrides / "notes").write_text("Unreviewed personal settings\n")
         self.install_ghostty()
         self.install_ghostty()
-        self.assertEqual(config.with_name("config.bak").read_text(), "font-size = 17\n")
+        self.assertEqual(config.read_text(), "font-size = 17\n")
+        self.assertFalse(config.is_symlink())
+        self.assertFalse(config.with_name("config.bak").exists())
+        self.assertEqual((overrides / "notes").read_text(), "Unreviewed personal settings\n")
+        self.assertFalse((config.parent / "dev-setup.bak").exists())
+        self.assertIn("font-size = 17", self.ghostty())
+
+    def test_ghostty_recognized_stock_config_aligns_idempotently(self):
+        config = self.home / ".config/ghostty/config"
+        config.parent.mkdir(parents=True)
+        stock = (UPSTREAM / "config/ghostty/config").read_bytes()
+        config.write_bytes(stock)
+        self.install_ghostty()
+        self.install_ghostty()
+        self.assertEqual(config.with_name("config.bak").read_bytes(), stock)
         self.assertEqual(config.resolve(), ROOT / "configs/ghostty/omarchy.conf")
         self.assertFalse(config.with_name("config.bak.1").exists())
-        self.assertEqual((config.parent / "dev-setup.bak/notes").read_text(), "Unreviewed personal settings\n")
-        self.assertFalse((config.parent / "dev-setup.bak.1").exists())
-        self.assertIn("font-size = 9", self.ghostty())
+        self.assertIn("font-family = JetBrainsMono Nerd Font", self.ghostty())
 
     def test_ghostty_migrates_only_the_known_shared_link(self):
         config = self.home / ".config/ghostty/config"

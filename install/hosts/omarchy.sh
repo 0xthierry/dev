@@ -49,7 +49,6 @@ HOST_PACMAN_PACKAGES=(
   libusb
   libxkbfile
   libxss
-  obsidian
   pacman-contrib
   python
   python-cattrs
@@ -183,6 +182,32 @@ enable_omarchy_units() {
   run_cmd sudo systemctl enable --now "${pending[@]}"
 }
 
+configure_omarchy_docker_policy() {
+  [[ "${SETUP_HOST:-}" == "omarchy" ]] || return 0
+
+  log_section "Docker Policy"
+  local source_path="$REPO_ROOT/configs/omarchy/system-docker-slice.conf"
+  local target_path="/etc/systemd/system/system-docker.slice.d/90-dev-setup-memory.conf"
+  local socket_target="/etc/systemd/system/docker.socket.d/90-dev-setup-standby.conf"
+  local socket_policy=$'[Unit]\n# Close the API listener when the manually started engine is stopped.\nPartOf=docker.service'
+  local changed=0
+  if [[ ! -f "$target_path" ]] || ! cmp -s "$source_path" "$target_path"; then
+    run_cmd sudo install -Dm644 "$source_path" "$target_path"
+    changed=1
+  fi
+  if [[ ! -f "$socket_target" ]] || ! cmp -s <(printf '%s\n' "$socket_policy") "$socket_target"; then
+    run_cmd sudo install -Dm644 /dev/stdin "$socket_target" <<< "$socket_policy"
+    changed=1
+  fi
+  if (( changed )); then
+    run_cmd sudo systemctl daemon-reload
+  fi
+  configure_omarchy_docker_daemon
+  configure_omarchy_docker_standby
+  log_item "NOTE: Docker daemon changes take effect at the next manual engine start; no restart performed"
+  log_item "NOTE: Recreate containers explicitly to migrate them into system-docker.slice"
+}
+
 configure_omarchy_docker_daemon() {
   local fragment="$REPO_ROOT/configs/omarchy/docker-daemon-fragment.json"
   local target="/etc/docker/daemon.json"
@@ -196,8 +221,8 @@ configure_omarchy_docker_daemon() {
   fi
 
   if ! check_installed jq || ! check_installed dockerd; then
-    log_item "Docker daemon: jq or dockerd unavailable; skipping policy merge"
-    return 0
+    log_item "ERROR: Docker daemon policy requires jq and dockerd; install the Omarchy packages first"
+    return 1
   fi
 
   merged="$(mktemp)"
@@ -265,10 +290,9 @@ report_containerd_ttrpc_version() {
 configure_omarchy_resource_resilience() {
   log_section "Resource Resilience"
 
-  install_omarchy_root_config \
-    "$REPO_ROOT/configs/omarchy/zram-generator.conf" \
-    "/etc/systemd/zram-generator.conf.d/90-dev-setup.conf" \
-    "zram"
+  # shellcheck source=install/omarchy-perf-profile.sh
+  source "$REPO_ROOT/install/omarchy-perf-profile.sh"
+  retire_overridden_vm_dropins || return
   install_omarchy_root_config \
     "$REPO_ROOT/configs/omarchy/oomd.conf" \
     "/etc/systemd/oomd.conf.d/90-dev-setup.conf" \
@@ -277,10 +301,7 @@ configure_omarchy_resource_resilience() {
     "$REPO_ROOT/configs/omarchy/user-oomd.conf" \
     "/etc/systemd/system/user@.service.d/90-dev-setup-oomd.conf" \
     "User-session OOM policy"
-  install_omarchy_root_config \
-    "$REPO_ROOT/configs/omarchy/system-docker-slice.conf" \
-    "/etc/systemd/system/system-docker.slice.d/90-dev-setup-memory.conf" \
-    "Docker container memory budget"
+  configure_omarchy_docker_policy
   install_omarchy_root_config \
     "$REPO_ROOT/configs/omarchy/sysstat-collect.timer.conf" \
     "/etc/systemd/system/sysstat-collect.timer.d/90-dev-setup-interval.conf" \
@@ -290,11 +311,6 @@ configure_omarchy_resource_resilience() {
     "$REPO_ROOT/configs/omarchy/journald.conf" \
     "/etc/systemd/journald.conf.d/90-dev-setup.conf" \
     "Journal size cap"
-  install_omarchy_root_config \
-    "$REPO_ROOT/configs/omarchy/sysctl-vm.conf" \
-    "/etc/sysctl.d/90-dev-setup-vm.conf" \
-    "Virtual memory tuning"
-  configure_omarchy_docker_daemon
 
   enable_omarchy_units \
     systemd-oomd.service \
@@ -331,14 +347,10 @@ configure_omarchy_resource_resilience() {
 
   report_containerd_ttrpc_version
 
-  log_item "NOTE: Reboot to activate the Docker daemon policy"
-  log_item "NOTE: Docker cgroup-parent applies only to newly created containers"
-  log_item "NOTE: Recreate each Compose stack to migrate its containers into system-docker.slice"
 }
 
 configure_omarchy_build_jobs() {
   local conf="/etc/makepkg.conf"
-  local jobs=""
 
   log_section "Build Parallelism"
 
@@ -347,18 +359,9 @@ configure_omarchy_build_jobs() {
     return 0
   fi
 
-  jobs="$(nproc)"
-
-  # Unset MAKEFLAGS means make defaults to -j1, so every AUR package builds on a
-  # single core. Arch ships the line commented out.
-  if grep -qE "^MAKEFLAGS=\"-j${jobs}\"$" "$conf"; then
-    log_item "MAKEFLAGS: already -j${jobs}"
-  else
-    log_item "MAKEFLAGS: building with -j${jobs}"
-    run_cmd sudo sed -i -E \
-      "s|^#?MAKEFLAGS=.*|MAKEFLAGS=\"-j${jobs}\"|" \
-      "$conf"
-  fi
+  # shellcheck source=install/omarchy-perf-profile.sh
+  source "$REPO_ROOT/install/omarchy-perf-profile.sh"
+  configure_interactive_makepkg || return
 
   # ccache returns a cached object when a translation unit hashes to something
   # already built, which dominates rebuild time for large AUR packages.
@@ -381,6 +384,10 @@ configure_omarchy_sysstat_activities() {
     log_item "sysstat: $conf not found, skipping activity set"
     return 0
   fi
+
+  # shellcheck source=install/omarchy-perf-profile.sh
+  source "$REPO_ROOT/install/omarchy-perf-profile.sh"
+  configure_sysstat_retention || return
 
   # sadc's default activity set excludes per-device disk statistics, so `sar -d`
   # reports "Requested activities not available" -- the one subsystem worth
@@ -501,23 +508,30 @@ configure_omarchy_luks_performance() {
 }
 
 set_default_browser_brave() {
-  local current_default=""
-
+  local desktop=brave-browser.desktop mime
+  local -a cmd
   log_section "Default Browser"
 
-  if ! check_installed xdg-settings; then
-    log_item "xdg-settings not available, skipping"
-    return 0
+  # Quattro's desktop-specific HTTP(S) handler is a dispatcher, not a browser.
+  # Use its native preference, and keep its generic backing associations explicit.
+  if [[ $(omarchy default browser 2>/dev/null) != brave ]]; then
+    run_cmd omarchy default browser brave || return 1
   fi
-
-  current_default="$(xdg-settings get default-web-browser 2>/dev/null || true)"
-  if [[ "$current_default" == "brave-browser.desktop" ]]; then
-    log_item "Default browser: already Brave"
-    return 0
+  for mime in x-scheme-handler/http x-scheme-handler/https text/html application/xhtml+xml; do
+    case $mime in
+      x-scheme-handler/*) cmd=(env XDG_CURRENT_DESKTOP= xdg-mime) ;;
+      *) cmd=(xdg-mime) ;;
+    esac
+    if [[ $("${cmd[@]}" query default "$mime" 2>/dev/null) != "$desktop" ]]; then
+      run_cmd "${cmd[@]}" default "$desktop" "$mime" || return 1
+      if (( ! ${DRY_RUN:-0} )) && [[ $("${cmd[@]}" query default "$mime") != "$desktop" ]]; then
+        printf 'error: %s did not resolve to %s\n' "$mime" "$desktop" >&2; return 1
+      fi
+    fi
+  done
+  if (( ! ${DRY_RUN:-0} )) && [[ $(omarchy default browser) != brave ]]; then
+    printf 'error: Omarchy did not resolve the default browser to Brave\n' >&2; return 1
   fi
-
-  log_item "Setting default browser to Brave"
-  run_cmd xdg-settings set default-web-browser brave-browser.desktop
 }
 
 configure_keyboard() {
@@ -554,16 +568,6 @@ configure_keyboard() {
       run_cmd setxkbmap -layout us -model pc105 -variant intl -option compose:caps
     fi
   fi
-}
-
-reload_hyprland_if_running() {
-  if ! check_installed hyprctl || [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
-    return 0
-  fi
-
-  log_section "Hyprland"
-  log_item "Reloading Hyprland configuration"
-  run_cmd hyprctl reload
 }
 
 configure_secret_service() {
@@ -704,8 +708,15 @@ configure_cua_driver_service() {
   log_item "Cua Driver: separate Wayland and X11 endpoints; no compositor plugin installed"
 }
 
+configure_quadcast_input() {
+  local dir="${XDG_CONFIG_HOME:-$HOME/.config}/wireplumber/wireplumber.conf.d"
+  ensure_dir "$dir"
+  safe_link_path "$REPO_ROOT/configs/omarchy/quadcast-input.conf" "$dir/90-quadcast-input.conf" 'QuadCast microphone profile'
+}
+
 setup_host_machine_state() {
   log_section "Host Machine State"
+  configure_quadcast_input
   configure_keyboard
   configure_legacy_tiocsti
   configure_omarchy_resource_resilience
@@ -716,7 +727,6 @@ setup_host_machine_state() {
   apply_host_configs
   configure_cua_driver_service
   cleanup_ai_launcher_duplicates
-  reload_hyprland_if_running
 }
 
 setup_post_host_state() {

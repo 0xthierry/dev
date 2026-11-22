@@ -11,6 +11,14 @@ Personal machine setup. One repo, two hosts, one command: `./setup.sh <host>`. S
 
 Shared CLI tools, shell, and editor across both hosts. Host-specific bits live in `install/hosts/{host}.sh`.
 
+## Canonical Omarchy Setup
+
+- `~/dev` is the canonical setup checkout. Normal `./setup.sh omarchy` targets an already-working packaged Quattro (4.x) desktop; it is not an OS upgrade and requires no migration checkout or cutover tools.
+- Preserve the real `~/.config/hypr` directory, stock Lua entrypoint, and current live monitors, scale, workspaces, shortcuts, and dictation defaults. Ordinary setup must not activate a personal overlay. Personal settings are optional review material, never an automatic replacement for the working desktop.
+- Docker is strict standby: disable boot startup for both `docker.service` and `docker.socket`, stop the listening socket only when the engine is inactive or failed, and preserve running/transitioning engines and their workloads. Never start/restart Docker or connect a Docker client to validate standby. Do not mask the socket required by the packaged service. Explicit engine startup remains available to the user.
+- Keep the Docker slice policy at `MemoryHigh=24G`, `MemoryMax=32G`, `MemorySwapMax=8G`; do not conflate system resource policies with optional desktop settings.
+- Obsolete 3.x cutover scripts/tests/runbooks and the ARM Parallels guide are [historical Git references](docs/history/README.md), not supported setup paths.
+
 ## Two-Layer Model
 
 Setup has two independent layers:
@@ -25,7 +33,7 @@ The two layers don't validate each other. **Most recurring bug:** config deploye
 | Source | Deployed To | Method |
 |---|---|---|
 | `configs/nvim/` | `~/.config/nvim` | symlink |
-| `configs/hypr-quattro/` | `~/.config/hypr/dev-setup` | Omarchy 4.x only. Keep the real user config directory and stock Lua entrypoint; insert one optional import for this workstation's personal settings. Do not deploy a complete desktop config. |
+| `configs/hypr-quattro/` | Optional, manually reviewed personal settings | Omarchy 4.x only. Ordinary setup preserves the real user config directory, stock Lua entrypoint, and current desktop; it does not insert an overlay import. Review individual settings separately; never deploy a complete desktop config. |
 | `configs/herdr/config.toml` | `~/.config/herdr/config.toml` | symlink |
 | `configs/browser-diagnostics/` | `~/.local/bin/chrome-devtools-cli`, `~/.local/bin/browser-diagnostics` | `install/browser-diagnostics.sh`; diagnostic-only CLI, frozen package-local Bun dependencies and launcher links (omarchy/macbook only) |
 | `configs/browser-automation/` | `~/.local/bin/{playwriter,playwriter-mcp,chrome-devtools-mcp}`, native client MCP entries | `install/browser-automation.sh` via `install/mcp.sh`; pinned runtimes on all hosts; Playwriter primary controller, Chrome DevTools diagnostics/capability fallback; ChatGPT uses explicit `chatgpt-browser-mcp` tunnels and account authorization |
@@ -85,6 +93,12 @@ Default to shared. Only touch `install/hosts/{host}.sh` when the user names a ho
 
 ## Testing
 
+Offline Quattro tests resolve `OMARCHY_TEST_UPSTREAM`, defaulting to
+`~/.cache/dev-setup/omarchy-test-upstream`, rather than a sibling migration
+checkout. Supply pristine Omarchy v4.5.0 sources pinned to
+`ac2690cd7be4f47e4a255f5e2e78d904d436b068`; this fixture is for tests only,
+not normal setup. `tests/hypr-quattro.test.py` also accepts `--upstream`.
+
 ```bash
 bash -n setup.sh install/*.sh install/hosts/*.sh
 shellcheck setup.sh install/*.sh install/hosts/*.sh
@@ -120,6 +134,9 @@ bun test configs/agents/skills/roblox-open-cloud-api/scripts
 # Uses an isolated browser fixture, not the user's Brave session:
 bun run test:browser-diagnostics:e2e
 python3 tests/setup-hosts.test.py
+bash tests/quattro-config-deploy.test.sh
+python3 tests/hypr-quattro.test.py
+python3 docs/history/verify-archive.py
 ./setup.sh omarchy --dry-run
 ./setup.sh macbook --dry-run
 ```

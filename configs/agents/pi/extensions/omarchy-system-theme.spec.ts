@@ -1,12 +1,16 @@
 import { afterEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { omarchyPiTheme } from "./omarchy-system-theme";
 
 // Adapter integration, not a live Pi TUI check. The pristine 4.5.0 resolver is
 // the real subprocess; HOME and palette files are isolated per test.
 const oldPath = process.env.PATH;
+const upstreamBin = process.env.OMARCHY_TEST_UPSTREAM_BIN ?? resolve(
+  process.env.OMARCHY_TEST_UPSTREAM ?? join(homedir(), ".cache/dev-setup/omarchy-test-upstream"),
+  "bin",
+);
 const homes: string[] = [];
 afterEach(() => {
   process.env.PATH = oldPath;
@@ -19,7 +23,7 @@ function fixture(palette: string) {
   const theme = join(home, ".local/state/omarchy/current/theme");
   mkdirSync(theme, { recursive: true });
   writeFileSync(join(theme, "colors.toml"), palette);
-  process.env.PATH = `${process.env.OMARCHY_TEST_UPSTREAM_BIN ?? resolve(import.meta.dir, "../../../../../upstream/bin")}:${oldPath}`;
+  process.env.PATH = `${upstreamBin}:${oldPath}`;
   return { home, theme };
 }
 

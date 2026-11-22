@@ -9,6 +9,15 @@ write_mise_config() {
   local tmp=""
 
   log_section "Mise Configuration"
+  # Persist the opt-out before replacing our baseline, preserving existing
+  # disabled tools in the separate global override.
+  # shellcheck source=install/retired-ai-tools.sh
+  source "$(dirname "${BASH_SOURCE[0]}")/retired-ai-tools.sh"
+  if (( ${DRY_RUN:-0} )) || resolve_mise_bin >/dev/null 2>&1; then
+    disable_retired_ai_tools
+  else
+    log_item "Mise unavailable; retired AI tool opt-out deferred until mise is installed"
+  fi
   ensure_dir "$(dirname "$config_path")"
 
   tmp="$(mktemp)"

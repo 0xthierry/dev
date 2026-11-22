@@ -40,31 +40,33 @@ require_omarchy_quattro_layout() {
   fi
 }
 
-# Layer the personal baseline after package defaults, but before local config
-# and stock toggles. Never replace the directory or follow an entrypoint link.
-apply_hypr_quattro() (
+# Ordinary setup validates Quattro, but the desktop belongs to stock and the user.
+# Do not rewrite even one Lua file or move per-monitor workspace state.
+apply_hypr_quattro() {
+  require_omarchy_quattro_layout || return 1
+  log_item "Preserving current Quattro desktop, monitors, workspaces and personal config; shortcuts are a separate reviewed opt-in"
+}
+
+# Explicit opt-in only; never called by apply_hypr or the host config target.
+# Load shortcuts after defaults, before the user's modules and stock toggles.
+apply_hypr_quattro_shortcuts() (
   local dir="$HOME/.config/hypr" src="$REPO_ROOT/configs/hypr-quattro"
   local entry="$dir/hyprland.lua" overlay="$dir/dev-setup" tmp=''
-  local hook='if package.searchpath("hypr.dev-setup.dev-setup", package.path) then require("hypr.dev-setup.dev-setup") end'
+  local hook='if package.searchpath("hypr.dev-setup.shortcuts", package.path) then require("hypr.dev-setup.shortcuts") end'
   require_omarchy_quattro_layout || return 1
   if (( ${DRY_RUN:-0} )); then
-    log_item "Would link $src at $overlay and back up/load the optional overlay immediately after stock defaults; preserve user files and stock dictation"
+    log_item "Would link $src at $overlay and back up/load reviewed personal shortcuts only; preserve desktop, monitor/workspace state and stock dictation"
     return 0
   fi
-  if [[ ! -f $src/dev-setup.lua ]]; then
-    printf 'error: incomplete Quattro overlay; refusing to deploy.\n' >&2
+  if [[ ! -f $src/shortcuts.lua || ! -f $src/bindings.lua ]]; then
+    printf 'error: incomplete Quattro shortcuts; refusing to deploy.\n' >&2
     return 1
   fi
-  # A first stock login assigns per-monitor blocks. The shell bar reads those
-  # from disk even after Lua's global-workspace overlay is loaded. Never erase
-  # the mapping during setup; move it aside from a logged-out TTY as documented.
-  local state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy" mapping
-  for mapping in "$state_dir/monitor-workspaces" "$state_dir/monitor-workspaces-merged"; do
-    if [[ -L $mapping || -s $mapping ]]; then
-      printf 'error: stock workspace state found at %s; see configs/hypr-quattro/README.md before applying the global workspace layout.\n' "$mapping" >&2
-      return 1
-    fi
-  done
+  # Never silently upgrade a previously enabled full desktop overlay.
+  if grep -Fq 'hypr.dev-setup.dev-setup' "$entry"; then
+    printf 'error: historical full desktop overlay is enabled; review it manually before selecting shortcuts only.\n' >&2
+    return 1
+  fi
   local anchor='require("default.hypr.omarchy")' matches
   matches=$(grep -Fxc -- "$hook" "$entry" || :)
   if [[ $matches != 0 ]] && { [[ $matches != 1 ]] || ! awk -v a="$anchor" -v h="$hook" 'previous == a && $0 == h {found=1} {previous=$0} END {exit !found}' "$entry"; }; then
@@ -128,11 +130,20 @@ apply_ghostty() {
     printf 'error: refusing unrelated Ghostty symlink; review it before setup.\n' >&2
     return 1
   fi
+  # An independent materialized config is user-owned, not a migration source.
+  # Only identical stock defaults / our own materialized wrapper may converge.
+  if [[ -e "$dir/config" && ! -L "$dir/config" ]] &&
+     { [[ ! -f "$dir/config" ]] ||
+       { ! cmp -s "$dir/config" /usr/share/omarchy/config/ghostty/config &&
+         ! cmp -s "$dir/config" "$src/omarchy.conf"; }; }; then
+    log_item "Preserving independent Ghostty config at $dir/config; review configs/ghostty/omarchy.conf before opting into repository defaults"
+    return 0
+  fi
   ensure_dir "$dir"
   if [[ -L "$dir/config" && "$dir/config" -ef "$src/config" ]]; then
     run_cmd mv -- "$dir/config" "$(next_backup_path "$dir/config")"
   fi
-  # safe_link_path backs up materialized files, preserving unreviewed settings.
+  # Back up recognized stock/repository files before linking the managed wrapper.
   safe_link_path "$src" "$dir/dev-setup" "Ghostty personal overrides"
   safe_link_path "$src/omarchy.conf" "$dir/config" "Omarchy Ghostty config"
 }

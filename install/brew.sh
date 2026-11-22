@@ -10,7 +10,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/packages/common.sh"
 BREW_CASKS=(
   slack
   spotify
-  obsidian
   signal
   obs
   orbstack

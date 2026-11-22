@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Explicit, repo-owned opt-in deployment. Never invoked by ordinary setup.
+set -euo pipefail
+source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+bin="$HOME/.local/bin/stall-capture"
+unit="$HOME/.config/systemd/user/stall-capture.service"
+case "${1:-}" in
+  --install|--enable|--remove) action="$1" ;;
+  *) printf 'Usage: %s --install|--enable|--remove\n' "$0" >&2; exit 2 ;;
+esac
+[[ "$(uname -s)" == Linux ]] || { echo 'Linux only' >&2; exit 1; }
+if [[ -e "$unit" || -L "$unit" ]]; then
+  if [[ -L "$unit" ]] || ! grep -qx '# Managed by dev-setup stall-capture-install' "$unit"; then
+    echo "Refusing unmanaged unit: $unit" >&2; exit 1
+  fi
+fi
+if [[ -e "$bin" || -L "$bin" ]]; then
+  [[ -L "$bin" && "$(readlink -- "$bin")" == "$source_dir/stall-capture" ]] || {
+    echo "Refusing unrelated executable: $bin" >&2; exit 1;
+  }
+fi
+if [[ "$action" == --remove ]]; then
+  if [[ -f "$unit" ]]; then
+    systemctl --user disable --now stall-capture.service
+    rm -- "$unit"
+  fi
+  [[ ! -L "$bin" ]] || rm -- "$bin"
+  systemctl --user daemon-reload
+  echo 'Recorder removed; private recordings retained in ~/.local/state/stall-capture.'
+  exit
+fi
+[[ -x /usr/bin/python3 ]] || { echo 'System Python is required' >&2; exit 1; }
+mkdir -p -- "$(dirname -- "$bin")" "$(dirname -- "$unit")"
+ln -sfn -- "$source_dir/stall-capture" "$bin"
+cat > "$unit" <<'UNIT'
+# Managed by dev-setup stall-capture-install
+[Unit]
+Description=Bounded stall evidence ring (explicit opt-in)
+
+[Service]
+Type=simple
+# Bypass per-user runtime shims (can exceed TasksMax before Python even starts).
+ExecStart=/usr/bin/python3 -I %h/.local/bin/stall-capture --output %h/.local/state/stall-capture --interval 5 --duration 900 --attribution-interval 30
+Restart=always
+RestartSec=5
+UMask=0077
+Nice=19
+IOSchedulingClass=idle
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX
+MemoryMax=96M
+TasksMax=4
+CPUQuota=5%
+
+[Install]
+WantedBy=default.target
+UNIT
+systemctl --user daemon-reload
+if [[ "$action" == --enable ]]; then
+  systemctl --user enable --now stall-capture.service
+else
+  echo 'Installed but not started. Opt in: systemctl --user enable --now stall-capture.service'
+fi

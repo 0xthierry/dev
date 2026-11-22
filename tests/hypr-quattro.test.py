@@ -2,7 +2,7 @@
 """Offline Quattro overlay checks. Never contacts/reloads the live compositor.
 
 Run: python3 tests/hypr-quattro.test.py [--upstream /path/to/omarchy-v4.5.0]
-The default upstream is the pristine sibling ../upstream migration checkout.
+Defaults to OMARCHY_TEST_UPSTREAM or ~/.cache/dev-setup/omarchy-test-upstream.
 """
 import argparse
 import os
@@ -15,9 +15,10 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 OVERLAY = ROOT / "configs/hypr-quattro"
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--upstream", type=Path, default=ROOT.parent / "upstream")
+parser.add_argument("--upstream", type=Path, default=Path(os.environ.get(
+    "OMARCHY_TEST_UPSTREAM", Path.home() / ".cache/dev-setup/omarchy-test-upstream")))
 args, remaining = parser.parse_known_args()
-UPSTREAM = args.upstream.resolve()
+UPSTREAM = args.upstream.expanduser().resolve()
 
 
 class HyprQuattroTests(unittest.TestCase):
@@ -103,15 +104,15 @@ class HyprQuattroTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(portal.read_text(),
                          "screencopy {\n    custom_picker_binary = /user/observer-picker\n}\n")
-        self.assertIn('require("hypr.dev-setup.dev-setup")',
-                      (self.config / "hyprland.lua").read_text())
+        self.assertEqual((self.config / "hyprland.lua").read_bytes(),
+                         (UPSTREAM / "config/hypr/hyprland.lua").read_bytes())
 
     def test_deployment_does_not_select_missing_backend(self):
         self.prepare_dictation_fixture()
         result = self.deploy_overlay()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('require("hypr.dev-setup.dev-setup")',
-                      (self.config / "hyprland.lua").read_text())
+        self.assertEqual((self.config / "hyprland.lua").read_bytes(),
+                         (UPSTREAM / "config/hypr/hyprland.lua").read_bytes())
         self.assertFalse((self.home / ".config/omarchy/defaults/dictation").exists())
         self.assertFalse((self.home / "installer-calls").exists())
 

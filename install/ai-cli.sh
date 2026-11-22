@@ -162,125 +162,6 @@ install_factory_cli_binary() {
   run_cmd bash -c 'curl -fsSL https://app.factory.ai/cli | sh'
 }
 
-resolve_cursor_agent_bin() {
-  if [[ "$(uname -s)" == "Darwin" ]]; then
-    if [[ -x /opt/homebrew/bin/cursor-agent ]]; then
-      printf '%s\n' /opt/homebrew/bin/cursor-agent
-      return 0
-    fi
-
-    if [[ -x /usr/local/bin/cursor-agent ]]; then
-      printf '%s\n' /usr/local/bin/cursor-agent
-      return 0
-    fi
-  fi
-
-  if command -v cursor-agent >/dev/null 2>&1; then
-    command -v cursor-agent
-    return 0
-  fi
-
-  return 1
-}
-
-restore_cursor_agent_alias() {
-  local cursor_agent_bin=""
-
-  cursor_agent_bin="$(resolve_cursor_agent_bin 2>/dev/null)" || return 0
-  ensure_dir "$HOME/.local/bin"
-  run_cmd ln -sf "$cursor_agent_bin" "$HOME/.local/bin/agent"
-}
-
-resolve_brew_bin_for_ai_cli() {
-  if command -v brew >/dev/null 2>&1; then
-    command -v brew
-    return 0
-  fi
-
-  if [[ -x /opt/homebrew/bin/brew ]]; then
-    printf '%s\n' /opt/homebrew/bin/brew
-    return 0
-  fi
-
-  if [[ -x /usr/local/bin/brew ]]; then
-    printf '%s\n' /usr/local/bin/brew
-    return 0
-  fi
-
-  return 1
-}
-
-migrate_cursor_cli_from_homebrew() {
-  local brew_bin=""
-
-  if [[ "$(uname -s)" != "Darwin" ]]; then
-    return 0
-  fi
-
-  if ! brew_bin="$(resolve_brew_bin_for_ai_cli 2>/dev/null)"; then
-    return 0
-  fi
-
-  if ! "$brew_bin" list --cask --versions cursor-cli >/dev/null 2>&1; then
-    return 0
-  fi
-
-  log_item "Migrating Cursor Agent CLI from Homebrew to the official installer..."
-  run_cmd "$brew_bin" uninstall --cask cursor-cli
-}
-
-install_cursor_agent_cli_binary() {
-  migrate_cursor_cli_from_homebrew
-  log_item "Installing/updating Cursor Agent CLI..."
-  run_cmd bash -c 'curl https://cursor.com/install -fsS | bash'
-  restore_cursor_agent_alias
-}
-
-remove_grok_shell_block() {
-  local shell_file="$1"
-
-  if [[ ! -f "$shell_file" ]] || ! grep -q '# >>> grok installer >>>' "$shell_file"; then
-    return 0
-  fi
-
-  log_item "Removing Grok installer shell configuration: $shell_file"
-  # shellcheck disable=SC2016 # $1/$tmp are intentionally expanded by the inner bash.
-  run_cmd bash -c '
-    file="$1"
-    tmp="${file}.dev-setup-grok.$$"
-    trap '\''rm -f "$tmp"'\'' EXIT
-    awk '\''
-      /# >>> grok installer >>>/ { skip=1; next }
-      /# <<< grok installer <<</ { skip=0; next }
-      !skip { print }
-    '\'' "$file" > "$tmp"
-    cat "$tmp" > "$file"
-  ' _ "$shell_file"
-}
-
-install_grok_pi_launcher() {
-  local source_path="$AI_CLI_REPO_ROOT/scripts/grok"
-  local target_path="$HOME/.local/bin/grok"
-  local shell_file=""
-  local backup_path=""
-
-  for shell_file in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.config/fish/config.fish"; do
-    remove_grok_shell_block "$shell_file"
-  done
-
-  ensure_dir "$(dirname "$target_path")"
-  if [[ -L "$target_path" ]] \
-    && [[ "$(resolve_symlink_target "$target_path")" != "$(canonicalize_path "$source_path")" ]]; then
-    backup_path="$(next_backup_path "$target_path")"
-    run_cmd mv "$target_path" "$backup_path"
-    log_item "Grok command: backed up to $backup_path"
-    run_cmd ln -s "$source_path" "$target_path"
-    log_item "Grok Pi launcher: linked"
-    return 0
-  fi
-  safe_link_path "$source_path" "$target_path" "Grok Pi launcher"
-}
-
 install_amq_from_source() {
   local source_dir="$HOME/.local/share/dev-setup/sources/agent-message-queue"
   local install_dir="$HOME/.local/bin"
@@ -389,12 +270,6 @@ install_ai_clis() {
 
   # Factory CLI — `droid` binary
   install_factory_cli_binary
-
-  # `grok` launches Pi with direct xAI Grok 4.6 and high thinking.
-  install_grok_pi_launcher
-
-  # Cursor Agent CLI — `cursor-agent` binary
-  install_cursor_agent_cli_binary
 
   # Railway CLI — deploy/manage Railway projects
   install_npm_global_cli "Railway CLI" "@railway/cli" "5.28.0"

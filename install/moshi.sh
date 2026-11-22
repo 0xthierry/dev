@@ -202,13 +202,10 @@ configure_moshi_agent_hooks() {
   local -a target_commands=(
     claude:claude
     codex:codex
-    opencode:opencode
     gemini:gemini
     antigravity:antigravity
-    cursor:cursor-agent
     kimi:kimi
     qwen:qwen
-    grok:grok
     omp:omp
     hermes:hermes
   )
@@ -225,8 +222,8 @@ configure_moshi_agent_hooks() {
     log_item "Moshi Pi integration is not current; refresh configs/agents/pi/extensions/moshi-hooks.ts from the pinned moshi-hook release"
   fi
 
-  # Refresh every existing non-Pi hook, even when its agent binary is currently
-  # absent. Pi is repository-owned and regenerated separately at the pinned version.
+  # Refresh supported existing hooks, even when their binaries are absent.
+  # Pi is repo-owned; retired agents must not be re-enabled.
   configured_targets="$(
     jq -r '.hooks[]? | select(.target != "pi" and .status != "not_found") | .target' \
       <<< "$status_json" \
@@ -235,6 +232,7 @@ configure_moshi_agent_hooks() {
   )"
   IFS=' ' read -r -a existing_targets <<< "$configured_targets"
   for target in "${existing_targets[@]}"; do
+    case "$target" in amp|cursor|cursor-agent|grok|opencode) continue ;; esac
     run_cmd "$moshi_hook_bin" install --target "$target"
   done
 
