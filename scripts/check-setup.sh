@@ -10,6 +10,6 @@ shellcheck setup.sh install/*.sh install/hosts/*.sh scripts/clone-repos.sh scrip
 shellcheck scripts/check-setup.sh scripts/test-ssh-config.sh .githooks/pre-commit
 ./scripts/security-check.sh
 ./scripts/test-ssh-config.sh
-./setup.sh dev --dry-run >/dev/null
-./setup.sh omarchy --dry-run >/dev/null
-./setup.sh macbook --dry-run >/dev/null
+# Exercise supported hosts in isolated homes with network/package execution
+# forbidden, and assert that the retired dev host is rejected.
+python3 tests/setup-hosts.test.py

@@ -257,6 +257,11 @@ install_linux_devin_desktop() {
     return 0
   fi
 
+  if (( ${DRY_RUN:-0} )); then
+    log_item "Would resolve Devin Desktop package URL from vendor metadata and install it"
+    return 0
+  fi
+
   url="$(latest_devin_linux_deb_url)"
   install_linux_deb_app "Devin Desktop" "devin-desktop" "$url" "usr/share/devin-desktop/bin/devin-desktop" "Devin"
 }
@@ -351,6 +356,10 @@ install_linux_claude_desktop() {
     log_item "Claude Desktop: unsupported architecture $(uname -m)"
     return 0
   }
+  if (( ${DRY_RUN:-0} )); then
+    log_item "Would resolve Claude Desktop version and SHA-256 from vendor metadata, compare installed version, and install if needed"
+    return 0
+  fi
   if ! check_installed python3; then
     printf 'error: python3 is required to resolve Claude Desktop versions\n' >&2
     return 1

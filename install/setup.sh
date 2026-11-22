@@ -2,12 +2,12 @@
 
 load_host_module() {
   local repo_root="$1"
-  local host="$2"
+  local module_host="$2"
 
   # shellcheck source=install/hosts/common.sh
   source "$repo_root/install/hosts/common.sh"
   # shellcheck disable=SC1090
-  source "$repo_root/install/hosts/${host}.sh"
+  source "$repo_root/install/hosts/${module_host}.sh"
 }
 
 run_setup() {

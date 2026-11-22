@@ -9,10 +9,14 @@ cleanup() {
 }
 
 trap cleanup EXIT
+export HOME="$TMP_HOME"
+export XDG_CONFIG_HOME="$TMP_HOME/.config"
+export XDG_DATA_HOME="$TMP_HOME/.local/share"
+export XDG_CACHE_HOME="$TMP_HOME/.cache"
+export XDG_STATE_HOME="$TMP_HOME/.local/state"
 
-bash -lc "
+bash -c "
   set -euo pipefail
-  export HOME='$TMP_HOME'
   source '$REPO_ROOT/install/lib.sh'
   source '$REPO_ROOT/install/ssh.sh'
   unset HOST_SSH_CONFIG_LINES || true
@@ -22,9 +26,8 @@ bash -lc "
   grep -Fqx '  AddKeysToAgent yes' '$TMP_HOME/.ssh/config.d/dev-setup.conf'
 "
 
-bash -lc "
+bash -c "
   set -euo pipefail
-  export HOME='$TMP_HOME'
   source '$REPO_ROOT/install/lib.sh'
   source '$REPO_ROOT/install/ssh.sh'
   HOST_SSH_CONFIG_LINES=()
@@ -33,9 +36,8 @@ bash -lc "
   grep -Fqx '  AddKeysToAgent yes' '$TMP_HOME/.ssh/config.d/dev-setup.conf'
 "
 
-bash -lc "
+bash -c "
   set -euo pipefail
-  export HOME='$TMP_HOME'
   source '$REPO_ROOT/install/lib.sh'
   source '$REPO_ROOT/install/ssh.sh'
   HOST_SSH_CONFIG_LINES=(
