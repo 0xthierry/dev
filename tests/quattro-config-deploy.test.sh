@@ -1,15 +1,32 @@
 #!/usr/bin/env bash
-# No running compositor or real home involved. Optional argument: the pristine
-# Quattro config/hypr/hyprland.lua to exercise rather than the minimal fixture.
+# No running compositor or real home involved. Optional argument: pristine
+# Quattro config/hypr/hyprland.lua. Bubblewrap mounts the actual upstream tree
+# at the FIXED package path; production has no test-root environment bypass.
 set -euo pipefail
 REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+if [[ ${1:-} != --sandbox ]]; then
+  upstream_entry=${1:-"$REPO_ROOT/../upstream/config/hypr/hyprland.lua"}
+  upstream=$(cd "$(dirname "$upstream_entry")/../.." && pwd)
+  exec bwrap --ro-bind / / --dev /dev --tmpfs /usr/share --ro-bind "$upstream" /usr/share/omarchy \
+    --tmpfs /tmp --unshare-net -- bash "$0" --sandbox "$upstream_entry"
+fi
+shift
 source "$REPO_ROOT/install/configs.sh"
 work=$(mktemp -d); trap 'rm -rf -- "$work"' EXIT
 export HOME="$work/home"
 export XDG_CONFIG_HOME="$HOME/.config" XDG_DATA_HOME="$HOME/.local/share" XDG_STATE_HOME="$HOME/.local/state"
 dir="$HOME/.config/hypr"; entry="$dir/hyprland.lua"
+# Dry-run from an empty HOME plans but never initializes or upgrades anything.
+DRY_RUN=1 apply_hypr > "$work/dry-run"
+grep -F 'requires initialized stock Quattro' "$work/dry-run"
+[[ ! -e $HOME ]]
+if apply_hypr; then echo 'accepted missing config' >&2; exit 1; fi
+[[ ! -e $HOME ]]
 mkdir -p "$dir"
-if [[ $# == 1 ]]; then cp "$1" "$entry"; else printf '%s\n' '-- preserve user entry' 'require("default.hypr.omarchy")' 'require("hypr.input")' 'require("default.hypr.toggles")' > "$entry"; fi
+printf 'legacy user config\n' > "$dir/hyprland.conf"
+if apply_hypr; then echo 'accepted legacy config' >&2; exit 1; fi
+[[ $(< "$dir/hyprland.conf") == 'legacy user config' && ! -e $entry ]]
+cp "$1" "$entry"
 printf '\n%s\n' '-- an unrelated personal override' >> "$entry"
 cp "$entry" "$work/before"
 # Upstream's migration owns these late-loaded personal bindings. Setup must
@@ -33,6 +50,11 @@ done
 printf '%s\n' '-- independent user-managed Lua file' > "$entry"
 if apply_hypr_quattro; then echo 'accepted unknown Lua entry point' >&2; exit 1; fi
 [[ ! -L $dir/dev-setup && ! -e $entry.bak ]]
+cp "$work/before" "$entry"
+printf '\n%s\n' 'require("default.hypr.omarchy")' >> "$entry"
+cp "$entry" "$work/duplicate"
+if apply_hypr; then echo 'accepted duplicate stock import' >&2; exit 1; fi
+cmp "$work/duplicate" "$entry"; [[ ! -L $dir/dev-setup ]]
 cp "$work/before" "$entry"
 # Upstream's session-start callback is allowed to leave an empty merged file.
 : > "$state/monitor-workspaces-merged"
@@ -62,4 +84,8 @@ cmp "$work/owner.lua" "$work/once"
 rm "$entry"; mv "$work/owner.lua" "$entry"; mv "$dir" "$work/legacy"; ln -s "$work/legacy" "$dir"
 if apply_hypr_quattro; then echo 'accepted linked hypr directory' >&2; exit 1; fi
 cmp "$work/legacy/hyprland.lua" "$work/once"; [[ ! -e $work/legacy/dev-setup ]]
+rm "$dir"; mv "$work/legacy" "$dir"
+mv "$HOME/.config" "$work/linked-config"; ln -s "$work/linked-config" "$HOME/.config"
+if apply_hypr; then echo 'accepted linked .config ancestor' >&2; exit 1; fi
+cmp "$work/linked-config/hypr/hyprland.lua" "$work/once"; [[ ! -e $work/linked-config/hypr/dev-setup ]]
 printf 'Quattro deployment, idempotency, missing overlay, and refusal cases passed.\n'

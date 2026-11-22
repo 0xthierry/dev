@@ -45,7 +45,6 @@ CUA_WINDOWS_FILE="$TEST_ROOT/cua-windows.json"
 CUA_CALL_LOG="$TEST_ROOT/cua-calls.log"
 LUA_DISPATCH_LOG="$TEST_ROOT/lua-dispatch.log"
 LUA_ADAPTER="$TEST_ROOT/dispatch.lua"
-export HYPR_TEST_MODE="${HYPR_TEST_MODE:-legacy}"
 export CLIENTS_FILE MONITORS_FILE ACTIVE_FILE DISPATCH_LOG CUA_WINDOWS_FILE CUA_CALL_LOG LUA_DISPATCH_LOG LUA_ADAPTER
 
 # Evaluate the request with a real Lua parser, replacing only the compositor.
@@ -77,10 +76,8 @@ case "${1:-}" in
     [[ "${HYPR_TEST_PROBE_FAIL:-0}" != 1 ]] || exit 1
     if [[ -n "${HYPR_TEST_PROBE_REPLY:-}" ]]; then
       printf '%s\n' "$HYPR_TEST_PROBE_REPLY"
-    elif [[ "$HYPR_TEST_MODE" == lua ]]; then
-      printf 'ok\n'
     else
-      printf 'unknown request\n'
+      printf 'ok\n'
     fi
     ;;
   clients)
@@ -96,13 +93,11 @@ case "${1:-}" in
     cat "$ACTIVE_FILE"
     ;;
   dispatch)
-    if [[ "$HYPR_TEST_MODE" == lua ]]; then
-      [[ $# -eq 2 ]] || exit 98
-      printf '%s\n' "$2" >> "$LUA_DISPATCH_LOG"
-      parsed="$(lua "$LUA_ADAPTER" "$2")" || exit 99
-      mapfile -t args <<< "$parsed"
-      set -- dispatch "${args[0]}" "${args[1]}"
-    fi
+    [[ $# -eq 2 ]] || exit 98
+    printf '%s\n' "$2" >> "$LUA_DISPATCH_LOG"
+    parsed="$(lua "$LUA_ADAPTER" "$2")" || exit 99
+    mapfile -t args <<< "$parsed"
+    set -- dispatch "${args[0]}" "${args[1]}"
     [[ $# -eq 3 ]] || exit 94
     printf '%s <%s>\n' "$2" "$3" >> "$DISPATCH_LOG"
     [[ "${HYPR_TEST_DISPATCH_FAIL:-0}" != 1 ]] || exit 1
@@ -283,15 +278,15 @@ write_default_state
 if HYPR_TEST_PROBE_REPLY='unexpected reply' "$HELPER" focus 0xaaa --authorize-foreground > "$TEST_ROOT/mode.out" 2>&1; then
   fail 'unknown IPC mode was accepted'
 fi
-grep -Fq 'unrecognized Hyprland IPC mode response' "$TEST_ROOT/mode.out" || fail 'missing mode error'
+grep -Fq 'Hyprland Lua IPC is required' "$TEST_ROOT/mode.out" || fail 'missing mode error'
 [[ ! -s "$DISPATCH_LOG" ]] || fail 'unknown mode dispatched'
 if HYPR_TEST_PROBE_FAIL=1 "$HELPER" focus 0xaaa --authorize-foreground > "$TEST_ROOT/probe.out" 2>&1; then
   fail 'failed IPC probe was accepted'
 fi
-grep -Fq 'unable to determine Hyprland IPC mode' "$TEST_ROOT/probe.out" || fail 'missing probe error'
+grep -Fq 'unable to verify Hyprland Lua IPC' "$TEST_ROOT/probe.out" || fail 'missing probe error'
 [[ ! -s "$DISPATCH_LOG" ]] || fail 'failed probe dispatched'
 
-printf 'test: dispatch failure is not retried through another protocol\n'
+printf 'test: dispatch failure is not retried\n'
 write_default_state
 if HYPR_TEST_DISPATCH_FAIL=1 "$HELPER" focus 0xaaa --authorize-foreground > "$TEST_ROOT/dispatch-failure.out" 2>&1; then
   fail 'failed dispatch was accepted'
@@ -299,19 +294,14 @@ fi
 [[ "$(cat "$DISPATCH_LOG")" == 'focuswindow <address:0xaaa>' ]] || fail 'failed dispatch was retried'
 grep -Fq 'Hyprland refused to focus window 0xaaa' "$TEST_ROOT/dispatch-failure.out" || fail 'missing dispatch error'
 
-if [[ "$HYPR_TEST_MODE" == lua ]]; then
-  printf 'test: workspace strings remain data in Lua IPC\n'
-  write_default_state
-  workspace='5"); error("injected"); --\\literal'
-  jq --arg workspace "$workspace" '.[1].activeWorkspace.name = $workspace' "$MONITORS_FILE" > "$MONITORS_FILE.tmp"
-  mv "$MONITORS_FILE.tmp" "$MONITORS_FILE"
-  result="$("$HELPER" move-to-output 0xaaa HDMI-A-2)"
-  [[ "$result" == "moved window 0xaaa to output HDMI-A-2 workspace $workspace" ]] || fail 'workspace string changed'
-  jq -e --arg workspace "$workspace" '.[0].workspace.name == $workspace and .[0].monitor == 1' "$CLIENTS_FILE" >/dev/null || fail 'encoded workspace did not reach move'
-  [[ "$(cat "$LUA_DISPATCH_LOG")" == 'hl.dsp.window.move({ workspace = "5\"); error(\"injected\"); --\\\\literal", follow = false, window = "address:0xaaa" })' ]] || fail 'Lua IPC encoding mismatch'
-fi
+printf 'test: workspace strings remain data in Lua IPC\n'
+write_default_state
+workspace='5"); error("injected"); --\\literal'
+jq --arg workspace "$workspace" '.[1].activeWorkspace.name = $workspace' "$MONITORS_FILE" > "$MONITORS_FILE.tmp"
+mv "$MONITORS_FILE.tmp" "$MONITORS_FILE"
+result="$("$HELPER" move-to-output 0xaaa HDMI-A-2)"
+[[ "$result" == "moved window 0xaaa to output HDMI-A-2 workspace $workspace" ]] || fail 'workspace string changed'
+jq -e --arg workspace "$workspace" '.[0].workspace.name == $workspace and .[0].monitor == 1' "$CLIENTS_FILE" >/dev/null || fail 'encoded workspace did not reach move'
+[[ "$(cat "$LUA_DISPATCH_LOG")" == 'hl.dsp.window.move({ workspace = "5\"); error(\"injected\"); --\\\\literal", follow = false, window = "address:0xaaa" })' ]] || fail 'Lua IPC encoding mismatch'
 
-printf 'PASS: cua-omarchy-window helper tests (%s)\n' "$HYPR_TEST_MODE"
-if [[ "$HYPR_TEST_MODE" == legacy ]]; then
-  HYPR_TEST_MODE=lua bash "${BASH_SOURCE[0]}"
-fi
+printf 'PASS: cua-omarchy-window helper tests (Lua IPC)\n'

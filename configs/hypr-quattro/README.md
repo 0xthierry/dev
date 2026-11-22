@@ -4,15 +4,20 @@ Target: pristine Omarchy **v4.5.0** (`ac2690cd7be4f47e4a255f5e2e78d904d436b068`)
 not the live legacy desktop. The installer must symlink this directory at
 `~/.config/hypr/dev-setup` and load **only** `dev-setup.lua`, immediately after
 `require("default.hypr.omarchy")`, **before** personal Lua modules and toggles.
-This keeps personal overrides authoritative and allows stock no-animations to
-disable blur/shadow for software-rendered sessions:
+This keeps local personal overrides authoritative and stock toggles last:
 
 ```lua
 if package.searchpath("hypr.dev-setup.dev-setup", package.path) then require("hypr.dev-setup.dev-setup") end
 ```
 
-This directory does not replace `~/.config/hypr`. Do not source legacy `.conf`
-files alongside this overlay. Do not reload the live compositor to test it.
+This directory does not replace `~/.config/hypr`. Legacy 3.x deployment and its
+repo-owned tree have been removed. Real setup requires the fixed packaged
+`/usr/share/omarchy/default/hypr/bootstrap.lua`, a real (not symlinked) config
+directory/entrypoint, and exactly one stock defaults import. It refuses missing,
+legacy, unknown, or symlinked layouts instead of initializing/clobbering them.
+Dry-run from an empty HOME only prints the requirement and plan; it writes nothing.
+Do not source legacy `.conf` files alongside this overlay or reload the live
+compositor to test it.
 
 ## Personal behavior retained
 
@@ -20,13 +25,11 @@ files alongside this overlay. Do not reload the live compositor to test it.
   60 Hz, scale 1, position 3552×477.
 - Global workspaces 1–9: 5 persistent/default on HDMI-A-2; the others on DP-1,
   with 1 default. Numeric focus/move and bar clicks retain global identities.
-- US International / pc105 / Caps Compose, 600 ms repeat delay, mouse -0.4.
-  Stock already supplies repeat rate 40, numlock and touchpad scroll factor 0.4.
-- Border 1, no border dragging, opaque windows, direct scanout, legacy blur and
-  shadow settings, group indicator height 0 and windows/special animations.
-  Other current defaults and theme colors remain package-owned. Legacy
-  `omarchy-looknfeel.conf` was a compatibility copy, not a reason to freeze
-  every Quattro default.
+- US International / pc105 / Caps Compose, mouse -0.4. Stock repeat delay 250,
+  repeat rate 40, numlock, touchpad behavior and scroll rules are inherited.
+- Border 1, opaque windows and direct scanout. Border dragging, blur/shadows,
+  group indicators, animations and theme colors remain package-owned. The old
+  `omarchy-looknfeel.conf` was a compatibility copy, not personal preferences.
 - GUI copy/paste use Ctrl, terminals use Ctrl+Shift; cut is Super+Alt+X and
   Super+X is free. Stock v4.5 clipboard now implements the intended behavior
   with down/up events and a 50 ms release timer, including focused shell panels.
@@ -37,19 +40,59 @@ files alongside this overlay. Do not reload the live compositor to test it.
   backend nor changes dictation shortcuts. Stock Alt+Space / Right Alt and
   migration-generated personal F9 / Super+Ctrl+X bindings remain upstream-owned.
   There are no repo-owned dictation hooks, suppression submaps or runtime setup.
-  Legacy 3.x alone unbinds F9 / Super+Ctrl+X; macOS Handy remains unchanged.
+  The removed legacy tree's F9 / Super+Ctrl+X unbinds do not survive; macOS Handy
+  remains unchanged.
 - Native ChatGPT and Claude focus workspace 5 before launch; Github, Gmail,
-  Bitwarden, lazydocker, and Steam gaming enter/exit shortcuts override stock
+  Bitwarden, and Steam gaming enter/exit shortcuts override stock
   conflicts. Same-behavior stock app launchers remain inherited, including
-  newer terminal/cwd handling. Stock extra shortcuts remain available.
+  newer terminal/cwd and Docker TUI handling. Stock extra shortcuts remain available.
 - Physical grave `code:49`: Super region screenshot, Shift window, Ctrl display,
-  Alt region recording, Ctrl+Alt display recording. PRINT and stock Quake
-  console grave conflicts are removed. Uses the current screenrecording CLI,
+  Alt region recording, Ctrl+Alt display recording. Only stock Quake console
+  grave conflicts are removed; stock PRINT screenshot, recording, color picker
+  and OCR shortcuts remain usable. Uses the current screenrecording CLI,
   not retired `omarchy-cmd-screenrecord` or its obsolete `output` argument.
 - Once-per-session Xwayland keyboard alignment retained; **no Waybar watchdog**.
   No personal environment overrides existed; current package/theme env wins.
-- Stock scroll rules retained, except foot restored from Quattro 2.0 to personal
-  1.5. No obsolete agent-bar popup rules copied.
+- All stock scroll rules retained, including foot 2.0. No obsolete agent-bar
+  popup rules copied.
+
+## Provenance audit and remaining confirmations
+
+Compared the repo history through `a097d80`, real v3 defaults at
+`~/.local/share/omarchy` (`v3.8.4-5-gf4378f0d`), historical upstream changes,
+and tagged v4.5.0. A value living in a preference file is not proof of preference.
+
+| Decision | Evidence |
+| --- | --- |
+| Keep monitor layout/global workspace 5 | Explicit monitor/workspace edits `136daa3`, `86dc241`, `5ffb92d`, `fa87708`; latest layout is retained unchanged. |
+| Keep US intl/pc105 and Xwayland alignment | `d08aa0c` explicitly describes physical US keyboard/dead-key intent and adds matching `setxkbmap`. |
+| Keep sensitivity -0.4 | Initial repo import `42b0619` differs from upstream's commented `0.35` / default 0; no upstream source for -0.4 found. |
+| Keep border 1, opacity 1, direct scanout | Deliberate border transition `1ebe6af`; opacity fix and documented scanout intent `2d9f08b`. |
+| Drop repeat delay 600 | It was stock in upstream before `8a7c7729` changed it to 250; repo never independently selected 600. |
+| Drop foot 1.5 override | Repo `6ad19d1` copied upstream `7debca9f`'s addition of foot; v4 intentionally changes it to 2.0 with a precise-scroll explanation. |
+| Drop resize/blur/shadow/groupbar/animation overrides | Imported compatibility copy in `0db4a04`, explicitly labelled copied defaults; no subsequent personal edits. |
+| Drop legacy idle/lock services | Repo `6ad19d1`'s entire final hypridle config matches real v3 stock byte-for-byte (upstream `4831c883`); not a custom 150/152-second requirement. Quattro shell owns idle/lock. |
+| Keep copy/paste intent, not helper | `a808998` explains GUI/terminal-aware behavior; real v4 clipboard satisfies it, including shell panels. All callers of the removed helper were in the removed tree. |
+| Keep cut at Super+Alt+X / Super+X free | `e2e185f` explicitly states both choices. |
+| Keep physical grave capture | `3403a38` fixes intl dead-key matching; `1274809` maintains capture commands. |
+| Drop direct lazydocker override | It was the v3 stock binding in `config/hypr/bindings.conf`, not a personal choice; retain v4's `omarchy-launch-docker-tui` wrapper. |
+| Restore unrelated PRINT shortcuts | Initial `42b0619` unbind comment only claimed avoiding conflicts with grave, which uses a different chord; no explicit freed-PRINT workflow found. No new OCR unbind is warranted. |
+
+**Confirmation items, not silently erased personal intent:**
+
+- Caps Compose was a v3 default, but `d08aa0c` explicitly carries it into the
+  Xwayland alignment command. Retained for consistent keyboard behavior; confirm
+  whether Quattro's new Shift+Caps Compose / ordinary Caps Lock is preferred.
+- Sensitivity -0.4 is a nonstock imported value rather than a separately explained
+  commit. Retained conservatively; confirm if stock 0 should replace it.
+
+**Decided:** use Quattro's stock interactive screen-sharing picker. Do not carry
+forward the Sober observer's automatic selection from `1d5fb75`. A fresh install
+needs no overlay. If the bridge preserved the old picker, follow the one-time
+[cutover checklist](../../docs/omarchy-quattro-cutover.md#after-conversion-prefer-stock-over-carried-forward-files).
+Legacy fingerprint disabling is also stock, not a confirmation blocker: repo
+`f42be4d` follows upstream `bd8b12b2` (disable fingerprint unless configured).
+The retired lock config is not ported; Quattro owns authentication defaults.
 
 ## Workspace compatibility boundary
 
@@ -74,12 +117,12 @@ stock state back. Save work, log out completely, and use a **local text console*
 Do not merely open a terminal, switch VT with the compositor still running, or
 restart the bar. Keep the config snapshot and its matching state snapshot paired.
 
-From that stopped-session console, using the staged checkout's explicit path:
+From the root of the reviewed Quattro checkout in that stopped-session console:
 
 ```bash
 state="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy"
 # Choose a NEW explicit snapshot name. Parent must already exist, same filesystem.
-python3 /home/thierry/omarchy-migration-20261122/setup/configs/hypr-quattro/workspace-state.py \
+python3 configs/hypr-quattro/workspace-state.py \
   save "$state/dev-setup-stock-before-overlay-20261122"
 # Now run the separately reviewed overlay installer; log in only after it succeeds.
 ```
@@ -131,15 +174,9 @@ real Quickshell UI; that remains target/rehearsal validation.
   no selection file exists. This repo neither overrides that decision nor writes
   an opt-out marker; inspect the actual selected backend during bridge rehearsal.
   Preserve upstream migrations and any generated personal bindings unchanged.
-- Legacy `xdph.conf` selects `/home/thierry/.local/bin/sober-observer-picker`,
-  whereas Quattro selects `hyprland-preview-share-picker`. Portal picker
-  configuration is outside Lua; decide explicitly whether the custom picker is
-  still needed and available before deployment. This overlay does not change it.
-- Legacy hypridle uses a 150-second screensaver and 152-second subsequent lock
-  timer (the screensaver resets idle), plus lock-before-sleep/wake handling;
-  hyprlock disables fingerprint authentication. Quattro owns idle/lock in the
-  shell. These settings need separate shell-level review, not autostarting
-  retired hypridle/hyprlock alongside Quattro. Not claimed as ported here.
+- The stock portal picker decision is recorded above; routine deployment never
+  overwrites existing portal configuration or launches legacy idle/lock services.
+  Stock v3 idle timings/fingerprint defaults were not personal deltas to port.
 - Hyprsunset's identity/daytime default matches stock; no override required.
 - Native AI apps, Bitwarden, Steam launch helpers, and setxkbmap must
   remain installed. Lua validity does not establish those executables' runtime
@@ -162,14 +199,18 @@ Sources: [Lua parser](https://github.com/hyprwm/Hyprland/blob/v0.56.2/src/config
 ## Offline verification
 
 ```bash
-python3 tests/hypr-quattro.test.py
+bash tests/quattro-config-deploy.test.sh  # requires bubblewrap
+python3 tests/hypr-quattro.test.py         # requires bubblewrap, lua/luac
 python3 tests/hypr-quattro-workspaces.test.py  # requires Qt 6 qmltestrunner
 # Or another pristine v4.5.0 source checkout:
 python3 tests/hypr-quattro.test.py --upstream /path/to/omarchy
 ```
 
 The runner uses a temporary HOME/XDG tree, a strict environment allowlist and
-no live session sockets. It checks every Lua file with `luac -p`, executes real
+no live session sockets. Deployment tests mount real tagged upstream defaults
+at the fixed package path inside Bubblewrap (read-only host root, writable test
+HOME only); there is no production test-path bypass. The Python runner checks
+the exact v4.5.0 commit before loading its real default modules. It checks every Lua file with `luac -p`, executes real
 upstream helpers/clipboard/tiling/workspace callbacks against a compositor API
 recorder, and runs installed Hyprland's **`--verify-config` only** with the real
 helpers/look defaults and overlay. It verifies emitted focus/move/input/submap

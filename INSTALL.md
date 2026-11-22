@@ -62,22 +62,7 @@ from Flathub for the current user, including their required runtimes. It preserv
 existing app data and permissions and skips already-installed user apps on reruns.
 It does not install a separate system Wine or change sandbox permissions.
 
-Quattro uses the configured stable repositories without an archive fallback.
-On the legacy 3.x Git-based installation, the frozen database can reference older Flatpak/OSTree files that
-its mirror no longer serves (HTTP 404). For official `core`, `extra`, and
-`multilib` packages, setup adds the official Arch Linux Archive as the last
-server in a temporary pacman configuration. It requests the exact versions in
-the existing database and keeps pacman's checksum and signature checks. Custom
-repositories do not use this fallback. Setup does not refresh package databases,
-run a full system update, edit `/etc/pacman.conf` or the mirrorlist, or invoke the
-Omarchy/Quattro upgrade. This does not provide newer security fixes; system
-updates remain a separate maintenance task. If both sources fail, setup stops
-rather than changing versions or bypassing verification.
-
-Setup adds Flatpak's app directories to the running user-service environment
-and preserves custom data directories. On 3.x it restarts only active
-Elephant/Walker services. Quattro watches application entries; it does not need
-a shell restart. If Flatpak was first installed after your session started,
+Only packaged Omarchy 4.x is supported. Setup uses the configured pacman repositories; it does not add an archive mirror, change package verification, or perform an OS upgrade. Quattro watches Flatpak desktop entries and does not need a launcher restart. If Flatpak was first installed after your session started,
 you may need to log out and back in for the Quattro launcher to see its exports.
 If setup runs without a user service manager, log out and back in to refresh the
 desktop environment. Launch **Sober** to play or **Vinegar** to develop:
@@ -135,7 +120,7 @@ shellcheck setup.sh install/*.sh install/hosts/*.sh
 bash tests/moshi.test.sh
 bash tests/flatpak.test.sh
 bash tests/flatpak-launchers.test.sh
-bash tests/pacman-archive.test.sh
+bash tests/pacman.test.sh
 bash tests/quattro-config-deploy.test.sh
 python3 tests/omarchy-quattro-preflight.test.py
 python3 tests/hypr-quattro.test.py --upstream /path/to/omarchy-v4.5.0

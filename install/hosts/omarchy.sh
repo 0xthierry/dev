@@ -27,21 +27,11 @@ HOST_CONFIG_TARGETS=(
   psvr2
 )
 
-# Only the legacy frozen database needs Arch Archive downloads. Never add the
-# archive to a Quattro package transaction; retire the helper after cutover.
-HOST_PACMAN_ARCHIVE_FALLBACK=0
-if [[ ! -e /usr/share/omarchy && -d $HOME/.local/share/omarchy/.git ]]; then
-  # Read by the shared install_pacman_packages implementation.
-  # shellcheck disable=SC2034
-  HOST_PACMAN_ARCHIVE_FALLBACK=1
-fi
-
 # shellcheck disable=SC2034
 HOST_PACMAN_PACKAGES=(
   amdsmi
   bitwarden
   blender
-  bluez-utils
   cameractrls
   ccache
   containerd
@@ -64,15 +54,12 @@ HOST_PACMAN_PACKAGES=(
   python
   python-cattrs
   qemu-system-x86
-  socat
   steam
   sysstat
   tailscale
   telegram-desktop
   usbutils
   virtiofsd
-  wtype
-  xdg-desktop-portal-hyprland
   xdg-utils
   xorg-setxkbmap
   zram-generator
@@ -97,6 +84,8 @@ HOST_FLATPAK_APPS=(
 )
 
 setup_host_prereqs() {
+  # Fail before package installs or shared machine changes on unsupported hosts.
+  require_omarchy_quattro_layout || return $?
   log_section "Host Prerequisites"
   log_item "Preparing omarchy host prerequisites"
 }
@@ -632,13 +621,7 @@ cleanup_ai_launcher_duplicates() {
     if check_installed update-desktop-database || (( ${DRY_RUN:-0} )); then
       run_cmd update-desktop-database "$HOME/.local/share/applications"
     fi
-    # Quattro's launcher watches desktop entries; do not restart its shell
-    # (which also owns the lock screen) merely to refresh the application list.
-    if ! check_installed omarchy-shell; then
-      if check_installed omarchy || (( ${DRY_RUN:-0} )); then
-        run_cmd omarchy restart walker
-      fi
-    fi
+    # Quattro watches desktop entries; no launcher or shell restart is needed.
   else
     log_item "ChatGPT and Claude launchers: already deduplicated"
   fi

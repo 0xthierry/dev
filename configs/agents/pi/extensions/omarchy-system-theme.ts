@@ -1,4 +1,4 @@
-/** Keep Pi in step with Omarchy 3.x markers and Quattro's resolved palette. */
+/** Keep Pi in step with Omarchy's resolved palette. */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -16,9 +16,7 @@ export function omarchyPiTheme(home = process.env.HOME ?? ""): "light" | "dark" 
     const mode = result.stdout?.trim();
     return result.status === 0 && (mode === "light" || mode === "dark") ? mode : null;
   }
-  const legacy = join(home, ".config/omarchy/current/theme");
-  if (!existsSync(legacy)) return null; // Leave macOS and non-Omarchy users alone.
-  return existsSync(join(legacy, "light.mode")) ? "light" : "dark";
+  return null; // Leave macOS and non-Omarchy users alone.
 }
 
 export default function (pi: ExtensionAPI) {

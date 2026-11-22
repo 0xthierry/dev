@@ -44,7 +44,7 @@ class ReaTests(unittest.TestCase):
         self.calls = self.fixture / "calls.jsonl"
         self.env = {key: value for key, value in os.environ.items()
                     if key not in ("BASH_ENV", "ENV", "NODE_OPTIONS", "NODE_PATH",
-                                   "HOST_PACMAN_ARCHIVE_FALLBACK", "GHIDRA_INSTALL_DIR",
+                                   "GHIDRA_INSTALL_DIR",
                                    "JAVA_HOME", "REA_TEST_PRINT_ENV")}
         self.env.update(HOME=str(self.home), PATH=f"{self.tools}:/usr/bin:/bin",
                         REA_TEST_CALLS=str(self.calls), REA_TEST_NODE=str(self.node),

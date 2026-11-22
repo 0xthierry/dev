@@ -5,6 +5,7 @@ local upstream, overlay = assert(arg[1]), assert(arg[2])
 package.path = upstream .. "/?.lua;" .. package.path
 local bindings, events, dispatched, timers, commands, monitors, rules, settings = {}, {}, {}, {}, {}, {}, {}, {}
 local current_submap, active_window = "reset", nil
+local animations = {}
 local function chord(key)
   local parts = {}
   for part in key:gmatch("[^+]+") do parts[#parts + 1] = part:match("^%s*(.-)%s*$") end
@@ -57,22 +58,24 @@ hl = {
     end
     merge(settings, spec)
   end,
-  animation = function() end,
+  animation = function(spec) animations[spec.leaf] = spec end,
   curve = function() end,
 }
 require("default.hypr.helpers")
 require("default.hypr.monitor-workspaces")
 require("default.hypr.looknfeel")
+require("default.hypr.input")
+require("default.hypr.bindings.utilities")
+require("default.hypr.bindings.applications")
 require("default.hypr.bindings.clipboard")
 require("default.hypr.bindings.tiling")
 -- The runner supplies stock's selected backend in an isolated HOME. Load the
 -- actual stock bindings, then migrated personal bindings AFTER the overlay.
 require("default.hypr.bindings.dictation")
 require("default.hypr.dictation-backend")
--- Seed other stock conflicts without invoking unrelated system discovery.
-o.bind("SUPER + SHIFT + A", nil, "wrong-webapp")
-o.bind("SUPER + SHIFT + C", nil, "wrong-calendar")
-o.bind("SUPER + PRINT", nil, "wrong-picker")
+-- Snapshot stock animations; the overlay must not freeze copied v3 speeds.
+local stock_windows_animation = animations.windows
+local stock_special_animation = animations.specialWorkspace
 
 dofile(overlay .. "/dev-setup.lua")
 dofile(os.getenv("HOME") .. "/.config/hypr/bindings.lua")
@@ -162,6 +165,8 @@ assert(release_binding.options.ignore_mods and release_binding.options.transpare
 press("SUPER + CTRL + X")
 assert(dispatched[#dispatched].value == "omarchy-dictation toggle")
 
+press("SUPER + SHIFT + D")
+assert(dispatched[#dispatched].value == "omarchy-launch-tui 'omarchy-launch-docker-tui'")
 press("SUPER + SHIFT + A")
 assert(dispatched[#dispatched].value.workspace == "5")
 assert(commands[#commands] == 'omarchy-launch-or-focus ChatGPT "uwsm-app -- chatgpt"')
@@ -179,12 +184,23 @@ assert(dispatched[#dispatched].value == "omarchy capture screenrecording")
 press("SUPER + CTRL + ALT + code:49")
 assert(dispatched[#dispatched].value == "omarchy capture screenrecording --fullscreen")
 assert(bindings["reset/" .. chord("SUPER + grave")] == nil)
-assert(bindings["reset/" .. chord("SUPER + PRINT")] == nil)
+-- Real stock capture chords remain usable alongside the personal grave keys.
+press("PRINT")
+assert(dispatched[#dispatched].value == "omarchy-capture-screenshot")
+press("ALT + PRINT")
+assert(dispatched[#dispatched].value == "omarchy-capture-screenrecording --stop-recording || omarchy-menu toggle trigger.capture.screenrecord")
+press("SUPER + PRINT")
+assert(dispatched[#dispatched].value == "pkill hyprpicker || hyprpicker -a")
+press("SUPER + CTRL + PRINT")
+assert(dispatched[#dispatched].value == "omarchy-capture-text")
 assert(settings.input.kb_variant == "intl" and settings.input.kb_options == "compose:caps")
-assert(settings.general.border_size == 1 and settings.general.resize_on_border == false)
+assert(settings.input.sensitivity == -0.4 and settings.input.repeat_delay == 250)
+assert(settings.general.border_size == 1 and settings.general.resize_on_border == true)
 assert(settings.decoration.active_opacity == 1 and settings.render.direct_scanout == 1)
-assert(settings.decoration.blur.enabled and settings.decoration.shadow.enabled)
-assert(rules.foot.scroll_touchpad == 1.5)
+assert(settings.decoration.blur.enabled == false and settings.decoration.shadow.enabled == false)
+assert(settings.group.groupbar.indicator_height == 1)
+assert(animations.windows == stock_windows_animation and animations.specialWorkspace == stock_special_animation)
+assert(rules.foot.scroll_touchpad == 2.0)
 
 -- Stock's session-start callback and the personal Xwayland callback, isolated
 -- to temporary state by the Python runner; no actual external command is run.

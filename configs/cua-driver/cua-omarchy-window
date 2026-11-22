@@ -27,16 +27,12 @@ require_runtime() {
   require_command jq
 }
 
-# Probe the active config manager without dispatching anything. Never retry a
-# failed mutation using another protocol: it may already have taken effect.
-hyprland_ipc_mode() {
+# Require the supported Lua IPC without dispatching anything. A failed mutation
+# is never retried: it may already have taken effect.
+require_lua_ipc() {
   local reply=""
-  reply="$(hyprctl eval 'return' 2>/dev/null)" || fail "unable to determine Hyprland IPC mode"
-  case "$reply" in
-    ok) printf 'lua\n' ;;
-    'unknown request'|'eval is only supported with the lua config manager') printf 'legacy\n' ;;
-    *) fail "unrecognized Hyprland IPC mode response" ;;
-  esac
+  reply="$(hyprctl eval 'return' 2>/dev/null)" || fail "unable to verify Hyprland Lua IPC"
+  [[ "$reply" == ok ]] || fail "Hyprland Lua IPC is required"
 }
 
 # Encode data as a Lua string, never as an expression. JSON's Unicode escapes
@@ -53,22 +49,14 @@ lua_string() {
 }
 
 dispatch_window() {
-  local action="$1" address="$2" workspace="${3:-}" mode="" selector=""
-  mode="$(hyprland_ipc_mode)" || return 1
-  if [[ "$mode" == lua ]]; then
-    selector="$(lua_string "address:$address")" || return 1
-    case "$action" in
-      move) hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_string "$workspace"), follow = false, window = $selector })" ;;
-      focus) hyprctl dispatch "hl.dsp.focus({ window = $selector })" ;;
-      close) hyprctl dispatch "hl.dsp.window.close({ window = $selector })" ;;
-    esac
-  else
-    case "$action" in
-      move) hyprctl dispatch movetoworkspacesilent "$workspace,address:$address" ;;
-      focus) hyprctl dispatch focuswindow "address:$address" ;;
-      close) hyprctl dispatch closewindow "address:$address" ;;
-    esac
-  fi
+  local action="$1" address="$2" workspace="${3:-}" selector=""
+  require_lua_ipc || return 1
+  selector="$(lua_string "address:$address")" || return 1
+  case "$action" in
+    move) hyprctl dispatch "hl.dsp.window.move({ workspace = $(lua_string "$workspace"), follow = false, window = $selector })" ;;
+    focus) hyprctl dispatch "hl.dsp.focus({ window = $selector })" ;;
+    close) hyprctl dispatch "hl.dsp.window.close({ window = $selector })" ;;
+  esac
 }
 
 validate_address() {

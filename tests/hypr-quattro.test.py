@@ -40,6 +40,9 @@ class HyprQuattroTests(unittest.TestCase):
         }
         self.assertTrue((UPSTREAM / "default/hypr/monitor-workspaces.lua").is_file(),
                         "Supply the pristine Omarchy v4.5.0 source with --upstream")
+        version = subprocess.run(["git", "-C", str(UPSTREAM), "rev-parse", "HEAD"],
+                                 text=True, capture_output=True, check=True)
+        self.assertEqual(version.stdout.strip(), "ac2690cd7be4f47e4a255f5e2e78d904d436b068")
 
     def run_command(self, command):
         return subprocess.run(command, cwd=self.home, env=self.env, text=True,
@@ -53,6 +56,7 @@ class HyprQuattroTests(unittest.TestCase):
         scripts = {
             "superwhisper": "#!/bin/sh\nexit 0\n",
             "voxtype": "#!/bin/sh\nexit 0\n",
+            "lazydocker": "#!/bin/sh\nexit 0\n",
             "omarchy-pkg-present": "#!/bin/sh\nexit 0\n",
             "omarchy-install-dictation-superwhisper":
                 '#!/bin/sh\nprintf "%s\\n" "$*" >> "$HOME/installer-calls"\n',
@@ -70,11 +74,37 @@ class HyprQuattroTests(unittest.TestCase):
             backend.parent.mkdir(parents=True)
             backend.write_text(selected)
 
-    def deploy_overlay(self):
-        return self.run_command([
-            "bash", "-c", 'source "$1/install/configs.sh"; apply_hypr_quattro',
+    def deploy_overlay(self, packaged=True):
+        sandbox = ["bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--tmpfs", "/usr/share"]
+        if packaged:
+            sandbox += ["--ro-bind", str(UPSTREAM), "/usr/share/omarchy"]
+        return self.run_command(sandbox + [
+            "--bind", str(self.home), str(self.home), "--unshare-net", "--",
+            "bash", "-c", 'source "$1/install/configs.sh"; apply_hypr',
             "bash", str(ROOT),
         ])
+
+    def test_stock_config_without_installed_quattro_is_refused(self):
+        self.prepare_dictation_fixture()
+        before = (self.config / "hyprland.lua").read_bytes()
+        (self.config / "dev-setup").unlink()
+        result = self.deploy_overlay(packaged=False)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("requires initialized stock Quattro", result.stderr)
+        self.assertEqual((self.config / "hyprland.lua").read_bytes(), before)
+        self.assertFalse((self.config / "dev-setup").exists())
+        self.assertFalse((self.config / "hyprland.lua.bak").exists())
+
+    def test_existing_portal_picker_is_not_overwritten(self):
+        self.prepare_dictation_fixture()
+        portal = self.config / "xdph.conf"
+        portal.write_text("screencopy {\n    custom_picker_binary = /user/observer-picker\n}\n")
+        result = self.deploy_overlay()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(portal.read_text(),
+                         "screencopy {\n    custom_picker_binary = /user/observer-picker\n}\n")
+        self.assertIn('require("hypr.dev-setup.dev-setup")',
+                      (self.config / "hyprland.lua").read_text())
 
     def test_deployment_does_not_select_missing_backend(self):
         self.prepare_dictation_fixture()
@@ -149,7 +179,9 @@ class HyprQuattroTests(unittest.TestCase):
             'require("default.hypr.looknfeel")\n'
             'o.workspaces = {} -- no monitor manager in a parser-only process\n'
             'dofile(os.getenv("XDG_CONFIG_HOME") .. "/hypr/dev-setup/dev-setup.lua")\n'
-            'assert(hl.get_config("decoration.blur.enabled") == true)\n'
+            'assert(hl.get_config("decoration.blur.enabled") == false)\n'
+            'assert(hl.get_config("decoration.shadow.enabled") == false)\n'
+            'assert(hl.get_config("general.resize_on_border") == true)\n'
             'assert(hl.get_config("general.border_size") == 1)\n'
             '-- Personal files are loaded AFTER the overlay.\n'
             'hl.config({ general = { border_size = 3 }, input = { sensitivity = 0.25 } })\n'

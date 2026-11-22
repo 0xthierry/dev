@@ -8,10 +8,11 @@ setup to prepare this boundary: it can put repository links back. Post-upgrade
 ## Reproduce the inventory
 
 ```bash
-python3 /home/thierry/omarchy-migration-20261122/setup/scripts/omarchy-quattro-preflight.py \
-  --home /home/thierry \
-  --bridge /home/thierry/.local/share/omarchy/bin/omarchy-upgrade-to-quattro \
-  --upstream /home/thierry/omarchy-migration-20261122/upstream
+# From the root of the separate Quattro candidate checkout, not the live 3.x checkout:
+python3 scripts/omarchy-quattro-preflight.py \
+  --home "$HOME" \
+  --bridge "$HOME/.local/share/omarchy/bin/omarchy-upgrade-to-quattro" \
+  --upstream /path/to/omarchy-v4.5.0
 ```
 
 Use `--json` for all links, their logical paths (`observed_via`), scope provenance,
@@ -170,7 +171,7 @@ esac
 [[ $(realpath -e -- "$(dirname -- "$LINK")") == "$(dirname -- "$LINK")" ]]
 BACKUP="$LINK.pre-quattro-link"
 POST="$LINK.post-quattro-copy"
-[[ -L $BACKUP && $(readlink -- "$BACKUP") == "$EXPECTED_TARGET" ]]
+[[ -L $BACKUP && $(readlink -- "$BACKUP") == "$EXPECTED_TARGET" && -e $BACKUP ]]
 [[ ! -L $LINK && -e $LINK ]]
 [[ ! -e $POST && ! -L $POST ]]
 mv -T -- "$LINK" "$POST"
@@ -180,8 +181,7 @@ printf 'Restored %s; preserved materialized content at %s\n' "$LINK" "$POST"
 ```
 <!-- restore-rehearsal:end -->
 
-Do not automatically restore the old Hypr link after upgrading: old `.conf` and
-new Lua entry points need the separate `apply_hypr` cutover. This rollback restores
+A checkout of the Quattro branch does not contain `configs/hypr/`. For a deliberate rollback to 3.x, first restore the matching pre-cutover repo revision (or recover its tree from backup) and confirm the saved link resolves, **before** moving the working desktop config. On Quattro never restore that whole-directory link; use the separate `apply_hypr` deployment. This rollback restores
 only link topology; it does **not** downgrade Omarchy or undo package migrations.
 
 ## Verification boundary
@@ -189,8 +189,8 @@ only link topology; it does **not** downgrade Omarchy or undo package migrations
 ```bash
 python3 tests/omarchy-quattro-preflight.test.py
 python3 scripts/omarchy-quattro-preflight-rehearse.py \
-  --bridge /home/thierry/.local/share/omarchy/bin/omarchy-upgrade-to-quattro \
-  --upstream /home/thierry/omarchy-migration-20261122/upstream
+  --bridge "$HOME/.local/share/omarchy/bin/omarchy-upgrade-to-quattro" \
+  --upstream /path/to/omarchy-v4.5.0
 ```
 
 The second command refuses any other bridge checksum, extracts only

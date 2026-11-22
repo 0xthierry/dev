@@ -1,6 +1,4 @@
-# Legacy first, packaged Quattro state last: current colors win after cutover.
-# Both are optional so the same configuration remains usable on macOS.
-config-file = ?"~/.config/omarchy/current/theme/ghostty.conf"
+# Optional Omarchy theme colors; macOS keeps its selected Ghostty theme.
 config-file = ?"~/.local/state/omarchy/current/theme/ghostty.conf"
 
 font-family = "CaskaydiaMono Nerd Font"

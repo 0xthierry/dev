@@ -3,7 +3,7 @@ name: omarchy
 description: >-
   Required for end-user Omarchy Linux desktop customization: Hyprland, monitors,
   bindings, window rules, terminals, themes, Omarchy shell/bar/launcher/plugins,
-  legacy Waybar/Walker/Mako, idle/lock, screenshots, and privileged system setup.
+  idle/lock, screenshots, and privileged system setup.
   Excludes upstream Omarchy source development.
 ---
 
@@ -13,21 +13,17 @@ This skill is maintained in the machine-setup repository at
 `configs/agents/skills/omarchy/`, not in an installed upstream skill. All harness
 links use that copy. Preserve local authentication guidance when reviewing updates.
 
-## Identify the running generation first
+## Verify the supported runtime
 
 Use read-only `omarchy version`, command discovery (`omarchy commands --json`),
 and the active Hyprland config before choosing syntax. A staged package or a stale
 `OMARCHY_PATH` does not prove the running desktop has cut over.
 
-- **Stable 4.5.0 / Quattro:** packaged source `/usr/share/omarchy`, command wrappers
-  `/usr/bin/omarchy-*`, Lua Hyprland configuration and Quickshell desktop shell.
-  `/etc/omarchy.conf` can select a development source root; the packaged
-  `default/bash/env-bootstrap` resolves it. Do not prepend an archived
-  `~/.local/share/omarchy/bin` on this generation.
-- **Legacy 3.8.5:** source `~/.local/share/omarchy`, Hyprland `.conf` files,
-  Waybar/Walker/Elephant/Mako. Read [legacy-3.md](legacy-3.md) only for this generation.
-  The repository ownership and side-effect constraints here override that historical
-  guide's direct-edit and mandatory-restart examples.
+- **Supported target: stable 4.5.0 / Quattro.** Packaged source is
+  `/usr/share/omarchy`, with `/usr/bin/omarchy-*` wrappers, Lua Hyprland
+  configuration and the Quickshell desktop shell. `/etc/omarchy.conf` can select
+  a development source root; packaged `default/bash/env-bootstrap` resolves it.
+  If the running desktop differs, stop rather than apply incompatible syntax.
 - **Migration staging:** edit only the explicitly authorized staging checkout,
   use isolated HOME/stubs, and never reload or restart the live desktop as validation.
 
@@ -35,7 +31,7 @@ and the active Hyprland config before choosing syntax. A staged package or a sta
 
 Everything reproducible goes through this machine-setup repository. Never edit
 live symlink targets or deployed configs directly. Never edit packaged
-`/usr/share/omarchy`, the legacy source checkout, generated
+`/usr/share/omarchy`, generated
 `~/.local/state/omarchy/current/theme`, or system package wrappers for customization.
 Read source freely; put customizations in repo-owned deployment sources.
 
@@ -45,9 +41,8 @@ also owns the lock screen: never restart it casually to refresh a menu. Respect
 upstream's lock-state guard when an explicitly authorized restart is necessary.
 Do not run privilege prompts during read-only or staging tasks.
 
-For authorized privileged operations, read **Privileged Commands: Graphical
-Authentication with pkexec** in [legacy-3.md](legacy-3.md). That section is shared
-across generations: try bounded `sudo -n` first, explain the precise operation
+For authorized privileged operations, read [Graphical authentication with
+pkexec](privileged-commands.md): try bounded `sudo -n` first, explain the precise operation
 before graphical authorization, never handle the password or bypass a denial,
 and validate the result. It does not authorize broader changes.
 
@@ -86,7 +81,7 @@ Theme overlays can override stock themes by name. Use `omarchy theme set <name>`
 after authorized edits. Terminal configs are generated from `colors.toml`; don't
 patch their generated copies. Query `omarchy-theme-color mode` for upstream's
 `mode`, `theme_type`, `light.mode`, background-luminance, then dark precedence.
-Presence of a legacy `light.mode` alone is not the Quattro light/dark contract.
+Presence of `light.mode` alone is not the light/dark contract.
 
 ## Discovery and verification
 
@@ -95,6 +90,6 @@ commands: `omarchy version`, `omarchy commands --json`, `omarchy theme current`,
 `omarchy font current`, `hyprctl monitors`. Use `omarchy debug --no-sudo --print`
 for diagnostics. Commands that upload logs require authorization.
 
-Preserve macOS sharing and legacy behavior until cutover is verified. Report
+Preserve macOS and non-Omarchy behavior in shared integrations. Report
 syntax/config tests separately from real compositor, launcher, terminal and theme
 switching observations. Never call staged success a successful desktop migration.

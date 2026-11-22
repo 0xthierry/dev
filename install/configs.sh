@@ -25,14 +25,34 @@ apply_nvim() {
   safe_link_path "$REPO_ROOT/configs/nvim" "$HOME/.config/nvim" "nvim config"
 }
 
+# Shared early host/apply guard. This is not an upgrade or a fresh OS installer.
+# Keep the package path fixed: environment overrides must not bypass this gate.
+require_omarchy_quattro_layout() {
+  if (( ${DRY_RUN:-0} )); then
+    log_item "Hyprland deployment requires initialized stock Quattro; would validate package defaults and real user Lua config"
+    return 0
+  fi
+  local dir="$HOME/.config/hypr" entry="$HOME/.config/hypr/hyprland.lua"
+  if [[ ! -f /usr/share/omarchy/default/hypr/bootstrap.lua || -L $HOME/.config || -L $dir || -L $entry || ! -f $entry ]] ||
+    [[ $(grep -Fxc -- 'require("default.hypr.omarchy")' "$entry" 2>/dev/null || :) != 1 ]]; then
+    printf 'error: requires initialized stock Quattro with packaged defaults and a real ~/.config/hypr/hyprland.lua; refusing to deploy.\n' >&2
+    return 1
+  fi
+}
+
 # Layer the personal baseline after package defaults, but before local config
 # and stock toggles. Never replace the directory or follow an entrypoint link.
 apply_hypr_quattro() (
   local dir="$HOME/.config/hypr" src="$REPO_ROOT/configs/hypr-quattro"
   local entry="$dir/hyprland.lua" overlay="$dir/dev-setup" tmp=''
   local hook='if package.searchpath("hypr.dev-setup.dev-setup", package.path) then require("hypr.dev-setup.dev-setup") end'
-  if [[ -L $HOME/.config || -L $dir || -L $entry || ! -f $entry || ! -f $src/dev-setup.lua ]]; then
-    printf 'error: Quattro requires a real, initialized ~/.config/hypr/hyprland.lua and a complete overlay; refusing to deploy.\n' >&2
+  require_omarchy_quattro_layout || return 1
+  if (( ${DRY_RUN:-0} )); then
+    log_item "Would link $src at $overlay and back up/load the optional overlay immediately after stock defaults; preserve user files and stock dictation"
+    return 0
+  fi
+  if [[ ! -f $src/dev-setup.lua ]]; then
+    printf 'error: incomplete Quattro overlay; refusing to deploy.\n' >&2
     return 1
   fi
   # A first stock login assigns per-monitor blocks. The shell bar reads those
@@ -46,10 +66,6 @@ apply_hypr_quattro() (
     fi
   done
   local anchor='require("default.hypr.omarchy")' matches
-  if [[ $(grep -Fxc -- "$anchor" "$entry" || :) != 1 ]]; then
-    printf 'error: cannot identify a unique stock defaults import in %s; review manually.\n' "$entry" >&2
-    return 1
-  fi
   matches=$(grep -Fxc -- "$hook" "$entry" || :)
   if [[ $matches != 0 ]] && { [[ $matches != 1 ]] || ! awk -v a="$anchor" -v h="$hook" 'previous == a && $0 == h {found=1} {previous=$0} END {exit !found}' "$entry"; }; then
     printf 'error: existing dev-setup import is duplicated or out of order in %s; review manually.\n' "$entry" >&2
@@ -64,10 +80,6 @@ apply_hypr_quattro() (
     run_cmd ln -s -- "$src" "$overlay" || return 1
   fi
   if [[ $matches == 0 ]]; then
-    if (( ${DRY_RUN:-0} )); then
-      log_item "Would back up $entry and load the optional dev-setup module just after stock defaults"
-      return 0
-    fi
     # Same-filesystem rename: Hyprland must not observe a partial write.
     tmp=$(mktemp "$dir/.dev-setup.XXXXXXXX") || return 1
     trap 'rm -f -- "$tmp"' EXIT
@@ -77,15 +89,7 @@ apply_hypr_quattro() (
 )
 
 apply_hypr() {
-  if [[ -f /usr/share/omarchy/default/hypr/bootstrap.lua ]]; then
-    apply_hypr_quattro
-    return $?
-  elif [[ -e /usr/share/omarchy || -e $HOME/.config/hypr/hyprland.lua ]]; then
-    printf 'error: mixed/unknown Omarchy layout; refusing to replace Hyprland config.\n' >&2
-    return 1
-  fi
-  ensure_dir "$HOME/.config"
-  safe_link_path "$REPO_ROOT/configs/hypr" "$HOME/.config/hypr" "hypr config"
+  apply_hypr_quattro
 }
 
 apply_ai_desktop_linux() {
@@ -103,8 +107,34 @@ apply_ai_desktop_linux() {
 }
 
 apply_ghostty() {
-  ensure_dir "$HOME/.config/ghostty"
-  safe_link_path "$REPO_ROOT/configs/ghostty/config" "$HOME/.config/ghostty/config" "ghostty config"
+  local dir="$HOME/.config/ghostty" src="$REPO_ROOT/configs/ghostty"
+  if [[ "${SETUP_HOST:-}" == macbook ]]; then
+    ensure_dir "$dir"
+    safe_link_path "$src/config" "$dir/config" "ghostty config"
+    return
+  fi
+  if [[ "${SETUP_HOST:-}" != omarchy ]]; then
+    printf 'error: Ghostty deployment requires SETUP_HOST=omarchy or macbook.\n' >&2
+    return 1
+  fi
+  if { (( ! ${DRY_RUN:-0} )) && [[ ! -r /usr/share/omarchy/config/ghostty/config ]]; } ||
+     [[ -L "$HOME/.config" || -L "$dir" ]]; then
+    printf 'error: Omarchy Ghostty requires packaged defaults and a real user config directory.\n' >&2
+    return 1
+  fi
+  # Unknown links may contain user work. Only migrate our former shared link.
+  if [[ -L "$dir/config" && ! "$dir/config" -ef "$src/config" && ! "$dir/config" -ef "$src/omarchy.conf" ]] ||
+     [[ -L "$dir/dev-setup" && ! "$dir/dev-setup" -ef "$src" ]]; then
+    printf 'error: refusing unrelated Ghostty symlink; review it before setup.\n' >&2
+    return 1
+  fi
+  ensure_dir "$dir"
+  if [[ -L "$dir/config" && "$dir/config" -ef "$src/config" ]]; then
+    run_cmd mv -- "$dir/config" "$(next_backup_path "$dir/config")"
+  fi
+  # safe_link_path backs up materialized files, preserving unreviewed settings.
+  safe_link_path "$src" "$dir/dev-setup" "Ghostty personal overrides"
+  safe_link_path "$src/omarchy.conf" "$dir/config" "Omarchy Ghostty config"
 }
 
 apply_herdr() {

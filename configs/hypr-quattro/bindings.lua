@@ -12,7 +12,6 @@ end, { release = true })
 -- Same-behavior stock application bindings remain stock (terminal/cwd, browser,
 -- file manager, editor, music, btop and web apps). These are personal differences.
 o.rebind("SUPER + SHIFT + SLASH", "Passwords", { launch = "bitwarden.desktop" })
-o.rebind("SUPER + SHIFT + D", "Docker", { tui = "lazydocker" })
 local function ai_app(command)
   local callback = function()
     hl.dispatch(hl.dsp.focus({ workspace = "5" }))
@@ -29,9 +28,10 @@ o.rebind("SUPER + SHIFT + E", "Email", { webapp = "https://mail.google.com/mail/
 o.rebind("SUPER + SHIFT + S", "Steam Gaming Mode", "$HOME/.local/share/steam-launcher/enter-gamesmode")
 o.rebind("SUPER + SHIFT + R", "Exit Gaming Mode", "$HOME/.local/share/steam-launcher/leave-gamesmode")
 
--- Physical grave works with us(intl)'s dead_grave/dead_tilde. Remove both stock
--- PRINT bindings and the new Quake console keysym bindings on the same key.
-for _, key in ipairs({ "PRINT", "SHIFT + PRINT", "CTRL + PRINT", "ALT + PRINT", "CTRL + ALT + PRINT", "SUPER + PRINT", "SUPER + CTRL + PRINT", "SUPER + grave", "SUPER + SHIFT + grave" }) do
+-- Physical grave works with us(intl)'s dead_grave/dead_tilde. Only remove
+-- the Quake console's conflicting grave chords; unrelated PRINT/OCR stays stock.
+-- Legacy PRINT unbinds claimed conflicts, not a separate freed-key workflow.
+for _, key in ipairs({ "SUPER + grave", "SUPER + SHIFT + grave" }) do
   hl.unbind(key)
 end
 o.rebind("SUPER + code:49", "Screenshot of region", "omarchy capture screenshot region")

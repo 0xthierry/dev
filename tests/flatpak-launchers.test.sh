@@ -24,15 +24,7 @@ case "$2" in
     [[ "$3" == XDG_DATA_DIRS=* && "$#" == 3 ]] || exit 91
     printf '%s\n' "${3#XDG_DATA_DIRS=}" > "$LAUNCHER_STATE/dirs"
     ;;
-  is-active)
-    [[ "$3" == --quiet ]] || exit 92
-    [[ -f "$LAUNCHER_STATE/$4.active" ]]
-    ;;
-  restart)
-    [[ "${RESTART_FAIL:-0}" == 0 ]] || exit 23
-    cp "$LAUNCHER_STATE/dirs" "$LAUNCHER_STATE/$3.environment"
-    ;;
-  *) exit 93 ;;
+  *) printf '%s\n' "$*" > "$LAUNCHER_STATE/unexpected"; exit 93 ;;
 esac
 EOF
 cat > "$TEMP/bin/flatpak" <<'EOF'
@@ -45,7 +37,6 @@ export PATH="$TEMP/bin:$PATH"
 export XDG_DATA_HOME="$TEMP/data"
 export XDG_DATA_DIRS='/stale-shell/share'
 printf '/usr/local/share:/usr/share:/custom/share\n' > "$LAUNCHER_STATE/dirs"
-touch "$LAUNCHER_STATE/elephant.service.active" "$LAUNCHER_STATE/app-walker@autostart.service.active"
 
 DRY_RUN=1 PATH="$TEMP/no-tools" refresh_flatpak_launchers > "$TEMP/dry.log"
 grep -Fq 'XDG_DATA_DIRS' "$TEMP/dry.log" || fail 'dry-run omitted environment plan'
@@ -55,45 +46,24 @@ printf 'ok: dry-run works without services or Flatpak\n'
 DRY_RUN=0 refresh_flatpak_launchers > "$TEMP/refresh.log"
 expected="/usr/local/share:/usr/share:/custom/share:$TEMP/data/flatpak/exports/share:/var/lib/flatpak/exports/share:/opt/shared flatpak/exports/share"
 [[ "$(< "$LAUNCHER_STATE/dirs")" == "$expected" ]] || fail 'manager paths not preserved or Flatpak exports missing'
-[[ "$(< "$LAUNCHER_STATE/elephant.service.environment")" == "$expected" ]] || fail 'indexer did not get refreshed environment'
-[[ "$(< "$LAUNCHER_STATE/app-walker@autostart.service.environment")" == "$expected" ]] || fail 'launcher did not get refreshed environment'
-printf 'ok: active launchers inherit user and system Flatpak exports while preserving manager paths\n'
+grep -Fq 'log out and back in if apps are missing' "$TEMP/refresh.log" || fail 'first install lacks conditional login guidance'
+[[ ! -e "$LAUNCHER_STATE/unexpected" ]] || fail 'refresh attempted a service restart'
+printf 'ok: Quattro exposes all Flatpak exports without restarting services\n'
 
 DRY_RUN=0 refresh_flatpak_launchers > "$TEMP/repeat.log"
 [[ "$(< "$LAUNCHER_STATE/dirs")" == "$expected" ]] || fail 'repeat duplicated paths'
+grep -Fq 'watches desktop entries' "$TEMP/repeat.log" || fail 'normal discovery not reported'
 printf 'ok: repeated refresh does not duplicate paths\n'
-
-rm "$LAUNCHER_STATE/elephant.service.active" "$LAUNCHER_STATE/elephant.service.environment"
-DRY_RUN=0 refresh_flatpak_launchers > "$TEMP/inactive.log"
-[[ ! -e "$LAUNCHER_STATE/elephant.service.environment" ]] || fail 'inactive indexer was started'
-[[ "$(< "$LAUNCHER_STATE/app-walker@autostart.service.environment")" == "$expected" ]] || fail 'active launcher was not refreshed'
-printf 'ok: inactive services stay stopped\n'
 
 if DRY_RUN=0 SET_FAIL=1 refresh_flatpak_launchers > "$TEMP/error.log" 2>&1; then fail 'environment failure succeeded'; else status=$?; fi
 [[ "$status" == 22 ]] || fail 'environment error status lost'
-if DRY_RUN=0 RESTART_FAIL=1 refresh_flatpak_launchers > "$TEMP/restart-error.log" 2>&1; then fail 'restart failure succeeded'; else status=$?; fi
-[[ "$status" == 23 ]] || fail 'restart error status lost'
-printf 'ok: environment and restart failures propagate\n'
+printf 'ok: environment failures propagate\n'
 
 DRY_RUN=0 NO_MANAGER=1 refresh_flatpak_launchers > "$TEMP/no-manager.log"
 grep -Fq 'log out and back in' "$TEMP/no-manager.log" || fail 'headless setup omitted recovery instruction'
 [[ "$(< "$LAUNCHER_STATE/dirs")" == "$expected" ]] || fail 'headless setup changed environment'
 printf 'ok: headless setup provides logout guidance without changing manager state\n'
 [[ ! -e "$XDG_CONFIG_HOME/environment.d" ]] || fail 'refresh created persistent environment state'
-
-# The presence of Quattro never authorizes a whole-shell restart.
-printf '#!/bin/sh\nexit 99\n' > "$TEMP/bin/omarchy-shell"
-chmod +x "$TEMP/bin/omarchy-shell"
-rm -f "$LAUNCHER_STATE/app-walker@autostart.service.environment"
-printf '/usr/local/share:/usr/share:/custom/share\n' > "$LAUNCHER_STATE/dirs"
-DRY_RUN=0 refresh_flatpak_launchers > "$TEMP/quattro-first.log"
-grep -Fq 'log out and back in if apps are missing' "$TEMP/quattro-first.log" || fail 'first install lacks conditional login guidance'
-[[ ! -e "$LAUNCHER_STATE/app-walker@autostart.service.environment" ]] || fail 'Quattro restarted Walker'
-[[ "$(< "$LAUNCHER_STATE/dirs")" == "$expected" ]] || fail 'Quattro manager export paths missing'
-DRY_RUN=0 refresh_flatpak_launchers > "$TEMP/quattro-existing.log"
-grep -Fq 'watches desktop entries' "$TEMP/quattro-existing.log" || fail 'normal discovery not reported'
-[[ ! -e "$XDG_CONFIG_HOME/environment.d" ]] || fail 'Quattro froze manager paths on disk'
-printf 'ok: Quattro refreshes live exports without persistent overrides or launcher restarts\n'
 
 mkdir -p "$XDG_CONFIG_HOME/environment.d"
 printf 'XDG_DATA_DIRS=/user-owned\n' > "$XDG_CONFIG_HOME/environment.d/60-dev-setup-flatpak.conf"

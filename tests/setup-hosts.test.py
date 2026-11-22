@@ -48,6 +48,25 @@ class SetupHostsTests(unittest.TestCase):
         self.assertFalse((self.home / ".config/hypr").exists())
         self.assertFalse((self.home / "forbidden-commands").exists())
 
+    def test_omarchy_real_setup_rejects_uninitialized_home_before_changes(self):
+        bin_dir = self.home / "bin"
+        bin_dir.mkdir()
+        for name in ("curl", "wget", "sudo", "pacman", "yay", "paru", "systemctl"):
+            executable = bin_dir / name
+            executable.write_text(
+                "#!/bin/sh\nprintf '%s\\n' \"$0\" >> \"$HOME/forbidden-commands\"\nexit 99\n"
+            )
+            executable.chmod(0o755)
+        self.env["PATH"] = str(bin_dir) + os.pathsep + os.environ["PATH"]
+        result = subprocess.run(
+            ["bash", str(ROOT / "setup.sh"), "omarchy"], cwd=ROOT,
+            env=self.env, capture_output=True, text=True, timeout=60,
+        )
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("Quattro", result.stderr)
+        self.assertNotIn("Host Packages", result.stdout)
+        self.assertEqual(list(self.home.iterdir()), [bin_dir])
+
     def test_macbook_dry_run_plans_setup_without_network_or_deployment(self):
         result = self.run_dry_run("macbook")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

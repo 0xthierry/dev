@@ -144,6 +144,19 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual((self.home / ".config/hypr.post-quattro-copy/hyprland.conf").read_text(), "upgraded local config\n")
         self.assertEqual((self.home / ".config/hypr.post-quattro-copy/hyprland.lua").read_text(), "package Lua\n")
 
+    def test_rollback_with_missing_legacy_tree_leaves_active_config_alone(self):
+        result = self.runbook()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.source.rename(self.repo / "old-checkout")
+        entry = self.link / "hyprland.lua"
+        entry.write_text("working Quattro config\n")
+        result = self.runbook("restore-rehearsal")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.link.is_symlink())
+        self.assertEqual(entry.read_text(), "working Quattro config\n")
+        self.assertTrue(Path(str(self.link) + ".pre-quattro-link").is_symlink())
+        self.assertFalse(Path(str(self.link) + ".post-quattro-copy").exists())
+
     def test_materialized_leaf_preserves_repository_file(self):
         source = self.repo / "ghostty-config"
         source.write_text("theme = original\n")

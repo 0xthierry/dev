@@ -23,12 +23,9 @@ function fixture(palette: string) {
   return { home, theme };
 }
 
-test("Quattro explicit dark wins over a stale legacy light marker", () => {
+test("explicit dark overrides a light background", () => {
   // Arrange
   const { home } = fixture('mode = "dark"\nbackground = "#ffffff"\n');
-  const legacy = join(home, ".config/omarchy/current/theme");
-  mkdirSync(legacy, { recursive: true });
-  writeFileSync(join(legacy, "light.mode"), "");
   // Act
   const mode = omarchyPiTheme(home);
   // Assert
@@ -46,7 +43,7 @@ test("Quattro switches from explicit light to background-derived dark", () => {
   expect([light, dark]).toEqual(["light", "dark"]);
 });
 
-test("Quattro understands legacy theme_type palettes without a marker", () => {
+test("upstream resolves theme_type palettes without a marker", () => {
   // Arrange
   const { home } = fixture('theme_type = "light"\n');
   // Act
