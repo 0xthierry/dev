@@ -97,7 +97,7 @@ bun run test:pi-extensions codex-compaction
 bun run test:pi-extensions:e2e codex-compaction
 ```
 
-`lifecycle.spec.ts` checks real Pi scheduling with a deterministic provider fixture, including high-usage turns with too little compactable history before and after a successful compaction. It verifies that failed tool commands still reach the assistant without an unnecessary abort, and covers per-model retention overrides. `proxy.spec.ts` uses the normally configured CLIProxyAPI provider and running service. It compacts a synthetic conversation, restarts Pi, verifies assistant-only information survives artifact replay, and repeats compaction. It isolates its config/session and deletes them afterward. It makes real model calls; missing proxy configuration or authentication is a failure, not a skip. `CODEX_COMPACTION_PROXY_MODEL` optionally selects another configured proxy model (default `gpt-6-astra`).
+`lifecycle.spec.ts` checks real Pi scheduling with a deterministic provider fixture, including high-usage turns with too little compactable history before and after a successful compaction. It verifies that failed tool commands still reach the assistant without an unnecessary abort, and covers per-model retention overrides. `proxy.spec.ts` uses the normally configured CLIProxyAPI provider and running service. It compacts a synthetic conversation, restarts Pi, verifies assistant-only information survives artifact replay, and repeats compaction. It isolates its config/session and deletes them afterward. It makes real model calls; missing proxy configuration or authentication is a failure, not a skip. `CODEX_COMPACTION_PROXY_MODEL` optionally selects another configured proxy model (default `gpt-6.2-astra`).
 
 ## Scope
 

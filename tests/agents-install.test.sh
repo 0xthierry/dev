@@ -282,25 +282,26 @@ PY
     [.providers.cliproxyapi.models[].id] | sort == [
       "gpt-5.3-codex-spark", "gpt-5.5", "gpt-5.6-luna",
       "gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-astra", "gpt-6-luna",
-      "gpt-6.1-sol", "gpt-daybreak-blue-latest"
+      "gpt-6.1-sol", "gpt-6.2-astra", "gpt-6.2-sol", "gpt-daybreak-blue-latest"
     ]'
   assert_json "preserves Spark text-only input and smaller context" "$test_home/.pi/agent/models.json" '
     .providers.cliproxyapi.models[] | select(.id == "gpt-5.3-codex-spark") |
     .input == ["text"] and .contextWindow == 128000'
-  assert_json "uses 300k context for larger Codex models while preserving GPT-5.5 at 272k" "$test_home/.pi/agent/models.json" '
+  assert_json "preserves the per-model context budgets including GPT-6.2" "$test_home/.pi/agent/models.json" '
     [.providers.cliproxyapi.models[] | select(.id != "gpt-5.3-codex-spark")] |
     all(.input == ["text", "image"] and
-      .contextWindow == (if .id == "gpt-5.5" then 272000 else 300000 end))'
+      .contextWindow == (if .id == "gpt-5.5" or .id == "gpt-6.2-astra" then 272000
+                        elif .id == "gpt-6.2-sol" then 500000 else 300000 end))'
   assert_json "keeps conservative proxy output and reasoning settings" "$test_home/.pi/agent/models.json" '
     .providers.cliproxyapi.models | all(
       .maxTokens == 32768 and .reasoning == true and
       .thinkingLevelMap.off == null and .thinkingLevelMap.minimal == null and
       .thinkingLevelMap.xhigh == "xhigh" and
-      (if (.id | test("^gpt-(5[.]6-|6-)|^gpt-daybreak")) then .thinkingLevelMap.max == "max"
+      (if (.id | test("^gpt-(5[.]6-|6-|6[.][12]-)|^gpt-daybreak")) then .thinkingLevelMap.max == "max"
        else (.thinkingLevelMap | has("max") | not) end)
     )'
   assert_json "defaults Pi to proxy" "$test_home/.pi/agent/settings.json" '.defaultProvider == "cliproxyapi"'
-  assert_json "defaults Pi sessions to GPT-6.1 Sol" "$test_home/.pi/agent/settings.json" '.defaultModel == "gpt-6.1-sol"'
+  assert_json "defaults Pi sessions to GPT-6.2 Astra" "$test_home/.pi/agent/settings.json" '.defaultModel == "gpt-6.2-astra"'
   assert_json "defaults Pi sessions to high reasoning" "$test_home/.pi/agent/settings.json" '.defaultThinkingLevel == "high"'
   assert_file_contains "keeps Codex on the direct OpenAI provider" "$test_home/.codex/config.toml" 'model_provider = "openai"'
   assert_file_excludes "does not add the proxy provider to Codex" "$test_home/.codex/config.toml" 'cliproxyapi'

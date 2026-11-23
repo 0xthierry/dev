@@ -61,6 +61,7 @@ HOST_BREW_CASKS=(
   signal
   spotify
   steam
+  superwhisper
   t3-code
   tailscale-app
   telegram

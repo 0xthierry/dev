@@ -30,6 +30,7 @@ describe("codex-fast-mode extension E2E", () => {
     ["gpt-6-luna", "priority"],
     ["gpt-5.6-sol", "priority"],
     ["gpt-6-astra", "priority"],
+    ["gpt-6.2-astra", "priority"],
     ["gpt-6.1-sol", "priority"],
   ] as const) {
     test(`uses service_tier=${expectedTier} for ${CODEX_FAST_MODE_TEST_PROVIDER}/${model}`, async () => {

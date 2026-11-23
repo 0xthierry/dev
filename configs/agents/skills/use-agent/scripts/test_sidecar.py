@@ -22,7 +22,7 @@ if os.environ.get('FAIL_COMMAND') == name + ' ' + ' '.join(args[:2]):
 if name == 'pi':
     print('provider model context max-out thinking images')
     if not os.environ.get('MISSING_MODEL'):
-        for provider, model in [('cliproxyapi','gpt-6-astra'), ('cliproxyapi','gpt-6.1-sol')]:
+        for provider, model in [('cliproxyapi','gpt-6.2-astra'), ('cliproxyapi','gpt-6.1-sol')]:
             if model != 'gpt-6.1-sol' or not os.environ.get('MISSING_SOL'):
                 print(provider, model, '272K 128K yes yes')
 elif name == 'claude':
@@ -189,7 +189,7 @@ class SidecarTests(unittest.TestCase):
 
     def test_profiles_and_prompt_quoting(self):
         profiles = [
-            ('pi-gpt6-astra-1', 'cliproxyapi/gpt-6-astra', 'high', True),
+            ('pi-gpt6-astra-1', 'cliproxyapi/gpt-6.2-astra', 'high', True),
             ('pi-gpt6sol-1', 'cliproxyapi/gpt-6.1-sol', 'high', False),
             ('claude-opus55-xhigh-1', 'claude-opus-5-5', 'xhigh', True),
             ('claude-opus55-high-1', 'claude-opus-5-5', 'high', True),

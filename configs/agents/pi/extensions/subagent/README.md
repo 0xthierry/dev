@@ -115,7 +115,7 @@ Example spawn override:
   "prompt": "Review this bounded patch for correctness and report exact evidence.",
   "execution": {
     "provider": "cliproxyapi",
-    "model": "gpt-6-astra",
+    "model": "gpt-6.2-astra",
     "effort": "medium"
   }
 }
@@ -139,7 +139,7 @@ the parent. Repository locks and model-specific runtime policies still apply.
 
 Choose a named agent for its role, then select model and effort independently.
 Prefer `cliproxyapi/gpt-6.1-sol` for read-only reconnaissance and
-`cliproxyapi/gpt-6-astra` for implementation, debugging, planning, design, and review.
+`cliproxyapi/gpt-6.2-astra` for implementation, debugging, planning, design, and review.
 These model preferences do not prescribe an effort level.
 
 | Effort | Task characteristics |
@@ -175,8 +175,8 @@ availability. See `configs/cliproxyapi/README.md` for the complete mapping.
   continue useful local work, and explain each tool's practical behavior.
   Pi's own lifecycle semantics remain authoritative; Codex's defaults and tool
   behavior are not copied blindly.
-- The repo-managed `cliproxyapi` catalog maps GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra,
-  and GPT-5.6 Terra to the local Codex account pool. Catalog presence proves
+- The repo-managed `cliproxyapi` catalog maps the recommended GPT-6.2 Astra and GPT-6.1 Sol
+  to the local Codex account pool alongside earlier models. Catalog presence proves
   configuration, not live entitlement, quota, or comparative quality.
 - Prefer Astra for implementation and judgment-heavy work, and Sol for
   reconnaissance, while choosing effort separately for each assignment. These are
@@ -203,7 +203,7 @@ same stable model-selection guidance.
     "worker": {
       "execution": {
         "provider": "cliproxyapi",
-        "model": "gpt-6-astra",
+        "model": "gpt-6.2-astra",
         "effort": "high"
       },
       "allowInvocationOverride": {

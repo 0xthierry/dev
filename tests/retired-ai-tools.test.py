@@ -33,6 +33,21 @@ class RetiredToolsTest(unittest.TestCase):
             vendor_text += '\n[wrappers.grok]\ncommand = "' + str(home / 'account-manager') + '"\nargs = ["grok"]\n'
             vendor_text += '\n[wrappers.retained]\ncommand = "/bin/echo"\nargs = ["retained-wrapper"]\n'
             vendor_file.write_text(vendor_text)
+            tools_file = vendor / 'conf.d/omarchy-tools.toml'
+            tools_text = '[tools]\nantigravity-cli = "latest"\n'
+            tools_file.write_text(tools_text)
+            # Model an existing mise runtime and stale agy shim without network.
+            mise_data = home / '.local/share/mise'
+            duplicate = mise_data / 'installs/antigravity-cli/1.0.0/agy'
+            local_pin = home / '.local/bin/agy'
+            for exe, output in [(duplicate, 'DUPLICATE'), (local_pin, 'LOCAL_PIN')]:
+                exe.parent.mkdir(parents=True)
+                exe.write_text(f'#!/bin/sh\necho {output}\n')
+                exe.chmod(0o755)
+            local_pin.write_text('#!/bin/sh\nif [ "$1" = --version ]; then echo 1.5.15; else echo LOCAL_PIN; fi\n')
+            shim = mise_data / 'shims/agy'
+            shim.parent.mkdir(parents=True)
+            shim.symlink_to(MISE)
             manager = home / 'account-manager'
             manager.write_text('#!/bin/sh\nprintf "invoked" > "$HOME/account-manager-called"\n')
             manager.chmod(0o755)
@@ -51,22 +66,32 @@ class RetiredToolsTest(unittest.TestCase):
                        XDG_DATA_DIRS=str(home / 'data-dirs'),
                        MISE_SYSTEM_CONFIG_DIR=str(vendor), MISE_OFFLINE='1',
                        MISE_TRUSTED_CONFIG_PATHS=str(home),
-                       PATH=str(Path(MISE).parent) + ':/usr/bin:/bin')
+                       PATH=f'{shim.parent}:{local_pin.parent}:{Path(MISE).parent}:/usr/bin:/bin')
 
             def run(*args):
                 return subprocess.check_output(args, env=env, cwd=home, text=True)
 
             helper = str(ROOT / 'install/retired-ai-tools.sh')
             before = run(MISE, 'ls', '--json')
-            self.assertEqual(set(json.loads(before)), {'amp', 'cursor-agent', 'grok', 'opencode', 'node'})
+            self.assertEqual(set(json.loads(before)), {'amp', 'antigravity-cli', 'cursor-agent', 'grok', 'opencode', 'node'})
+            self.assertEqual(run('agy'), 'DUPLICATE\n')
             run('bash', '-c', 'eval "$(mise activate bash)"; grok')
             self.assertEqual((home / 'account-manager-called').read_text(), 'invoked')
             (home / 'account-manager-called').unlink()
             self.assertIn('[dry-run]', run('bash', helper, '--dry-run'))
             self.assertEqual((config / 'config.override.toml').read_text(), override)
             run('bash', helper)
+            # Standalone retirement cannot disable a still-working distro CLI.
+            self.assertEqual(run('agy'), 'DUPLICATE\n')
             self.assertEqual(json.loads(run(MISE, 'settings', 'get', 'disable_tools')),
                              ['amp', 'cursor-agent', 'grok', 'opencode', 'ruby'])
+            run('bash', '-c', 'source "$1"; install_antigravity_cli', '_', str(ROOT / 'install/antigravity-cli.sh'))
+            self.assertEqual(run('agy'), 'LOCAL_PIN\n')
+            self.assertEqual(run(str(duplicate)), 'DUPLICATE\n')
+            self.assertTrue(shim.is_symlink())
+            self.assertEqual(tools_file.read_text(), tools_text)
+            self.assertEqual(json.loads(run(MISE, 'settings', 'get', 'disable_tools')),
+                             ['amp', 'antigravity-cli', 'cursor-agent', 'grok', 'opencode', 'ruby'])
             self.assertEqual((config / 'config.toml').read_text(), original)
             self.assertEqual(vendor_file.read_text(), vendor_text)
             updated = (config / 'config.override.toml').read_text()
@@ -74,7 +99,8 @@ class RetiredToolsTest(unittest.TestCase):
             self.assertIn('experimental = false', updated)
             run('bash', helper)
             self.assertEqual((config / 'config.override.toml').read_text(), updated)
-            self.assertEqual(set(json.loads(run(MISE, 'ls', '--json'))), {'node'})
+            listed = json.loads(run(MISE, 'ls', '--json'))
+            self.assertEqual({name for name, versions in listed.items() if any(v['active'] for v in versions)}, {'node'})
             activated = run('bash', '-c', 'eval "$(mise activate bash)"; eval "$(mise hook-env -s bash)"; node')
             self.assertEqual(activated.strip(), 'retained-node')
             # Activation still creates a grok wrapper: it must fail closed rather
@@ -97,7 +123,7 @@ class RetiredToolsTest(unittest.TestCase):
             # Setup's baseline replacement must not undo the opt-out or drop ruby.
             run('bash', '-c', 'source "$1"; write_mise_config', '_', str(ROOT / 'install/mise.sh'))
             self.assertEqual(json.loads(run(MISE, 'settings', 'get', 'disable_tools')),
-                             ['amp', 'cursor-agent', 'grok', 'opencode', 'ruby'])
+                             ['amp', 'antigravity-cli', 'cursor-agent', 'grok', 'opencode', 'ruby'])
             self.assertEqual((config / 'config.override.toml').read_text(), updated)
             # Refuse to overwrite a user's unrelated Grok wrapper, before writing.
             custom = updated.replace('grok = "/usr/bin/false"', 'grok = "/bin/echo"')

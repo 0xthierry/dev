@@ -83,7 +83,7 @@ ENABLE_TOOL_SEARCH=auto:5 EXPECTED_TOOL_SEARCH=auto:5 "$ROOT/scripts/cliproxy" c
 [[ ! -v ENABLE_TOOL_SEARCH ]]
 "$ROOT/scripts/cliproxy" pi
  grep -qx -- 'cliproxyapi' "$CAPTURE"
- grep -qx -- 'gpt-6.1-sol' "$CAPTURE"
+ grep -qx -- 'gpt-6.2-astra' "$CAPTURE"
  grep -qx -- 'high' "$CAPTURE"
 "$ROOT/scripts/cliproxy" pi --model gpt-6-luna
  grep -qx -- 'gpt-6-luna' "$CAPTURE"

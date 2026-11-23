@@ -42,7 +42,7 @@ configure_herdr_agent_integrations() {
   local -a target_commands=(
     claude:claude
     codex:codex
-    antigravity-cli:antigravity
+    antigravity-cli:agy
     kimi:kimi
     qwen:qwen
     omp:omp
@@ -82,6 +82,10 @@ configure_herdr_agent_integrations() {
   for target_command in "${target_commands[@]}"; do
     target="${target_command%%:*}"
     command_name="${target_command#*:}"
+    # On first setup ~/.local/bin may not yet be on this shell's PATH.
+    if [[ "$command_name" == agy && -f "$HOME/.local/bin/agy" && -x "$HOME/.local/bin/agy" ]]; then
+      command_name="$HOME/.local/bin/agy"
+    fi
     if check_installed "$command_name" && [[ " $configured_targets " != *" $target "* ]]; then
       run_cmd "$herdr_bin" integration install "$target"
     fi

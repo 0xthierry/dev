@@ -45,6 +45,33 @@ The obsolete 3.x cutover bundle and ARM Parallels guide are retained only as [hi
 - Installs the shared CLI layer through Homebrew
 - Uses OrbStack as the container engine and installs the `docker` CLI through Homebrew
 - Applies `nvim`, `agents`, and Moshi host integration
+- Installs [Superwhisper](https://formulae.brew.sh/cask/superwhisper) through its Homebrew cask (macOS 14+). Open the app and complete permissions/sign-in yourself; setup does not change dictation settings or remove Handy. Omarchy's stock dictation remains unchanged.
+
+## Antigravity CLI and Pi
+
+Both hosts install Google's [Antigravity CLI](https://antigravity.google/docs/getting-started?tab=cli)
+as `~/.local/bin/agy`. This is the CLI, not the Antigravity editor or Gemini CLI.
+Setup installs version 1.5.15 from checksum-pinned official archives. Upstream
+may self-update during normal use; rerunning setup reconciles the pinned version.
+After verifying the binary, setup opts `antigravity-cli` out of mise management so
+Omarchy's floating distro entry cannot shadow it or trigger another download.
+Existing mise installs and unrelated settings are preserved. No login, agent
+session, or shell-startup modification is performed by this installer.
+
+To install only the CLI from this checkout:
+
+```bash
+bash -c 'source install/antigravity-cli.sh; install_antigravity_cli'
+agy --version
+agy  # Start explicitly and complete Google's sign-in flow
+```
+
+New Pi sessions and `cliproxy pi` use `cliproxyapi/gpt-6.2-astra` with `high`
+reasoning. Astra subagent guidance and the `use-agent` Astra profile also use 6.2;
+the stable `pi-gpt6-astra-N` handles, Sol/Opus roles, and task-specific reasoning
+policy are preserved. Existing sessions keep their model; switch with `/model`
+and reload updated skills/extensions with `/reload`, or start a new session.
+The separate Codex CLI default is unchanged. See [the proxy setup](configs/cliproxyapi/README.md).
 
 ## Roblox: play and develop
 

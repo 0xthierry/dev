@@ -65,6 +65,8 @@ Names differ between Homebrew and pacman (`tree-sitter-cli` vs `tree-sitter`, `m
 | Shared Neon/Datadog US5/Figma/ai-memory/REA/Playwriter/Chrome DevTools/Blender/Roblox MCP | `configs/mcp/`, `install/mcp.sh`; merge after agent/hook installers; OAuth, Playwriter extension authorization, and ChatGPT tunnel/account authorization remain explicit |
 | Add/update REA MCP | `configs/rea/`, `install/rea.sh`, `install/rea-prereqs.sh`, `install/rea-ghidra.sh`, shared MCP catalog; locked npm dependencies plus explicit Frida prebuild, no launch-time downloads; isolated Ghidra 12.1.4/JDK 21 leaves the old ghidra-cli runtime and global Java unchanged |
 | Add shared CLI tool | `install/packages/common.sh` |
+| Google Antigravity CLI | `install/antigravity-cli.sh`, wired through `install/hosts/common.sh`; SHA-512-pinned official `agy` binary on both hosts, distinct from the editor. Authentication is explicit; setup does not run upstream's shell-modifying `agy install`. |
+| MacBook Superwhisper | `superwhisper` Homebrew cask in `install/hosts/macbook.sh`; app permissions/sign-in remain manual. Do not alter Omarchy dictation or remove Handy. |
 | Lua/Luau servers and Lua linting | `install/packages/common.sh` (LuaLS + Luacheck), `install/lua-lsp.sh` (checksum-pinned standalone Luau + Claude plugin registration), `configs/agents/claude/plugins/` (local Luau plugin), `configs/nvim/` (system `lua_ls` + Luacheck; `luau-lsp.nvim` in `lua/custom/plugins/luau.lua` runs the standalone Luau binary and must not be paired with nvim-lspconfig's `luau_lsp`); `.lua` is Lua, `.luau` is standard Luau outside a Rojo project and Roblox Luau (types, sourcemap, Studio companion, StyLua, Selene) inside one; Rojo, StyLua and Selene come from each project's `rokit.toml` |
 | Roblox toolchain manager | `install/rokit.sh` (checksum-pinned Rokit, self-installed into `~/.rokit` on every host); `configs/shell/zshenv` sources `~/.rokit/env`; Rojo, Wally, Selene, StyLua and Lune are pinned per project in `rokit.toml`, never installed globally |
 | Multi-account Codex proxy for Pi | `install/cliproxyapi.sh`, `configs/cliproxyapi/`, `scripts/cliproxy` (default Pi provider; Codex CLI stays direct; OAuth state stays local) |
@@ -104,6 +106,7 @@ bash -n setup.sh install/*.sh install/hosts/*.sh
 shellcheck setup.sh install/*.sh install/hosts/*.sh
 python3 tests/lua-lsp.test.py
 python3 tests/rokit.test.py
+python3 tests/antigravity-cli.test.py
 python3 tests/claude-desktop-snapshot-patch.test.py
 python3 tests/claude-desktop-install.test.py
 # Requires installed Neovim plugins, LuaLS, Luau LSP, and Luacheck:

@@ -203,7 +203,7 @@ configure_moshi_agent_hooks() {
     claude:claude
     codex:codex
     gemini:gemini
-    antigravity:antigravity
+    antigravity:agy
     kimi:kimi
     qwen:qwen
     omp:omp
@@ -240,6 +240,10 @@ configure_moshi_agent_hooks() {
   for target_command in "${target_commands[@]}"; do
     target="${target_command%%:*}"
     command_name="${target_command#*:}"
+    # On first setup ~/.local/bin may not yet be on this shell's PATH.
+    if [[ "$command_name" == agy && -f "$HOME/.local/bin/agy" && -x "$HOME/.local/bin/agy" ]]; then
+      command_name="$HOME/.local/bin/agy"
+    fi
     if check_installed "$command_name" && [[ " $configured_targets " != *" $target "* ]]; then
       run_cmd "$moshi_hook_bin" install --target "$target"
     fi

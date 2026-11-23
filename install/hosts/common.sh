@@ -10,6 +10,7 @@ source "$REPO_ROOT/install/git.sh"
 source "$REPO_ROOT/install/ssh.sh"
 source "$REPO_ROOT/install/mise.sh"
 source "$REPO_ROOT/install/ai-cli.sh"
+source "$REPO_ROOT/install/antigravity-cli.sh"
 source "$REPO_ROOT/install/ai-desktop.sh"
 source "$REPO_ROOT/install/google-workspace-cli.sh"
 source "$REPO_ROOT/install/docker.sh"
@@ -78,6 +79,8 @@ setup_shared_cli_packages() {
 
 apply_shared_machine_state() {
   install_github_cli
+  # Install the replacement before mise can provision the distro's floating CLI.
+  install_antigravity_cli
   install_runtimes
   install_luau_lsp
   install_rokit

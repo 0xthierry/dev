@@ -1,6 +1,6 @@
 {
   "defaultProvider": "cliproxyapi",
-  "defaultModel": "gpt-6-astra",
+  "defaultModel": "gpt-6.2-astra",
   "transport": "auto",
   "defaultThinkingLevel": "high",
   "theme": "dark",

@@ -1,42 +1,52 @@
 #!/usr/bin/env bash
-# Opt out of distro-provided lazy AI tools without editing vendor configuration.
+# Keep retired or separately managed AI tools out of mise, without editing vendor files.
 set -euo pipefail
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 disable_retired_ai_tools() {
-  local mise_bin=""
+  merge_mise_ai_opt_outs retired amp cursor-agent grok opencode
+}
+
+# Called by the repo installer only after its agy executable is verified.
+disable_mise_antigravity_cli() {
+  merge_mise_ai_opt_outs external antigravity-cli
+}
+
+merge_mise_ai_opt_outs() {
+  local policy="$1" mise_bin=""
+  shift
   if ! mise_bin="$(resolve_mise_bin 2>/dev/null)"; then
     if (( ${DRY_RUN:-0} )); then
-      log_item "[dry-run] Disable mise tools: amp, cursor-agent, grok, opencode"
+      log_item "[dry-run] Disable mise management for: $*"
       return 0
     fi
-    printf 'error: mise is required to disable retired AI tools\n' >&2
+    printf 'error: mise is required to opt out of mise management for: %s\n' "$*" >&2
     return 1
   fi
 
   # Use mise's TOML-preserving editor and its high-priority global override.
   # The override survives write_mise_config and wins over distro/project tools.
   # Read from HOME, not the calling project, to avoid persisting project settings.
-  python3 - "$mise_bin" "${DRY_RUN:-0}" <<'PY'
+  python3 - "$mise_bin" "${DRY_RUN:-0}" "$policy" "$@" <<'PY'
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 
-mise, dry_run = sys.argv[1:]
+mise, dry_run, policy, *tools = sys.argv[1:]
 command = [mise, '-C', os.path.expanduser('~')]
 current = json.loads(subprocess.check_output(
     command + ['settings', 'get', 'disable_tools'], text=True))
 if not isinstance(current, list) or any(not isinstance(item, str) for item in current):
     raise SystemExit('error: mise disable_tools must be an array of strings')
-merged = sorted(set([*current, 'amp', 'cursor-agent', 'grok', 'opencode']))
+merged = sorted(set([*current, *tools]))
 # Only neutralize the known distro integration, never invent a Grok command on
 # hosts without it. The file is read-only; mise owns editing the user override.
 vendor = Path(os.environ.get('MISE_SYSTEM_CONFIG_DIR', '/etc/mise')) / 'conf.d/omarchy-agent-accounts.toml'
 block_wrapper = False
-if vendor.is_file():
+if policy == 'retired' and vendor.is_file():
     import tomllib  # Quattro ships Python 3.11+; not needed on a stock Mac.
     block_wrapper = 'grok' in tomllib.loads(vendor.read_text()).get('wrappers', {})
 if block_wrapper:
