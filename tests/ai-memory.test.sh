@@ -91,13 +91,13 @@ assert (home / "Library/LaunchAgents/dev.ai-memory.plist.bak").read_text() == "o
 assert (home / ".config/ai-memory/env").read_text() == "CUSTOM=keep\n"
 PY
 echo 'ok: repeat install links actual upstream binary, retires old service, removes only managed embedding overrides'
-# Fake only the downstream Codex adjustment's Python runtime; its real behavior
-# is covered by ai-memory-clients.test.py with the actual TOML writer.
+# Run the real Antigravity helper; fake the downstream Codex helpers here.
+# Their own suites use real client writers and Codex's app-server API.
 mkdir -p "$HOME/.local/share/mcp-services/venv/bin"
 cat > "$HOME/.local/share/mcp-services/venv/bin/python" <<'SH'
 #!/bin/sh
 case "$1" in */antigravity-client.py) exec python3 "$@";; esac
-printf 'codex-bridge\n' >> "$TEST_TMP/adjustments"
+printf '%s\n' "$*" >> "$TEST_TMP/adjustments"
 SH
 chmod +x "$HOME/.local/share/mcp-services/venv/bin/python"
 export AI_MEMORY_SERVER_URL=https://retired.invalid AI_MEMORY_AUTH_TOKEN=obsolete AI_MEMORY_DATA_DIR=/wrong
@@ -105,21 +105,25 @@ agy="$HOME/.gemini/config/mcp_config.json"
 mkdir -p "${agy%/*}"
 printf '{"mcpServers":{"custom":{"command":"keep"}}}\n' > "$agy"
 DRY_RUN=0 configure_ai_memory_agents >> "$TEST_TMP/install.log" 2>&1
-python3 - "$HOME" "$TEST_TMP" <<'PY'
+python3 - "$REPO_ROOT" "$TEST_TMP" <<'PY'
 import json
 from pathlib import Path
 import sys
-home, root = map(Path, sys.argv[1:])
+repo, root = map(Path, sys.argv[1:])
 calls = [json.loads(line) for line in (root / "calls.jsonl").read_text().splitlines()]
 assert calls == [
-    {"args": ["setup", "--yes", "--agent", "claude-code", "--agent", "codex", "--agent", "pi"], "cwd": str(home), "overrides": []},
-    {"args": ["install-mcp", "--client", "claude-desktop", "--apply"], "cwd": str(home), "overrides": []},
-    {"args": ["install-mcp", "--client", "antigravity-cli", "--apply", "--config-file", "<private stage>"], "cwd": str(home), "overrides": []},
-    {"args": ["install-hooks", "--agent", "antigravity-cli", "--apply"], "cwd": str(home), "overrides": []},
-    {"args": ["install-skills", "--scope", "global", "--agent", "antigravity"], "cwd": str(home), "overrides": []},
+    {"args": ["setup", "--yes", "--agent", "claude-code", "--agent", "codex", "--agent", "pi"], "cwd": str(repo), "overrides": []},
+    {"args": ["install-mcp", "--client", "claude-desktop", "--apply"], "cwd": str(repo), "overrides": []},
+    {"args": ["install-mcp", "--client", "antigravity-cli", "--apply", "--config-file", "<private stage>"], "cwd": str(repo), "overrides": []},
+    {"args": ["install-hooks", "--agent", "antigravity-cli", "--apply"], "cwd": str(repo), "overrides": []},
+    {"args": ["install-skills", "--scope", "global", "--agent", "antigravity"], "cwd": str(repo), "overrides": []},
+    {"args": ["doctor"], "cwd": str(repo), "overrides": []},
 ]
-assert (root / "adjustments").read_text() == "codex-bridge\n"
-path = home / '.gemini/config/mcp_config.json'
+assert (root / "adjustments").read_text().splitlines() == [
+    str(repo / "configs/ai-memory/codex-bridge.py"),
+    str(repo / "configs/ai-memory/trust-codex-hooks.py") + " --apply",
+]
+path = Path.home() / '.gemini/config/mcp_config.json'
 config = json.loads(path.read_bytes())
 assert config == {'mcpServers': {'custom': {'command': 'keep'}, 'ai-memory': {
     'serverUrl': 'http://127.0.0.1:49374/mcp', 'headers': {'Authorization': 'Bearer fixture'}}}}
@@ -138,14 +142,14 @@ cp "$agy" "$TEST_TMP/conflict"
 before_adjustments="$(wc -l < "$TEST_TMP/adjustments")"
 if DRY_RUN=0 configure_ai_memory_agents >> "$TEST_TMP/install.log" 2>&1; then exit 1; fi
 cmp "$agy" "$TEST_TMP/conflict"
-[[ "$(wc -l < "$TEST_TMP/adjustments")" -eq $((before_adjustments + 1)) ]]
+[[ "$(wc -l < "$TEST_TMP/adjustments")" -eq $((before_adjustments + 2)) ]]
 python3 - "$TEST_TMP/calls.jsonl" <<'PY'
 import json, pathlib, sys
 calls = [json.loads(line)['args'] for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
 assert calls[-2] == ['install-mcp', '--client', 'claude-desktop', '--apply']
 assert calls[-1][:3] == ['install-mcp', '--client', 'antigravity-cli']
 PY
-echo 'ok: Antigravity conflict leaves Desktop configured and Codex bridge adjustment completed'
+echo 'ok: Antigravity conflict leaves Desktop configured and Codex bridge/trust adjustments completed'
 grep -q 'different or unclear ai-memory transport' "$TEST_TMP/install.log"
 printf '{' > "$agy"
 cp "$TEST_TMP/calls.jsonl" "$TEST_TMP/before-invalid"

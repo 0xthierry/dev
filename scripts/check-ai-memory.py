@@ -52,8 +52,10 @@ def bridge(client, entry):
     process = subprocess.Popen([entry["command"], *argv], stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                env=env, text=True, bufsize=1)
+    stdin, stdout = process.stdin, process.stdout
+    assert stdin is not None and stdout is not None  # Both requested as PIPE.
     selector = selectors.DefaultSelector()
-    selector.register(process.stdout, selectors.EVENT_READ)
+    selector.register(stdout, selectors.EVENT_READ)
     request_id = 0
 
     def request(method, params, notify=False):
@@ -62,12 +64,12 @@ def bridge(client, entry):
         packet = {"jsonrpc": "2.0", "method": method, "params": params}
         if not notify:
             packet["id"] = request_id
-        process.stdin.write(json.dumps(packet) + "\n")
-        process.stdin.flush()
+        stdin.write(json.dumps(packet) + "\n")
+        stdin.flush()
         if notify:
             return
         while selector.select(30):
-            line = process.stdout.readline()
+            line = stdout.readline()
             if not line:
                 raise RuntimeError(f"{client} bridge closed stdout")
             response = json.loads(line)
@@ -82,6 +84,7 @@ def bridge(client, entry):
 
     def call(name, arguments):
         result = request("tools/call", {"name": name, "arguments": arguments})
+        assert result is not None  # Only notifications omit a response.
         return json.loads(next(part["text"] for part in result["content"] if part["type"] == "text"))
 
     try:
@@ -159,10 +162,16 @@ if args.capture:
                     raise RuntimeError(f"cleanup failed for default/{project}: {result.stderr}")
                 print("PASS: removed only disposable project " + project)
 
-result = subprocess.run([launcher, "doctor", "--json"], cwd=home, text=True, capture_output=True, timeout=40)
+repo = Path(__file__).resolve().parents[1]
+result = subprocess.run([launcher, "doctor", "--json"], cwd=repo, text=True, capture_output=True, timeout=40)
 if result.returncode:
     raise RuntimeError("upstream doctor failed: " + result.stderr)
-trust = json.loads(result.stdout).get("codex_hooks")
+report = json.loads(result.stdout)
+print(f"Capture scope: {report['workspace']}/{report['project']} (repository, not home directory)")
+for row in report.get("rows", []):
+    label = "ACTION REQUIRED" if row.get("uncaptured") else "PASS"
+    print(f"{label}: {row['agent']} — {row['captured']} captured session(s)")
+trust = report.get("codex_hooks")
 if trust is None:
     print("UNVERIFIED: Codex hook trust could not be determined")
 elif trust.get("skipped"):

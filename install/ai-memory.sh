@@ -144,11 +144,13 @@ configure_ai_memory_agents() (
     log_item "[dry-run] ai-memory setup --yes --agent claude-code --agent codex --agent pi"
     log_item "[dry-run] Configure Antigravity MCP without replacing existing policy; install upstream hooks and skills"
     log_item "[dry-run] Install upstream Claude Desktop MCP; use upstream Codex bridge for GUI file-token auth"
-    log_item "[dry-run] Codex /hooks trust approval remains manual"
+    log_item "[dry-run] Persist Codex trust for the eight exact reviewed ai-memory hooks; recheck repository capture"
     return
   fi
   for name in ${!AI_MEMORY_@}; do unset "$name"; done
-  cd "$HOME" || return
+  # The upstream self-check is cwd-scoped. Check this repository, not $HOME,
+  # whose old sessions otherwise look like broken capture in an empty project.
+  cd "$REPO_ROOT" || return
   "$runtime" "$REPO_ROOT/configs/ai-memory/antigravity-client.py" --preflight || return
   "$HOME/.local/bin/ai-memory" setup --yes --agent claude-code --agent codex --agent pi || return
   "$HOME/.local/bin/ai-memory" install-mcp --client claude-desktop --apply || return
@@ -156,10 +158,14 @@ configure_ai_memory_agents() (
   # requires exporting a root token in the GUI's environment. Keep upstream's
   # tool approval policy, replacing only that transport with file-backed auth.
   "$runtime" "$REPO_ROOT/configs/ai-memory/codex-bridge.py" || return
+  # Explicit repo policy: approve only the reviewed upstream local-memory
+  # commands through Codex's own API, never bypass trust for arbitrary hooks.
+  "$runtime" "$REPO_ROOT/configs/ai-memory/trust-codex-hooks.py" --apply || return
   # Finish existing clients before an Antigravity-specific failure can interrupt
-  # setup, particularly the GUI-safe Codex transport adjustment above.
+  # setup, particularly the GUI-safe Codex transport and reviewed hook trust.
   "$runtime" "$REPO_ROOT/configs/ai-memory/antigravity-client.py" || return
-  # setup prints Codex's real trust state. Never accept hooks on the user's behalf.
+  log_item "ai-memory: final repository capture/trust check (after managed-hook approval)"
+  "$HOME/.local/bin/ai-memory" doctor || return
 )
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

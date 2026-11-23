@@ -46,7 +46,7 @@ unavailable. No Ollama or API key is required for embeddings.
 | Claude Code CLI | Upstream session-aware `mcp-bridge` | Upstream lifecycle hooks |
 | Claude app — Chat | Upstream session-less stdio bridge | None; use explicit memory tools |
 | Claude app — local Code tab | Shared Claude Code hooks/settings; Desktop MCP entry also available | Supported by upstream; not a claim of Cowork/cloud capture |
-| Codex CLI / local app | Upstream plugin-style session-less stdio bridge | Upstream hooks, **after user trust approval** |
+| Codex CLI / local app | Upstream plugin-style session-less stdio bridge | Upstream hooks; setup persists trust for the eight reviewed repo-managed commands |
 | Antigravity CLI (`agy`) | Upstream-selected HTTP or stdio registration in `~/.gemini/config/mcp_config.json` | Upstream lifecycle hooks in `~/.gemini/config/hooks.json` |
 | Pi | **Unmodified upstream generated extension**, tools and lifecycle capture | Upstream extension |
 
@@ -71,10 +71,17 @@ setup, so an Antigravity-specific failure cannot interrupt Codex's bridge
 adjustment. Only Antigravity files are covered by this helper's no-write-on-conflict
 guarantee; host setup is not a cross-client transaction.
 
-**Codex trust is not automated.** Open `/hooks` in Codex, or the app's hook
-settings, review the ai-memory hooks, and trust them. Changed hook commands need
-approval again. Setup reports untrusted/modified hooks instead of claiming
-capture is ready. We never pass `--dangerously-bypass-hook-trust`.
+**Codex trust is narrowly automated for these reviewed hooks.** After upstream
+installation, `trust-codex-hooks.py` uses Codex's own `hooks/list` and
+`config/batchWrite` APIs—the same persistent trust mechanism as `/hooks`.
+It accepts only the eight expected user-level ai-memory commands for the local
+server and native data directory, and records Codex's `currentHash` for each.
+Unknown/changed commands fail closed before any trust write. Unrelated hooks,
+existing disabled states, tool approvals and sandbox settings are untouched.
+We never pass `--dangerously-bypass-hook-trust` or edit Codex's internal database.
+Identical setup reruns retain trust without prompting; a new/unrecognized hook
+needs explicit review and an allowlist update. Fully restart the Codex app/CLI
+after setup so an already-running process reloads its configuration.
 
 **Pi has one memory tool owner.** Its stock extension registers `memory_*` tools
 and forwards session identity to MCP. Do not also register `ai-memory` in Pi's
@@ -109,6 +116,8 @@ bash tests/ai-memory.test.sh
 # Exercise the installed pinned binary in disposable homes (no running server needed):
 python3 tests/ai-memory-antigravity.test.py
 ~/.local/share/mcp-services/venv/bin/python tests/ai-memory-clients.test.py
+python3 tests/ai-memory-codex-trust.test.py
+python3 tests/codex-hook-state.test.py
 python3 tests/ai-memory-skills.test.py
 ~/.local/share/mcp-services/venv/bin/python tests/mcp-clients.test.py
 python3 tests/mcp-runtime.test.py
@@ -123,9 +132,16 @@ python3 scripts/check-ai-memory.py
 python3 scripts/check-ai-memory.py --capture
 ```
 
-The capture check exercises the real local server and installed commands but
-**does not bypass or prove Codex's hook trust**. MCP checks launch the entries
-from the real client files, not the GUI applications. Pi's RPC spec runs actual
+Setup and the check run doctor from this repository, not `$HOME`. Project
+identity is derived from the Git remote; an absent marker is not an error when
+the server reports an exact project match. A fresh store does not contain old
+sessions: zero historical capture alone does not mean hooks are missing. Start a
+new session and check its captured observations before reinstalling hooks.
+
+The direct capture check exercises the real local server and installed commands
+but **does not prove Codex executed them through its harness**. Its separate
+read-only doctor check reports Codex's authoritative persisted trust state.
+MCP checks launch the entries from the real client files, not the GUI applications. Pi's RPC spec runs actual
 Pi and a deterministic no-cost model, replacing only the external memory service
 with an authenticated fixture. Live GUI behavior needs an app restart and an
 in-app memory call. Do not claim GUI validation from configuration alone.
@@ -141,4 +157,5 @@ claimed. Omarchy service verification must run on Omarchy, not macOS.
 - [Client registration and desktop limitations](https://github.com/akitaonrails/ai-memory/blob/v3.5.1/docs/mcp-install.md)
 - [Official plugins, including Codex stdio bridge](https://github.com/akitaonrails/ai-memory/blob/v3.5.1/docs/install.md#marketplace-plugins)
 - [Codex hook trust](https://learn.chatgpt.com/docs/hooks)
+- [Codex's own persisted `/hooks` approval implementation](https://github.com/openai/codex/blob/rust-v0.169.0/codex-rs/tui/src/hooks_rpc.rs#L64-L95)
 - [Codex local app/CLI MCP configuration](https://learn.chatgpt.com/docs/extend/mcp)
