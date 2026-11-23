@@ -15,7 +15,7 @@ Shared CLI tools, shell, and editor across both hosts. Host-specific bits live i
 
 - `~/dev` is the canonical setup checkout. Normal `./setup.sh omarchy` targets an already-working packaged Quattro (4.x) desktop; it is not an OS upgrade and requires no migration checkout or cutover tools.
 - Preserve the real `~/.config/hypr` directory, stock Lua entrypoint, and current live monitors, scale, workspaces, shortcuts, and dictation defaults. Ordinary setup must not activate a personal overlay. Personal settings are optional review material, never an automatic replacement for the working desktop.
-- Docker is strict standby: disable boot startup for both `docker.service` and `docker.socket`, stop the listening socket only when the engine is inactive or failed, and preserve running/transitioning engines and their workloads. Never start/restart Docker or connect a Docker client to validate standby. Do not mask the socket required by the packaged service. Explicit engine startup remains available to the user.
+- Docker starts automatically at boot: enable `docker.service`, and start it during setup only when inactive or failed. Preserve running/transitioning engines and their workloads; never stop or restart Docker merely to apply setup policy. The packaged service starts its required `docker.socket`; do not mask that socket or rely on socket-only activation. Verify startup through systemd without connecting a Docker client.
 - Keep the Docker slice policy at `MemoryHigh=24G`, `MemoryMax=32G`, `MemorySwapMax=8G`; do not conflate system resource policies with optional desktop settings.
 - Obsolete 3.x cutover scripts/tests/runbooks and the ARM Parallels guide are [historical Git references](docs/history/README.md), not supported setup paths.
 
@@ -137,6 +137,7 @@ bun test configs/agents/skills/roblox-open-cloud-api/scripts
 # Uses an isolated browser fixture, not the user's Brave session:
 bun run test:browser-diagnostics:e2e
 python3 tests/setup-hosts.test.py
+python3 tests/docker-startup.test.py
 bash tests/quattro-config-deploy.test.sh
 python3 tests/hypr-quattro.test.py
 python3 docs/history/verify-archive.py

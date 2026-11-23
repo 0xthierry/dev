@@ -34,7 +34,7 @@ Use `--dry-run` first when changing the setup flow or validating a host:
 - Applies `nvim`, `hypr`, `agents`, and Moshi host integration
 - **Quattro (4.x) is the supported desktop.** Start with a working packaged Quattro installation and run `cd ~/dev && ./setup.sh omarchy --dry-run` before applying setup. Setup is not an OS upgrade and needs no migration checkout, sibling `upstream` directory, preflight, or cutover rehearsal.
 - **Preserve the stock live desktop by default.** Keep `~/.config/hypr` a real directory with its stock Lua entrypoint. Ordinary setup does not activate a personal desktop overlay or replace current monitors, scale, workspaces, shortcuts, or dictation defaults. [Personal settings](configs/hypr-quattro/README.md) are optional, review-only material; review individual choices separately instead of importing an old desktop layout wholesale.
-- **Docker is strict standby, not socket-activated.** Setup disables automatic startup of both `docker.service` and `docker.socket`. When the engine is inactive or failed it stops the listening socket; when the engine is running or transitioning it preserves the engine, socket, and workloads. Setup never starts or restarts Docker to apply policy and does not mask the socket required by the packaged service. Start deliberately with `sudo systemctl start docker.service`; to return to standby after saving/stopping workloads, explicitly stop both `docker.service` and `docker.socket`. Do not use Docker client probes to check standby: they can activate a listening socket.
+- **Docker starts automatically at boot.** Setup enables `docker.service` and starts it if inactive or failed. A running or transitioning engine and its workloads are preserved; setup never stops or restarts Docker merely to apply policy. The packaged service starts its required `docker.socket`, so the socket does not need independent boot enablement. Verify with `systemctl is-enabled docker.service` and `systemctl is-active docker.service docker.socket`; no Docker client probe is needed. To stop Docker deliberately, first save/stop the workloads you want to shut down, then run `sudo systemctl stop docker.service`; the managed socket follows the engine's stop.
 - The Docker slice budget is `MemoryHigh=24G`, `MemoryMax=32G`, and `MemorySwapMax=8G`. These limits are independent of desktop layout and do not authorize workload shutdown or daemon restarts.
 
 The obsolete 3.x cutover bundle and ARM Parallels guide are retained only as [historical Git references](docs/history/README.md), not current installation instructions.
@@ -131,7 +131,7 @@ installation alone does not verify gameplay or the Studio graphics/runtime path.
 1. Shared CLI packages for the selected host
 2. Shared CLI tool config under `configs/cli/`
 3. Shared env, shell, git, SSH, `mise`, and AI CLI setup, including the pinned `ai-memory` v3.5.1 binary and local user service on each host
-4. Linux hosts install Docker; Omarchy applies the strict standby policy and 24G/32G/8G slice budget described above without starting or restarting the engine
+4. Linux hosts install Docker; Omarchy enables engine startup at boot, starts an inactive/failed engine, and applies the 24G/32G/8G slice budget described above without restarting a running engine
 5. Repo-owned config directories for the selected host
 6. Moshi host integration on hosts that include the `moshi` config target: installs the pinned `moshi-hook`, allows inbound Tailscale connections, exposes Herdr at `~/.local/bin/herdr` for SSH probes, opens the Tailscale mosh UDP range with UFW, refreshes hooks for installed/configured agents, and starts the `moshi-hook` user service after pairing
 7. Herdr integrations for installed/configured agents, with the Pi integration loaded from the pinned repository-generated extension
@@ -155,6 +155,7 @@ bash tests/moshi.test.sh
 bash tests/flatpak.test.sh
 bash tests/flatpak-launchers.test.sh
 bash tests/pacman.test.sh
+python3 tests/docker-startup.test.py
 bash tests/quattro-config-deploy.test.sh
 python3 tests/hypr-quattro.test.py
 python3 tests/setup-hosts.test.py

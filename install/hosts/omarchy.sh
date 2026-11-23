@@ -203,8 +203,8 @@ configure_omarchy_docker_policy() {
     run_cmd sudo systemctl daemon-reload
   fi
   configure_omarchy_docker_daemon
-  configure_omarchy_docker_standby
-  log_item "NOTE: Docker daemon changes take effect at the next manual engine start; no restart performed"
+  configure_omarchy_docker_startup || return
+  log_item "NOTE: Docker reads daemon changes on startup; a running engine is not restarted"
   log_item "NOTE: Recreate containers explicitly to migrate them into system-docker.slice"
 }
 

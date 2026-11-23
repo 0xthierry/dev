@@ -4,29 +4,29 @@ set -euo pipefail
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-# This never connects to Docker: even `docker info` can socket-activate it.
-configure_omarchy_docker_standby() {
+configure_omarchy_docker_startup() {
   [[ "${SETUP_HOST:-}" == "omarchy" ]] || return 0
 
-  # Disable without --now: a running engine and its workloads belong to the user.
-  # Do not mask: Arch's rootful docker.service requires docker.socket (-H fd://).
-  run_cmd sudo systemctl disable docker.service docker.socket
-
-  local state=""
   if (( ${DRY_RUN:-0} )); then
-    log_item "Docker standby: stop docker.socket only if docker.service is inactive or failed"
+    dry_run_cmd sudo systemctl enable docker.service
+    log_item "Docker: start docker.service only if inactive or failed"
     return 0
   fi
+
+  # Enable only the service: the packaged unit requires docker.socket.
+  local enabled state
+  enabled="$(systemctl show docker.service --property=UnitFileState --value)" || return
+  if [[ "$enabled" != enabled ]]; then
+    run_cmd sudo systemctl enable docker.service || return
+  fi
+
   state="$(systemctl show docker.service --property=ActiveState --value)" || return
   case "$state" in
     inactive|failed)
-      # Do not propagate a stop through Requires= if an explicit start races
-      # this check. Never stop the engine, containerd, or live-restored containers.
-      run_cmd sudo systemctl stop --job-mode=ignore-dependencies docker.socket
-      ;;
-    *) log_item "Docker: preserving $state engine and its socket until explicit shutdown" ;;
+      # Do not replace a conflicting job if a shutdown races this check.
+      run_cmd sudo systemctl start --job-mode=fail docker.service ;;
+    *) log_item "Docker: preserving $state engine" ;;
   esac
-  log_item "Docker: manual startup only (sudo systemctl start docker.service)"
 }
 
 install_docker() {
@@ -63,7 +63,8 @@ install_docker() {
   fi
 }
 
-# Targeted deployment, without full setup or a daemon restart:
+# Apply daemon/resource policy and boot startup without running full setup.
+# An inactive or failed engine is started; a running engine is not restarted:
 #   bash install/docker.sh omarchy --policy-only --dry-run
 #   bash install/docker.sh omarchy --policy-only
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
