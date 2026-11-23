@@ -141,6 +141,8 @@ installation alone does not verify gameplay or the Studio graphics/runtime path.
 11. Upstream `ai-memory setup --yes --agent claude-code --agent codex --agent pi` owns the local service, native hooks, MCP registration, and six official skills. Pi uses its unmodified generated extension for tools and capture. Claude Code's bridge is session-aware; Claude Desktop Chat uses the upstream session-less bridge and has no automatic capture. Codex CLI/app uses upstream's plugin-style stdio bridge for file-backed auth, preserving upstream tool approval rules; review and trust hooks in `/hooks` or app hook settings. See [ai-memory setup](configs/ai-memory/README.md). OAuth and account authorization remain explicit; setup starts no tunnels.
 
 The setup is intended to be idempotent and non-destructive. Existing unrelated paths are warned about and left in place instead of being overwritten.
+Factory/Droid is no longer installed by setup on either host. Existing copies are
+not automatically uninstalled; removal is a separate, explicitly requested action.
 
 ## Verification
 

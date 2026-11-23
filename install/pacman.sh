@@ -110,7 +110,31 @@ install_pacman_packages() {
     return 0
   fi
 
-  if ! (( ${DRY_RUN:-0} )) && ! command -v pacman &> /dev/null; then
+  if command -v pacman &> /dev/null; then
+    local missing installed='' package status
+    local -a targets=()
+    missing=$(pacman -T -- "$@") || {
+      status=$?
+      # Deptest exits 127 when it prints unsatisfied dependencies.
+      [[ $status == 127 ]] || return "$status"
+    }
+    for package in "$@"; do
+      if ! grep -Fxq -- "$package" <<< "$missing"; then
+        # --needed must still see exact names to upgrade them. Only skip
+        # satisfied dependencies that come from a differently named package.
+        if [[ -z $installed ]]; then
+          installed=$(pacman -Qq) || return
+        fi
+        if ! grep -Fxq -- "$package" <<< "$installed"; then
+          log_item "Keeping installed provider for: $package"
+          continue
+        fi
+      fi
+      targets+=("$package")
+    done
+    [[ ${#targets[@]} -gt 0 ]] || return 0
+    packages=("${targets[@]}")
+  elif ! (( ${DRY_RUN:-0} )); then
     log_item "Skipping: pacman not available"
     return 0
   fi

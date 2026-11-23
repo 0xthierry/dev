@@ -19,6 +19,19 @@ installed_binary_is_pinned pinned-tool 1.2.3
 if installed_binary_is_pinned pinned-tool 2.0.0; then exit 1; fi
 printf 'ok: pinned version detection accepts matching and rejects other versions\n'
 
+# Exercise the shared installer entry point without fetching vendor scripts.
+# An empty fixture npm root makes retained package installs visible in the plan.
+ln -s /usr/bin/true "$TEST_TMP_DIR/bin/npm"
+ln -s /usr/bin/true "$TEST_TMP_DIR/bin/go"
+DRY_RUN=1 bash "$REPO_ROOT/install/ai-cli.sh" > "$TEST_TMP_DIR/ai-cli.plan"
+grep -Fq '@openai/codex@' "$TEST_TMP_DIR/ai-cli.plan"
+grep -Fq '@railway/cli@' "$TEST_TMP_DIR/ai-cli.plan"
+if grep -Ei 'factory\.ai|factory cli|droid' "$TEST_TMP_DIR/ai-cli.plan"; then
+  printf 'error: shared installer still manages Factory/Droid\n' >&2
+  exit 1
+fi
+printf 'ok: shared installer plans Codex and Railway without Factory/Droid\n'
+
 # Exercise the actual integration reconciliation with installed retired binaries
 # AND previously configured retired hooks. Only retained agents may be refreshed.
 # shellcheck source=install/herdr.sh

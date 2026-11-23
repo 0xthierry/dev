@@ -157,11 +157,6 @@ install_notion_cli_binary() {
     bash -c 'curl -fsSL https://ntn.dev | bash'
 }
 
-install_factory_cli_binary() {
-  log_item "Installing/updating Factory CLI (droid)..."
-  run_cmd bash -c 'curl -fsSL https://app.factory.ai/cli | sh'
-}
-
 install_amq_from_source() {
   local source_dir="$HOME/.local/share/dev-setup/sources/agent-message-queue"
   local install_dir="$HOME/.local/bin"
@@ -267,9 +262,6 @@ install_ai_clis() {
 
   # Notion CLI (makenotion) — `ntn` binary, pairs with notion-cli skill
   install_notion_cli_binary "v0.20.0"
-
-  # Factory CLI — `droid` binary
-  install_factory_cli_binary
 
   # Railway CLI — deploy/manage Railway projects
   install_npm_global_cli "Railway CLI" "@railway/cli" "5.28.0"

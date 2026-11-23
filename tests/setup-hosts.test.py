@@ -44,6 +44,8 @@ class SetupHostsTests(unittest.TestCase):
         self.assertIn("Would install agy 1.5.15 from linux-x64/cli_linux_x64.tar.gz", result.stdout)
         self.assertIn("Would resolve Claude Desktop version and SHA-256", result.stdout)
         self.assertIn("ai-memory", result.stdout)
+        self.assertNotIn("https://app.factory.ai/cli", result.stdout)
+        self.assertNotIn("Installing/updating Factory CLI", result.stdout)
         self.assertEqual(result.stderr, "")
         self.assertFalse((self.home / ".ssh").exists())
         self.assertFalse((self.home / ".zshrc").exists())
@@ -78,6 +80,8 @@ class SetupHostsTests(unittest.TestCase):
         self.assertIn("Would install agy 1.5.15 from darwin-arm/cli_mac_arm64.tar.gz", result.stdout)
         self.assertIn("claude_desktop_snapshot_install.py pin", result.stdout)
         self.assertIn("ai-memory", result.stdout)
+        self.assertNotIn("https://app.factory.ai/cli", result.stdout)
+        self.assertNotIn("Installing/updating Factory CLI", result.stdout)
         self.assertEqual(result.stderr, "")
         self.assertFalse((self.home / ".ssh").exists())
         self.assertFalse((self.home / ".zshrc").exists())
@@ -106,13 +110,19 @@ class SetupHostsTests(unittest.TestCase):
         self.assertEqual(list(self.home.iterdir()), [])
 
     def run_dry_run(self, host):
-        # Fail closed on network/mutation commands; read-only brew probes see
+        # Fail closed on network/mutation commands; read-only package probes see
         # an empty installation rather than the developer's machine state.
         bin_dir = self.home / "bin"
         bin_dir.mkdir()
         for name in ("curl", "wget", "sudo", "brew", "pacman", "yay", "paru"):
             executable = bin_dir / name
             probe = '[ "$1" != list ] || exit 1\n' if name == "brew" else ""
+            if name == "pacman":
+                probe = (
+                    'if [ "$1" = -Qq ]; then [ "$#" = 1 ] && exit 0; exit 1; fi\n'
+                    'if [ "$1" = -T ]; then shift; [ "$1" != -- ] || shift; '
+                    'printf "%s\\n" "$@"; exit 127; fi\n'
+                )
             executable.write_text(
                 "#!/bin/sh\n" + probe +
                 "printf '%s\\n' \"$0\" >> \"$HOME/forbidden-commands\"\n"
