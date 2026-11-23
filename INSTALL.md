@@ -80,6 +80,37 @@ policy are preserved. Existing sessions keep their model; switch with `/model`
 and reload updated skills/extensions with `/reload`, or start a new session.
 The separate Codex CLI default is unchanged. See [the proxy setup](configs/cliproxyapi/README.md).
 
+### Antigravity models inside Pi
+
+Both hosts declare [`pi-agy-provider`](https://github.com/teededung/pi-agy-provider)
+**1.1.13** as a pinned npm package in `configs/agents/pi-settings.json`. Pi resolves
+it on startup; `pi install npm:pi-agy-provider@1.1.13` explicitly installs the
+already-declared package. In Pi 1.2.0, `pi update` alone did not materialize a
+package that was declared but not installed. The complete upstream package is
+loaded, including its `/btw` extension and skill; it is not copied into our
+extension bundle.
+The existing `cliproxyapi/gpt-6.2-astra` default stays unchanged.
+
+Reopen Pi after setup. Use `/agy-login` if Antigravity is not signed in, then
+select an `antigravity` model with `/model`. `/agy` and `/agy-tools status`
+show the integration state; `/agy-models` refreshes its model catalog. Login
+is manual; setup does not extract or copy OAuth credentials. Startup may run
+`agy models` to refresh discovery, which is not a generation request.
+
+The configured driver is `acp` with `toolMode: "pi"`. Ordinary bridged Pi tool
+calls pass through Pi's tool loop. **This is not a blanket sandbox:** native mode
+(`/agy-tools off`) executes actions outside Pi's tool hooks, some native web/image
+tools remain available in Pi mode, and `/boost`, `/teamwork` and `/swarm` use
+native orchestration rather than the restricted Pi-tools agent. The stream-json
+route uses `--dangerously-skip-permissions`; ACP auto-approves ordinary native
+permission requests. ACP is a transport,
+not a stronger permission boundary. `/btw` uses a separate runtime with its own
+tools and does not inherit the main session's extension permission hooks;
+`/btw:ask` narrows that side thread to read-only tools. Do not treat these modes
+as permission-equivalent to ordinary Pi tools or activate them implicitly.
+The upstream footer can be toggled with
+`/agy-config footer off` without removing provider or side-chat functionality.
+
 ## Cua Driver: Omarchy and Pi on MacBook
 
 Setup pins **Cua Driver 0.59.4**, verifies its archive checksum and exact-release

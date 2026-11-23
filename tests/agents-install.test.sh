@@ -158,6 +158,12 @@ assert json.loads((home / '.codex/hooks.json').read_text()) == {
 pi = json.loads((home / '.pi/agent/settings.json').read_text())
 assert len([p for p in pi['packages'] if isinstance(p, str)
             and p.startswith('npm:@plannotator/pi-extension@')]) == 1
+assert [p for p in pi['packages'] if isinstance(p, str)
+        and p.startswith('npm:pi-agy-provider')] == ['npm:pi-agy-provider@1.1.13']
+assert pi['antigravity'] == {'toolMode': 'pi', 'driver': 'acp'}
+assert (pi['defaultProvider'], pi['defaultModel'], pi['defaultThinkingLevel']) == (
+    'cliproxyapi', 'gpt-6.2-astra', 'high')
+print('ok: deploys pinned Antigravity Pi package with ACP/Pi tools without changing the default model')
 assert (home / '.claude/skills/plannotator-review/SKILL.md').is_file()
 assert (home / '.codex/skills/plannotator-review/SKILL.md').is_file()
 assert not (home / '.pi/agent/skills/plannotator-review').exists()
