@@ -37,7 +37,7 @@ eligibility and authorization cannot be created by writing local client files.
 
 Add the [browser workflow instructions](../browser-automation/client-instructions.md)
 to ChatGPT's project/custom instructions and connector descriptions where supported:
-Playwriter is primary; Chrome DevTools supplies diagnostics/capability fallback,
+For these ChatGPT tunnels (not local CLI/Pi routing), Playwriter is primary; Chrome DevTools supplies diagnostics/capability fallback,
 with `new_page.background=true` and `select_page.bringToFront=false`. Preserve the
 same browser/page and never bypass permission or authentication failures. These
 are per-call choices, not server-enforced background defaults. Claude Desktop

@@ -18,7 +18,8 @@ RENDERER = ROOT / "configs/mcp/configure-clients.py"
 CODEX = shutil.which("codex")
 # Resolve mise's dispatch shim before changing HOME; resolving its symlink
 # would invoke mise itself, not the Codex config reader.
-if CODEX and Path(CODEX).parent.name == "shims" and shutil.which("mise"):
+MISE = shutil.which("mise")
+if CODEX and MISE and (Path(CODEX).parent.name == "shims" or Path(CODEX).samefile(MISE)):
     CODEX = subprocess.check_output(["mise", "which", "codex"], text=True).strip()
 CODEX_BIN = str(Path(CODEX).parent) if CODEX else ""
 CODEX = str(Path(CODEX).resolve()) if CODEX else None
@@ -36,13 +37,14 @@ class McpClientTests(unittest.TestCase):
         self.env.update(HOME=str(self.home), PI_OFFLINE="1", PI_SKIP_VERSION_CHECK="1",
                         PATH=f"{CODEX_BIN}:{os.environ['PATH']}")
         self.code = self.home / ".claude.json"
+        self.agy = self.home / ".gemini/config/mcp_config.json"
         self.pi = self.home / ".pi/agent/mcp.json"
         self.codex = self.home / ".codex/config.toml"
         self.desktop = self.home / ".config/Claude/claude_desktop_config.json"
         self.preferences = self.home / ".config/mcp-services/preferences.json"
 
-    def run_config(self, host="omarchy"):
-        return subprocess.run([sys.executable, str(RENDERER), host], env=self.env,
+    def run_config(self, host="omarchy", *options):
+        return subprocess.run([sys.executable, str(RENDERER), host, *options], env=self.env,
                               capture_output=True, text=True, timeout=30)
 
     def put(self, path, content):
@@ -67,7 +69,8 @@ class McpClientTests(unittest.TestCase):
         result = self.run_config()
         self.assertEqual(result.returncode, 0, result.stderr)
         code = json.loads(self.code.read_text())["mcpServers"]
-        self.assertEqual(set(code), {"neon", "datadog", "figma", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
+        self.assertEqual(set(code), {"neon", "datadog", "figma", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio", "cua-driver"})
+        self.assertEqual(code["cua-driver"], {"command": f"{self.home}/.local/bin/cua-driver-mcp", "args": []})
         self.assertEqual(code["rea"], {"command": f"{self.home}/.local/bin/rea-mcp", "args": []})
         self.assertEqual(code["neon"], {"type": "http", "url": "https://mcp.neon.tech/mcp"})
         self.assertEqual(code["datadog"], {"type": "http", "url": "https://mcp.us5.datadoghq.com/v1/mcp"})
@@ -76,6 +79,8 @@ class McpClientTests(unittest.TestCase):
         self.assertNotIn("ai-memory", pi)
         self.assertNotIn("ai-memory", code)
         self.assertEqual(set(pi), set(code))
+        self.assertEqual(pi["cua-driver"], {**code["cua-driver"], "exposure": "deferred",
+                         "description": "Inspect and interact with desktop applications through the managed Cua Driver daemon."})
         self.assertEqual(pi["rea"], {
             "command": f"{self.home}/.local/bin/rea-mcp", "args": [],
             "description": "Analyze and reverse-engineer binaries with REA.", "exposure": "deferred"})
@@ -86,7 +91,198 @@ class McpClientTests(unittest.TestCase):
         codex = tomllib.loads(self.codex.read_text())["mcp_servers"]
         self.assertEqual(codex["figma"], {"url": "https://mcp.figma.com/mcp"})
         self.assertEqual(set(codex), set(code))
+        self.assertEqual(codex["cua-driver"], code["cua-driver"])
         self.assertEqual(codex["rea"], {"command": f"{self.home}/.local/bin/rea-mcp", "args": []})
+
+    def test_agy_fresh_global_config_uses_native_transports(self):
+        result = self.run_config()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.agy.read_text()), {"mcpServers": {
+            "cua-driver": {"command": f"{self.home}/.local/bin/cua-driver-mcp", "args": []},
+            "neon": {"serverUrl": "https://mcp.neon.tech/mcp"},
+            "datadog": {"serverUrl": "https://mcp.us5.datadoghq.com/v1/mcp"},
+            "figma": {"serverUrl": "https://mcp.figma.com/mcp"},
+            "rea": {"command": f"{self.home}/.local/bin/rea-mcp", "args": []},
+            "playwriter": {"command": f"{self.home}/.local/bin/playwriter-mcp", "args": []},
+            "chrome-devtools": {"command": f"{self.home}/.local/bin/chrome-devtools-mcp", "args": []},
+            "blender": {"command": f"{self.home}/.local/bin/blender-mcp", "args": []},
+            "Roblox_Studio": {"command": f"{self.home}/.local/bin/roblox-studio-mcp", "args": []}}})
+
+    def test_agy_zero_byte_bootstrap_and_rerun_on_macbook(self):
+        self.put(self.agy, "")
+        first = self.run_config("macbook")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(set(json.loads(self.agy.read_text())["mcpServers"]), {
+            "neon", "datadog", "figma", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
+        before = self.agy.read_bytes(), self.agy.stat().st_mtime_ns
+        second = self.run_config("macbook")
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual((self.agy.read_bytes(), self.agy.stat().st_mtime_ns), before)
+        self.assertEqual(self.agy.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(Path(f"{self.agy}.bak").read_bytes(), b"")
+        self.assertFalse(Path(f"{self.agy}.bak.1").exists())
+
+    def test_agy_migrates_transport_aliases_without_resetting_options_or_other_servers(self):
+        remote_options = {"headers": {"X-Test": "fixture"}, "oauth": {"clientId": "fixture"},
+                          "authProviderType": "google_credentials", "disabled": True, "timeoutSeconds": 90}
+        local_options = {"env": {"CUSTOM": "fixture"}, "cwd": "/custom", "disabledTools": ["edit"]}
+        custom = {"command": "custom", "args": ["--custom"], "disabled": True}
+        self.put(self.agy, json.dumps({"theme": "dark", "mcpServers": {
+            "neon": {"httpUrl": "https://mcp.neon.tech/mcp", "url": "https://mcp.neon.tech/mcp", **remote_options},
+            "rea": {"command": f"{self.home}/.local/bin/rea-mcp", **local_options}, "ai-memory": custom}}))
+        original = self.agy.read_bytes()
+        result = self.run_config()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        config = json.loads(self.agy.read_text())
+        self.assertEqual(config["theme"], "dark")
+        self.assertEqual(config["mcpServers"]["ai-memory"], custom)
+        self.assertEqual(config["mcpServers"]["neon"], {"serverUrl": "https://mcp.neon.tech/mcp", **remote_options})
+        self.assertEqual(config["mcpServers"]["rea"], {"command": f"{self.home}/.local/bin/rea-mcp", "args": [], **local_options})
+        self.assertEqual(Path(f"{self.agy}.bak").read_bytes(), original)
+
+    def test_agy_foreign_https_destination_does_not_forward_auth_or_write_any_file(self):
+        self.put(self.agy, json.dumps({"mcpServers": {"neon": {
+            "serverUrl": "https://private.example/proxy", "headers": {"Authorization": "Bearer dummy-only"},
+            "oauth": {"clientSecret": "dummy-only"}, "authProviderType": "google_credentials"}}}))
+        self.put(self.code, '{"theme":"unchanged"}')
+        original = {self.code: self.code.read_bytes(), self.agy: self.agy.read_bytes()}
+        result = self.run_config()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Antigravity server 'neon'", result.stderr)
+        self.assertNotIn("dummy-only", result.stderr)
+        self.assertEqual({p: p.read_bytes() for p in self.home.rglob("*") if p.is_file()}, original)
+
+    def test_agy_foreign_command_does_not_forward_env_or_write_any_file(self):
+        self.put(self.agy, json.dumps({"mcpServers": {"rea": {
+            "command": "/user/rea-wrapper", "args": [], "env": {"PRIVATE_TOKEN": "dummy-only"}}}}))
+        original = self.agy.read_bytes()
+        result = self.run_config()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Antigravity server 'rea'", result.stderr)
+        self.assertNotIn("dummy-only", result.stderr)
+        self.assertEqual({p: p.read_bytes() for p in self.home.rglob("*") if p.is_file()}, {self.agy: original})
+
+    def test_agy_rejects_ambiguous_unknown_and_incompatible_existing_transports(self):
+        cases = {
+            "contradictory aliases": {"neon": {"serverUrl": "https://mcp.neon.tech/mcp", "url": "https://other.invalid"}},
+            "remote to local": {"rea": {"url": "https://other.invalid"}},
+            "local to remote": {"neon": {"command": "/user/server"}},
+            "mixed transports": {"neon": {"url": "https://mcp.neon.tech/mcp", "command": "/user/server"}},
+            "foreign args": {"rea": {"command": f"{self.home}/.local/bin/rea-mcp", "args": ["--proxy"]}},
+            "disabled placeholder": {"neon": {"disabled": True}},
+            "empty placeholder": {"rea": {}}}
+        for case, servers in cases.items():
+            with self.subTest(case=case):
+                self.put(self.agy, json.dumps({"mcpServers": servers}))
+                original = self.agy.read_bytes()
+                result = self.run_config()
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("Antigravity server", result.stderr)
+                self.assertEqual({p: p.read_bytes() for p in self.home.rglob("*") if p.is_file()}, {self.agy: original})
+
+    def test_agy_nonempty_whitespace_is_invalid_before_any_write(self):
+        self.put(self.agy, " \n")
+        result = self.run_config()
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(self.agy.read_text(), " \n")
+        self.assertEqual([p for p in self.home.rglob("*") if p.is_file()], [self.agy])
+
+    def test_select_only_antigravity_ignores_unrelated_client_inputs_and_outputs(self):
+        settings = self.home / ".claude/settings.json"
+        self.put(settings, "not json")
+        self.put(self.preferences, "not json")
+        self.put(self.pi, "not json")
+        result = self.run_config("omarchy", "--client", "antigravity")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.agy.read_text())["mcpServers"]["neon"],
+                         {"serverUrl": "https://mcp.neon.tech/mcp"})
+        self.assertEqual({p for p in self.home.rglob("*") if p.is_file()},
+                         {settings, self.preferences, self.pi, self.agy})
+        self.assertEqual(self.pi.read_text(), "not json")
+
+    def test_agy_symlink_fails_without_writing_any_client(self):
+        target = self.home / "target"
+        self.put(target, "{}")
+        self.agy.parent.mkdir(parents=True)
+        self.agy.symlink_to(target)
+        result = self.run_config()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("refusing symlink", result.stderr)
+        self.assertTrue(self.agy.is_symlink())
+        self.assertEqual(target.read_text(), "{}")
+        self.assertEqual({p for p in self.home.rglob("*") if p.is_file()}, {self.agy, target})
+
+    def test_empty_claude_json_is_not_a_bootstrap_file(self):
+        self.put(self.code, "")
+        result = self.run_config()
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual([p for p in self.home.rglob("*") if p.is_file()], [self.code])
+
+    def render_fixture_catalog(self, **scope):
+        source = Path(self.temp.name) / "catalog fixture"
+        source.mkdir()
+        renderer = source / RENDERER.name
+        shutil.copy2(RENDERER, renderer)
+        self.put(source / "catalog.json", json.dumps({"fixture": {"launcher": "fixture-mcp",
+                 "description": "fixture", **scope}}))
+        return subprocess.run([sys.executable, str(renderer), "omarchy"], env=self.env,
+                              capture_output=True, text=True, timeout=10)
+
+    def test_unknown_host_selector_rejected_before_writing(self):
+        result = self.render_fixture_catalog(clients_by_host={"bogus": ["pi"]})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("invalid catalog host scope", result.stderr)
+        self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_unknown_client_selector_rejected_before_writing(self):
+        result = self.render_fixture_catalog(clients_by_host={"omarchy": ["bogus"]})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("invalid catalog clients", result.stderr)
+        self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_misspelled_catalog_scope_cannot_register_service_everywhere(self):
+        result = self.render_fixture_catalog(clients_by_hosts={"macbook": ["pi"]})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("unknown catalog field", result.stderr)
+        self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_cua_preserves_existing_pi_hidden_tools_and_disabled_server(self):
+        entry = {"command": f"{self.home}/.local/bin/cua-driver-mcp", "enabled": False,
+                 "exposure": "hidden", "toolExposure": {"get_window_state": "hidden"},
+                 "env": {"CUSTOM": "fixture"}, "description": "private"}
+        self.put(self.pi, json.dumps({"mcpServers": {"cua-driver": entry}}))
+        result = self.run_config("macbook", "--client", "pi")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.pi.read_text())["mcpServers"]["cua-driver"], {**entry, "args": []})
+        self.assertFalse(self.agy.exists())
+
+    def test_cua_mac_does_not_remove_an_unselected_foreign_entry(self):
+        foreign = {"serverUrl": "https://example.invalid", "disabled": True}
+        self.put(self.agy, json.dumps({"mcpServers": {"cua-driver": foreign}}))
+        result = self.run_config("macbook")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.agy.read_text())["mcpServers"]["cua-driver"], foreign)
+        self.assertIn("cua-driver", json.loads(self.pi.read_text())["mcpServers"])
+
+    def test_cua_claude_mixed_remote_transport_with_credentials_fails_before_write(self):
+        entry = {"command": f"{self.home}/.local/bin/cua-driver-mcp", "url": "https://example.invalid",
+                 "headers": {"Authorization": "sensitive-fixture"}}
+        original = json.dumps({"mcpServers": {"cua-driver": entry}})
+        self.put(self.code, original)
+        result = self.run_config()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("claude server 'cua-driver'", result.stderr)
+        self.assertNotIn("sensitive-fixture", result.stderr)
+        self.assertEqual({p: p.read_text() for p in self.home.rglob('*') if p.is_file()}, {self.code: original})
+
+    def test_cua_codex_custom_launcher_with_credentials_fails_before_write(self):
+        original = '[mcp_servers.cua-driver]\ncommand="custom"\n[mcp_servers.cua-driver.env]\nTOKEN="sensitive-fixture"\n'
+        self.put(self.codex, original)
+        result = self.run_config()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("codex server 'cua-driver'", result.stderr)
+        self.assertNotIn("sensitive-fixture", result.stderr)
+        self.assertEqual({p: p.read_text() for p in self.home.rglob('*') if p.is_file()}, {self.codex: original})
 
     def test_browser_stdio_launchers_reach_every_client_with_absolute_commands(self):
         result = self.run_config()
@@ -320,7 +516,10 @@ class McpClientTests(unittest.TestCase):
         self.assertEqual(set(json.loads(self.code.read_text())["mcpServers"]),
                          {"neon", "datadog", "figma", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(set(json.loads(self.pi.read_text())["mcpServers"]),
-                         {"neon", "datadog", "figma", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
+                         {"neon", "datadog", "figma", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio", "cua-driver"})
+        pi_cua = json.loads(self.pi.read_text())["mcpServers"]["cua-driver"]
+        self.assertEqual((pi_cua["command"], pi_cua["args"], pi_cua["exposure"]),
+                         (f"{self.home}/.local/bin/cua-driver-mcp", [], "deferred"))
         self.assertEqual(set(tomllib.loads(self.codex.read_text())["mcp_servers"]),
                          {"neon", "datadog", "figma", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(json.loads(desktop.read_text())["mcpServers"]["rea"],

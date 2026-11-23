@@ -32,7 +32,7 @@ Called `clothing.py` below. Stages: `new`, `guides`, `repaint`, `check`, `build`
   - The `codex-image` skill for the repaint and concept images (it uses the owner's ChatGPT plan; about a minute per image).
   - The Studio MCP for the preview.
   - The `roblox-open-cloud-api` skill for uploads.
-  - For heads: Blender 5 on the command line (`blender -b`), Rojo, and Tripo in the owner's browser (the `playwriter` skill).
+  - For heads: Blender 5 on the command line (`blender -b`), Rojo, and Tripo in the owner's signed-in browser (use the `playwriter` skill for the verified network/download workflow in `references/heads.md`).
 
   Without `codex-image`, the outfit can still be built from code alone (`build --code`).
 - **Where outfits live:** in the game's repository, e.g. `tools/clothing/outfits/<id>/`. Keep `outfit.py`, `prompts/`, `concept.png` and `ai/` under version control: the repaints can't be regenerated identically.

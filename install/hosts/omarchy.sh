@@ -644,8 +644,12 @@ cua_driver_service_needs_restart() {
   desired_executable="$(readlink -f "$HOME/.local/bin/cua-driver" 2>/dev/null || true)"
   running_executable="$(readlink -f "$proc_root/$main_pid/exe" 2>/dev/null || true)"
   [[ -n "$desired_executable" && "$running_executable" == "$desired_executable" ]] || return 0
-  tr '\0' '\n' < "$proc_root/$main_pid/environ" 2>/dev/null \
-    | grep -Fxq "CUA_DRIVER_RS_ENABLE_WAYLAND=$wayland_enabled" || return 0
+  local setting
+  for setting in "CUA_DRIVER_RS_ENABLE_WAYLAND=$wayland_enabled" \
+    CUA_DRIVER_RS_TELEMETRY_ENABLED=false CUA_DRIVER_RS_UPDATE_CHECK=false; do
+    tr '\0' '\n' < "$proc_root/$main_pid/environ" 2>/dev/null \
+      | grep -Fxq "$setting" || return 0
+  done
   return 1
 }
 
@@ -662,8 +666,8 @@ configure_cua_driver_backend() {
     return 1
   fi
 
-  ensure_dir "$(dirname "$target_path")"
-  safe_link_path "$source_path" "$target_path" "Cua Driver user service"
+  ensure_dir "$(dirname "$target_path")" || return
+  safe_link_path "$source_path" "$target_path" "Cua Driver user service" || return
 
   if (( ! ${DRY_RUN:-0} )); then
     if [[ ! -x "$HOME/.local/bin/cua-driver" ]]; then
@@ -681,20 +685,20 @@ configure_cua_driver_backend() {
     fi
   fi
 
-  run_cmd systemctl --user daemon-reload
+  run_cmd systemctl --user daemon-reload || return
   if (( ${DRY_RUN:-0} )); then
-    run_cmd systemctl --user enable "$service_name"
-    run_cmd systemctl --user start "$service_name"
+    run_cmd systemctl --user enable "$service_name" || return
+    run_cmd systemctl --user start "$service_name" || return
   else
     if ! systemctl --user is-enabled --quiet "$service_name" 2>/dev/null; then
-      run_cmd systemctl --user enable "$service_name"
+      run_cmd systemctl --user enable "$service_name" || return
     fi
     if ! systemctl --user is-active --quiet "$service_name" 2>/dev/null; then
-      run_cmd systemctl --user start "$service_name"
+      run_cmd systemctl --user start "$service_name" || return
       log_item "Cua Driver service: started"
     elif cua_driver_service_needs_restart "$service_name" "$wayland_enabled"; then
-      run_cmd systemctl --user restart "$service_name"
-      log_item "Cua Driver service: restarted to load the current runtime and Wayland settings"
+      run_cmd systemctl --user restart "$service_name" || return
+      log_item "Cua Driver service: restarted to load the current runtime and managed backend/privacy settings"
     else
       log_item "Cua Driver service: already running the current runtime"
     fi

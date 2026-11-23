@@ -150,6 +150,12 @@ sys.exit("unexpected package/runtime command")
         self.assertIn("invalid choice: 'blender'", result.stderr)
         self.assertEqual(result.stdout, "")
 
+    def test_cua_cannot_be_launched_by_the_desktop_http_bridge(self):
+        result = self.bridge("cua-driver")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("invalid choice: 'cua-driver'", result.stderr)
+        self.assertEqual(result.stdout, "")
+
     def test_missing_runtime_configuration_fails_without_launch(self):
         result = self.bridge()
         self.assertEqual(result.returncode, 1)

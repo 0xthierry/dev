@@ -1,8 +1,8 @@
 # Shared MCP services
 
 `catalog.json` is the shared source for Neon, Datadog **US5**, Figma,
-REA, Playwriter, Chrome DevTools, Blender, and Roblox Studio. `./setup.sh <host>` merges it after
-agent settings and upstream ai-memory integrations have been installed. ai-memory
+REA, Cua Driver, Playwriter, Chrome DevTools, Blender, and Roblox Studio. `./setup.sh <host>`
+merges it after agent settings, then runs upstream ai-memory integration. ai-memory
 is deliberately not in this catalog: upstream owns its client registrations. To refresh just these
 registrations on an already provisioned host:
 
@@ -18,20 +18,23 @@ atomic per file; an interrupted multi-client update converges on retry.
 
 ## Client matrix
 
-| Service | Pi | Claude Code | Codex CLI/app | Claude Desktop | ChatGPT |
-|---|---|---|---|---|---|
-| Neon | Native HTTP | Native HTTP | Native HTTP | Opt-in stdio bridge | Authorize remote MCP/app in account |
-| Datadog US5 | Native HTTP | Native HTTP | Native HTTP | Opt-in stdio bridge | Official Datadog app does **not** support US5; custom MCP support must be verified separately |
-| Figma | Native HTTP | Existing enabled/installed plugin, otherwise native HTTP | Native HTTP | Opt-in stdio bridge | Authorize remote MCP/app in account |
-| ai-memory (upstream-owned) | Stock extension tools + capture | Session-aware stdio bridge + capture | Upstream stdio bridge + capture | Session-less stdio bridge | Not configured |
-| REA | Native stdio | Native stdio | Native stdio | Native stdio | Not configured |
-| Playwriter | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel + account authorization |
-| Chrome DevTools | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel + account authorization |
-| Blender | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel |
-| Roblox Studio | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel |
+| Service | Pi | Claude Code | Codex CLI/app | Antigravity CLI | Claude Desktop | ChatGPT |
+|---|---|---|---|---|---|---|
+| Neon | Native HTTP | Native HTTP | Native HTTP | Native HTTP | Opt-in stdio bridge | Authorize remote MCP/app in account |
+| Datadog US5 | Native HTTP | Native HTTP | Native HTTP | Native HTTP | Opt-in stdio bridge | Official Datadog app does **not** support US5; custom MCP support must be verified separately |
+| Figma | Native HTTP | Existing enabled/installed plugin, otherwise native HTTP | Native HTTP | Native HTTP | Opt-in stdio bridge | Authorize remote MCP/app in account |
+| ai-memory (upstream-owned) | Stock extension tools + capture | Session-aware stdio bridge + capture | Upstream stdio bridge + capture | Upstream HTTP or stdio bridge + lifecycle hooks + skills | Session-less stdio bridge | Not configured |
+| Cua Driver | Native stdio, both hosts | Native stdio, Omarchy only | Native stdio, Omarchy only | Native stdio, Omarchy only | Not configured | Not configured |
+| REA | Native stdio | Native stdio | Native stdio | Native stdio | Native stdio | Not configured |
+| Playwriter | Native stdio | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel + account authorization |
+| Chrome DevTools | Native stdio | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel + account authorization |
+| Blender | Native stdio | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel |
+| Roblox Studio | Native stdio | Native stdio | Native stdio | Native stdio | Native stdio | Explicit local-server tunnel |
 
-Both supported hosts (`macbook` and `omarchy`) receive these registrations.
-Browser control needs a browser on the machine running the server; it does not
+Both supported hosts (`macbook` and `omarchy`) receive the shared registrations;
+Cua is explicitly restricted by `clients_by_host` to four native Omarchy clients
+and **Pi only on MacBook**. Existing user entries on excluded clients are not
+removed. Browser control needs a browser on the machine running the server; it does not
 connect to a desktop elsewhere. Existing unrelated entries are preserved.
 
 The renderer honors `CLAUDE_CONFIG_DIR`, `PI_CODING_AGENT_DIR`, `CODEX_HOME`,
@@ -39,13 +42,56 @@ and Linux `XDG_CONFIG_HOME`. It uses pinned `tomlkit` rather than `codex mcp add
 that command can initiate OAuth during setup. Codex CLI and Codex app use the
 same `~/.codex/config.toml` registration; account authorization is separate.
 
-## Browser automation: Playwriter + Chrome DevTools
+[Antigravity CLI (`agy`)](https://antigravity.google/docs/mcp) reads the global
+`~/.gemini/config/mcp_config.json`, also used by the Antigravity IDE. Setup
+merges the catalog there, not into workspace `.agents/mcp_config.json` files.
+Remote entries use `serverUrl` for Streamable HTTP; local entries use absolute
+`command` paths and `args`. Existing `disabled` settings, tool restrictions,
+and authentication options are preserved only for the same endpoint or exact
+launcher and arguments. If a catalog name already has a different, mixed, or
+missing transport (even a disabled placeholder), setup stops before any client
+writes. Rename the custom entry or reconcile its destination and credentials
+explicitly before retrying. Open `/mcp` in agy to reload or
+inspect connections when ready; rendering does not start or authenticate agy.
+To refresh only this client after provisioning, from the repository root:
+
+```bash
+~/.local/share/mcp-services/venv/bin/python configs/mcp/configure-clients.py omarchy --client antigravity
+# Use macbook instead of omarchy on the Mac.
+```
+
+## Cua Driver: host- and client-scoped computer use
+
+`cua-driver-mcp` is a fixed stdio proxy to the managed daemon. It does not start
+an independent runtime when the endpoint is missing, enable browser debugging,
+grant permissions, or install anything at tool invocation. Omarchy uses the
+native Wayland endpoint; its private X11 endpoint remains separate. macOS uses
+the signed app's daemon, with manual owner permissions. Install the runtime with
+normal host setup before refreshing registrations.
+
+The `clients_by_host` catalog field prevents accidental Claude Desktop or
+non-Pi macOS exposure. A conflicting existing Cua command, endpoint or argument
+list fails before writing; matching registrations retain tool restrictions and
+disabled state. Scoped refresh supports `--client claude`, `pi`, `codex`, or
+`antigravity` so another client's configuration need not be touched.
+
+Read `configs/cua-driver/skill/SKILL.md` for the exact-target and session rules.
+Cua is primary for qualified native/browser GUI work in its scoped clients;
+Brave and specialist workflows retain verified alternatives until qualified.
+No automatic foreground takeover, personal-profile attachment, or recording is
+part of registration. `python3 scripts/check-cua-mcp.py` checks the real proxy,
+daemon discovery and a read-only guide call, not GUI acceptance.
+
+## Browser automation: Cua scope, Playwriter + Chrome DevTools
 
 The shared installer first provisions the [pinned browser runtime](../browser-automation/README.md),
 then registers `playwriter` and `chrome-devtools`. GUI clients use absolute launchers
 and a recorded Node executable; nothing downloads at MCP startup.
 
-- **Playwriter is the default controller.** Install its [browser extension](https://chromewebstore.google.com/detail/playwriter/jfeammnjpkecdekppnclgkkffahnhfhe)
+- **Playwriter is the default outside Cua scope and a verified browser fallback
+  within it.** Keep the selected browser/profile and complete workflow; Cua's
+  presence does not qualify Brave or replace network-based diagnostic/download
+  operations. Install its [browser extension](https://chromewebstore.google.com/detail/playwriter/jfeammnjpkecdekppnclgkkffahnhfhe)
   in the existing browser/profile and enable it on a tab. Existing logins stay in
   that profile. Setup does not silently install/authorize an extension or launch
   a separate browser. Read the shared `playwriter` skill.
@@ -97,10 +143,21 @@ See [REA runtime details](../rea/README.md).
 
 ## ai-memory ownership and Pi migration
 
-The upstream ai-memory installers own Claude Code, Codex, and Claude Desktop
-memory registration. The shared renderer preserves their transport, auth,
+The upstream ai-memory installers own Claude Code, Codex, Antigravity CLI, and
+Claude Desktop memory registration. The shared renderer preserves their transport, auth,
 approval, and other options unchanged. A fresh renderer run alone emits no
-memory registration; normal setup runs upstream integration first.
+memory registration. Normal host setup runs the renderer first (including Pi's
+legacy-entry cleanup), then upstream integration. The standalone
+`install/ai-memory.sh` refresh runs upstream integration and then re-merges the
+catalog; both orders preserve upstream-owned memory entries.
+
+Antigravity's memory registration is generated by upstream into a private staging
+file, then checked and merged by `configs/ai-memory/antigravity-client.py`. A
+same-transport existing entry stays intact, including `disabled`, tool
+restrictions and authentication; a conflicting destination stops setup rather
+than forwarding credentials or resetting restrictions. Upstream chooses HTTP
+for inline credentials or its stdio bridge for file-backed credentials. The
+upstream Antigravity hook and skill installers still own their content.
 
 Pi uses the **stock** `ai-memory-pi.ts` extension for both custom memory tools
 (`memory_search`, `memory_read_page`, and the other upstream `memory_*` names)

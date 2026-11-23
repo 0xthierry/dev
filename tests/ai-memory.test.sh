@@ -49,14 +49,22 @@ import hashlib, io, pathlib, sys, tarfile
 root = pathlib.Path(sys.argv[1])
 binary = b'''#!/usr/bin/env python3
 import json, os, pathlib, sys
+args = sys.argv[1:]
+if args[:3] == ["install-mcp", "--client", "antigravity-cli"]:
+    staged = pathlib.Path(args[args.index("--config-file") + 1])
+    assert staged.parent.stat().st_mode & 0o077 == 0
+    if (pathlib.Path(os.environ["TEST_TMP"]) / "edit-during-plan").exists():
+        (pathlib.Path.home() / ".gemini/config/mcp_config.json").write_text('{"concurrent":"keep"}')
+    staged.write_text(json.dumps({"mcpServers": {"ai-memory": {"serverUrl": "http://127.0.0.1:49374/mcp", "headers": {"Authorization": "Bearer fixture"}}}}))
+    args = args[:args.index("--config-file")] + ["--config-file", "<private stage>"]
 with (pathlib.Path(os.environ["TEST_TMP"]) / "calls.jsonl").open("a") as f:
-    f.write(json.dumps({"args": sys.argv[1:], "cwd": os.getcwd(), "overrides": [k for k in os.environ if k.startswith("AI_MEMORY_")]}) + "\\n")
+    f.write(json.dumps({"args": args, "cwd": os.getcwd(), "overrides": [k for k in os.environ if k.startswith("AI_MEMORY_")]}) + "\\n")
 '''
 with tarfile.open(root / "release.tar.gz", "w:gz") as archive:
     entry = tarfile.TarInfo("ai-memory")
     entry.size = len(binary)
     archive.addfile(entry, io.BytesIO(binary))
-    for agent in ("claude-code", "codex"):
+    for agent in ("claude-code", "codex", "antigravity-cli"):
         directory = tarfile.TarInfo("hooks/" + agent)
         directory.type = tarfile.DIRTYPE
         archive.addfile(directory)
@@ -86,9 +94,16 @@ echo 'ok: repeat install links actual upstream binary, retires old service, remo
 # Fake only the downstream Codex adjustment's Python runtime; its real behavior
 # is covered by ai-memory-clients.test.py with the actual TOML writer.
 mkdir -p "$HOME/.local/share/mcp-services/venv/bin"
-printf '#!/bin/sh\nprintf "codex-bridge\\n" >> "$TEST_TMP/adjustments"\n' > "$HOME/.local/share/mcp-services/venv/bin/python"
+cat > "$HOME/.local/share/mcp-services/venv/bin/python" <<'SH'
+#!/bin/sh
+case "$1" in */antigravity-client.py) exec python3 "$@";; esac
+printf 'codex-bridge\n' >> "$TEST_TMP/adjustments"
+SH
 chmod +x "$HOME/.local/share/mcp-services/venv/bin/python"
 export AI_MEMORY_SERVER_URL=https://retired.invalid AI_MEMORY_AUTH_TOKEN=obsolete AI_MEMORY_DATA_DIR=/wrong
+agy="$HOME/.gemini/config/mcp_config.json"
+mkdir -p "${agy%/*}"
+printf '{"mcpServers":{"custom":{"command":"keep"}}}\n' > "$agy"
 DRY_RUN=0 configure_ai_memory_agents >> "$TEST_TMP/install.log" 2>&1
 python3 - "$HOME" "$TEST_TMP" <<'PY'
 import json
@@ -99,9 +114,54 @@ calls = [json.loads(line) for line in (root / "calls.jsonl").read_text().splitli
 assert calls == [
     {"args": ["setup", "--yes", "--agent", "claude-code", "--agent", "codex", "--agent", "pi"], "cwd": str(home), "overrides": []},
     {"args": ["install-mcp", "--client", "claude-desktop", "--apply"], "cwd": str(home), "overrides": []},
+    {"args": ["install-mcp", "--client", "antigravity-cli", "--apply", "--config-file", "<private stage>"], "cwd": str(home), "overrides": []},
+    {"args": ["install-hooks", "--agent", "antigravity-cli", "--apply"], "cwd": str(home), "overrides": []},
+    {"args": ["install-skills", "--scope", "global", "--agent", "antigravity"], "cwd": str(home), "overrides": []},
 ]
 assert (root / "adjustments").read_text() == "codex-bridge\n"
+path = home / '.gemini/config/mcp_config.json'
+config = json.loads(path.read_bytes())
+assert config == {'mcpServers': {'custom': {'command': 'keep'}, 'ai-memory': {
+    'serverUrl': 'http://127.0.0.1:49374/mcp', 'headers': {'Authorization': 'Bearer fixture'}}}}
+assert path.stat().st_mode & 0o777 == 0o600
+assert path.with_suffix('.json.bak').stat().st_mode & 0o777 == 0o600
+config['mcpServers']['ai-memory'].update(disabled=True, disabledTools=['memory_delete_page'], headers={'X-Custom': 'keep'})
+path.write_text(json.dumps(config))
 PY
+cp "$agy" "$TEST_TMP/restricted"
+DRY_RUN=0 configure_ai_memory_agents >> "$TEST_TMP/install.log" 2>&1
+cmp "$agy" "$TEST_TMP/restricted"
+[[ ! -e "$agy.bak.1" ]]
+echo 'ok: refresh retains complete restricted Antigravity entry, auth and unrelated entries'
+printf '%s' '{"mcpServers":{"ai-memory":{"command":"unrelated"}}}' > "$agy"
+cp "$agy" "$TEST_TMP/conflict"
+before_adjustments="$(wc -l < "$TEST_TMP/adjustments")"
+if DRY_RUN=0 configure_ai_memory_agents >> "$TEST_TMP/install.log" 2>&1; then exit 1; fi
+cmp "$agy" "$TEST_TMP/conflict"
+[[ "$(wc -l < "$TEST_TMP/adjustments")" -eq $((before_adjustments + 1)) ]]
+python3 - "$TEST_TMP/calls.jsonl" <<'PY'
+import json, pathlib, sys
+calls = [json.loads(line)['args'] for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+assert calls[-2] == ['install-mcp', '--client', 'claude-desktop', '--apply']
+assert calls[-1][:3] == ['install-mcp', '--client', 'antigravity-cli']
+PY
+echo 'ok: Antigravity conflict leaves Desktop configured and Codex bridge adjustment completed'
+grep -q 'different or unclear ai-memory transport' "$TEST_TMP/install.log"
+printf '{' > "$agy"
+cp "$TEST_TMP/calls.jsonl" "$TEST_TMP/before-invalid"
+if DRY_RUN=0 configure_ai_memory_agents >> "$TEST_TMP/install.log" 2>&1; then exit 1; fi
+cmp "$TEST_TMP/before-invalid" "$TEST_TMP/calls.jsonl"
+rm "$agy"
+ln -s "$TEST_TMP/restricted" "$agy"
+if DRY_RUN=0 configure_ai_memory_agents >> "$TEST_TMP/install.log" 2>&1; then exit 1; fi
+cmp "$TEST_TMP/before-invalid" "$TEST_TMP/calls.jsonl"
+echo 'ok: refuses different transport, malformed JSON, and symlinked Antigravity config'
+rm "$agy"
+touch "$TEST_TMP/edit-during-plan"
+if DRY_RUN=0 configure_ai_memory_agents >> "$TEST_TMP/install.log" 2>&1; then exit 1; fi
+[[ "$(< "$agy")" == '{"concurrent":"keep"}' ]]
+grep -q 'Antigravity config changed during planning' "$TEST_TMP/install.log"
+echo 'ok: an edit during upstream rendering survives; setup asks for retry'
 echo 'ok: delegates service/hooks/skills/MCP to upstream setup, with no stale cloud overrides or hook-trust bypass'
 cp "$TEST_TMP/services" "$TEST_TMP/services-before"
 cp "$HOME/.local/lib/ai-memory/ai-memory" "$TEST_TMP/original-binary"

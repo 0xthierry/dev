@@ -23,6 +23,7 @@ HOST_CONFIG_TARGETS=(
   ghostty
   herdr
   agents
+  cua-driver
   claude-desktop-pinned
   moshi
   brave

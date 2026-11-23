@@ -1,0 +1,13 @@
+# MacBook: Pi only
+
+Use this route only from Pi on the managed MacBook (macOS 14+). No Cua setup or routing is intended for other Mac harnesses. Preserve Claude Code's and Codex's built-in Computer Use, including their enablement and permissions; do not replace, disable or reconfigure either integration through Cua setup. Use the managed `CuaDriver.app` daemon: the signed app owns the macOS permissions. Do not start a direct runtime under a terminal, wrapper or another app's permissions. Read-only `cua-driver status` and `cua-driver doctor` can distinguish a missing daemon or grant from an app input limitation.
+
+## Permissions belong to the owner
+
+Report the specific missing prerequisite. Accessibility is needed for native accessibility/input; Screen Recording permits pixels, **not** authorization to record a session. The managed 0.59.4 daemon gates desktop tools until both required grants are present. If either is missing, stop and report `permissions_pending`; `include_screenshot:false` does not bypass this gate. Never disable the permissions gate to continue. On macOS 26+ direct window capture can need additional approval; on macOS 27+ existing Chrome/Edge profile access can need an additional per-app grant. Do not request unrelated grants. Never click privacy prompts, modify TCC, re-sign the app, or grant Full Disk Access on the owner's behalf.
+
+## Input without accidental submission
+
+Bind the exact `(pid, window_id)` in the persistent session. Prefer semantic actions; do not equate a window being visible to Cua with being focusable or accepting background keystrokes. For literal field contents, prefer `set_value` when the element supports it and verify its resulting value. In key-based `type_text`, **newline is Return and tab is Tab**: that can submit a form, execute a terminal command or move focus into a different field. Do not type multiline/tabbed text by keys when those effects were not requested. Separate editing, readback and an explicitly intended submission. If no safe literal-text route exists, stop.
+
+For pixel input, select coordinates only from this exact window's latest valid screenshot on this connection/session; never infer a Retina factor or map a desktop/multi-display screenshot into window coordinates. Inspect the actual result after each action. A minimized window, inactive tab or custom canvas may not accept the same input as a visible control. Foreground retry needs a proven no-op/refusal and explicit permission for the interruption. Qualification on a different Mac, browser or app does not prove the current background workflow.

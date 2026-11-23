@@ -2,14 +2,18 @@
 
 Apply this profile only when the current graphical session is Hyprland/Omarchy. The repository manages two separate user services: `cua-driver.service` uses native Wayland (`CUA_DRIVER_RS_ENABLE_WAYLAND=1`), while `cua-driver-x11.service` uses X11 (`CUA_DRIVER_RS_ENABLE_WAYLAND=0`) on a private endpoint. Reuse these services; do not start ad hoc daemons or change the default service's backend to work around an input failure.
 
+## Current 0.59.4 acceptance boundary
+
+On 2026-11-23, the managed Wayland and X11 services and persistent MCP discovery were verified on this host. One disposable GTK/Wayland fixture produced a correctly targeted AT-SPI tree, but foreground identity changed before input. The test stopped without sending `set_value`, and the fixture process/window were verified gone. This establishes native observation, **not background input**. The report does not establish what changed focus; GTK non-focus flags alone did not establish a background-launch guarantee. Schedule visible fixture launches with the owner rather than promising that opening a new window cannot disturb focus. Browser/profile and raw-input acceptance remain separate.
+
 ## Establish the live display layout
 
 Run `cua-omarchy-display monitors` before any task whose result depends on a monitor or desktop coordinate. Treat the returned `hyprctl monitors -j` data as current state. Discover output names and geometry at runtime; names such as `DP-1` and `HDMI-A-2` are examples, not durable identities.
 
-With the repository's pinned Cua Driver 0.28.3:
+Historical host observations under 0.28.3 (not yet revalidated under 0.59.4):
 
 - `get_desktop_state` has no selected-output parameter.
-- Its `"display":"primary"` label does not prove that Hyprland considers the captured output primary or focused. The native Wayland backend currently binds the first advertised `wl_output`.
+- Its `"display":"primary"` label does not prove that Hyprland considers the captured output primary or focused. The observed native Wayland backend bound the first advertised `wl_output`.
 - Desktop action targets accept only `display_id:"primary"`.
 - Changing the focused Hyprland monitor does not prove that a later desktop capture uses that output.
 
@@ -26,7 +30,7 @@ cua-omarchy-display capture-layout /tmp/layout.png
 
 `capture-output` validates the output against the live Hyprland monitor list before calling `grim`. `capture-layout` captures the complete compositor layout. Both commands are observation-only and do not authorize input.
 
-Treat these images as external evidence. **Never pass coordinates read from a helper screenshot into a Cua desktop action.** A selected-output image uses output-local coordinates, while Cua desktop actions use the driver's `"primary"` frame. A full-layout image uses compositor-layout coordinates. Neither mapping is proven equivalent to Cua's desktop frame.
+Treat these images as external evidence. **Never pass coordinates read from a helper screenshot into a Cua desktop action.** A selected-output image uses output-local coordinates, while a Cua desktop action must use its own session-bound Cua frame. A full-layout image uses compositor-layout coordinates. Neither mapping is proven equivalent to Cua's desktop frame.
 
 ## Operate a window on any monitor
 
@@ -42,7 +46,7 @@ Do not derive a Cua window click by subtracting monitor origins from a `grim` sc
 
 ## Use the isolated X11 endpoint for terminal input
 
-Native Wayland capture does not imply native keyboard injection is available. On this host, Cua 0.28.3 refuses native foreground keyboard input without the Hyprland input plugin. For an explicitly authorized terminal-verification workflow, launch a separate **Alacritty X11** window through Cua; leave the user's existing terminals, global environment, and keyboard layout unchanged:
+Native Wayland capture does not imply native keyboard injection is available. Historically on this host, Cua 0.28.3 refused native foreground keyboard input without the Hyprland input plugin. For an explicitly authorized terminal-verification workflow, launch a separate **Alacritty X11** window through Cua; leave the user's existing terminals, global environment, and keyboard layout unchanged:
 
 ```bash
 cua-driver launch_app '{"name":"/usr/bin/env","additional_arguments":["-u","WAYLAND_DISPLAY","/usr/bin/alacritty","--title","Cua terminal verification","-e","bash","--noprofile","--norc"]}'
@@ -51,11 +55,11 @@ socket="$XDG_RUNTIME_DIR/cua-driver-x11/driver.sock"
 CUA_DRIVER_RS_ENABLE_WAYLAND=0 cua-driver --socket "$socket" list_windows '{}'
 ```
 
-Use this socket for **every** subsequent observation and action on that window. X11 `window_id` values are XIDs and differ from the native Wayland endpoint's IDs for the same application; never mix them. Obtain the exact PID/XID from this endpoint, then take `get_window_state` before input. The endpoint sees X11/XWayland windows, not native Wayland applications. Do not use the native `cua-omarchy-window correlate` output as an X11 target.
+Use this socket for **every** subsequent observation and action on that window. X11 `window_id` values are XIDs and differ from the native Wayland endpoint's IDs for the same application; never mix them. Obtain the exact PID/XID from this endpoint, then use a persistent `cua-driver mcp --embedded --socket "$socket"` connection to that endpoint and read fresh `get_window_state` in the same session before input. Do not chain disposable CLI actions or reuse a snapshot from the default MCP connection. The endpoint sees X11/XWayland windows, not native Wayland applications. Do not use the native `cua-omarchy-window correlate` output as an X11 target.
 
-Keep the normal background-first input ladder. The tested XWayland background route timed out while waiting for its virtual input device; after this backend failure and with foreground authorization, retry only the refused action with `delivery_mode:"foreground"`. Do not reinterpret a permission denial as a backend failure. Verify text and keys from fresh screenshots, not the tool's delivery summary. If the result remains unverifiable, stop rather than assuming that a command ran.
+Keep the normal background-first input ladder. The historical 0.28.3 XWayland background route timed out while waiting for its virtual input device; do not assume 0.59.4 has the same failure. After a current backend failure, verify delivery first; only with foreground authorization, retry a proven missed action with `delivery_mode:"foreground"`. Do not reinterpret a permission denial as a backend failure. Verify text and keys from fresh screenshots, not the tool's delivery summary. If the result remains unverifiable, stop rather than assuming that a command ran.
 
-Host verification with Cua 0.28.3 demonstrated foreground typing and Enter execution in Alacritty, with `CUA_INPUT_OK` visible afterward. Ghostty X11 received text but the tested Return/Enter actions did not execute the command. Quoted text also failed to reproduce exactly with the host's US International dead-key layout; inspect the complete text before submitting it and never execute a mismatched command. This is bounded host evidence, not a claim that arbitrary text, all XWayland applications, or all key combinations work. Prefer Alacritty for this verification route; broader CLI navigation still needs its own evidence.
+Historical verification with Cua 0.28.3 (pending repeat on 0.59.4) demonstrated foreground typing and Enter execution in Alacritty, with `CUA_INPUT_OK` visible afterward. Ghostty X11 received text but the tested Return/Enter actions did not execute the command. Quoted text also failed to reproduce exactly with the host's US International dead-key layout; inspect the complete text before submitting it and never execute a mismatched command. This is bounded host evidence, not a claim that arbitrary text, all XWayland applications, or all key combinations work. Prefer Alacritty for this verification route; broader CLI navigation still needs its own evidence.
 
 ## Restrict desktop-level actions
 
@@ -105,8 +109,10 @@ Do not use `hyprctl dispatch` directly. Add any future compositor operation to t
 
 ## Diagnose before improvising
 
+Hyprland support is experimental. Never inspect, capture or operate the Omarchy authentication dialog; hand control to the owner and resume only after it is dismissed.
+
 Run `cua-driver doctor` when the default service, Wayland backend, accessibility bus, or capture route is unclear. Check `systemctl --user status cua-driver.service cua-driver-x11.service` for the managed endpoints. Native Wayland capture remains plugin-free; X11 terminal input uses the separate endpoint described above.
 
-Do not install or enable a Hyprland plugin as an incidental fix. The 0.28.3 release-asset build kit enables production input but still declares `native_certified:false`; its package instructions, manifest, and PKGBUILD supersede the tag's stale source README for package procedures. The kit requires the matching compositor/compiler/runtime, installation outside Hyprland, and a fresh graphical session. On the inspected host, the compositor was built with GCC 16.1.1 while the installed compiler was 16.2.1. Do not bypass verification, replace shared runtime libraries, downgrade the system compiler, or hot-load/unload an incompatible module. A future native-plugin setup needs a separate compatibility review and explicit approval for disruptive steps.
+Do not install or enable a Hyprland plugin as an incidental fix. Historically the 0.28.3 release-asset build kit enables production input but still declares `native_certified:false`; its package instructions, manifest, and PKGBUILD supersede the tag's stale source README for package procedures. The kit requires the matching compositor/compiler/runtime, installation outside Hyprland, and a fresh graphical session. On the inspected host, the compositor was built with GCC 16.1.1 while the installed compiler was 16.2.1. The reviewed 0.59.4 kit still declares `native_certified:false` and requires its exact Hyprland package, compiler and runtime; upgrading Cua does not qualify the plugin. Do not bypass verification, replace shared runtime libraries, downgrade the system compiler, or hot-load/unload an incompatible module. A future native-plugin setup needs a separate compatibility review and explicit approval for disruptive steps.
 
 A degraded accessibility tree does not justify ungrounded coordinates. Use the exact window screenshot, the typed browser route, or a fresh supported observation. Preserve the upstream rule that foreground delivery requires prior authorization or a new user approval.

@@ -7,6 +7,9 @@ PartOf=graphical-session.target
 [Service]
 Type=simple
 Environment=CUA_DRIVER_RS_ENABLE_WAYLAND=1
+Environment=CUA_DRIVER_RS_TELEMETRY_ENABLED=false
+Environment=CUA_DRIVER_RS_UPDATE_CHECK=false
+UMask=0077
 ExecStart=%h/.local/bin/cua-driver serve
 Restart=on-failure
 RestartSec=3

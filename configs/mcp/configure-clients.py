@@ -16,6 +16,7 @@ import tomllib
 
 
 HOSTS = ("macbook", "omarchy")
+CLIENTS = ("claude", "pi", "codex", "antigravity", "desktop")
 CATALOG = Path(__file__).with_name("catalog.json")
 
 
@@ -55,6 +56,8 @@ def load_catalog():
     catalog = parse_json(CATALOG.read_bytes(), CATALOG)
     for name, service in catalog.items():
         object_value(service, f"catalog service {name}")
+        if set(service) - {"url", "launcher", "args", "description", "desktop_opt_in", "hosts", "clients_by_host"}:
+            raise ValueError(f"unknown catalog field for {name}")  # A misspelled scope must not select all clients.
         if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
             raise ValueError(f"invalid catalog server name: {name}")
         if ("url" in service) == ("launcher" in service):
@@ -74,7 +77,20 @@ def load_catalog():
         hosts = service.get("hosts", list(HOSTS))
         if not isinstance(hosts, list) or not hosts or any(host not in HOSTS for host in hosts):
             raise ValueError(f"invalid catalog hosts for {name}")
+        if "clients_by_host" in service:
+            scopes = object_value(service["clients_by_host"], f"clients_by_host for {name}")
+            if "hosts" in service or not scopes or any(host not in HOSTS for host in scopes):
+                raise ValueError(f"invalid catalog host scope for {name}")
+            for host, clients in scopes.items():
+                if not isinstance(clients, list) or not clients or any(c not in CLIENTS for c in clients):
+                    raise ValueError(f"invalid catalog clients for {name} on {host}")
     return catalog
+
+
+def selected_services(catalog, host, client):
+    return {name: service for name, service in catalog.items()
+            if host in service.get("hosts", HOSTS)
+            and ("clients_by_host" not in service or client in service["clients_by_host"].get(host, []))}
 
 
 def desktop_remote_services(path, catalog):
@@ -155,7 +171,8 @@ def render_entry(service, home, client, name):
     if "url" in service:
         if client == "desktop":
             return {"command": str(home / ".local/bin/mcp-service"), "args": [name]}
-        entry = {"url": service["url"]}
+        endpoint = "serverUrl" if client == "antigravity" else "url"
+        entry = {endpoint: service["url"]}
         if client == "claude":
             entry["type"] = "http"
     else:
@@ -163,6 +180,29 @@ def render_entry(service, home, client, name):
     if client == "pi":
         entry.update(description=service["description"], exposure="deferred")
     return entry
+
+
+def merge_matching_entry(client, name, existing, desired):
+    """Never move an existing entry's auth or options to a different destination."""
+    if existing is None:
+        return desired
+    endpoints = [existing[key] for key in ("serverUrl", "url", "httpUrl") if key in existing]
+    if "serverUrl" in desired:
+        matches = (bool(endpoints) and all(url == desired["serverUrl"] for url in endpoints)
+                   and "command" not in existing and "args" not in existing
+                   and existing.get("type", "http") in ("http", "streamable-http"))
+    else:
+        matches = (not endpoints and existing.get("command") == desired["command"]
+                   and existing.get("args", []) == desired["args"]
+                   and existing.get("type", "stdio") == "stdio")
+    if not matches:
+        raise ValueError(f"{client} server {name!r} has a different or unclear transport; "
+                         "rename the existing entry or reconcile it with the catalog before retrying")
+    result = dict(existing)
+    for alias in ("url", "httpUrl"):
+        result.pop(alias, None)
+    # Fill defaults without changing an existing Pi exposure or other user option.
+    return desired | result
 
 
 def merge_entry(existing, desired):
@@ -213,7 +253,7 @@ def save(path, original, content):
     print(f"configured: {path}")
 
 
-def configure(host):
+def configure(host, only_client=None):
     try:
         import tomlkit
     except ImportError as error:
@@ -224,15 +264,17 @@ def configure(host):
                  else home / ".claude.json")
     pi_path = Path(os.environ.get("PI_CODING_AGENT_DIR", home / ".pi/agent")) / "mcp.json"
     codex_path = Path(os.environ.get("CODEX_HOME", home / ".codex")) / "config.toml"
-    paths = {"claude": code_path, "pi": pi_path, "codex": codex_path}
+    paths = {"claude": code_path, "pi": pi_path, "codex": codex_path,
+             "antigravity": home / ".gemini/config/mcp_config.json"}
     desktop = (home / "Library/Application Support/Claude" if host == "macbook"
                else Path(os.environ.get("XDG_CONFIG_HOME", home / ".config")) / "Claude")
     paths["desktop"] = desktop / "claude_desktop_config.json"
+    if only_client is not None:
+        paths = {only_client: paths[only_client]}
     if len({path.absolute() for path in paths.values()}) != len(paths):
         raise ValueError("client configuration paths must be distinct")
     catalog = load_catalog()
-    selected = {name: service for name, service in catalog.items()
-                if host in service.get("hosts", HOSTS)}
+    selected = {client: selected_services(catalog, host, client) for client in paths}
     preferences_path = (Path(os.environ.get("XDG_CONFIG_HOME", home / ".config"))
                         / "mcp-services/preferences.json")
     desktop_enabled = (desktop_remote_services(preferences_path, catalog)
@@ -249,10 +291,15 @@ def configure(host):
                 object_value(entry, f"server {name} in {path}")
             configs[client] = tomlkit.parse(raw.decode() if raw is not None else "")
         else:
+            # agy can create a zero-byte global config on first launch. Only
+            # treat that exact bootstrap state as absent; retain it for backup.
+            if client == "antigravity" and raw == b"":
+                raw = None
             configs[client] = parse_json(raw, path, servers=True)
     # Stock Pi extension owns memory tools. Preflight custom entries before
     # planning any writes; other clients' upstream memory entries are untouched.
-    pi_memory = configs["pi"].get("mcpServers", {}).get("ai-memory")
+    pi_servers = configs.get("pi", {}).get("mcpServers", {})
+    pi_memory = pi_servers.get("ai-memory")
     if pi_memory is not None and not managed_pi_memory_entry(pi_memory, home):
         raise ValueError(f"custom Pi ai-memory entry in {pi_path}; remove that native "
                          "mcpServers entry explicitly before setup to avoid duplicate "
@@ -260,15 +307,17 @@ def configure(host):
     # Pi maps '-' to '_' in native server identifiers. Do not publish a
     # catalog entry that collides with an existing differently named server.
     pi_names = {}
-    for name in [*selected, *configs["pi"].get("mcpServers", {})]:
+    pi_selected = selected.get("pi", {})
+    for name in [*pi_selected, *pi_servers]:
         normalized = name.replace("-", "_")
         managed_name = pi_names.get(normalized)
         if managed_name is not None and managed_name != name:
             raise ValueError(f"Pi server names {managed_name!r} and {name!r} collide; "
                              f"resolve the existing entry in {pi_path} before setup")
-        if name in selected:
+        if name in pi_selected:
             pi_names[normalized] = name
-    plugin_active = "figma" in selected and figma_plugin_active(claude_dir, selected["figma"]["url"])
+    plugin_active = ("figma" in selected.get("claude", {})
+                     and figma_plugin_active(claude_dir, catalog["figma"]["url"]))
     plans = []
     for client, path in paths.items():
         config = configs[client]
@@ -279,7 +328,7 @@ def configure(host):
         servers = config[key]
         if client == "pi" and pi_memory is not None:
             del servers["ai-memory"]
-        for name, service in selected.items():
+        for name, service in selected[client].items():
             if client == "desktop" and service.get("desktop_opt_in", False):
                 existing = servers.get(name)
                 managed = existing is not None and managed_desktop_entry(existing, home, name)
@@ -299,7 +348,11 @@ def configure(host):
                         print("warning: active Figma plugin; preserving custom standalone figma entry", file=sys.stderr)
                 continue
             existing = servers.get(name, {})
-            merged = merge_entry(existing, desired)
+            if client == "antigravity" or name == "cua-driver":
+                merged = merge_matching_entry("Antigravity" if client == "antigravity" else client,
+                                              name, servers.get(name), desired)
+            else:
+                merged = merge_entry(existing, desired)
             if existing != merged:
                 if client == "codex" and name in servers:
                     # Mutate a real TOML table to preserve its comments and unrelated fields.
@@ -331,7 +384,10 @@ def configure(host):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("host", choices=HOSTS)
+    parser.add_argument("--client", choices=CLIENTS,
+                        help="refresh only the named client (default: configure all clients)")
+    args = parser.parse_args()
     try:
-        configure(parser.parse_args().host)
+        configure(args.host, only_client=args.client)
     except (OSError, ValueError) as error:
         parser.exit(1, f"error: {error}\n")

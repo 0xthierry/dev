@@ -3,7 +3,7 @@ import { z } from "zod";
 const codeInputSchema = z.object({ code: z.string() });
 
 export function browserUseToolDescription(browserClientPath: string): string {
-  return `Run JavaScript against the user's connected Chromium browser (Chrome, Brave, or Edge) through the ChatGPT browser extension, only when the user explicitly requests browser_use, control-browser, or this extension for the task. Otherwise use Playwriter MCP; use Chrome DevTools MCP for diagnostics or a capability fallback through CDP, preserving the same browser/profile and page. Tool availability or /browser-use on alone is not a request to use this tool.
+  return `Run JavaScript against the user's connected Chromium browser (Chrome, Brave, or Edge) through the ChatGPT browser extension, only when the user explicitly requests browser_use, control-browser, or this extension for the task. In Pi on Omarchy or MacBook prefer Cua for qualified GUI work and Playwriter MCP for verified browser gaps; outside managed Cua scope use Playwriter MCP; use Chrome DevTools MCP for diagnostics or a capability fallback through CDP, preserving the same browser/profile and page. Tool availability or /browser-use on alone is not a request to use this tool.
 
 Follow the control-browser skill before using this tool. First call in a session:
 

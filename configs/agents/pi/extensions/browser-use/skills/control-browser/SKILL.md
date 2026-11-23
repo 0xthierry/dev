@@ -1,13 +1,13 @@
 ---
 name: control-browser
-description: "Use only when the user explicitly requests browser_use, control-browser, or the ChatGPT browser extension for the task. Otherwise use Playwriter MCP for browser automation and Chrome DevTools MCP for diagnostics or capability fallback."
+description: "Use only when the user explicitly requests browser_use, control-browser, or the ChatGPT browser extension for the task. In Pi on Omarchy or MacBook prefer Cua for qualified GUI work, Playwriter MCP for verified browser gaps, and Chrome DevTools MCP for diagnostics."
 ---
 
 # Browser
 ## Choose the workflow
-Default to Playwriter MCP for browser automation in the user's existing browser/profile. Use Chrome DevTools MCP for diagnostics or an authorized capability fallback through CDP, preserving the same browser/profile and exact page. Use `browser_use` only when the user explicitly requests `browser_use`, `control-browser`, or the ChatGPT browser extension for the task. Naming Chrome, Brave, Edge, an existing login, or a URL does not select this tool.
+In Pi on Omarchy or MacBook, prefer Cua for qualified GUI work in the selected browser/profile. Playwriter MCP handles verified capability gaps and remains the default browser controller outside managed Cua scope. Use Chrome DevTools MCP for diagnostics or an authorized capability fallback through CDP, preserving the same browser/profile and exact page. Use `browser_use` only when the user explicitly requests `browser_use`, `control-browser`, or the ChatGPT browser extension for the task. Naming Chrome, Brave, Edge, an existing login, or a URL does not select this tool.
 
-Tool availability or `/browser-use on` alone does not select `browser_use`. Do not ask to enable it during a Playwriter or Chrome DevTools MCP task. Preserve the user's chosen browser and tool; report failures instead of silently switching tools. A disabled extension is not a ban on independently requested CDP work. Never switch tools to bypass an explicit permission denial.
+Tool availability or `/browser-use on` alone does not select `browser_use`. Do not ask to enable it during a Cua, Playwriter or Chrome DevTools MCP task. Preserve the user's chosen browser and tool; report failures instead of silently switching tools. A disabled extension is not a ban on independently requested CDP work. Never switch tools to bypass an explicit permission denial.
 
 The rest of this skill applies only after the user selects `browser_use`. It describes this extension's APIs, not exclusive ownership of the user's browser.
 

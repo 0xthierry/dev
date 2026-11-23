@@ -36,6 +36,7 @@ COMMON_PACMAN_PACKAGES=(
   fastfetch
   inxi
   github-cli
+  cosign
   go
   gcc
   make
@@ -118,6 +119,7 @@ COMMON_BREW_FORMULAE=(
   procs
   fastfetch
   gh
+  cosign
   googleworkspace-cli
   infisical/get-cli/infisical
   go

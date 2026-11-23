@@ -19,7 +19,7 @@ Set `PI_BROWSER_USE_RESOURCES_ROOT` to the desktop **Resources directory** for a
 
 ## Tool routing
 
-Playwriter MCP is the default for browser automation in the user's existing browser/profile. Chrome DevTools MCP is the diagnostic and capability fallback, with explicit browser/page identity checks and background tab controls. Use `browser_use` only when the user explicitly requests `browser_use`, `control-browser`, or the ChatGPT browser extension for the task. Naming a browser, URL, or existing login does not select this extension. Tool availability or `/browser-use on` alone does not select it either.
+In Pi on Omarchy or MacBook, Cua is primary for qualified native and browser GUI work. Preserve the user's browser/profile: use independently authorized Playwriter MCP for a verified capability gap, including Brave or Tripo download workflows not qualified under Cua. Outside managed Cua scope, Playwriter MCP remains the default browser controller. Chrome DevTools MCP is the diagnostic and capability fallback, with explicit browser/page identity checks and background tab controls. Use `browser_use` only when the user explicitly requests `browser_use`, `control-browser`, or the ChatGPT browser extension for the task. Naming a browser, URL, or existing login does not select this extension. Tool availability or `/browser-use on` alone does not select it either.
 
 Preserve the selected browser and tool. Report failures rather than silently switching tools. A disabled extension is not a prohibition on CDP, but never switch tools to bypass an explicit permission denial. This policy changes routing instructions only, not either tool's capabilities or permission checks.
 

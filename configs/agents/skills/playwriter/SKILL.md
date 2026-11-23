@@ -1,9 +1,11 @@
 ---
 name: playwriter
-description: Use Playwriter MCP as the default controller for the user's existing Chrome/Brave browser and logins. Use for browsing, navigation, forms, uploads/downloads, screenshots, scraping, and web-app testing. Keep agent-owned tabs in the background; use Chrome DevTools MCP for diagnostics or a verified capability fallback.
+description: Use Playwriter MCP for authenticated browser workflows where Cua is unqualified or lacks a required capability, or as the default browser controller outside Cua's host/harness scope. Use for browsing, navigation, forms, uploads/downloads, screenshots, scraping, and web-app testing. Keep agent-owned tabs in the background; use Chrome DevTools MCP for diagnostics or a verified capability fallback.
 ---
 
 # Playwriter browser control
+
+On Omarchy (Claude Code, Pi, Codex, Antigravity) and on the MacBook (Pi only), prefer Cua for qualified GUI workflows. Keep Playwriter for verified capabilities on the user's actual browser/profile, including Brave pending Cua qualification and Tripo network/download handling. Do not attempt Cua merely to trigger a failure when the limitation is known. Outside this scope, Playwriter remains the default browser controller.
 
 Repository-managed Playwriter **0.9.0**, through the `playwriter` MCP server. The shared MCP installer registers the server in Pi, Claude Code, Codex, and Claude Desktop. ChatGPT needs a separately authorized connection; a local registration is not evidence it is connected.
 

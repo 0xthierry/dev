@@ -1,6 +1,6 @@
 ---
 name: chrome-devtools
-description: Use Chrome DevTools MCP for browser performance, network, console, Lighthouse, and memory diagnostics, or an authorized capability fallback when Playwriter cannot complete a browser operation reliably. Preserve the user's browser/profile, exact page, and background focus.
+description: Use Chrome DevTools MCP for browser performance, network, console, Lighthouse, and memory diagnostics, or an authorized capability fallback when the primary controller cannot complete a browser operation reliably. Preserve the user's browser/profile, exact page, and background focus.
 ---
 
 # Chrome DevTools MCP
@@ -9,10 +9,10 @@ The shared catalog registers native `chrome-devtools` MCP **1.9.0** in supported
 
 ## Select the right tool and page
 
-- Playwriter MCP is the default browser controller. Use this server directly for deeper diagnostics or when a verified capability/reliability limitation calls for it. A permission denial or missing login is not such a limitation.
+- Follow the shared host/harness routing: qualified Cua workflows on Omarchy (Claude Code, Pi, Codex, Antigravity) and MacBook (Pi only); Playwriter is the default browser controller outside that scope. Use this server directly for deeper diagnostics or when a verified capability/reliability limitation calls for it. A permission denial or missing login is not such a limitation.
 - Discover the configured server's tools and their current schemas. In Pi, use `tool_search`; do not assume every tool is already loaded. Prefer native MCP over the diagnostic CLI when using this server as a controller.
 - Inspect `list_pages`, match the requested page, and pass `pageId` explicitly to page-scoped tools. Do not assume a Playwriter page handle, a CDP target ID, and an MCP page ID are interchangeable.
-- Verify browser/profile identity before handing over from Playwriter. The local port may belong to Brave even when Playwriter is connected to another browser. Stop on mismatch or ambiguity; never silently change browser/profile to make a call succeed.
+- Verify browser/profile identity before handing over from Cua or Playwriter. The local port may belong to Brave even when Playwriter is connected to another browser. Stop on mismatch or ambiguity; never silently change browser/profile to make a call succeed.
 - Use `select_page` with `bringToFront: false`. Use `new_page` with `background: true`, without `isolatedContext` when the task needs existing logins. Those are per-call options, not server-wide guarantees. Do not activate windows or tabs unless foreground access was explicitly requested.
 - Keep exactly one controller responsible for navigation/input on a page at a time. Re-snapshot after switching tools. Before retrying a failed action, inspect whether its side effect already occurred.
 

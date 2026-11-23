@@ -37,7 +37,7 @@ install_ai_memory_binary() (
   local platform="$1" checksum="$2" runtime="$HOME/.local/lib/ai-memory"
   local bin="$runtime/ai-memory" marker="$runtime/version"
   local expected="$AI_MEMORY_VERSION $platform" tmp
-  if [[ -x "$bin" && ! -L "$bin" && -f "$marker" && -d "$runtime/hooks/claude-code" && -d "$runtime/hooks/codex" ]] \
+  if [[ -x "$bin" && ! -L "$bin" && -f "$marker" && -d "$runtime/hooks/claude-code" && -d "$runtime/hooks/codex" && -d "$runtime/hooks/antigravity-cli" ]] \
     && [[ "$(< "$marker")" == "$expected" ]]; then
     log_item "ai-memory: already at $AI_MEMORY_VERSION ($platform)"
     return
@@ -83,7 +83,7 @@ with tarfile.open(archive, "r:gz") as release:
             with release.extractfile(member) as source, target.open("wb") as output:
                 shutil.copyfileobj(source, output)
             target.chmod(0o755 if member.mode & 0o111 else 0o644)
-    if not all((stage / "hooks" / agent).is_dir() for agent in ("claude-code", "codex")):
+    if not all((stage / "hooks" / agent).is_dir() for agent in ("claude-code", "codex", "antigravity-cli")):
         sys.exit("error: ai-memory archive is missing its hook bundle")
 (stage / "ai-memory").chmod(0o755)
 PY
@@ -142,18 +142,23 @@ configure_ai_memory_agents() (
   local name runtime="$HOME/.local/share/mcp-services/venv/bin/python"
   if (( ${DRY_RUN:-0} )); then
     log_item "[dry-run] ai-memory setup --yes --agent claude-code --agent codex --agent pi"
+    log_item "[dry-run] Configure Antigravity MCP without replacing existing policy; install upstream hooks and skills"
     log_item "[dry-run] Install upstream Claude Desktop MCP; use upstream Codex bridge for GUI file-token auth"
     log_item "[dry-run] Codex /hooks trust approval remains manual"
     return
   fi
   for name in ${!AI_MEMORY_@}; do unset "$name"; done
   cd "$HOME" || return
+  "$runtime" "$REPO_ROOT/configs/ai-memory/antigravity-client.py" --preflight || return
   "$HOME/.local/bin/ai-memory" setup --yes --agent claude-code --agent codex --agent pi || return
   "$HOME/.local/bin/ai-memory" install-mcp --client claude-desktop --apply || return
   # Upstream's Codex plugin uses this bridge too. The bare Codex writer instead
   # requires exporting a root token in the GUI's environment. Keep upstream's
   # tool approval policy, replacing only that transport with file-backed auth.
   "$runtime" "$REPO_ROOT/configs/ai-memory/codex-bridge.py" || return
+  # Finish existing clients before an Antigravity-specific failure can interrupt
+  # setup, particularly the GUI-safe Codex transport adjustment above.
+  "$runtime" "$REPO_ROOT/configs/ai-memory/antigravity-client.py" || return
   # setup prints Codex's real trust state. Never accept hooks on the user's behalf.
 )
 

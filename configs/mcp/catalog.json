@@ -14,6 +14,14 @@
     "description": "Read Figma design context and use Figma tools.",
     "desktop_opt_in": true
   },
+  "cua-driver": {
+    "launcher": "cua-driver-mcp",
+    "description": "Inspect and interact with desktop applications through the managed Cua Driver daemon.",
+    "clients_by_host": {
+      "omarchy": ["claude", "pi", "codex", "antigravity"],
+      "macbook": ["pi"]
+    }
+  },
   "rea": {
     "launcher": "rea-mcp",
     "description": "Analyze and reverse-engineer binaries with REA."

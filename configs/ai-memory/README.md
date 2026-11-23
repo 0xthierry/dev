@@ -22,6 +22,8 @@ After the shared agent configurations are installed, it runs:
 ```sh
 ai-memory setup --yes --agent claude-code --agent codex --agent pi
 ai-memory install-mcp --client claude-desktop --apply
+~/.local/share/mcp-services/venv/bin/python "$REPO_ROOT/configs/ai-memory/codex-bridge.py"
+~/.local/share/mcp-services/venv/bin/python "$REPO_ROOT/configs/ai-memory/antigravity-client.py"
 ```
 
 Upstream owns initialization, authentication, the service, MCP registrations,
@@ -45,6 +47,7 @@ unavailable. No Ollama or API key is required for embeddings.
 | Claude app — Chat | Upstream session-less stdio bridge | None; use explicit memory tools |
 | Claude app — local Code tab | Shared Claude Code hooks/settings; Desktop MCP entry also available | Supported by upstream; not a claim of Cowork/cloud capture |
 | Codex CLI / local app | Upstream plugin-style session-less stdio bridge | Upstream hooks, **after user trust approval** |
+| Antigravity CLI (`agy`) | Upstream-selected HTTP or stdio registration in `~/.gemini/config/mcp_config.json` | Upstream lifecycle hooks in `~/.gemini/config/hooks.json` |
 | Pi | **Unmodified upstream generated extension**, tools and lifecycle capture | Upstream extension |
 
 **Codex transport adjustment:** the bare upstream Codex writer emits HTTP with
@@ -52,7 +55,21 @@ unavailable. No Ollama or API key is required for embeddings.
 inherit a shell token. `codex-bridge.py` changes only that transport to the same
 `ai-memory mcp-bridge --no-session-id` used by upstream's official Codex plugin.
 The bridge reads the native token file. Upstream's default read-tool approvals
-and per-destructive-tool prompts remain unchanged. No token enters client files.
+and per-destructive-tool prompts remain unchanged. No token enters the Codex config.
+
+**Antigravity policy survives refresh.** Upstream normally replaces its entire
+MCP entry. `antigravity-client.py` asks it to generate the registration in a
+private temporary directory instead, then installs it only if missing. For a
+matching transport, the whole existing entry (including auth, disabled state and
+tool restrictions) is retained, not refreshed. For a different transport, setup
+stops: review and rename or reconcile the entry before retrying. The upstream
+HTTP form may contain a bearer token; keep the config and backups private. The
+helper then delegates hooks and global Antigravity skills to upstream. Unsupported
+`httpUrl`-only entries also fail with a migration message rather than being
+reported as configured. The guarded apply runs after the other clients' complete
+setup, so an Antigravity-specific failure cannot interrupt Codex's bridge
+adjustment. Only Antigravity files are covered by this helper's no-write-on-conflict
+guarantee; host setup is not a cross-client transaction.
 
 **Codex trust is not automated.** Open `/hooks` in Codex, or the app's hook
 settings, review the ai-memory hooks, and trust them. Changed hook commands need
@@ -67,8 +84,9 @@ capture-only patch and static-native-MCP instructions are removed. The source is
 vendored without edits; `vendor/refresh-ai-memory-pi.py` verifies exact upstream
 `install-hooks --apply` output. Stock whitespace is intentional.
 
-Six upstream skills remain repo-symlinked into the agent skill roots. Upstream
-setup finds matching content and leaves it unchanged. Refresh the repo copies
+Six upstream skills remain repo-symlinked into the existing shared agent skill
+roots. Upstream setup finds matching content and leaves it unchanged. Antigravity
+receives upstream-managed copies in its CLI and App/IDE global skill directories. Refresh the repo copies
 with the pinned binary's `install-skills --target-dir` before upgrading the pin.
 
 ## Migration
@@ -81,13 +99,15 @@ migration snapshots, or reset databases. Old inactive data/credentials can remai
 on disk; they are not consulted by the Mac's new native-default installation.
 
 `configs/mcp/catalog.json` no longer owns ai-memory. Upstream setup writes its
-client entries after the shared renderer; later shared MCP refreshes preserve
-those entries rather than rebuilding them.
+client entries; the shared MCP renderer preserves those entries rather than
+rebuilding them.
 
 ## Verification and limits
 
 ```sh
 bash tests/ai-memory.test.sh
+# Exercise the installed pinned binary in disposable homes (no running server needed):
+python3 tests/ai-memory-antigravity.test.py
 ~/.local/share/mcp-services/venv/bin/python tests/ai-memory-clients.test.py
 python3 tests/ai-memory-skills.test.py
 ~/.local/share/mcp-services/venv/bin/python tests/mcp-clients.test.py

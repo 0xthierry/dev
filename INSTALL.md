@@ -66,12 +66,56 @@ agy --version
 agy  # Start explicitly and complete Google's sign-in flow
 ```
 
+Normal host setup also merges the eight shared MCP services into
+`~/.gemini/config/mcp_config.json` and asks upstream ai-memory to install its
+Antigravity MCP, lifecycle hooks, and official skills. Existing unrelated
+servers and user options are preserved. OAuth and application permissions stay
+manual; registration is not proof of connectivity. See the
+[client matrix and scoped refresh command](configs/mcp/README.md#client-matrix).
+
 New Pi sessions and `cliproxy pi` use `cliproxyapi/gpt-6.2-astra` with `high`
 reasoning. Astra subagent guidance and the `use-agent` Astra profile also use 6.2;
 the stable `pi-gpt6-astra-N` handles, Sol/Opus roles, and task-specific reasoning
 policy are preserved. Existing sessions keep their model; switch with `/model`
 and reload updated skills/extensions with `/reload`, or start a new session.
 The separate Codex CLI default is unchanged. See [the proxy setup](configs/cliproxyapi/README.md).
+
+## Cua Driver: Omarchy and Pi on MacBook
+
+Setup pins **Cua Driver 0.59.4**, verifies its archive checksum and exact-release
+Sigstore signature using the shared `cosign` package, and installs a matching
+repo-owned skill. The scope is intentional:
+
+| Host | Cua clients |
+|---|---|
+| Omarchy | Claude Code, Pi, Codex, Antigravity CLI |
+| MacBook | **Pi only**; other Mac clients keep their existing browser workflow |
+
+On Omarchy, the native Wayland and private X11 services remain separate. Setup
+updates/restarts only stale Cua services; it does not restart Hyprland or install
+the experimental input plugin. On Mac, the signed `CuaDriver.app` owns OS
+permissions and a user LaunchAgent runs the daemon. Complete any required macOS
+permissions yourself; setup never grants them or re-signs the app.
+
+Cua is primary for qualified GUI workflows in those clients. Keep the user's
+browser and profile: Brave support and native Hyprland raw input have documented
+limits, so Playwriter/DevTools remain for verified gaps and specialist diagnostics.
+Do not treat an MCP registration as proof of a successful GUI action. Domain APIs
+remain appropriate for their semantic operations.
+
+For a runtime-only Omarchy refresh, followed by the normal service reconciliation:
+
+```bash
+SETUP_HOST=omarchy bash install/cua-driver.sh
+bash -c 'export REPO_ROOT="$PWD"; source install/lib.sh; source install/hosts/omarchy.sh; configure_cua_driver_service'
+# Reconcile the intended client's MCP registrations; repeat for claude/codex/antigravity:
+~/.local/share/mcp-services/venv/bin/python configs/mcp/configure-clients.py omarchy --client pi
+python3 scripts/check-cua-mcp.py  # Discovery and read-only guide, not GUI acceptance.
+```
+
+Use normal `./setup.sh macbook` on the MacBook. Reload/restart the agent after
+configuration changes. Never switch to a fresh profile, grant broad permissions,
+or take foreground control merely to make validation pass.
 
 ## Roblox: play and develop
 
@@ -138,7 +182,7 @@ installation alone does not verify gameplay or the Studio graphics/runtime path.
 8. Agent hook dependencies from `configs/agents/hooks`
 9. Agent code review tools from `configs/agents/bin/install-cr-tools.sh`
 10. The [shared MCP catalog](configs/mcp/README.md) merges Neon, Datadog US5, Figma, REA, Playwriter, Chrome DevTools, Blender, and Roblox registrations. It does not own ai-memory and removes the retired native Pi memory entry.
-11. Upstream `ai-memory setup --yes --agent claude-code --agent codex --agent pi` owns the local service, native hooks, MCP registration, and six official skills. Pi uses its unmodified generated extension for tools and capture. Claude Code's bridge is session-aware; Claude Desktop Chat uses the upstream session-less bridge and has no automatic capture. Codex CLI/app uses upstream's plugin-style stdio bridge for file-backed auth, preserving upstream tool approval rules; review and trust hooks in `/hooks` or app hook settings. See [ai-memory setup](configs/ai-memory/README.md). OAuth and account authorization remain explicit; setup starts no tunnels.
+11. Upstream `ai-memory setup --yes --agent claude-code --agent codex --agent pi` owns the local service, native hooks, MCP registration, and six official skills. Antigravity receives upstream-generated MCP, hooks and skills separately, with a guarded staged MCP merge that preserves disable/tool-restriction options and refuses conflicting transports. Pi uses its unmodified generated extension for tools and capture. Claude Code's bridge is session-aware; Claude Desktop Chat uses the upstream session-less bridge and has no automatic capture. Codex CLI/app uses upstream's plugin-style stdio bridge for file-backed auth, preserving upstream tool approval rules; review and trust hooks in `/hooks` or app hook settings. See [ai-memory setup](configs/ai-memory/README.md). OAuth and account authorization remain explicit; setup starts no tunnels.
 
 The setup is intended to be idempotent and non-destructive. Existing unrelated paths are warned about and left in place instead of being overwritten.
 Factory/Droid is no longer installed by setup on either host. Existing copies are

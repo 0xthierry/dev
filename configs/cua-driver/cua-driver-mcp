@@ -1,0 +1,16 @@
+#!/bin/sh
+# Fixed stdio proxy. Service lifecycle and permissions belong to the host installer.
+set -eu
+if [ "$#" -ne 0 ]; then
+    echo 'usage: cua-driver-mcp (no arguments)' >&2
+    exit 64
+fi
+case "$(uname -s)" in
+    Linux)  socket="$HOME/.cache/cua-driver/cua-driver.sock" ;;
+    Darwin) socket="$HOME/Library/Caches/cua-driver/cua-driver.sock" ;;
+    *) echo 'cua-driver-mcp: unsupported operating system' >&2; exit 1 ;;
+esac
+export CUA_DRIVER_RS_TELEMETRY_ENABLED=false CUA_DRIVER_RS_UPDATE_CHECK=false
+# --socket selects the persistent daemon; --embedded prevents upstream from
+# launching a replacement controller if that endpoint becomes unavailable.
+exec "$HOME/.local/bin/cua-driver" mcp --embedded --socket "$socket"

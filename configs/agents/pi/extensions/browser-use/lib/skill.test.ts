@@ -20,6 +20,8 @@ describe("control-browser skill contract", () => {
     ["control-browser skill", skill],
   ])("%s preserves explicit extension opt-in and the selected browser MCPs", (_name, guidance) => {
     expect(guidance).toContain("only when the user explicitly requests");
+    expect(guidance).toContain("Pi on Omarchy or MacBook");
+    expect(guidance).toContain("Cua for qualified GUI work");
     expect(guidance).toContain("Playwriter");
     expect(guidance).toContain("Chrome DevTools MCP");
     expect(guidance).toContain("CDP");
@@ -31,13 +33,24 @@ describe("control-browser skill contract", () => {
     expect(guidance).not.toContain("separate managed automation and QA sessions");
   });
 
+  test("shared instructions route only the admitted host and harness pairs to Cua", () => {
+    // Arrange: shared instructions also reach non-Pi macOS harnesses.
+    const instructions = readFileSync(new URL("../../../../AGENTS.md", import.meta.url), "utf8");
+
+    // Act: read the host/harness cells whose primary route is Cua.
+    const cuaScopes = [...instructions.matchAll(/^\| ([^|]+?) \| Cua Driver for [^|]+ \|$/gm)].map((row) => row[1]);
+
+    // Assert
+    expect(cuaScopes).toEqual(["Omarchy: Claude Code, Pi, Codex, Antigravity", "Managed MacBook: Pi only"]);
+  });
+
   test("discovery and routing distinguish browser target from tool selection", () => {
     const guidance = section("## Choose the workflow");
     expect(skill.split("---")[1]).toContain("Use only when the user explicitly requests");
     expect(BROWSER_USE_PROMPT_SNIPPET).toContain("only when the user explicitly requests");
-    expect(BROWSER_USE_PROMPT_SNIPPET).toContain("otherwise use Playwriter MCP");
+    expect(BROWSER_USE_PROMPT_SNIPPET).toContain("Pi on Omarchy or MacBook prefer Cua for qualified GUI work");
     expect(guidance).toContain("Naming Chrome, Brave, Edge, an existing login, or a URL does not select this tool");
-    expect(guidance).toContain("Do not ask to enable it during a Playwriter or Chrome DevTools MCP task");
+    expect(guidance).toContain("Do not ask to enable it during a Cua, Playwriter or Chrome DevTools MCP task");
     expect(guidance).toContain("The rest of this skill applies only after the user selects `browser_use`");
     expect(playwriterSkill).toContain("all extension-enabled tabs are shared");
     expect(playwriterSkill).toContain("Never switch tools to bypass an explicit permission denial");

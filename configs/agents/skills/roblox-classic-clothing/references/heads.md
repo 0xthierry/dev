@@ -78,10 +78,10 @@ The method that fits best: have an image model paint the piece **onto a head ref
    - **Check the image before spending credits:** the head unchanged, the piece where it should be, nothing extra.
    - Without a reference image, the same template works with a description instead of Image 2.
 
-3. **Make it 3D** in Tripo (studio.tripo3d.ai), driven from the owner's browser with the `playwriter` skill:
-   - **Settings:** image to 3D, the HD model, **20,000 polygons**. The polygon setting is saved as the account's default, so set it back afterwards.
-   - **Cost:** 55 credits, about 3 to 4 minutes.
-   - **Export as GLB:** capture the signed `…glb?` URL from the network response and `curl` it.
+3. **Make it 3D** in Tripo (studio.tripo3d.ai), in the owner's selected, signed-in browser/profile. Keep the verified `playwriter` workflow: a Cua page click alone does not provide network-response observation or the downloaded model. Do not switch profiles or controllers mid-generation.
+   - **Settings:** image to 3D, the HD model, **20,000 polygons**. Record the original polygon default before changing it. Restore and verify it afterwards, including if export fails; report any restoration failure.
+   - **Cost:** confirm the displayed cost (historically 55 credits, about 3 to 4 minutes) and obtain authorization before spending. Check the job state after a timeout rather than submitting again.
+   - **Export as GLB:** capture the signed `…glb?` URL from the network response and download it privately with `curl`; never print the signed URL. Verify the resulting GLB opens in Blender before reporting success.
    - **Clean up:** move any copy the browser saved out of `~/Downloads`, and close only your own tab.
 
 4. **Fit and check:**

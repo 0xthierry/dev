@@ -1,6 +1,6 @@
 # Browser instructions for Claude Desktop and ChatGPT
 
-CLI clients and Pi receive the shared agent skills/instructions from this repo.
+This block is only for Claude Desktop and ChatGPT; neither receives managed Cua registration. Do not copy it into CLI clients or Pi, whose local routing is host- and harness-specific.
 Claude Desktop and ChatGPT do **not** automatically read those files just because
 the MCP servers are registered. Add the following block to the relevant app's
 project/custom instructions (and to ChatGPT's custom connector descriptions where
