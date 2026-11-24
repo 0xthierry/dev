@@ -114,7 +114,7 @@ json.dump(s, open(p, "w"))
         self.assertEqual(daemon["builder"]["gc"]["custom"], True)
         self.assertEqual(daemon["builder"]["gc"]["policy"][-1]["maxUsedSpace"], "300GB")
         installed = self.root / "etc/systemd/system/system-docker.slice.d/90-dev-setup-memory.conf"
-        self.assertIn("MemoryHigh=24G\nMemoryMax=32G\nMemorySwapMax=8G", installed.read_text())
+        self.assertIn("CPUQuota=1600%\nMemoryHigh=24G\nMemoryMax=32G\nMemorySwapMax=8G", installed.read_text())
         self.assertEqual(state["calls"].count(["daemon-reload"]), 1)
         socket_policy = self.root / "etc/systemd/system/docker.socket.d/90-dev-setup-standby.conf"
         self.assertEqual(socket_policy.read_text(),

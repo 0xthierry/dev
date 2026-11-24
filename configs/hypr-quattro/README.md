@@ -1,4 +1,4 @@
-# Quattro: stock desktop, optional personal shortcuts
+# Quattro: stock desktop, optional workspaces and shortcuts
 
 Normal `./setup.sh omarchy` **preserves the current desktop**. It validates an
 initialized Quattro installation, then leaves `~/.config/hypr` and Omarchy's
@@ -14,6 +14,23 @@ The protective guard still requires the fixed packaged
 layouts are refused, not initialized or replaced. Dry-run on an empty HOME
 prints the requirement and writes nothing. Populated stock per-monitor state
 is expected and **must not be quarantined** for normal setup or shortcuts.
+
+## Optional: nine global workspaces with the Quattro bar
+
+On the DP-1 / HDMI-A-2 desktop running Omarchy 4.5.0, you can opt in to the old global numbering **without changing either display's scale, mode or position**. DP-1 owns 1–4 and 6–9 (default 1); HDMI-A-2 owns 5 (default and persistent). `Super+number` selects the same global workspace from either monitor. The move and silent-move number shortcuts use the same IDs; `0` still targets 10. Moving a workspace by direction does not renumber it.
+
+Both bars show 1–9 even when empty, using Quattro's occupancy styling, active layout glyph, click and wheel controls. Any existing extra workspace (e.g. 14) remains accessible by its actual number until it disappears. Enabling this option does **not** merge or renumber existing workspaces, move their windows, or discard saved per-monitor state. Use Super+5 to visit the pinned secondary workspace.
+
+From the repository root in an unlocked, running Omarchy session:
+
+```bash
+scripts/quattro-global-workspaces --dry-run
+scripts/quattro-global-workspaces --apply
+```
+
+The installer links only `global-workspaces.lua` and the `devsetup.global-workspaces` user plugin. It backs up the Lua entrypoint before inserting one guarded import, reloads Hyprland, then asks the shell to replace just the workspace widget in its existing position. It never restarts the shell. Unknown link destinations, an unrecognized layout, or the historical full overlay are refused. A repeated run does not add imports, backups or widgets. Neither ordinary setup nor the optional shortcuts command enables this feature.
+
+To opt out, use `omarchy plugin disable devsetup.global-workspaces` (the shell restores its stock widget). Remove **only** the `hypr.dev-global-workspaces` import from the user entrypoint, not any later personal edits. Stock workspace reconciliation resumes on reload and may reassign workspaces to per-monitor blocks; do this when ready for that change. The inactive plugin/module links can remain.
 
 ## Optional shortcuts: review before enabling
 
@@ -93,6 +110,9 @@ retains its separate repository config path.
 bash tests/quattro-config-deploy.test.sh  # bubblewrap, real packaged fixtures
 python3 tests/hypr-quattro.test.py        # lua/luac, isolated compositor API recorder
 python3 tests/hypr-quattro-workspaces.test.py  # historical workspace behavior only
+bash tests/global-workspaces-deploy.test.sh    # opt-in installation, preserved user state and IPC readback
+bash tests/global-workspaces-lua.test.sh       # global rules and shortcut/event dispatch
+python3 tests/global-workspaces-widget.test.py # offscreen Quickshell bar interactions
 ```
 
 Deployment tests run against read-only host/package trees and temporary HOME/XDG

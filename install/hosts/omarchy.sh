@@ -45,6 +45,7 @@ HOST_PACMAN_PACKAGES=(
   grim
   hicolor-icon-theme
   libnotify
+  libpulse
   libsecret
   libusb
   libxkbfile
@@ -52,6 +53,7 @@ HOST_PACMAN_PACKAGES=(
   pacman-contrib
   python
   python-cattrs
+  python-gobject
   qemu-system-x86
   steam
   sysstat
@@ -712,6 +714,23 @@ configure_cua_driver_service() {
   log_item "Cua Driver: separate Wayland and X11 endpoints; no compositor plugin installed"
 }
 
+configure_g325_audio() {
+  local src="$REPO_ROOT/configs/omarchy/g325-audio" lib="$HOME/.local/lib/g325-audio"
+  local units="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+  ensure_dir "$lib" && ensure_dir "$units" || return
+  safe_link_path "$src/recover.py" "$lib/recover.py" 'G325 audio recovery' || return
+  safe_link_path "$src/g325-audio.service" "$units/g325-audio.service" 'G325 audio service' || return
+  if (( ! ${DRY_RUN:-0} )) && ! [[ "$lib/recover.py" -ef "$src/recover.py" && "$units/g325-audio.service" -ef "$src/g325-audio.service" ]]; then
+    log_item 'Refusing to start an unmanaged G325 audio service'
+    return 1
+  fi
+  run_cmd systemctl --user daemon-reload || return
+  run_cmd systemctl --user enable g325-audio.service || return
+  if (( ${DRY_RUN:-0} )) || systemctl --user is-active --quiet graphical-session.target; then
+    run_cmd systemctl --user start g325-audio.service || return
+  fi
+}
+
 configure_quadcast_input() {
   local dir="${XDG_CONFIG_HOME:-$HOME/.config}/wireplumber/wireplumber.conf.d"
   ensure_dir "$dir"
@@ -721,6 +740,7 @@ configure_quadcast_input() {
 setup_host_machine_state() {
   log_section "Host Machine State"
   configure_quadcast_input
+  configure_g325_audio || return
   configure_keyboard
   configure_legacy_tiocsti
   configure_omarchy_resource_resilience

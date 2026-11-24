@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Explicit opt-in for the two-monitor desktop. Never called by ordinary setup.
+set -euo pipefail
+REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+# shellcheck source=install/configs.sh
+source "$REPO_ROOT/install/configs.sh"
+fail() { printf 'global-workspaces: %s\n' "$*" >&2; exit 1; }
+case ${1:-} in --apply|--dry-run) ;; *) fail 'usage: quattro-global-workspaces --dry-run | --apply';; esac
+[[ $# == 1 ]] || fail 'expected exactly one option'
+# Even a preview checks the real layout; the generic setup dry-run skips it.
+DRY_RUN=0 require_omarchy_quattro_layout
+case $(omarchy version) in 4.5.0|4.5.0-*) ;; *) fail 'review the workspace API/widget against this Omarchy version first';; esac
+[[ ${XDG_CONFIG_HOME:-$HOME/.config} == "$HOME/.config" ]] || fail 'unexpected XDG_CONFIG_HOME'
+
+entry=$HOME/.config/hypr/hyprland.lua
+module=$HOME/.config/hypr/dev-global-workspaces.lua
+source_lua=$REPO_ROOT/configs/hypr-quattro/global-workspaces.lua
+id=devsetup.global-workspaces
+plugin=$HOME/.config/omarchy/plugins/$id
+source_plugin=$REPO_ROOT/configs/omarchy/global-workspaces
+hook='if package.searchpath("hypr.dev-global-workspaces", package.path) then require("hypr.dev-global-workspaces") end'
+anchor='require("hypr.monitors")'
+[[ -f $source_lua ]] || fail 'missing workspace module'
+luac -p "$source_lua"
+omarchy plugin validate "$source_plugin"
+for dir in "$HOME/.config/omarchy" "${plugin%/*}"; do
+  [[ -d $dir && ! -L $dir ]] || fail "expected a real directory: $dir"
+done
+check_link() {
+  [[ ! -e $1 && ! -L $1 ]] || [[ -L $1 && $1 -ef $2 ]] || fail "refusing to replace $1"
+}
+check_link "$module" "$source_lua"; check_link "$plugin" "$source_plugin"
+if grep -Fq 'hypr.dev-setup.dev-setup' "$entry"; then fail 'review the enabled historical overlay first'; fi
+awk -v anchor="$anchor" -v hook="$hook" '
+  $0 == "require(\"default.hypr.omarchy\")" {stock=NR}
+  $0 == anchor {n++; a=NR}
+  index($0,"hypr.dev-global-workspaces") {m++; if ($0 != hook) bad=1; h=NR}
+  END {exit !(n==1 && stock<a && (!m || (m==1 && h+1==a)) && !bad)}' "$entry" || fail 'unknown import order or conflicting workspace import'
+active_widget() {
+  jq -er --arg id "$id" '[.bar.layout[][] | (if type=="string" then . else .id end) | select(.=="omarchy.workspaces" or .==$id)] | select(length==1) | first' "$HOME/.config/omarchy/shell.json"
+}
+widget=$(active_widget) || fail 'expected one stock or managed workspace widget in the existing layout'
+no_config_errors() { hyprctl -j configerrors | jq -e 'type=="array" and all(.[]; .=="")' >/dev/null; }
+no_config_errors || fail 'resolve existing Hyprland config errors first'
+omarchy-shell lock status | jq -e '.locked==false and .requested==false and .sessionLocked==false' >/dev/null || fail 'requires an unlocked, responding shell'
+if [[ $1 == --dry-run ]]; then
+  echo "Would enable global workspaces and replace only the workspace widget. No changes made."
+  exit 0
+fi
+[[ -L $module ]] || ln -sT -- "$source_lua" "$module"
+[[ -L $plugin ]] || ln -sT -- "$source_plugin" "$plugin"
+# Discover/validate the plugin before touching the active Lua config or layout.
+if ! omarchy plugin list --json | jq -e --arg id "$id" 'any(.[]; .id==$id and .clonedFrom=="omarchy.workspaces")' >/dev/null; then
+  omarchy-shell shell rescanPlugins >/dev/null
+  for ((i=0; i<40; i++)); do
+    if omarchy plugin list --json | jq -e --arg id "$id" 'any(.[]; .id==$id and .clonedFrom=="omarchy.workspaces")' >/dev/null; then break; fi
+    sleep 0.1
+  done
+  ((i<40)) || fail 'workspace plugin was not discovered; no active configuration changed'
+fi
+if ! grep -Fxq -- "$hook" "$entry"; then
+  tmp=$(mktemp "${entry%/*}/.workspace-import.XXXXXXXX"); trap 'rm -f -- "$tmp"' EXIT
+  cp -p -- "$entry" "$tmp"
+  awk -v a="$anchor" -v h="$hook" '$0==a {print h} {print}' "$entry" > "$tmp"
+  luac -p "$tmp"
+  backup=$(next_backup_path "$entry"); cp -p -- "$entry" "$backup"
+  mv -T -- "$tmp" "$entry"
+  echo "Original entrypoint: $backup"
+  hyprctl reload
+fi
+# Reload is asynchronous. Never enable the paired bar if the Lua policy failed.
+for ((i=0; i<40; i++)); do
+  if hyprctl -j workspacerules | jq -e 'any(.[]; .workspaceString=="5" and .monitor=="HDMI-A-2" and .persistent==true)' >/dev/null; then break; fi
+  sleep 0.1
+done
+((i<40)) || fail 'workspace 5 rule is not active; check hyprctl configerrors and the entrypoint backup'
+no_config_errors || fail 'Hyprland reported a config error; review the entrypoint backup'
+if [[ $widget != "$id" ]]; then
+  # The shell can save the change and reload the widget before its IPC reply
+  # arrives. Check the actual layout below; never replay an uncertain mutation.
+  omarchy plugin enable "$id" || printf 'Checking the layout after an incomplete enable reply…\n' >&2
+fi
+for ((i=0; i<40; i++)); do
+  [[ $(active_widget) != "$id" ]] || break
+  sleep 0.1
+done
+((i<40)) || fail 'shell has not saved the selected workspace widget; inspect omarchy plugin list'
+echo 'Global workspace rules and Quattro bar widget enabled.'

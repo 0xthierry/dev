@@ -1,0 +1,13 @@
+[Unit]
+Description=Recover G325 stereo audio on a Bluetooth connection without an audio profile
+PartOf=graphical-session.target
+After=wireplumber.service pipewire-pulse.socket
+
+[Service]
+ExecStart=/usr/bin/python -B %h/.local/lib/g325-audio/recover.py
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=graphical-session.target
