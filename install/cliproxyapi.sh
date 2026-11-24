@@ -4,11 +4,11 @@ set -euo pipefail
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-CLIPROXYAPI_VERSION="7.3.12"
+CLIPROXYAPI_VERSION="8.1.2"
 CLIPROXYAPI_PLUGIN_BUILD_VERSION="2"
-CLIPROXYAPI_SOURCE_COMMIT="2eb8dd11d2480c5fd8bc8f2796cec6af534bc3b6" # gitleaks:allow public upstream commit
-CLIPROXYAPI_SOURCE_SHA256="842718798c86b0259b631648da7007a3047fc38a4d750bfea679a511427eae63" # gitleaks:allow public source archive checksum
-CLIPROXYAPI_GO_TOOLCHAIN="go1.26.0"
+CLIPROXYAPI_SOURCE_COMMIT="85225381d89915595598ed13766cd79890c03a84" # gitleaks:allow public upstream commit
+CLIPROXYAPI_SOURCE_SHA256="5fc26270afaea2daac210102bc6ec1c4fce38a3ad0cfc60eb0e76d9f76af21d8" # gitleaks:allow public source archive checksum
+CLIPROXYAPI_GO_TOOLCHAIN="go1.26.10"
 CLIPROXYAPI_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 install_cliproxyapi_binary() (
@@ -198,6 +198,7 @@ import re
 import secrets
 import sys
 import tempfile
+import uuid
 
 home = pathlib.Path(sys.argv[1]).absolute()
 template = pathlib.Path(sys.argv[2]).read_text()
@@ -242,26 +243,31 @@ def write_private(path, content, mode=0o600):
             os.unlink(name)
 
 
-def private_key(name):
-    key_file = config_dir / name
-    if key_file.is_symlink():
+def private_value(name, pattern, generate):
+    path = config_dir / name
+    if path.is_symlink():
         sys.exit("error: CLIProxyAPI " + name + " must not be a symlink")
-    if key_file.exists():
-        key_file.chmod(0o600)
-        key = key_file.read_text().strip()
-        if not re.fullmatch(r"[0-9a-f]{64}", key):
+    if path.exists():
+        path.chmod(0o600)
+        value = path.read_text().strip()
+        if not re.fullmatch(pattern, value):
             sys.exit("error: existing CLIProxyAPI " + name + " is invalid; refusing to replace it")
     else:
-        key = secrets.token_hex(32)
-        # Exclusive creation avoids silently replacing a concurrently created key.
-        fd = os.open(key_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        value = generate()
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w") as stream:
-            stream.write(key + "\n")
-    return key
+            stream.write(value + "\n")
+    return value
+
+
+def private_key(name):
+    return private_value(name, r"[0-9a-f]{64}", lambda: secrets.token_hex(32))
 
 
 key = private_key("api-key")
-rendered = template.replace("{{API_KEY}}", key)
+# v8 otherwise rewrites the deployed YAML to persist its generated ID on start.
+server_id = private_value("server-id", r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", lambda: str(uuid.uuid4()))
+rendered = template.replace("{{API_KEY}}", key).replace("{{SERVER_ID}}", server_id)
 rendered = rendered.replace("{{PLUGIN_DIR}}", sys.argv[4])
 if "{{MANAGEMENT_KEY}}" in rendered:
     rendered = rendered.replace("{{MANAGEMENT_KEY}}", private_key("management-key"))

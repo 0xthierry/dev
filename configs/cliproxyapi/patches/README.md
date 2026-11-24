@@ -1,19 +1,26 @@
 # CLIProxyAPI catalog persistence patch
 
-`0001-persist-model-catalog.patch` applies to upstream v7.3.12, commit
-`2eb8dd11d2480c5fd8bc8f2796cec6af534bc3b6`. It includes production changes and
+`0001-persist-model-catalog.patch` applies to upstream v8.1.2, commit
+`85225381d89915595598ed13766cd79890c03a84`. It includes production changes and
 registry regression tests. It is a local patch, not an upstream release.
 
 ## Contract
 
-- Restore the last validated `models.json` before the first network fetch.
+- For the **implicit official general catalog**, restore the last validated
+  `models.json` before its first background fetch and finish notifying registrations
+  before startup returns. Explicit URLs/files, `--local-model`, Home mode, and the
+  separate Codex/Devin catalogs retain upstream policy; they never read or write
+  this cache.
 - Preserve the raw JSON, including provider capability fields omitted by Go JSON
-  marshaling of the public model structs.
+  marshaling of the public model structs. If an official update omits Meta, keep
+  the previous official Meta definitions (not a custom source's definitions).
 - Limit cache/network reads to 8 MiB; reject malformed, duplicate-ID, and all-empty
   catalogs. Keep the previous catalog on invalid remote data.
 - Write cache files privately using a same-directory temporary file, fsync, atomic
   rename, and directory fsync. Failed writes retain the live in-memory catalog and
-  trigger retries.
+  trigger retries on the background schedule. Background and on-demand publication
+  share upstream's generation/sequence fence so a stale result cannot overwrite
+  a newer memory or disk catalog.
 - Retry unsuccessful refreshes with exponential delay and half-to-full jitter,
   capped at one minute. Return to the existing three-hour interval after success.
 - Use the existing provider registration callback; do not restart the server or
@@ -28,8 +35,8 @@ In a checkout of the pinned upstream commit:
 
 ```bash
 git apply /path/to/dev/configs/cliproxyapi/patches/0001-persist-model-catalog.patch
-GOTOOLCHAIN=go1.26.0 go test ./internal/registry
-GOTOOLCHAIN=go1.26.0 go test -race ./internal/registry
+GOTOOLCHAIN=go1.26.10 go test ./internal/registry
+GOTOOLCHAIN=go1.26.10 go test -race ./internal/registry
 ```
 
 From this setup repo:

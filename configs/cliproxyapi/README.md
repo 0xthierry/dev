@@ -18,8 +18,8 @@ bash configs/agents/install.sh --yes
 ```
 
 The proxy installer requires Go, Git, and the platform C compiler (`cc`). It builds
-CLIProxyAPI from checksum-verified v7.3.12 source with the repo-owned catalog-cache
-patch, and builds the model registrar plugin. Both builds use Go 1.26.0 via
+CLIProxyAPI from checksum-verified v8.1.2 source with the repo-owned catalog-cache
+patch, and builds the model registrar plugin. Both builds use Go 1.26.10 via
 `GOTOOLCHAIN` (Go downloads that toolchain if absent). The second command syncs all
 repository-managed agent configuration, not just the proxy. It preserves unrelated Pi providers and
 Codex MCP entries. Pi defaults to the proxy, while Codex remains direct; enroll
@@ -161,7 +161,7 @@ Codex chat models and are not included.
 
 ## Claude Code subscription pool (opt-in)
 
-The same proxy also accepts Claude OAuth accounts. The pinned v7.3.12 binary
+The same proxy also accepts Claude OAuth accounts. The pinned v8.1.2 binary
 supports `--claude-login`; the helper exposes it separately from Codex login:
 
 ```bash
@@ -222,7 +222,7 @@ Use `/context` to inspect the new request's budget. Verification must cover both
 `ToolSearch` discovery and a subsequent MCP call, because a gateway that rejects
 `tool_reference` blocks could show a smaller prompt while breaking tool access.
 
-Live verification on Claude Code 2.1.296 and the pinned CLIProxyAPI v7.3.12
+Earlier verification on Claude Code 2.1.296 and CLIProxyAPI v7.3.12
 successfully discovered `mcp__rea__binary_session` and called it with `{}`; it
 returned `open: false`. A second verification used the deployed launcher's default
 with normal hooks enabled and no `ENABLE_TOOL_SEARCH` override: its first request
@@ -268,13 +268,15 @@ accounts; do not deliberately exhaust quotas to test failover. Use ordinary
   and scheduler. It reads existing Codex auth through CLIProxyAPI's host API, checks
   model availability against the Codex endpoint, and has no executor or authentication
   capability. Never expose the listener publicly.
-- Private config/key: `~/.config/cliproxyapi/{config.yaml,api-key}` (0600).
+- Private config/key: `~/.config/cliproxyapi/{config.yaml,api-key}` (0600). Setup
+  keeps the v8 deployment UUID in `server-id` alongside them so restarting or
+  rerunning setup does not regenerate it. The optional v8 session KV database is disabled.
 - OAuth state: `~/.local/share/cliproxyapi/auth/` (directory 0700, service/helper umask 077).
   Never commit, paste, or share these files. Local processes running as your user can
   access them, just as they can access your direct CLI credentials.
 - Request-body logging, including error-only request capture, is disabled via
   `commercial-mode`. Application diagnostics still exist; treat logs as private.
-- v7.3.12 source is pinned by full commit and archive SHA256 in
+- v8.1.2 source is pinned by full commit and archive SHA256 in
   `install/cliproxyapi.sh`. The catalog-cache patch is repo-owned at
   `configs/cliproxyapi/patches/0001-persist-model-catalog.patch`. The build marker
   includes the source commit, patch digest, platform, and pinned Go toolchain.
@@ -399,6 +401,13 @@ short conversation plus a tool call in Pi. Controlled account failover
 and reasoning/tool-history replay need live verification; don't deliberately exhaust
 accounts to test it. An empty model list means no usable account/model is loaded.
 A missing key/service is fixed by the targeted installer/start commands above.
+
+If `/loop` reports `Claude Code 2.1.258 does not support this model` despite a
+newer local CLI, check the **running proxy**. v7.3.12 did not recognize the
+`workload/cron` user-agent extension and could replace the actual client version
+with its 2.1.258 fallback. [v8.1.2](https://github.com/router-for-me/CLIProxyAPI/releases/tag/v8.1.2)
+recognizes scheduled and background Claude Code requests. Deploy the pinned build
+and restart the active proxy; you do not need to change models or log in again.
 
 To stop pooling, select Pi's direct provider as shown above (or change the repo default)
 and stop the service:

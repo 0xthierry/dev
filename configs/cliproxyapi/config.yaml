@@ -1,4 +1,9 @@
 # Rendered by install/cliproxyapi.sh; never commit the rendered key or auth files.
+server:
+  server-id: "{{SERVER_ID}}"
+  # Keep session/routing state in memory, as before v8.
+  kv-store:
+    disabled: true
 host: "127.0.0.1"
 port: 8317
 auth-dir: "~/.local/share/cliproxyapi/auth"

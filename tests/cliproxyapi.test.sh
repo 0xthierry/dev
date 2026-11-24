@@ -116,12 +116,17 @@ assert f'dir: "{home}/.local/share/cliproxyapi/plugins"' in config
 assert "codex-current-models:" in config
 for path in (config_dir / "api-key", config_dir / "config.yaml"):
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
+import uuid
+server_id = (config_dir / "server-id").read_text().strip()
+assert uuid.UUID(server_id).version == 4
+assert f'server-id: "{server_id}"' in config
+assert '  kv-store:\n    disabled: true' in config
 assert stat.S_IMODE((home / ".local/share/cliproxyapi/auth").stat().st_mode) == 0o700
 plugin = home / ".local/share/cliproxyapi/plugins/linux/amd64/codex-current-models.so"
 assert plugin.read_text() == "fixture plugin\n"
 assert stat.S_IMODE(plugin.stat().st_mode) == 0o700
 marker = (home / ".local/share/cliproxyapi/plugin-codex-current-models.version").read_text().strip()
-assert re.fullmatch(r"[0-9a-f]{64} linux_amd64 build-2 go1.26.0", marker)
+assert re.fullmatch(r"[0-9a-f]{64} linux_amd64 build-2 go1\.26\.10", marker)
 assert (config_dir / "api-key").read_bytes() == (tmp / "original-key").read_bytes()
 assert key in (config_dir / "config.yaml").read_text()
 assert "~/.local/share/cliproxyapi/auth" in (config_dir / "config.yaml").read_text()
@@ -132,7 +137,7 @@ import hashlib
 patch = tmp / "repo/configs/cliproxyapi/patches/0001-persist-model-catalog.patch"
 patch_digest = hashlib.sha256(patch.read_bytes()).hexdigest()
 assert (home / ".local/share/cliproxyapi/version").read_text().strip() == (
-    "7.3.12 linux_amd64 2eb8dd11d2480c5fd8bc8f2796cec6af534bc3b6 " + patch_digest + " go1.26.0"
+    "8.1.2 linux_amd64 85225381d89915595598ed13766cd79890c03a84 " + patch_digest + " go1.26.10"
 )
 unit = (home / ".config/systemd/user/cliproxyapi.service").read_text()
 assert f'"{home}/.local/bin/cli-proxy-api" -config "{config_dir}/config.yaml"' in unit
@@ -176,7 +181,7 @@ if install_cliproxyapi_binary linux_aarch64 invalid > "$TEST_TMP/mismatch.log" 2
 fi
 cmp "$TEST_TMP/original-binary" "$HOME/.local/bin/cli-proxy-api"
 grep -q 'SHA256 mismatch' "$TEST_TMP/mismatch.log"
-[[ "$(< "$HOME/.local/share/cliproxyapi/version")" == '7.3.12 linux_amd64 '* ]]
+[[ "$(< "$HOME/.local/share/cliproxyapi/version")" == '8.1.2 linux_amd64 '* ]]
 echo 'ok: checksum rejection preserves existing binary and marker'
 cp "$HOME/.local/share/cliproxyapi/version" "$TEST_TMP/original-marker"
 if BUILD_FAIL=1 install_cliproxyapi_binary linux_aarch64 "$CLIPROXYAPI_SOURCE_SHA256" > "$TEST_TMP/build-fail.log" 2>&1; then
