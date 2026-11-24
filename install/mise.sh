@@ -46,6 +46,19 @@ EOF
   log_item "Mise config: $config_path"
 }
 
+repair_legacy_bun_link() {
+  local link="$HOME/bin/bun" shim="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims/bun"
+  # Only migrate the observed legacy link. Leave custom launchers and fresh homes alone.
+  [[ -L "$link" && "$(readlink "$link")" == "$HOME/.local/share/mise/installs/bun/1.3.2/bin/bun" ]] || return 0
+  if (( ! ${DRY_RUN:-0} )) && [[ ! -x "$shim" ]]; then
+    printf 'Cannot repair %s: mise Bun shim is missing at %s\n' "$link" "$shim" >&2
+    return 1
+  fi
+  run_cmd cp -P "$link" "$(next_backup_path "$link")" || return
+  run_cmd ln -sfn "$shim" "$link" || return
+  log_item "Legacy Bun launcher: $link now follows the worktree's mise pin"
+}
+
 install_runtimes() {
   local mise_bin=""
   local previous_herdr_version=""
@@ -76,6 +89,7 @@ install_runtimes() {
   log_item "Upgrading floating language runtimes..."
   run_cmd "$mise_bin" upgrade --no-prune
 
+  repair_legacy_bun_link
   log_item "Activating mise shims..."
   if (( ${DRY_RUN:-0} )); then
     dry_run_cmd /bin/bash -lc "eval \"\$(mise activate bash)\""
