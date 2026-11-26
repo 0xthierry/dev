@@ -73,7 +73,7 @@ describe("CLIProxyAPI native compaction E2E", () => {
         "--provider",
         "cliproxyapi",
         "--model",
-        process.env.CODEX_COMPACTION_PROXY_MODEL ?? "gpt-6.2-astra",
+        process.env.CODEX_COMPACTION_PROXY_MODEL ?? "gpt-6-astra",
         "--thinking",
         "low",
         "--session",

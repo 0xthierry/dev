@@ -50,7 +50,7 @@ test("exposes task-dependent reasoning guidance through the spawn tool", () => {
   expect(description).toEndWith(SUBAGENT_MODEL_GUIDANCE);
   expect(description).toContain("Prefer cliproxyapi/gpt-6.1-sol for read-only codebase reconnaissance");
   expect(description).toContain(
-    "Prefer cliproxyapi/gpt-6.2-astra for implementation, debugging, planning, design decisions, and code review",
+    "Prefer cliproxyapi/gpt-6-astra for implementation, debugging, planning, design decisions, and code review",
   );
   expect(description).toContain(
     "Choose reasoning effort by difficulty, uncertainty, and consequences of a wrong answer",

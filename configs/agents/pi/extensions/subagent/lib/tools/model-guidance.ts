@@ -6,7 +6,7 @@ Choose a named agent for its role and instructions, then choose execution settin
 
 Model guidance:
 - Prefer cliproxyapi/gpt-6.1-sol for read-only codebase reconnaissance: locating files, tracing call paths, mapping dependencies, finding patterns, and explaining existing code. Require file paths and supporting evidence.
-- Prefer cliproxyapi/gpt-6.2-astra for implementation, debugging, planning, design decisions, and code review. Give reviewers an artifact and a specific review question; require evidence.
+- Prefer cliproxyapi/gpt-6-astra for implementation, debugging, planning, design decisions, and code review. Give reviewers an artifact and a specific review question; require evidence.
 
 Choose reasoning effort by difficulty, uncertainty, and consequences of a wrong answer:
 - low: a narrow lookup, a straightforward code explanation, or a small change with a clear pattern and direct verification.

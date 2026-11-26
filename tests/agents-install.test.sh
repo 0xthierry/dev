@@ -162,7 +162,7 @@ assert [p for p in pi['packages'] if isinstance(p, str)
         and p.startswith('npm:pi-agy-provider')] == ['npm:pi-agy-provider@1.1.13']
 assert pi['antigravity'] == {'toolMode': 'pi', 'driver': 'acp'}
 assert (pi['defaultProvider'], pi['defaultModel'], pi['defaultThinkingLevel']) == (
-    'cliproxyapi', 'gpt-6.2-astra', 'high')
+    'cliproxyapi', 'gpt-6-astra', 'medium')
 print('ok: deploys pinned Antigravity Pi package with ACP/Pi tools without changing the default model')
 assert (home / '.claude/skills/plannotator-review/SKILL.md').is_file()
 assert (home / '.codex/skills/plannotator-review/SKILL.md').is_file()
@@ -307,8 +307,8 @@ PY
        else (.thinkingLevelMap | has("max") | not) end)
     )'
   assert_json "defaults Pi to proxy" "$test_home/.pi/agent/settings.json" '.defaultProvider == "cliproxyapi"'
-  assert_json "defaults Pi sessions to GPT-6.2 Astra" "$test_home/.pi/agent/settings.json" '.defaultModel == "gpt-6.2-astra"'
-  assert_json "defaults Pi sessions to high reasoning" "$test_home/.pi/agent/settings.json" '.defaultThinkingLevel == "high"'
+  assert_json "defaults Pi sessions to GPT-6 Astra" "$test_home/.pi/agent/settings.json" '.defaultModel == "gpt-6-astra"'
+  assert_json "defaults Pi sessions to medium reasoning" "$test_home/.pi/agent/settings.json" '.defaultThinkingLevel == "medium"'
   assert_file_contains "keeps Codex on the direct OpenAI provider" "$test_home/.codex/config.toml" 'model_provider = "openai"'
   assert_file_excludes "does not add the proxy provider to Codex" "$test_home/.codex/config.toml" 'cliproxyapi'
   cp "$test_home/.pi/agent/models.json" "$TEST_TMP_DIR/first-pi-models.json"

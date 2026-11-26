@@ -1,6 +1,6 @@
 ---
 name: use-agent
-description: Use only when the user explicitly asks or allows the current Claude or Pi main to orchestrate other agent harnesses over Herdr and AMQ. Routes GPT-6.2 Astra at high as the most powerful planner, hard-task debugger, and orchestration profile; GPT-6.1 Sol executes, while Claude Opus 5.5 provides independent review. Otherwise, never invoke it.
+description: Use only when the user explicitly asks or allows the current Claude or Pi main to orchestrate other agent harnesses over Herdr and AMQ. Routes GPT-6 Astra at high as the most powerful planner, hard-task debugger, and orchestration profile; GPT-6.1 Sol executes, while Claude Opus 5.5 provides independent review. Otherwise, never invoke it.
 ---
 
 # Use Agent
@@ -13,7 +13,7 @@ Use only this curated mapping. Roles and capability priority are workflow policy
 
 | Profile | Harness / pinned model | Effort | Role and ownership |
 | --- | --- | --- | --- |
-| **GPT-6.2 Astra orchestrator** | Pi / `cliproxyapi/gpt-6.2-astra` | `high` | **Most powerful profile.** Leads demanding planning, architecture, hard tasks, deep debugging, decomposition, synthesis, and adjudication. Prefer orchestration over execution. Read-only as a sidecar. |
+| **GPT-6 Astra orchestrator** | Pi / `cliproxyapi/gpt-6-astra` | `high` | **Most powerful profile.** Leads demanding planning, architecture, hard tasks, deep debugging, decomposition, synthesis, and adjudication. Prefer orchestration over execution. Read-only as a sidecar. |
 | **Claude Opus 5.5 second opinion** | Claude / `claude-opus-5-5` | `xhigh` | Read-only second-opinion partner to Astra. Supplies independent evidence, counterarguments, and alternatives. **Not an oracle or final adjudicator**, and never an escalation above Astra. |
 | **Claude Opus 5.5 adversary** | Claude / `claude-opus-5-5` | `high` | Read-only demanding plan, implementation, debugging-hypothesis, security, and correctness review; one explicit lens per task. |
 | **GPT-6.1 Sol implementer** | Pi / `cliproxyapi/gpt-6.1-sol` | `high` | Writing workhorse for demanding multi-file features, refactors, reproductions, fix application, integration, and test/fix loops. Exact file ownership required. |
@@ -85,7 +85,7 @@ This provisions mailboxes only, not processes. It uses `amq init --force` for th
 
 | Handle pattern (N is a positive integer) | Profile |
 | --- | --- |
-| `pi-gpt6-astra-N` | GPT-6.2 Astra `high`, read-only planner/orchestration advisor; the handle stays unchanged for existing rosters |
+| `pi-gpt6-astra-N` | GPT-6 Astra `high`, read-only planner/orchestration advisor; the handle stays unchanged for existing rosters |
 | `claude-opus55-xhigh-N` | Opus 5.5 `xhigh`, read-only second opinion |
 | `claude-opus55-high-N` | Opus 5.5 `high`, read-only adversary |
 | `pi-gpt6sol-N` | GPT-6.1 Sol `high`, writer |

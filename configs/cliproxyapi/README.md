@@ -67,9 +67,9 @@ cliproxy check                  # API authentication + model availability, no in
 cliproxy models                 # discover models exposed by logged-in accounts
 cliproxy usage                  # live quota usage for all local Codex/Claude accounts
 cliproxy usage --json           # normalized report for scripts (no tokens)
-pi                             # GPT-6.2 Astra high via pool
+pi                             # GPT-6 Astra medium via pool
 cliproxy pi                    # Explicit pool launcher, same model and reasoning
-pi --provider cliproxyapi --model gpt-6.2-astra
+pi --provider cliproxyapi --model gpt-6.1-sol  # Select Sol instead
 codex                          # Direct built-in OpenAI provider
 ```
 
@@ -135,7 +135,7 @@ with 128K context. GPT-6.2 Sol uses 500K context and GPT-6.2 Astra uses 272K,
 matching their live Codex catalog defaults; both accept text and images. The older
 Pi mappings retain their existing 272K/300K budgets. All retain the proxy's
 conservative 32K output cap. Proxy limits and actual model limits may differ.
-New Pi sessions and `cliproxy pi` default to GPT-6.2 Astra at `high` reasoning.
+New Pi sessions and `cliproxy pi` default to GPT-6 Astra at `medium` reasoning.
 Existing sessions retain their selections; use `/model` to switch them. The
 separate Codex CLI default is unchanged.
 Reasoning mappings retain the proxy's disabled off/minimal settings and expose the

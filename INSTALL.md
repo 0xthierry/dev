@@ -75,8 +75,9 @@ servers and user options are preserved. OAuth and application permissions stay
 manual; registration is not proof of connectivity. See the
 [client matrix and scoped refresh command](configs/mcp/README.md#client-matrix).
 
-New Pi sessions and `cliproxy pi` use `cliproxyapi/gpt-6.2-astra` with `high`
-reasoning. Astra subagent guidance and the `use-agent` Astra profile also use 6.2;
+New Pi sessions and `cliproxy pi` use `cliproxyapi/gpt-6-astra` with `medium`
+reasoning. Select `cliproxyapi/gpt-6.1-sol` with `/model` for Sol.
+Astra subagent guidance and the `use-agent` Astra profile also use GPT-6 Astra;
 the stable `pi-gpt6-astra-N` handles, Sol/Opus roles, and task-specific reasoning
 policy are preserved. Existing sessions keep their model; switch with `/model`
 and reload updated skills/extensions with `/reload`, or start a new session.
@@ -91,7 +92,7 @@ already-declared package. In Pi 1.2.0, `pi update` alone did not materialize a
 package that was declared but not installed. The complete upstream package is
 loaded, including its `/btw` extension and skill; it is not copied into our
 extension bundle.
-The existing `cliproxyapi/gpt-6.2-astra` default stays unchanged.
+Installing Antigravity does not change Pi’s startup model.
 
 Reopen Pi after setup. Use `/agy-login` if Antigravity is not signed in, then
 select an `antigravity` model with `/model`. `/agy` and `/agy-tools status`
