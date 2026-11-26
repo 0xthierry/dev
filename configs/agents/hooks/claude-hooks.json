@@ -1,6 +1,16 @@
 {
   "PreToolUse": [
     {
+      "matcher": "Bash",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "python3 \"$HOME/.claude/hooks/guard-rm.py\" || exit 2",
+          "timeout": 5
+        }
+      ]
+    },
+    {
       "matcher": "EnterPlanMode",
       "hooks": [
         {

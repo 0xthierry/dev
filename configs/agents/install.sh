@@ -30,11 +30,12 @@ SOURCE_DEV_INSTRUCTIONS="$SCRIPT_DIR/developer-instructions.txt"
 
 usage() {
   cat <<'EOF'
-Usage: ./install.sh [--dry-run] [--yes]
+Usage: ./install.sh [--dry-run] [--yes | --claude-deny-only]
 
 Options:
   -n, --dry-run   Print the actions without creating directories or symlinks.
   -y, --yes       Skip confirmation prompts (install ~/.claude, ~/.codex, and ~/.pi/agent).
+  --claude-deny-only  Sync the repo-owned Claude deny list and rm guard on an existing install.
   -h, --help      Show this help message.
 EOF
 }
@@ -722,7 +723,25 @@ install_pi_target() {
   force_link_path "$SOURCE_PI_EXTENSIONS_DIR" "$target_root/extensions" "pi extensions"
 }
 
+sync_claude_deny_only() (
+  local settings="$HOME/.claude/settings.json" tmp
+  [[ -f "$settings" && ! -L "$settings" && "$HOME/.claude/hooks/guard-rm.py" -ef "$SOURCE_HOOKS_DIR/guard-rm.py" ]] || {
+    warn 'Expected installed Claude settings and the repo-owned rm hook'; return 1;
+  }
+  if (( DRY_RUN )); then log '[dry-run] Sync Claude deny list and rm hook only'; return; fi
+  tmp="$(mktemp "${settings}.XXXXXX")"
+  trap 'rm -f "$tmp"' EXIT
+  jq --slurpfile base "$SOURCE_CLAUDE_SETTINGS" --slurpfile hooks "$SOURCE_HOOKS_DIR/claude-hooks.json" '
+    ([$hooks[0].PreToolUse[] | select(.matcher == "Bash" and any(.hooks[]; .command | contains("/guard-rm.py")))]
+      | if length == 1 then .[0] else error("expected one rm guard") end) as $guard
+    | .permissions.deny = $base[0].permissions.deny
+    | .hooks.PreToolUse = ([$guard] + [(.hooks.PreToolUse // [])[] | select(. != $guard)])
+  ' -e "$settings" > "$tmp"
+  if ! cmp -s "$tmp" "$settings"; then mv "$tmp" "$settings"; fi
+)
+
 main() {
+  local deny_only=0
   local install_codex=1
   local install_claude=1
   local install_pi=1
@@ -734,6 +753,9 @@ main() {
         ;;
       -y|--yes)
         AUTO_YES=1
+        ;;
+      --claude-deny-only)
+        deny_only=1
         ;;
       -h|--help)
         usage
@@ -747,6 +769,8 @@ main() {
     esac
     shift
   done
+
+  if (( deny_only )); then sync_claude_deny_only; return; fi
 
   if [[ ! -d "$SOURCE_AGENTS_DIR" ]]; then
     warn "Missing source agents directory: $SOURCE_AGENTS_DIR"

@@ -288,6 +288,10 @@ workspace = "meistrari"
 project = "background-coding-agent"
 ```
 
+### Claude Code deletion safeguards
+
+The Bash `PreToolUse` hook in `configs/agents/hooks/guard-rm.py` checks `rm` targets rather than denying all recursive cleanup. Ordinary explicit project paths such as `node_modules` are not denied by this rule. It is an accident guard, not a filesystem sandbox for arbitrary programs. Removing a command from `permissions.deny` does not automatically approve it. On an existing managed install, `bash configs/agents/install.sh --claude-deny-only` deploys the repo-owned deny list and guard without changing model choices or unrelated hooks. Restart Claude Code to load the hook.
+
 ### Claude Code inline images (Ghostty and Herdr)
 
 Setup installs the pinned `inline-images@thierry-local` plugin from the repo-local marketplace. It previews image reads, MCP image results, pasted images, and local image references in Claude's terminal transcript. New Ghostty and Herdr shells opt into terminal images; other terminals are not forced. No Ghostty graphics setting needs changing.

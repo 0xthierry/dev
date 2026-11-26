@@ -133,6 +133,15 @@ EOF
   # Act
   HOME="$test_home" "$REPO_ROOT/configs/agents/install.sh" --yes >/dev/null
 
+  # Refresh only the Claude command policy; leave local model choices and hooks intact.
+  local policy_fixture="$TEST_TMP_DIR/claude-policy"
+  mkdir -p "$policy_fixture/.claude"
+  ln -s "$REPO_ROOT/configs/agents/hooks" "$policy_fixture/.claude/hooks"
+  printf '%s\n' '{"model":"keep","permissions":{"allow":["Read"]},"hooks":{"PreToolUse":[{"matcher":"Read","hooks":[]}]}}' > "$policy_fixture/.claude/settings.json"
+  HOME="$policy_fixture" "$REPO_ROOT/configs/agents/install.sh" --claude-deny-only
+  HOME="$policy_fixture" "$REPO_ROOT/configs/agents/install.sh" --claude-deny-only
+  assert_json 'policy-only refresh preserves unrelated settings and does not duplicate hooks' "$policy_fixture/.claude/settings.json" '.model == "keep" and .permissions.allow == ["Read"] and (.permissions.deny | index("Bash(pacman -S*)") != null) and [.hooks.PreToolUse[].matcher] == ["Bash", "Read"]'
+
   # Assert: deployed Plannotator integrations can reach plan review in each harness.
   python3 - "$test_home" <<'PY'
 import json
@@ -142,7 +151,13 @@ import tomllib
 
 home = pathlib.Path(sys.argv[1])
 claude = json.loads((home / '.claude/settings.json').read_text())
-assert {'EnterPlanMode', 'ExitPlanMode'}.isdisjoint(claude['permissions']['deny'])
+deny = claude['permissions']['deny']
+assert {'EnterPlanMode', 'ExitPlanMode'}.isdisjoint(deny)
+assert not any(rule.startswith(('Bash(git ', 'Bash(sudo ', 'Bash(rm ')) for rule in deny)
+assert {'Bash(pacman -S*)', 'Bash(yay -S*)', 'Bash(brew install *)'}.issubset(deny)
+assert any(entry['matcher'] == 'Bash' and any('guard-rm.py' in h['command'] for h in entry['hooks'])
+           for entry in claude['hooks']['PreToolUse'])
+assert (home / '.claude/hooks/guard-rm.py').is_file()
 assert claude['hooks']['PermissionRequest'] == [{
     'matcher': 'ExitPlanMode',
     'hooks': [{'type': 'command', 'command': 'plannotator', 'timeout': 345600}],
