@@ -78,7 +78,10 @@ class McpClientTests(unittest.TestCase):
         pi = json.loads(self.pi.read_text())["mcpServers"]
         self.assertNotIn("ai-memory", pi)
         self.assertNotIn("ai-memory", code)
-        self.assertEqual(set(pi), set(code))
+        self.assertEqual(set(pi), set(code) | {"mobbin"})
+        self.assertEqual(pi["mobbin"], {
+            "url": "https://api.mobbin.com/mcp", "exposure": "deferred",
+            "description": "Search Mobbin for app screens and design flows."})
         self.assertEqual(pi["cua-driver"], {**code["cua-driver"], "exposure": "deferred",
                          "description": "Inspect and interact with desktop applications through the managed Cua Driver daemon."})
         self.assertEqual(pi["rea"], {
@@ -90,7 +93,8 @@ class McpClientTests(unittest.TestCase):
         self.assertEqual(desktop["Roblox_Studio"], {"command": f"{self.home}/.local/bin/roblox-studio-mcp", "args": []})
         codex = tomllib.loads(self.codex.read_text())["mcp_servers"]
         self.assertEqual(codex["figma"], {"url": "https://mcp.figma.com/mcp"})
-        self.assertEqual(set(codex), set(code))
+        self.assertEqual(set(codex), set(code) | {"mobbin"})
+        self.assertEqual(codex["mobbin"], {"url": "https://api.mobbin.com/mcp"})
         self.assertEqual(codex["cua-driver"], code["cua-driver"])
         self.assertEqual(codex["rea"], {"command": f"{self.home}/.local/bin/rea-mcp", "args": []})
 
@@ -516,12 +520,17 @@ class McpClientTests(unittest.TestCase):
         self.assertEqual(set(json.loads(self.code.read_text())["mcpServers"]),
                          {"neon", "datadog", "figma", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
         self.assertEqual(set(json.loads(self.pi.read_text())["mcpServers"]),
-                         {"neon", "datadog", "figma", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio", "cua-driver"})
+                         {"neon", "datadog", "figma", "mobbin", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio", "cua-driver"})
+        self.assertEqual(json.loads(self.pi.read_text())["mcpServers"]["mobbin"], {
+            "url": "https://api.mobbin.com/mcp", "exposure": "deferred",
+            "description": "Search Mobbin for app screens and design flows."})
         pi_cua = json.loads(self.pi.read_text())["mcpServers"]["cua-driver"]
         self.assertEqual((pi_cua["command"], pi_cua["args"], pi_cua["exposure"]),
                          (f"{self.home}/.local/bin/cua-driver-mcp", [], "deferred"))
         self.assertEqual(set(tomllib.loads(self.codex.read_text())["mcp_servers"]),
-                         {"neon", "datadog", "figma", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
+                         {"neon", "datadog", "figma", "mobbin", "rea", "playwriter", "chrome-devtools", "blender", "Roblox_Studio"})
+        self.assertEqual(tomllib.loads(self.codex.read_text())["mcp_servers"]["mobbin"],
+                         {"url": "https://api.mobbin.com/mcp"})
         self.assertEqual(json.loads(desktop.read_text())["mcpServers"]["rea"],
                          {"command": f"{self.home}/.local/bin/rea-mcp", "args": []})
         self.assertFalse(self.desktop.exists())

@@ -14,6 +14,14 @@
     "description": "Read Figma design context and use Figma tools.",
     "desktop_opt_in": true
   },
+  "mobbin": {
+    "url": "https://api.mobbin.com/mcp",
+    "description": "Search Mobbin for app screens and design flows.",
+    "clients_by_host": {
+      "macbook": ["pi", "codex"],
+      "omarchy": ["pi", "codex"]
+    }
+  },
   "cua-driver": {
     "launcher": "cua-driver-mcp",
     "description": "Inspect and interact with desktop applications through the managed Cua Driver daemon.",

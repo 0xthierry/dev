@@ -238,6 +238,10 @@ pi mcp login datadog
 pi mcp login figma
 ```
 
+Mobbin (`https://api.mobbin.com/mcp`) is registered only for Pi and Codex on both
+hosts. To authorize it, run `pi mcp login mobbin` and `codex mcp login mobbin`.
+Setup does not copy credentials or change an existing Claude Code registration.
+
 Use Claude Code's `/mcp` authentication flow and Codex's `codex mcp login NAME`.
 Claude Desktop launches the pinned `mcp-remote` bridge through
 `~/.local/bin/mcp-service NAME`; its first remote connection may open OAuth.
