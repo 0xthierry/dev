@@ -288,6 +288,10 @@ workspace = "meistrari"
 project = "background-coding-agent"
 ```
 
+### Claude Code version on Omarchy
+
+Omarchy setup verifies `~/.local/bin/claude` against the version in `install/ai-cli.sh` before disabling mise’s separate `claude` tool. This preserves Omarchy’s account selection wrapper without running its floating `latest` binary. After setup, `claude --version` in a new shell should match `~/.local/bin/claude --version`, even if `command -v claude` shows a wrapper. The MacBook Desktop/Code pin is separate.
+
 ### Claude Code deletion safeguards
 
 The Bash `PreToolUse` hook in `configs/agents/hooks/guard-rm.py` checks `rm` targets rather than denying all recursive cleanup. Ordinary explicit project paths such as `node_modules` are not denied by this rule. It is an accident guard, not a filesystem sandbox for arbitrary programs. Removing a command from `permissions.deny` does not automatically approve it. On an existing managed install, `bash configs/agents/install.sh --claude-deny-only` deploys the repo-owned deny list and guard without changing model choices or unrelated hooks. Restart Claude Code to load the hook.

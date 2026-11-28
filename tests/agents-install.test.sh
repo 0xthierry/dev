@@ -339,7 +339,12 @@ PY
   assert_json "canonical Claude plugin value wins" "$test_home/.claude/settings.json" '.enabledPlugins["typescript-lsp@claude-plugins-official"] == true'
   assert_json "drops runtime-injected Claude env" "$test_home/.claude/settings.json" '.env.PATH == null'
   assert_json "drops other local-only Claude settings" "$test_home/.claude/settings.json" '.agentPushNotifEnabled == null'
-  assert_json "defaults Claude sessions to Opus 5.5 with explicit 1M context" "$test_home/.claude/settings.json" '.model == "claude-opus-5-5[1m]"'
+  assert_json "defaults Claude sessions to Fable 5.2 with explicit 1M context" "$test_home/.claude/settings.json" '.model == "claude-fable-5-2[1m]"'
+  assert_json "picker selects the same model version at its advertised context size" "$test_home/.claude/settings.json" '
+    .modelPicker.replaceBuiltInOptions and (.modelPicker.options | map(.model) |
+      index("claude-opus-5-5[1m]") != null and index("claude-fable-5-1[1m]") != null and
+      index("claude-fable-5-2[1m]") != null and index("claude-haiku-4-5-20251001") != null) and
+    all(.modelPicker.options[]; (.model | endswith("[1m]")) == (.label | endswith("(1M)")))'
   assert_json "defaults Claude sessions to high reasoning" "$test_home/.claude/settings.json" '.effortLevel == "high"'
 
   assert_json "enables Claude auto-compaction" "$test_home/.claude.json" '.autoCompactEnabled == true'

@@ -107,14 +107,24 @@ install_npm_global_cli() {
 
 install_claude_code_binary() {
   local version="$1"
-  if installed_binary_is_pinned "claude" "$version"; then
-    log_item "Claude Code CLI: already at $version"
-    return 0
+  local target="$HOME/.local/bin/claude"
+  if installed_binary_is_pinned "$target" "$version"; then
+    log_item "Claude Code CLI: $target already at $version"
+  else
+    log_item "Installing Claude Code CLI @ $version..."
+    # shellcheck disable=SC2016  # $0 is intentionally expanded by the inner bash
+    run_cmd bash -o pipefail -c 'curl -fsSL https://claude.ai/install.sh | bash -s -- "$0"' "$version" || return 1
+    if (( ! ${DRY_RUN:-0} )) && ! installed_binary_is_pinned "$target" "$version"; then
+      printf 'error: expected Claude Code %s at %s; leaving mise unchanged\n' "$version" "$target" >&2
+      return 1
+    fi
   fi
 
-  log_item "Installing Claude Code CLI @ $version..."
-  # shellcheck disable=SC2016  # $0 is intentionally expanded by the inner bash, not the outer one
-  run_cmd bash -c 'curl -fsSL https://claude.ai/install.sh | bash -s -- "$0"' "$version"
+  # Leave Omarchy's account wrapper in place, but don't let mise put its
+  # floating Claude binary ahead of the verified standalone installation.
+  # shellcheck source=install/retired-ai-tools.sh
+  source "$AI_CLI_REPO_ROOT/install/retired-ai-tools.sh"
+  merge_mise_ai_opt_outs external claude
 }
 
 install_plannotator_binary() {
